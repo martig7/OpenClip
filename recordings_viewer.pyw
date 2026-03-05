@@ -422,9 +422,8 @@ def stream_video():
 
     _, ext = os.path.splitext(path)
     mime_type = MIME_TYPES.get(ext.lower(), 'video/mp4')
-    serve_path = path
 
-    file_size = os.path.getsize(serve_path)
+    file_size = os.path.getsize(path)
     range_header = request.headers.get('Range')
 
     if range_header:
@@ -440,7 +439,7 @@ def stream_video():
         content_length = byte_end - byte_start + 1
 
         def generate():
-            with open(serve_path, 'rb') as f:
+            with open(path, 'rb') as f:
                 f.seek(byte_start)
                 remaining = content_length
                 chunk_size = 1024 * 1024  # 1MB chunks
@@ -464,7 +463,7 @@ def stream_video():
 
     # No range request - stream with Accept-Ranges header
     def generate_full():
-        with open(serve_path, 'rb') as f:
+        with open(path, 'rb') as f:
             chunk_size = 1024 * 1024  # 1MB chunks
             while True:
                 chunk = f.read(chunk_size)

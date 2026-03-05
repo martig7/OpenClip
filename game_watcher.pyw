@@ -16,6 +16,9 @@ import shutil
 import re
 import subprocess
 from datetime import datetime, timedelta
+
+# Suppress console window for subprocesses on Windows
+NO_WINDOW = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
 from configparser import ConfigParser
 
 # Paths
@@ -249,7 +252,7 @@ def remux_to_mp4(source_file):
             cmd,
             capture_output=True,
             text=True,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+            creationflags=NO_WINDOW
         )
         if result.returncode == 0 and os.path.exists(mp4_path):
             # Remove original file
@@ -310,7 +313,7 @@ def get_video_duration(file_path):
             cmd,
             capture_output=True,
             text=True,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+            creationflags=NO_WINDOW
         )
         if result.returncode == 0:
             return float(result.stdout.strip())
@@ -456,10 +459,11 @@ def create_auto_clips(recording_path, game_name, recording_start_time, recording
     # Create each clip using FFmpeg stream-copy
     created_clips = []
     date_str = datetime.now().strftime("%Y-%m-%d")
+    next_clip_num = count_clips_for_date(clips_path, game_name, date_str) + 1
 
-    for clip_start, clip_end in merged:
+    for i, (clip_start, clip_end) in enumerate(merged):
         clip_duration = clip_end - clip_start
-        clip_num = count_clips_for_date(clips_path, game_name, date_str) + 1
+        clip_num = next_clip_num + i
         output_filename = f"{game_name} Clip {date_str} #{clip_num}.mp4"
         output_path = os.path.join(clips_path, output_filename)
 
@@ -480,7 +484,7 @@ def create_auto_clips(recording_path, game_name, recording_start_time, recording
                 cmd,
                 capture_output=True,
                 text=True,
-                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+                creationflags=NO_WINDOW
             )
 
             if result.returncode == 0 and os.path.exists(output_path):
@@ -777,7 +781,6 @@ def main():
 
                                 # Auto-clip creation from markers
                                 recording_end_time = time.time()
-                                auto_clip_settings = settings.get('auto_clip_settings', {})
                                 for org_file in organized_files:
                                     log(f"Checking for auto-clips: {os.path.basename(org_file)}")
                                     created_clips = create_auto_clips(
@@ -790,7 +793,7 @@ def main():
 
                                     # Delete full recording if configured and clips were created
                                     if (created_clips and
-                                            auto_clip_settings.get('delete_recording_after_clips', False)):
+                                            settings.get('auto_clip_settings', {}).get('delete_recording_after_clips', False)):
                                         try:
                                             os.remove(org_file)
                                             log(f"Deleted full recording (clips-only mode): {os.path.basename(org_file)}")
