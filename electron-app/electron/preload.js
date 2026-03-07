@@ -1,0 +1,68 @@
+const { contextBridge, ipcRenderer } = require('electron');
+
+contextBridge.exposeInMainWorld('api', {
+  // Store
+  getStore: (key) => ipcRenderer.invoke('store:get', key),
+  setStore: (key, value) => ipcRenderer.invoke('store:set', key, value),
+
+  // Games
+  getGames: () => ipcRenderer.invoke('games:list'),
+  addGame: (game) => ipcRenderer.invoke('games:add', game),
+  removeGame: (id) => ipcRenderer.invoke('games:remove', id),
+  toggleGame: (id) => ipcRenderer.invoke('games:toggle', id),
+  updateGame: (id, updates) => ipcRenderer.invoke('games:update', id, updates),
+
+  // Windows
+  getVisibleWindows: () => ipcRenderer.invoke('windows:list'),
+
+  // Watcher
+  startWatcher: () => ipcRenderer.invoke('watcher:start'),
+  stopWatcher: () => ipcRenderer.invoke('watcher:stop'),
+  getWatcherStatus: () => ipcRenderer.invoke('watcher:status'),
+  onWatcherState: (callback) => {
+    const handler = (_event, state) => callback(state);
+    ipcRenderer.on('watcher:state', handler);
+    return () => ipcRenderer.removeListener('watcher:state', handler);
+  },
+
+  // OBS
+  detectOBSPath: () => ipcRenderer.invoke('obs:detect-path'),
+
+  // Dialogs
+  openDirectoryDialog: () => ipcRenderer.invoke('dialog:openDirectory'),
+
+  // Shell
+  showInExplorer: (path) => ipcRenderer.invoke('shell:showInExplorer', path),
+  openExternal: (path) => ipcRenderer.invoke('shell:openExternal', path),
+
+  // Recordings
+  getRecordings: () => ipcRenderer.invoke('recordings:list'),
+  deleteRecording: (path) => ipcRenderer.invoke('recordings:delete', path),
+  getVideoURL: (filePath) => ipcRenderer.invoke('video:getURL', filePath),
+
+  // Clips
+  getClips: () => ipcRenderer.invoke('clips:list'),
+  createClip: (opts) => ipcRenderer.invoke('clips:create', opts),
+  deleteClip: (path) => ipcRenderer.invoke('clips:delete', path),
+
+  // Markers
+  getMarkers: () => ipcRenderer.invoke('markers:list'),
+  deleteMarker: (index) => ipcRenderer.invoke('markers:delete', index),
+  onMarkerAdded: (callback) => {
+    const handler = (_event, count) => callback(count);
+    ipcRenderer.on('clip:marker-added', handler);
+    return () => ipcRenderer.removeListener('clip:marker-added', handler);
+  },
+
+  // Storage
+  getStorageStats: () => ipcRenderer.invoke('storage:stats'),
+
+  // Hotkey
+  registerHotkey: () => ipcRenderer.invoke('hotkey:register'),
+
+  // Re-encode
+  reencodeVideo: (opts) => ipcRenderer.invoke('video:reencode', opts),
+
+  // API server port
+  getApiPort: () => ipcRenderer.invoke('api:port'),
+});
