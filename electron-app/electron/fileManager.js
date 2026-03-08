@@ -40,9 +40,9 @@ function organizeRecordings(store, gameName) {
     const dest = path.join(targetDir, newName);
 
     if (ext.toLowerCase() !== '.mp4') {
-      // Remux to MP4
+      // Remux to MP4, preserving all audio tracks (-map 0) and optimizing for streaming (-movflags +faststart)
       try {
-        execSync(`ffmpeg -i "${src}" -c copy "${dest}" -y`, { timeout: 120000 });
+        execSync(`ffmpeg -i "${src}" -map 0 -c copy -movflags +faststart "${dest}" -y`, { timeout: 120000 });
         fs.unlinkSync(src);
       } catch {
         // Fallback: just move the file
@@ -57,6 +57,18 @@ function organizeRecordings(store, gameName) {
   const autoClip = store.get('settings.autoClip');
   if (autoClip?.enabled) {
     processAutoClips(store, gameName, targetDir);
+  }
+}
+
+function getVideoDurationSync(filePath) {
+  try {
+    const out = execSync(
+      `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filePath}"`,
+      { encoding: 'utf-8', timeout: 10000 }
+    );
+    return parseFloat(out.trim()) || null;
+  } catch {
+    return null;
   }
 }
 
@@ -84,16 +96,28 @@ function processAutoClips(store, gameName, recordingDir) {
   if (recordings.length === 0) return;
   const recording = recordings[0];
 
+  // Determine recording time window to convert absolute marker timestamps → video positions
+  const duration = getVideoDurationSync(recording.path);
+  if (!duration) return;
+  const recordingStartUnix = recording.mtime.getTime() / 1000 - duration;
+
   const dateStr = new Date().toISOString().slice(0, 10);
   let clipNum = 1;
 
   for (const marker of markers) {
-    const start = Math.max(0, marker.timestamp - bufferBefore);
-    const duration = bufferBefore + bufferAfter;
+    // Convert absolute Unix timestamp to position within the video
+    const videoPosition = marker.timestamp - recordingStartUnix;
+    if (videoPosition < 0 || videoPosition > duration) continue; // marker outside this recording
+
+    const start = Math.max(0, videoPosition - bufferBefore);
+    const clipDuration = bufferBefore + bufferAfter;
     const clipPath = path.join(clipsDir, `${gameName} Clip ${dateStr} #${clipNum}.mp4`);
 
     try {
-      execSync(`ffmpeg -ss ${start} -i "${recording.path}" -t ${duration} -c copy "${clipPath}" -y`, { timeout: 60000 });
+      execSync(
+        `ffmpeg -ss ${start} -i "${recording.path}" -t ${clipDuration} -c copy -avoid_negative_ts make_zero "${clipPath}" -y`,
+        { timeout: 60000 }
+      );
       clipNum++;
     } catch {
       // Skip failed clips

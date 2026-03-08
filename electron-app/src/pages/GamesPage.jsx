@@ -119,6 +119,14 @@ export default function GamesPage() {
                     onClick={() => toggleGame(game.id)}
                     title={game.enabled ? 'Enabled' : 'Disabled'}
                   />
+                  {game.icon && (
+                    <img
+                      src={`file:///${game.icon.replace(/\\/g, '/')}`}
+                      alt=""
+                      style={{ width: 24, height: 24, objectFit: 'contain', borderRadius: 4, flexShrink: 0 }}
+                      onError={e => { e.currentTarget.style.display = 'none'; }}
+                    />
+                  )}
                   <div className="list-item-info">
                     <div className="list-item-title">{game.name}</div>
                     <div className="list-item-subtitle">

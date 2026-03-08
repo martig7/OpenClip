@@ -157,7 +157,14 @@ function countClipsForDate(clipsPath, gameName, dateStr) {
 
 // --- Mutations ---
 
-function createClip(sourcePath, startTime, endTime, gameName = 'Unknown') {
+function buildAudioMapArgs(audioTracks) {
+  // Returns FFmpeg args for selective audio track mapping.
+  // audioTracks: array of 0-based audio stream indices, or null/undefined for all.
+  if (!Array.isArray(audioTracks) || audioTracks.length === 0) return '';
+  return `-map 0:v:0 ${audioTracks.map(i => `-map 0:a:${i}`).join(' ')}`;
+}
+
+function createClip(sourcePath, startTime, endTime, gameName = 'Unknown', audioTracks = null) {
   return new Promise((resolve, reject) => {
     if (!sourcePath || !fs.existsSync(sourcePath)) {
       return reject(new Error('Source not found'));
@@ -175,9 +182,10 @@ function createClip(sourcePath, startTime, endTime, gameName = 'Unknown') {
     const outputFilename = `${gameName} Clip ${dateStr} #${clipNum}.mp4`;
     const outputPath = path.join(clipsPath, outputFilename);
     const duration = endTime - startTime;
+    const mapArgs = buildAudioMapArgs(audioTracks);
 
     exec(
-      `ffmpeg -y -ss ${startTime} -i "${sourcePath}" -t ${duration} -c copy -avoid_negative_ts make_zero "${outputPath}"`,
+      `ffmpeg -y -ss ${startTime} -i "${sourcePath}" -t ${duration} ${mapArgs} -c copy -avoid_negative_ts make_zero "${outputPath}"`,
       { timeout: 120000 },
       (error, _stdout, stderr) => {
         if (error) return reject(new Error(`FFmpeg error: ${stderr}`));
@@ -200,7 +208,7 @@ function deleteFile(filePath) {
   }
 }
 
-function reencodeVideo(sourcePath, { codec = 'h265', crf = 23, preset = 'medium', replaceOriginal = false, originalSize = 0 } = {}) {
+function reencodeVideo(sourcePath, { codec = 'h265', crf = 23, preset = 'medium', replaceOriginal = false, originalSize = 0, audioTracks = null } = {}) {
   return new Promise((resolve, reject) => {
     if (!sourcePath || !fs.existsSync(sourcePath)) {
       return reject(new Error('Not found'));
@@ -209,9 +217,10 @@ function reencodeVideo(sourcePath, { codec = 'h265', crf = 23, preset = 'medium'
     const encoder = CODEC_MAP[codec] || 'libx265';
     const base = sourcePath.replace(/\.[^.]+$/, '');
     const outPath = replaceOriginal ? `${base}_temp.mp4` : `${base}_reencoded_${codec}.mp4`;
+    const mapArgs = buildAudioMapArgs(audioTracks);
 
     exec(
-      `ffmpeg -y -i "${sourcePath}" -c:v ${encoder} -crf ${crf} -preset ${preset} -c:a copy "${outPath}"`,
+      `ffmpeg -y -i "${sourcePath}" ${mapArgs} -c:v ${encoder} -crf ${crf} -preset ${preset} -c:a copy "${outPath}"`,
       { timeout: 600000 },
       (error, _stdout, stderr) => {
         if (error) {
@@ -245,6 +254,61 @@ function reencodeVideo(sourcePath, { codec = 'h265', crf = 23, preset = 'medium'
   });
 }
 
+/**
+ * Run the auto-delete pass. Called on watcher start.
+ * Deletes unlocked recordings (and clips if not excluded) that are:
+ *   1. Older than max_age_days, OR
+ *   2. Pushing total storage over max_storage_gb (oldest deleted first).
+ * Returns a summary { deleted, skipped, errors }.
+ */
+function runAutoDelete() {
+  const settings = store.get('storageSettings') || {};
+  if (!settings.auto_delete_enabled) return { deleted: 0, skipped: 0, errors: 0 };
+
+  const maxBytes   = (settings.max_storage_gb ?? 100) * 1024 ** 3;
+  const maxAgeMs   = (settings.max_age_days   ?? 30)  * 24 * 60 * 60 * 1000;
+  const excClips   = settings.exclude_clips !== false;
+  const locked     = new Set(
+    (store.get('lockedRecordings') || []).map(p => path.normalize(p).toLowerCase())
+  );
+
+  // Gather candidates — recordings always included, clips only if not excluded
+  let candidates = [...scanRecordings()];
+  if (!excClips) candidates = candidates.concat(scanClips());
+
+  // Remove locked files
+  candidates = candidates.filter(f => !locked.has(path.normalize(f.path).toLowerCase()));
+
+  // Sort oldest first for size-based trimming
+  candidates.sort((a, b) => a.mtime - b.mtime);
+
+  const nowMs     = Date.now();
+  const toDelete  = new Set();
+
+  // Pass 1: age-based — mark anything older than max_age_days
+  for (const f of candidates) {
+    if (nowMs - f.mtime * 1000 > maxAgeMs) toDelete.add(f.path);
+  }
+
+  // Pass 2: size-based — if still over limit after age deletions, trim oldest first
+  const remaining = candidates.filter(f => !toDelete.has(f.path));
+  let totalBytes  = remaining.reduce((s, f) => s + f.size_bytes, 0);
+  for (const f of remaining) {
+    if (totalBytes <= maxBytes) break;
+    toDelete.add(f.path);
+    totalBytes -= f.size_bytes;
+  }
+
+  let deleted = 0, errors = 0;
+  for (const filePath of toDelete) {
+    const result = deleteFile(filePath);
+    if (result.success) deleted++;
+    else errors++;
+  }
+
+  return { deleted, skipped: locked.size, errors };
+}
+
 module.exports = {
   init,
   invalidateCache,
@@ -258,4 +322,5 @@ module.exports = {
   createClip,
   deleteFile,
   reencodeVideo,
+  runAutoDelete,
 };

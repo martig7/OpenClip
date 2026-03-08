@@ -21,6 +21,8 @@ const PROJECT_ROOT = path.join(__dirname, '..', '..');
 const RUNTIME_DIR = path.join(PROJECT_ROOT, 'runtime');
 const STATE_FILE = path.join(RUNTIME_DIR, 'game_state');
 const MARKERS_FILE = path.join(RUNTIME_DIR, 'clip_markers.json');
+const PID_FILE = path.join(RUNTIME_DIR, 'watcher.pid');
+const LOG_FILE = path.join(RUNTIME_DIR, 'watcher.log');
 const GAMES_CONFIG_FILE = path.join(PROJECT_ROOT, 'games_config.json');
 const MANAGER_SETTINGS_FILE = path.join(PROJECT_ROOT, 'manager_settings.json');
 
@@ -44,6 +46,8 @@ module.exports = {
   RUNTIME_DIR,
   STATE_FILE,
   MARKERS_FILE,
+  PID_FILE,
+  LOG_FILE,
   GAMES_CONFIG_FILE,
   MANAGER_SETTINGS_FILE,
   formatFileSize,

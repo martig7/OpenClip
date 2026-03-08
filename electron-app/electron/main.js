@@ -215,6 +215,7 @@ const store = {
 const { setupGameWatcher } = require('./gameWatcher');
 const { setupFileManager } = require('./fileManager');
 const { readOBSRecordingPath } = require('./obsIntegration');
+const { getProfiles, readEncodingSettings, writeEncodingSettings, isOBSRunning } = require('./obsEncoding');
 const { startApiServer } = require('./apiServer');
 const { RUNTIME_DIR, STATE_FILE } = require('./constants');
 
@@ -353,6 +354,11 @@ ipcMain.handle('windows:list', async () => {
 ipcMain.handle('watcher:start', () => {
   if (watcher) return { running: true };
   ensureGameState();
+
+  // Run auto-delete pass on startup (non-blocking, errors are swallowed)
+  const { runAutoDelete } = require('./recordingService');
+  try { runAutoDelete(); } catch {}
+
   watcherStartedAt = Date.now();
   watcher = setupGameWatcher(store, (state) => {
     currentGame = state.currentGame;
@@ -384,6 +390,12 @@ ipcMain.handle('watcher:status', () => {
 
 // OBS
 ipcMain.handle('obs:detect-path', () => readOBSRecordingPath());
+
+// OBS Encoding
+ipcMain.handle('obs:profiles',      () => getProfiles());
+ipcMain.handle('obs:encoding:get',  (_e, profileDir) => readEncodingSettings(profileDir));
+ipcMain.handle('obs:encoding:set',  (_e, profileDir, settings) => { writeEncodingSettings(profileDir, settings); return { success: true }; });
+ipcMain.handle('obs:running',       () => isOBSRunning());
 
 // Dialogs
 ipcMain.handle('dialog:openDirectory', async () => {

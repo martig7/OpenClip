@@ -162,9 +162,9 @@ function startApiServer(appStore) {
       // POST /api/clips/create
       if (pathname === '/api/clips/create' && req.method === 'POST') {
         const data = await readBody(req);
-        const { source_path, start_time, end_time, game_name = 'Unknown' } = data;
+        const { source_path, start_time, end_time, game_name = 'Unknown', audio_tracks = null } = data;
         try {
-          const result = await service.createClip(source_path, start_time, end_time, game_name);
+          const result = await service.createClip(source_path, start_time, end_time, game_name, audio_tracks);
           return json(res, result);
         } catch (e) {
           const status = e.message.includes('not found') ? 404 : e.message.includes('End time') ? 400 : 500;
@@ -314,18 +314,47 @@ function startApiServer(appStore) {
       // POST /api/reencode
       if (pathname === '/api/reencode' && req.method === 'POST') {
         const data = await readBody(req);
-        const { source_path, codec = 'h265', crf = 23, preset = 'medium', replace_original = false, original_size = 0 } = data;
+        const { source_path, codec = 'h265', crf = 23, preset = 'medium', replace_original = false, original_size = 0, audio_tracks = null } = data;
         try {
           const result = await service.reencodeVideo(source_path, {
             codec, crf, preset,
             replaceOriginal: replace_original,
             originalSize: original_size,
+            audioTracks: audio_tracks,
           });
           return json(res, result);
         } catch (e) {
           const status = e.message.includes('Not found') ? 404 : 500;
           return json(res, { error: e.message }, status);
         }
+      }
+
+      // GET /api/video/tracks?path=...
+      if (pathname === '/api/video/tracks' && req.method === 'GET') {
+        const filePath = query.path;
+        if (!filePath || !fs.existsSync(filePath)) return json(res, { error: 'File not found' }, 404);
+        return new Promise((resolve) => {
+          exec(
+            `ffprobe -v error -show_streams -select_streams a -of json "${filePath}"`,
+            { encoding: 'utf-8', timeout: 10000 },
+            (error, stdout) => {
+              if (error) { resolve(json(res, { tracks: [] })); return; }
+              try {
+                const data = JSON.parse(stdout);
+                const tracks = (data.streams || []).map((s, i) => ({
+                  index: i,
+                  stream_index: s.index ?? i,
+                  codec_name: s.codec_name || 'unknown',
+                  channels: s.channels || 0,
+                  channel_layout: s.channel_layout || '',
+                  sample_rate: s.sample_rate || '',
+                  title: s.tags?.title || s.tags?.handler_name || `Track ${i + 1}`,
+                }));
+                resolve(json(res, { tracks }));
+              } catch { resolve(json(res, { tracks: [] })); }
+            }
+          );
+        });
       }
 
       // GET /api/ffmpeg-check
