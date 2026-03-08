@@ -1,0 +1,42 @@
+// When running inside Electron, window.api is injected by preload.js.
+// When running in a browser (vite dev without electron), provide a mock.
+
+const noop = () => {};
+const asyncNoop = async () => null;
+const asyncArr = async () => [];
+const asyncObj = async (val) => val;
+
+const mockApi = {
+  getStore: asyncNoop,
+  setStore: asyncNoop,
+  getGames: asyncArr,
+  addGame: asyncArr,
+  removeGame: asyncArr,
+  toggleGame: asyncArr,
+  updateGame: asyncArr,
+  getVisibleWindows: asyncArr,
+  startWatcher: async () => ({ running: false }),
+  stopWatcher: async () => ({ running: false }),
+  getWatcherStatus: async () => ({ running: false, currentGame: null, startedAt: null, gameState: null }),
+  onWatcherState: () => noop,
+  detectOBSPath: asyncNoop,
+  openDirectoryDialog: asyncNoop,
+  showInExplorer: noop,
+  openExternal: noop,
+  getRecordings: asyncArr,
+  deleteRecording: asyncNoop,
+  getVideoURL: asyncNoop,
+  getClips: asyncArr,
+  createClip: asyncNoop,
+  deleteClip: asyncNoop,
+  getMarkers: asyncArr,
+  deleteMarker: asyncArr,
+  onMarkerAdded: () => noop,
+  getStorageStats: async () => ({ totalSize: 0, recordingCount: 0, clipCount: 0, byGame: {} }),
+  registerHotkey: asyncNoop,
+  reencodeVideo: asyncNoop,
+};
+
+const api = window.api || mockApi;
+
+export default api;

@@ -1,0 +1,289 @@
+import { useRef, useState, useEffect, useCallback } from 'react'
+import Timeline from './Timeline'
+import ClipControls from './ClipControls'
+import { apiFetch, getBase } from '../apiBase'
+import { formatTime } from '../utils'
+
+function VideoPlayer({ recording, onClipCreated }) {
+  const videoRef = useRef(null)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const [volume, setVolume] = useState(1)
+  const [isMuted, setIsMuted] = useState(false)
+
+  // Clip mode state
+  const [clipMode, setClipMode] = useState(false)
+  const [clipStart, setClipStart] = useState(0)
+  const [clipEnd, setClipEnd] = useState(30)
+  const [isCreatingClip, setIsCreatingClip] = useState(false)
+
+  // Markers state
+  const [markers, setMarkers] = useState([])
+
+  // Reset state when recording changes
+  useEffect(() => {
+    setIsPlaying(false)
+    setCurrentTime(0)
+    setDuration(0)
+    setClipMode(false)
+    setMarkers([])
+  }, [recording])
+
+  // Fetch markers when recording changes and duration is known
+  useEffect(() => {
+    if (!recording || !duration) return
+
+    const fetchMarkers = async () => {
+      try {
+        const response = await apiFetch(
+          `/api/markers?path=${encodeURIComponent(recording.path)}&game_name=${encodeURIComponent(recording.game_name)}`
+        )
+        const data = await response.json()
+        if (response.ok && data.markers) {
+          setMarkers(data.markers)
+        }
+      } catch (error) {
+        console.error('Failed to fetch markers:', error)
+      }
+    }
+
+    fetchMarkers()
+  }, [recording, duration])
+
+  const handleTimeUpdate = useCallback(() => {
+    if (videoRef.current) {
+      setCurrentTime(videoRef.current.currentTime)
+    }
+  }, [])
+
+  const handleLoadedMetadata = useCallback(() => {
+    if (videoRef.current) {
+      setDuration(videoRef.current.duration)
+      setClipEnd(Math.min(30, videoRef.current.duration))
+    }
+  }, [])
+
+  const handlePlay = useCallback(() => setIsPlaying(true), [])
+  const handlePause = useCallback(() => setIsPlaying(false), [])
+
+  const togglePlay = useCallback(() => {
+    if (videoRef.current) {
+      if (isPlaying) {
+        videoRef.current.pause()
+      } else {
+        videoRef.current.play()
+      }
+    }
+  }, [isPlaying])
+
+  const handleSeek = useCallback((time) => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = time
+      setCurrentTime(time)
+    }
+  }, [])
+
+  const handleVolumeChange = useCallback((newVolume) => {
+    if (videoRef.current) {
+      videoRef.current.volume = newVolume
+      setVolume(newVolume)
+      setIsMuted(newVolume === 0)
+    }
+  }, [])
+
+  const toggleMute = useCallback(() => {
+    if (videoRef.current) {
+      if (isMuted) {
+        videoRef.current.volume = volume || 1
+        setIsMuted(false)
+      } else {
+        videoRef.current.volume = 0
+        setIsMuted(true)
+      }
+    }
+  }, [isMuted, volume])
+
+  const skip = useCallback((seconds) => {
+    if (videoRef.current) {
+      const newTime = Math.max(0, Math.min(duration, currentTime + seconds))
+      videoRef.current.currentTime = newTime
+    }
+  }, [currentTime, duration])
+
+  const handleMarkerClick = useCallback((position) => {
+    handleSeek(position)
+    if (videoRef.current && !isPlaying) {
+      videoRef.current.play()
+    }
+  }, [handleSeek, isPlaying])
+
+  const enterClipMode = useCallback(() => {
+    setClipMode(true)
+    setClipStart(currentTime)
+    setClipEnd(Math.min(currentTime + 30, duration))
+  }, [currentTime, duration])
+
+  const exitClipMode = useCallback(() => {
+    setClipMode(false)
+  }, [])
+
+  const handleCreateClip = useCallback(async () => {
+    if (!recording || isCreatingClip) return
+
+    setIsCreatingClip(true)
+    try {
+      const response = await apiFetch('/api/clips/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          source_path: recording.path,
+          start_time: clipStart,
+          end_time: clipEnd,
+          game_name: recording.game_name
+        })
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setClipMode(false)
+        if (onClipCreated) {
+          onClipCreated(data)
+        }
+      } else {
+        alert(`Failed to create clip: ${data.error}`)
+      }
+    } catch (error) {
+      alert(`Error creating clip: ${error.message}`)
+    } finally {
+      setIsCreatingClip(false)
+    }
+  }, [recording, clipStart, clipEnd, isCreatingClip, onClipCreated])
+
+  if (!recording) {
+    return (
+      <div className="main-content">
+        <div className="player-container">
+          <div className="player-placeholder">
+            <div className="icon">&#127916;</div>
+            <p>Select a recording to play</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="main-content">
+      <div className="player-container">
+        <video
+          ref={videoRef}
+          src={`${getBase()}/api/video?path=${encodeURIComponent(recording.path)}`}
+          onTimeUpdate={handleTimeUpdate}
+          onLoadedMetadata={handleLoadedMetadata}
+          onPlay={handlePlay}
+          onPause={handlePause}
+          onClick={togglePlay}
+        />
+      </div>
+
+      <div className="video-controls">
+        <Timeline
+          currentTime={currentTime}
+          duration={duration}
+          onSeek={handleSeek}
+          clipMode={clipMode}
+          clipStart={clipStart}
+          clipEnd={clipEnd}
+          onClipStartChange={setClipStart}
+          onClipEndChange={setClipEnd}
+          markers={markers}
+          onMarkerClick={handleMarkerClick}
+        />
+
+        <div className="controls-row">
+          <button className="control-btn" onClick={() => skip(-10)} title="Rewind 10s">
+            &#9194;
+          </button>
+          <button className="control-btn" onClick={togglePlay} title={isPlaying ? 'Pause' : 'Play'}>
+            {isPlaying ? '\u23F8' : '\u25B6'}
+          </button>
+          <button className="control-btn" onClick={() => skip(10)} title="Forward 10s">
+            &#9193;
+          </button>
+
+          <span className="time-display">
+            {formatTime(currentTime)} / {formatTime(duration)}
+          </span>
+
+          <div className="volume-control">
+            <button className="control-btn" onClick={toggleMute} title={isMuted ? 'Unmute' : 'Mute'}>
+              {isMuted ? '\u{1F507}' : '\u{1F50A}'}
+            </button>
+            <input
+              type="range"
+              className="volume-slider"
+              min="0"
+              max="1"
+              step="0.1"
+              value={isMuted ? 0 : volume}
+              onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+            />
+          </div>
+        </div>
+
+        {clipMode && (
+          <ClipControls
+            clipStart={clipStart}
+            clipEnd={clipEnd}
+            duration={duration}
+            onClipStartChange={setClipStart}
+            onClipEndChange={setClipEnd}
+            onCancel={exitClipMode}
+            onCreate={handleCreateClip}
+            isCreating={isCreatingClip}
+          />
+        )}
+      </div>
+
+      <div className="video-info-bar">
+        <h2 className="video-title">{recording.filename}</h2>
+        <div className="video-meta">
+          <span>&#128193; {recording.game_name}</span>
+          <span>&#128197; {recording.date}</span>
+          <span>&#128190; {recording.size_formatted}</span>
+        </div>
+        <div className="action-buttons">
+          {!clipMode && (
+            <button className="btn btn-primary" onClick={enterClipMode}>
+              &#9986; Create Clip
+            </button>
+          )}
+          <button
+            className="btn btn-secondary"
+            onClick={() => apiFetch('/api/open-external', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ path: recording.path })
+            })}
+          >
+            &#9654; Open in Player
+          </button>
+          <button
+            className="btn btn-secondary"
+            onClick={() => apiFetch('/api/show-in-explorer', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ path: recording.path })
+            })}
+          >
+            &#128194; Show in Explorer
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default VideoPlayer

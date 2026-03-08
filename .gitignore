@@ -26,3 +26,5 @@ nul
 
 # Node modules (frontend has its own .gitignore)
 /frontend/node_modules/
+/electron-app/node_modules/
+/electron-app/dist/
