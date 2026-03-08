@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
 import Timeline from './Timeline'
 import ClipControls from './ClipControls'
+import ZoomTimeline from './ZoomTimeline'
 
 function VideoPlayer({ recording, onClipCreated }) {
   const videoRef = useRef(null)
@@ -19,6 +20,10 @@ function VideoPlayer({ recording, onClipCreated }) {
   // Markers state
   const [markers, setMarkers] = useState([])
 
+  // Audio tracks state
+  const [audioTracks, setAudioTracks] = useState([])
+  const [selectedTracks, setSelectedTracks] = useState([])
+
   // Reset state when recording changes
   useEffect(() => {
     setIsPlaying(false)
@@ -26,6 +31,30 @@ function VideoPlayer({ recording, onClipCreated }) {
     setDuration(0)
     setClipMode(false)
     setMarkers([])
+    setAudioTracks([])
+    setSelectedTracks([])
+  }, [recording])
+
+  // Fetch audio tracks when recording changes
+  useEffect(() => {
+    if (!recording) return
+
+    const fetchTracks = async () => {
+      try {
+        const response = await fetch(
+          `/api/video/tracks?path=${encodeURIComponent(recording.path)}`
+        )
+        const data = await response.json()
+        if (response.ok && data.tracks) {
+          setAudioTracks(data.tracks)
+          setSelectedTracks(data.tracks.map((_, i) => i))
+        }
+      } catch (error) {
+        console.error('Failed to fetch audio tracks:', error)
+      }
+    }
+
+    fetchTracks()
   }, [recording])
 
   // Fetch markers when recording changes and duration is known
@@ -138,7 +167,9 @@ function VideoPlayer({ recording, onClipCreated }) {
           source_path: recording.path,
           start_time: clipStart,
           end_time: clipEnd,
-          game_name: recording.game_name
+          game_name: recording.game_name,
+          audio_tracks: audioTracks.length > 1 && selectedTracks.length < audioTracks.length
+            ? selectedTracks : null
         })
       })
 
@@ -157,7 +188,7 @@ function VideoPlayer({ recording, onClipCreated }) {
     } finally {
       setIsCreatingClip(false)
     }
-  }, [recording, clipStart, clipEnd, isCreatingClip, onClipCreated])
+  }, [recording, clipStart, clipEnd, isCreatingClip, onClipCreated, audioTracks, selectedTracks])
 
   const formatTime = (seconds) => {
     if (!isFinite(seconds)) return '0:00'
@@ -239,16 +270,32 @@ function VideoPlayer({ recording, onClipCreated }) {
         </div>
 
         {clipMode && (
-          <ClipControls
-            clipStart={clipStart}
-            clipEnd={clipEnd}
-            duration={duration}
-            onClipStartChange={setClipStart}
-            onClipEndChange={setClipEnd}
-            onCancel={exitClipMode}
-            onCreate={handleCreateClip}
-            isCreating={isCreatingClip}
-          />
+          <>
+            <ZoomTimeline
+              currentTime={currentTime}
+              duration={duration}
+              onSeek={handleSeek}
+              clipStart={clipStart}
+              clipEnd={clipEnd}
+              onClipStartChange={setClipStart}
+              onClipEndChange={setClipEnd}
+              markers={markers}
+              onMarkerClick={handleMarkerClick}
+            />
+            <ClipControls
+              clipStart={clipStart}
+              clipEnd={clipEnd}
+              duration={duration}
+              onClipStartChange={setClipStart}
+              onClipEndChange={setClipEnd}
+              onCancel={exitClipMode}
+              onCreate={handleCreateClip}
+              isCreating={isCreatingClip}
+              audioTracks={audioTracks}
+              selectedTracks={selectedTracks}
+              onSelectedTracksChange={setSelectedTracks}
+            />
+          </>
         )}
       </div>
 

@@ -123,6 +123,43 @@ def get_video_duration(file_path):
     return None
 
 
+def get_audio_tracks(file_path):
+    """Get audio track info from a video file using ffprobe."""
+    try:
+        cmd = [
+            'ffprobe', '-v', 'error',
+            '-show_streams', '-select_streams', 'a',
+            '-of', 'json',
+            file_path
+        ]
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+        )
+        if result.returncode != 0:
+            return []
+
+        data = json.loads(result.stdout)
+        tracks = []
+        for i, stream in enumerate(data.get('streams', [])):
+            tags = stream.get('tags', {})
+            title = tags.get('title') or tags.get('handler_name') or f'Track {i + 1}'
+            tracks.append({
+                'index': i,
+                'stream_index': stream.get('index', i),
+                'codec_name': stream.get('codec_name', 'unknown'),
+                'channels': stream.get('channels', 0),
+                'channel_layout': stream.get('channel_layout', ''),
+                'sample_rate': stream.get('sample_rate', ''),
+                'title': title,
+            })
+        return tracks
+    except:
+        return []
+
+
 def get_markers_for_recording(game_name, file_mtime, duration):
     """Get markers that belong to a specific recording."""
     markers_data = load_markers()
@@ -282,11 +319,17 @@ def scan_recordings():
             pass
 
     # Scan raw OBS folder for unorganized recordings
+    # Only include files matching OBS naming patterns to avoid listing unrelated videos
+    obs_filename_pattern = re.compile(
+        r'^\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}|'  # Default: "2024-10-17 12-20-26"
+        r'^Replay \d{4}-\d{2}-\d{2}|'                # Replay buffer
+        r'.+ Session \d{4}-\d{2}-\d{2} #\d+'          # Our organized naming
+    )
     if obs_path and os.path.exists(obs_path):
         try:
             for filename in os.listdir(obs_path):
-                _, ext = os.path.splitext(filename)
-                if ext.lower() in VIDEO_EXTENSIONS:
+                name_no_ext, ext = os.path.splitext(filename)
+                if ext.lower() in VIDEO_EXTENSIONS and obs_filename_pattern.match(name_no_ext):
                     file_path = os.path.join(obs_path, filename)
                     normalized = os.path.normpath(file_path).lower()
                     if normalized not in seen_paths:
@@ -491,6 +534,7 @@ def create_clip():
     start_time = data.get('start_time', 0)
     end_time = data.get('end_time', 0)
     game_name = data.get('game_name', 'Unknown')
+    audio_tracks = data.get('audio_tracks', None)  # list of audio stream indices, or None for all
 
     # Validate inputs
     if not source_path or not is_path_allowed(source_path):
@@ -526,16 +570,18 @@ def create_clip():
     # Calculate duration
     duration = end_time - start_time
 
-    # Run FFmpeg
+    # Run FFmpeg - use -map flags if specific audio tracks requested
     cmd = [
         'ffmpeg', '-y',
         '-ss', str(start_time),
         '-i', source_path,
         '-t', str(duration),
-        '-c', 'copy',
-        '-avoid_negative_ts', 'make_zero',
-        output_path
     ]
+    if audio_tracks is not None and isinstance(audio_tracks, list):
+        cmd += ['-map', '0:v:0']
+        for track_idx in audio_tracks:
+            cmd += ['-map', f'0:a:{track_idx}']
+    cmd += ['-c', 'copy', '-avoid_negative_ts', 'make_zero', output_path]
 
     try:
         result = subprocess.run(
@@ -616,7 +662,8 @@ def show_in_explorer():
         return jsonify({'error': 'File not found'}), 404
 
     try:
-        subprocess.run(['explorer', '/select,', path])
+        normalized = os.path.normpath(path)
+        subprocess.run(f'explorer /select,"{normalized}"')
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -653,50 +700,59 @@ def reencode_video():
     """Reencode a video to a different codec."""
     data = request.get_json()
     source_path = data.get('source_path', '')
-    codec = data.get('codec', 'h265')  # h264, h265, av1
+    codec = data.get('codec', 'h265')  # h264, h265, av1, copy
     crf = data.get('crf', 23)  # Quality: lower = better (18-28 typical range)
     preset = data.get('preset', 'medium')  # ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow
     replace_original = data.get('replace_original', False)
-    
+    audio_tracks = data.get('audio_tracks', None)  # list of audio stream indices, or None for all
+
     if not source_path or not is_path_allowed(source_path):
         return jsonify({'error': 'Access denied'}), 403
-    
+
     if not os.path.exists(source_path):
         return jsonify({'error': 'File not found'}), 404
-    
+
     # Check FFmpeg
     if not check_ffmpeg():
         return jsonify({'error': 'FFmpeg not found. Please install FFmpeg and add it to PATH.'}), 500
-    
+
     # Determine codec settings
     codec_map = {
         'h264': {'codec': 'libx264', 'ext': '.mp4'},
         'h265': {'codec': 'libx265', 'ext': '.mp4'},
-        'av1': {'codec': 'libsvtav1', 'ext': '.mp4'}
+        'av1': {'codec': 'libsvtav1', 'ext': '.mp4'},
+        'copy': {'codec': 'copy', 'ext': '.mp4'},
     }
-    
+
     if codec not in codec_map:
         return jsonify({'error': 'Invalid codec'}), 400
-    
+
     codec_info = codec_map[codec]
-    
+    is_remux = (codec == 'copy')
+
     # Generate output path
     base, ext = os.path.splitext(source_path)
     if replace_original:
         output_path = base + '_temp' + codec_info['ext']
     else:
-        output_path = base + f'_reencoded_{codec}' + codec_info['ext']
-    
+        suffix = '_remuxed' if is_remux else f'_reencoded_{codec}'
+        output_path = base + suffix + codec_info['ext']
+
     # Build FFmpeg command
-    cmd = [
-        'ffmpeg', '-y',
-        '-i', source_path,
-        '-c:v', codec_info['codec'],
-        '-crf', str(crf),
-        '-preset', preset,
-        '-c:a', 'copy',  # Copy audio without reencoding
-        output_path
-    ]
+    cmd = ['ffmpeg', '-y', '-i', source_path]
+
+    # Add stream mapping if specific audio tracks requested
+    if audio_tracks is not None and isinstance(audio_tracks, list):
+        cmd += ['-map', '0:v:0']
+        for track_idx in audio_tracks:
+            cmd += ['-map', f'0:a:{track_idx}']
+
+    if is_remux:
+        cmd += ['-c', 'copy']
+    else:
+        cmd += ['-c:v', codec_info['codec'], '-crf', str(crf), '-preset', preset, '-c:a', 'copy']
+
+    cmd.append(output_path)
     
     try:
         # Run FFmpeg (this will take time for large files)
@@ -744,6 +800,24 @@ def reencode_video():
             except:
                 pass
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/video/tracks')
+def video_tracks():
+    """Get audio track info for a video file."""
+    path = request.args.get('path', '')
+
+    if not path or not is_path_allowed(path):
+        return jsonify({'error': 'Access denied'}), 403
+
+    if not os.path.exists(path):
+        return jsonify({'error': 'File not found'}), 404
+
+    if not check_ffmpeg():
+        return jsonify({'error': 'FFmpeg/FFprobe not found'}), 500
+
+    tracks = get_audio_tracks(path)
+    return jsonify({'tracks': tracks})
 
 
 @app.route('/api/markers')
