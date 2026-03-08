@@ -35,11 +35,17 @@ function writeJson(filePath, data) {
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
 }
 
+// Normalize a file-system path: resolve forward/back slashes, remove duplicate separators
+function normalizePath(p) {
+  if (!p) return p;
+  return path.normalize(p);
+}
+
 // Translate manager_settings.json → Electron settings shape (camelCase)
 function msToElectronSettings(ms, obsRecordingPath) {
   return {
-    obsRecordingPath: obsRecordingPath || '',
-    destinationPath: ms.organized_path || '',
+    obsRecordingPath: normalizePath(obsRecordingPath) || '',
+    destinationPath: normalizePath(ms.organized_path) || '',
     clipMarkerHotkey: ms.clip_hotkey || 'F9',
     autoClip: {
       enabled: ms.auto_clip_settings?.enabled || false,
@@ -60,7 +66,7 @@ function msToElectronSettings(ms, obsRecordingPath) {
 // Translate Electron settings shape → fields in manager_settings.json
 function electronSettingsToMs(ms, electronSettings) {
   const updated = { ...ms };
-  if (electronSettings.destinationPath !== undefined) updated.organized_path = electronSettings.destinationPath;
+  if (electronSettings.destinationPath !== undefined) updated.organized_path = normalizePath(electronSettings.destinationPath);
   if (electronSettings.clipMarkerHotkey !== undefined) updated.clip_hotkey = electronSettings.clipMarkerHotkey;
   if (electronSettings.autoClip !== undefined) {
     updated.auto_clip_settings = {
@@ -175,7 +181,7 @@ const store = {
     }
     if (key === 'settings') {
       if (value.obsRecordingPath !== undefined) {
-        this._electron().obsRecordingPath = value.obsRecordingPath;
+        this._electron().obsRecordingPath = normalizePath(value.obsRecordingPath);
         this._saveElectron();
       }
       this._msData = electronSettingsToMs(this._ms(), value);
@@ -186,7 +192,7 @@ const store = {
       const subKey = key.slice('settings.'.length);
       // obsRecordingPath lives only in electron config
       if (subKey === 'obsRecordingPath') {
-        this._electron().obsRecordingPath = value;
+        this._electron().obsRecordingPath = normalizePath(value);
         this._saveElectron();
         return;
       }
