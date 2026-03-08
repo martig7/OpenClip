@@ -97,10 +97,15 @@ function scanRecordings() {
     } catch {}
   }
 
+  // Only include files that match OBS naming patterns, to avoid listing unrelated videos
+  const obsFilenamePattern = /^\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}|^Replay \d{4}-\d{2}-\d{2}|.+ Session \d{4}-\d{2}-\d{2} #\d+/;
+
   if (obsPath && fs.existsSync(obsPath)) {
     try {
       for (const file of fs.readdirSync(obsPath)) {
         if (!isVideoFile(file)) continue;
+        const nameNoExt = file.replace(/\.[^.]+$/, '');
+        if (!obsFilenamePattern.test(nameNoExt)) continue;
         const fp = path.join(obsPath, file);
         if (seenPaths.has(fp.toLowerCase())) continue;
         const info = parseRecordingInfo(fp, '(Unorganized)');
