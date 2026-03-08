@@ -17,27 +17,27 @@ function ClipsPage() {
       const response = await apiFetch('/api/clips')
       const data = await response.json()
       setClips(data)
-      return data
-    } catch (error) {
-      console.error('Failed to fetch clips:', error)
-      return []
-    } finally {
-      setLoading(false)
-    }
-  }, [])
 
-  useEffect(() => {
-    fetchClips().then(data => {
+      // Auto-select clip from URL parameter
       const pathParam = searchParams.get('path')
       if (pathParam && data.length > 0) {
         const clip = data.find(c => c.path === pathParam)
         if (clip) {
           setSelectedClip(clip)
+          // Clear the URL parameter
           setSearchParams({})
         }
       }
-    })
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    } catch (error) {
+      console.error('Failed to fetch clips:', error)
+    } finally {
+      setLoading(false)
+    }
+  }, [searchParams, setSearchParams])
+
+  useEffect(() => {
+    fetchClips()
+  }, [fetchClips])
 
   const handleDelete = useCallback(async () => {
     if (!selectedClip) return

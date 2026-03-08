@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Modal from '../components/Modal'
 import { apiFetch } from '../apiBase'
@@ -20,6 +20,9 @@ function StoragePage() {
   })
   const [isReencoding, setIsReencoding] = useState(false)
   const [reencodeProgress, setReencodeProgress] = useState({ current: 0, total: 0, currentFile: '' })
+  const [reencodeAudioTracks, setReencodeAudioTracks] = useState([])
+  const [reencodeSelectedTracks, setReencodeSelectedTracks] = useState([])
+  const [loadingTracks, setLoadingTracks] = useState(false)
   const [toast, setToast] = useState(null)
   const [filterType, setFilterType] = useState('all') // 'all', 'recordings', 'clips'
   const [filterGame, setFilterGame] = useState('all') // 'all' or specific game name
@@ -75,14 +78,14 @@ function StoragePage() {
   const toggleLock = useCallback(async (path) => {
     const normalizedPath = path.replace(/\//g, '\\')
     const isLocked = lockedRecordings.has(normalizedPath)
-    
+
     try {
       const response = await apiFetch('/api/storage/lock', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path, locked: !isLocked })
       })
-      
+
       if (response.ok) {
         setLockedRecordings(prev => {
           const newSet = new Set(prev)
@@ -116,7 +119,7 @@ function StoragePage() {
         setSelectedItems(new Set())
         setDeleteModal(false)
         fetchStats()
-        
+
         let message = `Deleted ${data.deleted_count} item(s)`
         if (data.skipped_locked_count > 0) {
           message += `, skipped ${data.skipped_locked_count} locked`
@@ -151,23 +154,141 @@ function StoragePage() {
 
   const handleSaveSettings = useCallback(() => {
     if (!editedSettings) return
-    
+
     // Validate and sanitize settings before saving
     const validatedSettings = {
       ...editedSettings,
       max_storage_gb: Math.max(1, parseInt(editedSettings.max_storage_gb) || 100),
       max_age_days: Math.max(1, parseInt(editedSettings.max_age_days) || 30)
     }
-    
+
     updateSettings(validatedSettings)
   }, [editedSettings, updateSettings])
 
-  const hasUnsavedChanges = useMemo(() => {
+  const hasUnsavedChanges = useCallback(() => {
     if (!settings || !editedSettings) return false
     return JSON.stringify(settings) !== JSON.stringify(editedSettings)
   }, [settings, editedSettings])
 
-  const allItems = useMemo(() => {
+  const fetchReencodeTracks = useCallback(async () => {
+    const paths = Array.from(selectedItems)
+    if (paths.length === 0) return
+
+    setLoadingTracks(true)
+    try {
+      const response = await apiFetch(`/api/video/tracks?path=${encodeURIComponent(paths[0])}`)
+      const data = await response.json()
+      if (response.ok && data.tracks) {
+        setReencodeAudioTracks(data.tracks)
+        setReencodeSelectedTracks(data.tracks.map((_, i) => i))
+      } else {
+        setReencodeAudioTracks([])
+        setReencodeSelectedTracks([])
+      }
+    } catch {
+      setReencodeAudioTracks([])
+      setReencodeSelectedTracks([])
+    } finally {
+      setLoadingTracks(false)
+    }
+  }, [selectedItems])
+
+  const toggleReencodeTrack = useCallback((index) => {
+    setReencodeSelectedTracks(prev => {
+      if (prev.includes(index)) {
+        if (prev.length <= 1) return prev
+        return prev.filter(i => i !== index)
+      }
+      return [...prev, index].sort((a, b) => a - b)
+    })
+  }, [])
+
+  const handleReencode = useCallback(async () => {
+    if (selectedItems.size === 0) return
+
+    setIsReencoding(true)
+    const paths = Array.from(selectedItems)
+    const totalFiles = paths.length
+    let successCount = 0
+    let failCount = 0
+    let totalSavings = 0
+
+    const audioTracksParam = reencodeAudioTracks.length > 1 && reencodeSelectedTracks.length < reencodeAudioTracks.length
+      ? reencodeSelectedTracks : null
+
+    setReencodeProgress({ current: 0, total: totalFiles, currentFile: '' })
+
+    for (let i = 0; i < paths.length; i++) {
+      const path = paths[i]
+      const item = getAllItems().find(item => item.path === path)
+      const filename = item?.filename || path.split(/[\\/]/).pop()
+
+      setReencodeProgress({ current: i + 1, total: totalFiles, currentFile: filename })
+
+      try {
+        const response = await apiFetch('/api/reencode', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            source_path: path,
+            codec: reencodeSettings.codec,
+            crf: reencodeSettings.crf,
+            preset: reencodeSettings.preset,
+            replace_original: reencodeSettings.replaceOriginal,
+            original_size: item?.size_bytes || 0,
+            audio_tracks: audioTracksParam
+          })
+        })
+
+        const data = await response.json()
+
+        if (response.ok) {
+          successCount++
+          totalSavings += data.savings || 0
+        } else {
+          failCount++
+        }
+      } catch (error) {
+        failCount++
+      }
+    }
+
+    setIsReencoding(false)
+    setReencodeModal(false)
+    setReencodeProgress({ current: 0, total: 0, currentFile: '' })
+    setSelectedItems(new Set())
+    fetchStats()
+
+    const label = reencodeSettings.codec === 'copy' ? 'Re-exported' : 'Reencoded'
+    const savingsFormatted = totalSavings > 0 ? ` (saved ${formatBytes(totalSavings)})` : ''
+    showToast('success', `${label} ${successCount} file(s)${savingsFormatted}${failCount > 0 ? `, ${failCount} failed` : ''}`)
+  }, [selectedItems, reencodeSettings, reencodeAudioTracks, reencodeSelectedTracks, fetchStats, showToast])
+
+  const formatBytes = (bytes) => {
+    if (bytes === 0) return '0 B'
+    const k = 1024
+    const sizes = ['B', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
+  }
+
+  const handleItemClick = useCallback((item) => {
+    if (item.type === 'clip') {
+      navigate(`/clips?path=${encodeURIComponent(item.path)}`)
+    } else {
+      navigate(`/recordings?path=${encodeURIComponent(item.path)}`)
+    }
+  }, [navigate])
+
+  const getUniqueGames = useCallback(() => {
+    if (!stats) return []
+    const games = new Set()
+    stats.recordings.forEach(r => games.add(r.game_name))
+    stats.clips.forEach(c => games.add(c.game_name))
+    return Array.from(games).sort()
+  }, [stats])
+
+  const getAllItems = useCallback(() => {
     if (!stats) return []
 
     let items = []
@@ -204,86 +325,6 @@ function StoragePage() {
     return items
   }, [stats, filterType, filterGame, sortBy])
 
-  const handleReencode = useCallback(async () => {
-    if (selectedItems.size === 0) return
-    
-    setIsReencoding(true)
-    const paths = Array.from(selectedItems)
-    const totalFiles = paths.length
-    let successCount = 0
-    let failCount = 0
-    let totalSavings = 0
-    
-    setReencodeProgress({ current: 0, total: totalFiles, currentFile: '' })
-    
-    for (let i = 0; i < paths.length; i++) {
-      const path = paths[i]
-      const item = allItems.find(item => item.path === path)
-      const filename = item?.filename || path.split(/[\\/]/).pop()
-      
-      setReencodeProgress({ current: i + 1, total: totalFiles, currentFile: filename })
-      
-      try {
-        const response = await apiFetch('/api/reencode', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            source_path: path,
-            codec: reencodeSettings.codec,
-            crf: reencodeSettings.crf,
-            preset: reencodeSettings.preset,
-            replace_original: reencodeSettings.replaceOriginal,
-            original_size: item?.size_bytes || 0
-          })
-        })
-        
-        const data = await response.json()
-        
-        if (response.ok) {
-          successCount++
-          totalSavings += data.savings || 0
-        } else {
-          failCount++
-        }
-      } catch (error) {
-        failCount++
-      }
-    }
-    
-    setIsReencoding(false)
-    setReencodeModal(false)
-    setReencodeProgress({ current: 0, total: 0, currentFile: '' })
-    setSelectedItems(new Set())
-    fetchStats()
-    
-    const savingsFormatted = totalSavings > 0 ? ` (saved ${formatBytes(totalSavings)})` : ''
-    showToast('success', `Reencoded ${successCount} file(s)${savingsFormatted}${failCount > 0 ? `, ${failCount} failed` : ''}`)
-  }, [selectedItems, reencodeSettings, fetchStats, showToast, allItems])
-
-  const formatBytes = (bytes) => {
-    if (bytes === 0) return '0 B'
-    const k = 1024
-    const sizes = ['B', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
-  }
-
-  const handleItemClick = useCallback((item) => {
-    if (item.type === 'clip') {
-      navigate(`/clips?path=${encodeURIComponent(item.path)}`)
-    } else {
-      navigate(`/?path=${encodeURIComponent(item.path)}`)
-    }
-  }, [navigate])
-
-  const getUniqueGames = useCallback(() => {
-    if (!stats) return []
-    const games = new Set()
-    stats.recordings.forEach(r => games.add(r.game_name))
-    stats.clips.forEach(c => games.add(c.game_name))
-    return Array.from(games).sort()
-  }, [stats])
-
   const getSizeClass = useCallback((sizeBytes) => {
     const gb = sizeBytes / (1024 ** 3)
     if (gb < 0.5) return 'small'
@@ -309,7 +350,7 @@ function StoragePage() {
     )
   }
 
-  const items = allItems
+  const items = getAllItems()
   const selectedCount = selectedItems.size
   const lockedCount = items.filter(item => {
     const normalized = item.path.replace(/\//g, '\\')
@@ -328,7 +369,7 @@ function StoragePage() {
               <div className="stat-value">{stats?.total_size_formatted || '0 B'}</div>
             </div>
           </div>
-          
+
           <div className="stat-card">
             <div className="stat-icon">🎬</div>
             <div className="stat-content">
@@ -337,7 +378,7 @@ function StoragePage() {
               <div className="stat-detail">{stats?.recording_size_formatted || '0 B'}</div>
             </div>
           </div>
-          
+
           <div className="stat-card">
             <div className="stat-icon">✂️</div>
             <div className="stat-content">
@@ -346,7 +387,7 @@ function StoragePage() {
               <div className="stat-detail">{stats?.clip_size_formatted || '0 B'}</div>
             </div>
           </div>
-          
+
           {stats?.disk_usage && (
             <div className="stat-card">
               <div className="stat-icon">📊</div>
@@ -403,7 +444,7 @@ function StoragePage() {
                 <button className="btn btn-secondary" onClick={() => setSelectedItems(new Set())}>
                   Clear Selection
                 </button>
-                <button className="btn btn-primary" onClick={() => setReencodeModal(true)}>
+                <button className="btn btn-primary" onClick={() => { setReencodeModal(true); fetchReencodeTracks() }}>
                   🎬 Reencode Selected ({selectedCount})
                 </button>
                 <button className="btn btn-danger" onClick={() => setDeleteModal(true)}>
@@ -468,10 +509,10 @@ function StoragePage() {
             </label>
           </div>
           <div className="settings-actions">
-            <button 
-              className="btn btn-primary" 
+            <button
+              className="btn btn-primary"
               onClick={handleSaveSettings}
-              disabled={!hasUnsavedChanges}
+              disabled={!hasUnsavedChanges()}
             >
               💾 Save Settings
             </button>
@@ -490,7 +531,7 @@ function StoragePage() {
             const normalizedPath = item.path.replace(/\//g, '\\')
             const isLocked = lockedRecordings.has(normalizedPath)
             const sizeClass = getSizeClass(item.size_bytes)
-            
+
             return (
               <div
                 key={item.path}
@@ -503,13 +544,13 @@ function StoragePage() {
                     onChange={() => toggleSelection(item.path)}
                   />
                 </div>
-                
+
                 <div className="item-lock" onClick={() => toggleLock(item.path)} title={isLocked ? 'Unlock' : 'Lock'}>
                   {isLocked ? '🔒' : '🔓'}
                 </div>
 
                 <div className="item-type-badge">{item.type === 'clip' ? '✂️' : '🎬'}</div>
-                
+
                 <div className="item-content">
                   <div className="item-clickable" onClick={() => handleItemClick(item)}>
                     <div className="item-game">{item.game_name}</div>
@@ -532,64 +573,95 @@ function StoragePage() {
           <div className="modal-content reencode-modal" onClick={(e) => e.stopPropagation()}>
             <h2>Reencode Videos</h2>
             <p>Reencode {selectedCount} selected video(s) to a different codec</p>
-            
+
             <div className="reencode-settings">
               <div className="setting-row">
                 <label>Codec:</label>
-                <select 
-                  value={reencodeSettings.codec} 
+                <select
+                  value={reencodeSettings.codec}
                   onChange={(e) => setReencodeSettings({...reencodeSettings, codec: e.target.value})}
                   disabled={isReencoding}
                 >
                   <option value="h264">H.264 (widely compatible)</option>
                   <option value="h265">H.265/HEVC (better compression)</option>
                   <option value="av1">AV1 (best compression, slower)</option>
+                  <option value="copy">Stream Copy (track removal only, instant)</option>
                 </select>
               </div>
-              
-              <div className="setting-row">
-                <label>Quality (CRF):</label>
-                <input 
-                  type="range" 
-                  min="18" 
-                  max="28" 
-                  value={reencodeSettings.crf}
-                  onChange={(e) => setReencodeSettings({...reencodeSettings, crf: parseInt(e.target.value)})}
-                  disabled={isReencoding}
-                />
-                <span>{reencodeSettings.crf} {reencodeSettings.crf < 20 ? '(high)' : reencodeSettings.crf < 24 ? '(medium)' : '(low)'}</span>
-              </div>
-              
-              <div className="setting-row">
-                <label>Speed Preset:</label>
-                <select 
-                  value={reencodeSettings.preset}
-                  onChange={(e) => setReencodeSettings({...reencodeSettings, preset: e.target.value})}
-                  disabled={isReencoding}
-                >
-                  <option value="veryfast">Very Fast (larger file)</option>
-                  <option value="fast">Fast</option>
-                  <option value="medium">Medium (recommended)</option>
-                  <option value="slow">Slow (smaller file)</option>
-                  <option value="veryslow">Very Slow (smallest file)</option>
-                </select>
-              </div>
-              
+
+              {reencodeSettings.codec !== 'copy' && (
+                <>
+                  <div className="setting-row">
+                    <label>Quality (CRF):</label>
+                    <input
+                      type="range"
+                      min="18"
+                      max="28"
+                      value={reencodeSettings.crf}
+                      onChange={(e) => setReencodeSettings({...reencodeSettings, crf: parseInt(e.target.value)})}
+                      disabled={isReencoding}
+                    />
+                    <span>{reencodeSettings.crf} {reencodeSettings.crf < 20 ? '(high)' : reencodeSettings.crf < 24 ? '(medium)' : '(low)'}</span>
+                  </div>
+
+                  <div className="setting-row">
+                    <label>Speed Preset:</label>
+                    <select
+                      value={reencodeSettings.preset}
+                      onChange={(e) => setReencodeSettings({...reencodeSettings, preset: e.target.value})}
+                      disabled={isReencoding}
+                    >
+                      <option value="veryfast">Very Fast (larger file)</option>
+                      <option value="fast">Fast</option>
+                      <option value="medium">Medium (recommended)</option>
+                      <option value="slow">Slow (smaller file)</option>
+                      <option value="veryslow">Very Slow (smallest file)</option>
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {reencodeAudioTracks.length > 1 && (
+                <div className="clip-tracks">
+                  <label className="clip-tracks-label">Audio Tracks</label>
+                  {loadingTracks ? (
+                    <div className="track-loading">Loading tracks...</div>
+                  ) : (
+                    <div className="track-list">
+                      {reencodeAudioTracks.map((track, i) => (
+                        <label key={i} className="track-item">
+                          <input
+                            type="checkbox"
+                            checked={reencodeSelectedTracks.includes(i)}
+                            onChange={() => toggleReencodeTrack(i)}
+                            disabled={isReencoding}
+                          />
+                          <span className="track-name">{track.title || `Track ${i + 1}`}</span>
+                          <span className="track-detail">{track.codec_name} · {track.channels}ch</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <label className="checkbox-label">
-                <input 
-                  type="checkbox" 
+                <input
+                  type="checkbox"
                   checked={reencodeSettings.replaceOriginal}
                   onChange={(e) => setReencodeSettings({...reencodeSettings, replaceOriginal: e.target.checked})}
                   disabled={isReencoding}
                 />
                 Replace original files (saves space)
               </label>
-              
+
               <p className="modal-note">
-                ℹ️ Reencoding may take several minutes per video. Lower CRF = better quality but larger files. H.265 typically saves 30-50% space compared to H.264.
+                {reencodeSettings.codec === 'copy'
+                  ? 'Stream copy re-exports the video without re-encoding. Use this to quickly remove unwanted audio tracks.'
+                  : 'Reencoding may take several minutes per video. Lower CRF = better quality but larger files. H.265 typically saves 30-50% space compared to H.264.'}
               </p>
             </div>
-            
+
             {isReencoding && (
               <div className="reencode-progress">
                 <div className="progress-info">
@@ -597,28 +669,28 @@ function StoragePage() {
                   <span className="progress-filename">{reencodeProgress.currentFile}</span>
                 </div>
                 <div className="progress-bar-container">
-                  <div 
-                    className="progress-bar-fill" 
+                  <div
+                    className="progress-bar-fill"
                     style={{ width: `${(reencodeProgress.current / reencodeProgress.total) * 100}%` }}
                   />
                 </div>
               </div>
             )}
-            
+
             <div className="modal-actions">
-              <button 
-                className="btn btn-secondary" 
+              <button
+                className="btn btn-secondary"
                 onClick={() => setReencodeModal(false)}
                 disabled={isReencoding}
               >
                 Cancel
               </button>
-              <button 
-                className="btn btn-primary" 
+              <button
+                className="btn btn-primary"
                 onClick={handleReencode}
                 disabled={isReencoding}
               >
-                {isReencoding ? '⏳ Reencoding...' : '🎬 Start Reencoding'}
+                {isReencoding ? '⏳ Processing...' : reencodeSettings.codec === 'copy' ? '📦 Start Re-export' : '🎬 Start Reencoding'}
               </button>
             </div>
           </div>
