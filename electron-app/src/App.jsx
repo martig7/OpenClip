@@ -1,7 +1,8 @@
 import { HashRouter, Routes, Route, NavLink } from 'react-router-dom';
-import { Gamepad2, Video, Film, HardDrive, Settings } from 'lucide-react';
+import { Gamepad2, Video, Film, HardDrive, Settings, Sliders } from 'lucide-react';
 import GamesPage from './pages/GamesPage';
 import SettingsPage from './pages/SettingsPage';
+import EncodingPage from './pages/EncodingPage';
 import ViewerRecordingsPage from './viewer/pages/RecordingsPage';
 import ViewerClipsPage from './viewer/pages/ClipsPage';
 import ViewerStoragePage from './viewer/pages/StoragePage';
@@ -13,6 +14,7 @@ const navItems = [
   { path: '/recordings', icon: Video, label: 'Recordings' },
   { path: '/clips', icon: Film, label: 'Clips' },
   { path: '/storage', icon: HardDrive, label: 'Storage' },
+  { path: '/encoding', icon: Sliders, label: 'Encoding' },
   { path: '/settings', icon: Settings, label: 'Settings' },
 ];
 
@@ -41,6 +43,7 @@ export default function App() {
             <Route path="/recordings" element={<ViewerRecordingsPage />} />
             <Route path="/clips" element={<ViewerClipsPage />} />
             <Route path="/storage" element={<ViewerStoragePage />} />
+            <Route path="/encoding" element={<EncodingPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </main>

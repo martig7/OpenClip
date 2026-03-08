@@ -1,6 +1,11 @@
 const { exec } = require('child_process');
 const fs = require('fs');
-const { RUNTIME_DIR, STATE_FILE } = require('./constants');
+const { RUNTIME_DIR, STATE_FILE, PID_FILE, LOG_FILE } = require('./constants');
+
+function log(message) {
+  const line = `[${new Date().toISOString()}] ${message}\n`;
+  try { fs.appendFileSync(LOG_FILE, line, 'utf-8'); } catch {}
+}
 
 function getRunningProcesses() {
   return new Promise((resolve) => {
@@ -46,6 +51,12 @@ function setupGameWatcher(store, onStateChange) {
   let lastGame = null;
   let stopped = false;
 
+  // Clear log and write PID on startup (matches Python watcher behaviour)
+  fs.mkdirSync(RUNTIME_DIR, { recursive: true });
+  try { fs.writeFileSync(LOG_FILE, '', 'utf-8'); } catch {}
+  try { fs.writeFileSync(PID_FILE, String(process.pid), 'utf-8'); } catch {}
+  log(`Watcher started (pid ${process.pid})`);
+
   async function poll() {
     if (stopped) return;
 
@@ -55,21 +66,23 @@ function setupGameWatcher(store, onStateChange) {
     if (detected && !lastGame) {
       lastGame = detected;
       writeGameState(`RECORDING|${detected.name}|${detected.scene || ''}`);
+      log(`Game detected: ${detected.name}`);
       onStateChange({ currentGame: detected.name, status: 'recording' });
     } else if (!detected && lastGame) {
       const stoppedGame = lastGame.name;
       lastGame = null;
       writeGameState('IDLE');
+      log(`Game stopped: ${stoppedGame}`);
       onStateChange({ currentGame: null, status: 'idle' });
 
       setTimeout(() => {
         const { organizeRecordings } = require('./fileManager');
         organizeRecordings(store, stoppedGame);
-      }, 3000);
+      }, 2000);
     }
 
     if (!stopped) {
-      setTimeout(poll, 2000);
+      setTimeout(poll, 1000);
     }
   }
 
@@ -79,6 +92,8 @@ function setupGameWatcher(store, onStateChange) {
   return {
     stop() {
       stopped = true;
+      log('Watcher stopped');
+      try { fs.unlinkSync(PID_FILE); } catch {}
     },
   };
 }
