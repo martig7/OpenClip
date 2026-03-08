@@ -1,8 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync, exec } = require('child_process');
-
-const VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.flv', '.mov', '.avi', '.ts'];
+const { isVideoFile, CODEC_MAP } = require('./constants');
+const service = require('./recordingService');
 
 function getWeekFolder(date) {
   const d = new Date(date);
@@ -18,9 +18,7 @@ function organizeRecordings(store, gameName) {
   const destPath = store.get('settings.destinationPath');
   if (!obsPath || !destPath || !fs.existsSync(obsPath)) return;
 
-  const files = fs.readdirSync(obsPath).filter(f =>
-    VIDEO_EXTENSIONS.includes(path.extname(f).toLowerCase())
-  );
+  const files = fs.readdirSync(obsPath).filter(f => isVideoFile(f));
 
   const now = new Date();
   const weekFolder = `${gameName} - ${getWeekFolder(now)}`;
@@ -32,7 +30,7 @@ function organizeRecordings(store, gameName) {
     // Only process files modified in the last 10 minutes
     if (now - stat.mtime > 10 * 60 * 1000) continue;
 
-    if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+    fs.mkdirSync(targetDir, { recursive: true });
 
     const dateStr = now.toISOString().slice(0, 10);
     const existing = fs.readdirSync(targetDir).filter(f => f.includes(dateStr));
@@ -68,7 +66,7 @@ function processAutoClips(store, gameName, recordingDir) {
 
   const destPath = store.get('settings.destinationPath');
   const clipsDir = path.join(destPath, 'Clips');
-  if (!fs.existsSync(clipsDir)) fs.mkdirSync(clipsDir, { recursive: true });
+  fs.mkdirSync(clipsDir, { recursive: true });
 
   const autoClip = store.get('settings.autoClip');
   const bufferBefore = autoClip.bufferBefore || 15;
@@ -77,7 +75,10 @@ function processAutoClips(store, gameName, recordingDir) {
   // Find the most recent recording file
   const recordings = fs.readdirSync(recordingDir)
     .filter(f => f.endsWith('.mp4'))
-    .map(f => ({ name: f, path: path.join(recordingDir, f), mtime: fs.statSync(path.join(recordingDir, f)).mtime }))
+    .map(f => {
+      const fp = path.join(recordingDir, f);
+      return { name: f, path: fp, mtime: fs.statSync(fp).mtime };
+    })
     .sort((a, b) => b.mtime - a.mtime);
 
   if (recordings.length === 0) return;
@@ -109,133 +110,35 @@ function processAutoClips(store, gameName, recordingDir) {
   }
 }
 
-function scanRecordings(destPath) {
-  if (!destPath || !fs.existsSync(destPath)) return [];
-
-  const recordings = [];
-  const entries = fs.readdirSync(destPath, { withFileTypes: true });
-
-  for (const entry of entries) {
-    if (!entry.isDirectory() || entry.name === 'Clips') continue;
-    const dirPath = path.join(destPath, entry.name);
-    // Extract game name from folder (e.g., "GameName - Week of ...")
-    const gameMatch = entry.name.match(/^(.+?)\s*-\s*Week of/);
-    const gameName = gameMatch ? gameMatch[1].trim() : entry.name;
-
-    const files = fs.readdirSync(dirPath).filter(f =>
-      VIDEO_EXTENSIONS.includes(path.extname(f).toLowerCase())
-    );
-
-    for (const file of files) {
-      const filePath = path.join(dirPath, file);
-      const stat = fs.statSync(filePath);
-      recordings.push({
-        name: file,
-        path: filePath,
-        game: gameName,
-        size: stat.size,
-        modified: stat.mtime.toISOString(),
-        folder: entry.name,
-      });
-    }
-  }
-
-  return recordings.sort((a, b) => new Date(b.modified) - new Date(a.modified));
-}
-
-function scanClips(destPath) {
-  const clipsDir = path.join(destPath, 'Clips');
-  if (!fs.existsSync(clipsDir)) return [];
-
-  return fs.readdirSync(clipsDir)
-    .filter(f => VIDEO_EXTENSIONS.includes(path.extname(f).toLowerCase()))
-    .map(f => {
-      const filePath = path.join(clipsDir, f);
-      const stat = fs.statSync(filePath);
-      const gameMatch = f.match(/^(.+?)\s+Clip/);
-      return {
-        name: f,
-        path: filePath,
-        game: gameMatch ? gameMatch[1] : 'Unknown',
-        size: stat.size,
-        modified: stat.mtime.toISOString(),
-      };
-    })
-    .sort((a, b) => new Date(b.modified) - new Date(a.modified));
-}
-
-function getStorageStats(destPath) {
-  if (!destPath || !fs.existsSync(destPath)) {
-    return { totalSize: 0, recordingCount: 0, clipCount: 0, byGame: {} };
-  }
-
-  const recordings = scanRecordings(destPath);
-  const clips = scanClips(destPath);
-  const all = [...recordings, ...clips];
-
-  const byGame = {};
-  for (const item of all) {
-    byGame[item.game] = (byGame[item.game] || 0) + item.size;
-  }
-
-  return {
-    totalSize: all.reduce((sum, i) => sum + i.size, 0),
-    recordingCount: recordings.length,
-    clipCount: clips.length,
-    byGame,
-  };
-}
-
 function setupFileManager(ipcMain, store) {
+  service.init(store);
+
   ipcMain.handle('recordings:list', () => {
-    return scanRecordings(store.get('settings.destinationPath'));
+    return service.scanRecordings();
   });
 
   ipcMain.handle('recordings:delete', (_event, filePath) => {
     const destPath = store.get('settings.destinationPath');
     if (!filePath.startsWith(destPath)) throw new Error('Invalid path');
-    fs.unlinkSync(filePath);
-    return true;
+    return service.deleteFile(filePath);
   });
 
   ipcMain.handle('video:getURL', (_event, filePath) => {
-    // Return a file:// URL for the video
     return `file:///${filePath.replace(/\\/g, '/')}`;
   });
 
   ipcMain.handle('clips:list', () => {
-    return scanClips(store.get('settings.destinationPath'));
+    return service.scanClips();
   });
 
-  ipcMain.handle('clips:create', async (_event, { sourcePath, startTime, endTime }) => {
-    const destPath = store.get('settings.destinationPath');
-    const clipsDir = path.join(destPath, 'Clips');
-    if (!fs.existsSync(clipsDir)) fs.mkdirSync(clipsDir, { recursive: true });
-
-    const baseName = path.basename(sourcePath, path.extname(sourcePath));
-    const dateStr = new Date().toISOString().slice(0, 10);
-    const existing = fs.readdirSync(clipsDir).filter(f => f.includes(dateStr));
-    const num = existing.length + 1;
-    const clipPath = path.join(clipsDir, `${baseName} Clip ${dateStr} #${num}.mp4`);
-    const duration = endTime - startTime;
-
-    return new Promise((resolve, reject) => {
-      exec(
-        `ffmpeg -ss ${startTime} -i "${sourcePath}" -t ${duration} -c copy "${clipPath}" -y`,
-        { timeout: 120000 },
-        (error) => {
-          if (error) reject(error);
-          else resolve({ path: clipPath, name: path.basename(clipPath) });
-        }
-      );
-    });
+  ipcMain.handle('clips:create', async (_event, { sourcePath, startTime, endTime, gameName }) => {
+    return service.createClip(sourcePath, startTime, endTime, gameName);
   });
 
   ipcMain.handle('clips:delete', (_event, filePath) => {
     const destPath = store.get('settings.destinationPath');
     if (!filePath.startsWith(destPath)) throw new Error('Invalid path');
-    fs.unlinkSync(filePath);
-    return true;
+    return service.deleteFile(filePath);
   });
 
   ipcMain.handle('markers:list', () => {
@@ -250,31 +153,25 @@ function setupFileManager(ipcMain, store) {
   });
 
   ipcMain.handle('storage:stats', () => {
-    return getStorageStats(store.get('settings.destinationPath'));
+    const recordings = service.scanRecordings();
+    const clips = service.scanClips();
+    const all = [...recordings, ...clips];
+    const byGame = {};
+    for (const item of all) {
+      byGame[item.game_name] = (byGame[item.game_name] || 0) + item.size_bytes;
+    }
+    return {
+      totalSize: all.reduce((sum, i) => sum + i.size_bytes, 0),
+      recordingCount: recordings.length,
+      clipCount: clips.length,
+      byGame,
+    };
   });
 
   ipcMain.handle('video:reencode', async (_event, { filePath, codec, crf, preset, replace }) => {
-    const codecMap = {
-      h264: 'libx264',
-      h265: 'libx265',
-      av1: 'libsvtav1',
-    };
-    const encoder = codecMap[codec] || 'libx264';
-    const outPath = replace ? filePath + '.tmp.mp4' : filePath.replace('.mp4', `_${codec}.mp4`);
-
-    return new Promise((resolve, reject) => {
-      exec(
-        `ffmpeg -i "${filePath}" -c:v ${encoder} -crf ${crf} -preset ${preset} -c:a copy "${outPath}" -y`,
-        { timeout: 600000 },
-        (error) => {
-          if (error) return reject(error);
-          if (replace) {
-            fs.unlinkSync(filePath);
-            fs.renameSync(outPath, filePath);
-          }
-          resolve(true);
-        }
-      );
+    return service.reencodeVideo(filePath, {
+      codec, crf, preset,
+      replaceOriginal: replace,
     });
   });
 }
