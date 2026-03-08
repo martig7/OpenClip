@@ -167,6 +167,43 @@ function StoragePage() {
     return JSON.stringify(settings) !== JSON.stringify(editedSettings)
   }, [settings, editedSettings])
 
+  const allItems = useMemo(() => {
+    if (!stats) return []
+
+    let items = []
+
+    if (filterType === 'all' || filterType === 'recordings') {
+      items = [...items, ...stats.recordings.map(r => ({ ...r, type: 'recording' }))]
+    }
+
+    if (filterType === 'all' || filterType === 'clips') {
+      items = [...items, ...stats.clips.map(c => ({ ...c, type: 'clip' }))]
+    }
+
+    // Filter by game
+    if (filterGame !== 'all') {
+      items = items.filter(item => item.game_name === filterGame)
+    }
+
+    // Sort items
+    items.sort((a, b) => {
+      if (sortBy === 'date') {
+        return b.mtime - a.mtime
+      } else if (sortBy === 'size') {
+        return b.size_bytes - a.size_bytes
+      } else if (sortBy === 'game') {
+        // Sort by game name, then by date within each game
+        const gameCompare = a.game_name.localeCompare(b.game_name)
+        if (gameCompare !== 0) return gameCompare
+        return b.mtime - a.mtime
+      } else {
+        return a.filename.localeCompare(b.filename)
+      }
+    })
+
+    return items
+  }, [stats, filterType, filterGame, sortBy])
+
   const handleReencode = useCallback(async () => {
     if (selectedItems.size === 0) return
     
@@ -246,43 +283,6 @@ function StoragePage() {
     stats.clips.forEach(c => games.add(c.game_name))
     return Array.from(games).sort()
   }, [stats])
-
-  const allItems = useMemo(() => {
-    if (!stats) return []
-
-    let items = []
-
-    if (filterType === 'all' || filterType === 'recordings') {
-      items = [...items, ...stats.recordings.map(r => ({ ...r, type: 'recording' }))]
-    }
-
-    if (filterType === 'all' || filterType === 'clips') {
-      items = [...items, ...stats.clips.map(c => ({ ...c, type: 'clip' }))]
-    }
-
-    // Filter by game
-    if (filterGame !== 'all') {
-      items = items.filter(item => item.game_name === filterGame)
-    }
-
-    // Sort items
-    items.sort((a, b) => {
-      if (sortBy === 'date') {
-        return b.mtime - a.mtime
-      } else if (sortBy === 'size') {
-        return b.size_bytes - a.size_bytes
-      } else if (sortBy === 'game') {
-        // Sort by game name, then by date within each game
-        const gameCompare = a.game_name.localeCompare(b.game_name)
-        if (gameCompare !== 0) return gameCompare
-        return b.mtime - a.mtime
-      } else {
-        return a.filename.localeCompare(b.filename)
-      }
-    })
-
-    return items
-  }, [stats, filterType, filterGame, sortBy])
 
   const getSizeClass = useCallback((sizeBytes) => {
     const gb = sizeBytes / (1024 ** 3)

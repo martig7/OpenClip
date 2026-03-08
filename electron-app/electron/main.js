@@ -71,13 +71,12 @@ const { setupGameWatcher } = require('./gameWatcher');
 const { setupFileManager } = require('./fileManager');
 const { readOBSRecordingPath } = require('./obsIntegration');
 const { startApiServer } = require('./apiServer');
+const { RUNTIME_DIR, STATE_FILE } = require('./constants');
 
 let apiServer = null;
 let apiPort = null;
-
-// Ensure runtime dir and game_state file exist
-const RUNTIME_DIR = path.join(__dirname, '..', '..', 'runtime');
-const STATE_FILE = path.join(RUNTIME_DIR, 'game_state');
+let apiPortResolve;
+const apiPortReady = new Promise(r => { apiPortResolve = r; });
 
 function ensureGameState() {
   fs.mkdirSync(RUNTIME_DIR, { recursive: true });
@@ -93,7 +92,7 @@ function readGameState() {
 }
 
 let mainWindow;
-let watcherInterval = null;
+let watcher = null;
 let watcherStartedAt = null;
 let currentGame = null;
 
@@ -182,45 +181,48 @@ ipcMain.handle('games:update', (_event, id, updates) => {
 
 // Windows - enumerate visible windows for game selector
 ipcMain.handle('windows:list', async () => {
-  const { execSync } = require('child_process');
-  try {
+  const { exec } = require('child_process');
+  return new Promise((resolve) => {
     const cmd = `powershell -Command "Get-Process | Where-Object {$_.MainWindowTitle -ne ''} | Select-Object ProcessName, MainWindowTitle | ConvertTo-Json"`;
-    const output = execSync(cmd, { encoding: 'utf-8', timeout: 5000 });
-    const parsed = JSON.parse(output);
-    const items = Array.isArray(parsed) ? parsed : [parsed];
-    const systemProcs = ['explorer', 'searchhost', 'textinputhost', 'shellexperiencehost', 'applicationframehost', 'systemsettings', 'mmc'];
-    return items
-      .filter(p => p.MainWindowTitle && !systemProcs.includes(p.ProcessName.toLowerCase()))
-      .map(p => ({
-        title: p.MainWindowTitle,
-        process: p.ProcessName,
-      }));
-  } catch {
-    return [];
-  }
+    exec(cmd, { encoding: 'utf-8', timeout: 5000 }, (error, stdout) => {
+      if (error) return resolve([]);
+      try {
+        const parsed = JSON.parse(stdout);
+        const items = Array.isArray(parsed) ? parsed : [parsed];
+        const systemProcs = ['explorer', 'searchhost', 'textinputhost', 'shellexperiencehost', 'applicationframehost', 'systemsettings', 'mmc'];
+        resolve(items
+          .filter(p => p.MainWindowTitle && !systemProcs.includes(p.ProcessName.toLowerCase()))
+          .map(p => ({
+            title: p.MainWindowTitle,
+            process: p.ProcessName,
+          }))
+        );
+      } catch {
+        resolve([]);
+      }
+    });
+  });
 });
 
 // Watcher
 ipcMain.handle('watcher:start', () => {
-  if (watcherInterval) return { running: true };
+  if (watcher) return { running: true };
   ensureGameState();
   watcherStartedAt = Date.now();
-  const result = setupGameWatcher(store, (state) => {
+  watcher = setupGameWatcher(store, (state) => {
     currentGame = state.currentGame;
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('watcher:state', state);
     }
   });
-  watcherInterval = result.interval;
   return { running: true };
 });
 ipcMain.handle('watcher:stop', () => {
-  if (watcherInterval) {
-    clearInterval(watcherInterval);
-    watcherInterval = null;
+  if (watcher) {
+    watcher.stop();
+    watcher = null;
     watcherStartedAt = null;
     currentGame = null;
-    // Reset game_state file
     try { fs.writeFileSync(STATE_FILE, 'IDLE', 'utf-8'); } catch {}
   }
   return { running: false };
@@ -228,7 +230,7 @@ ipcMain.handle('watcher:stop', () => {
 ipcMain.handle('watcher:status', () => {
   const gameState = readGameState();
   return {
-    running: !!watcherInterval,
+    running: !!watcher,
     currentGame,
     startedAt: watcherStartedAt,
     gameState,
@@ -280,8 +282,11 @@ ipcMain.handle('hotkey:register', () => {
   return true;
 });
 
-// IPC: get api port
-ipcMain.handle('api:port', () => apiPort);
+// IPC: get api port (waits until server is listening)
+ipcMain.handle('api:port', async () => {
+  await apiPortReady;
+  return apiPort;
+});
 
 app.whenReady().then(() => {
   ensureGameState();
@@ -297,6 +302,7 @@ app.whenReady().then(() => {
   apiServer.on('listening', () => {
     apiPort = apiServer.address().port;
     console.log(`API server on port ${apiPort}`);
+    apiPortResolve();
   });
 
   createWindow();
@@ -308,7 +314,7 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  if (watcherInterval) clearInterval(watcherInterval);
+  if (watcher) watcher.stop();
   if (apiServer) apiServer.close();
   globalShortcut.unregisterAll();
   app.quit();
