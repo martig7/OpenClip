@@ -177,6 +177,221 @@ def get_obs_recording_path():
     return None
 
 
+def find_obs_executable():
+    """Try to find the OBS executable automatically."""
+    import winreg
+
+    # Check common install locations first
+    common_paths = [
+        os.path.join(os.environ.get('ProgramFiles', r'C:\Program Files'), 'obs-studio', 'bin', '64bit', 'obs64.exe'),
+        os.path.join(os.environ.get('ProgramFiles(x86)', r'C:\Program Files (x86)'), 'obs-studio', 'bin', '64bit', 'obs64.exe'),
+        os.path.join(os.environ.get('LOCALAPPDATA', ''), 'obs-studio', 'bin', '64bit', 'obs64.exe'),
+    ]
+    for p in common_paths:
+        if os.path.isfile(p):
+            return p
+
+    # Check Windows registry (Uninstall keys)
+    reg_paths = [
+        (winreg.HKEY_LOCAL_MACHINE, r'SOFTWARE\OBS Studio'),
+        (winreg.HKEY_CURRENT_USER, r'SOFTWARE\OBS Studio'),
+        (winreg.HKEY_LOCAL_MACHINE, r'SOFTWARE\WOW6432Node\OBS Studio'),
+    ]
+    for hive, subkey in reg_paths:
+        try:
+            with winreg.OpenKey(hive, subkey) as key:
+                install_dir, _ = winreg.QueryValueEx(key, '')
+                candidate = os.path.join(install_dir, 'bin', '64bit', 'obs64.exe')
+                if os.path.isfile(candidate):
+                    return candidate
+        except OSError:
+            continue
+
+    # Check Uninstall registry entries for InstallLocation
+    uninstall_keys = [
+        (winreg.HKEY_LOCAL_MACHINE, r'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'),
+        (winreg.HKEY_LOCAL_MACHINE, r'SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall'),
+        (winreg.HKEY_CURRENT_USER, r'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'),
+    ]
+    for hive, subkey in uninstall_keys:
+        try:
+            with winreg.OpenKey(hive, subkey) as key:
+                i = 0
+                while True:
+                    try:
+                        name = winreg.EnumKey(key, i)
+                        if 'obs' in name.lower():
+                            with winreg.OpenKey(key, name) as entry:
+                                try:
+                                    loc, _ = winreg.QueryValueEx(entry, 'InstallLocation')
+                                    candidate = os.path.join(loc, 'bin', '64bit', 'obs64.exe')
+                                    if os.path.isfile(candidate):
+                                        return candidate
+                                except OSError:
+                                    pass
+                        i += 1
+                    except OSError:
+                        break
+        except OSError:
+            continue
+
+    return None
+
+
+def get_obs_profile_dir():
+    """Return the path to the first OBS profile directory."""
+    appdata = os.getenv('APPDATA', '')
+    profiles_dir = os.path.join(appdata, 'obs-studio', 'basic', 'profiles')
+    if os.path.exists(profiles_dir):
+        for profile in os.listdir(profiles_dir):
+            profile_path = os.path.join(profiles_dir, profile)
+            if os.path.isdir(profile_path) and os.path.exists(os.path.join(profile_path, 'basic.ini')):
+                return profile_path
+    return None
+
+
+def _make_case_preserving_parser():
+    """Create a ConfigParser that preserves key casing (OBS requires original case)."""
+    config = ConfigParser()
+    config.optionxform = lambda optionstr: optionstr  # Preserve original key casing
+    return config
+
+
+def read_obs_encoding_settings():
+    """Read encoding settings from the OBS profile. Returns (dict, profile_path) or (None, None)."""
+    profile_dir = get_obs_profile_dir()
+    if not profile_dir:
+        return None, None
+
+    settings = {}
+    basic_ini = os.path.join(profile_dir, 'basic.ini')
+    config = _make_case_preserving_parser()
+    config.read(basic_ini, encoding='utf-8-sig')
+
+    # Video settings — try both original and lowercased keys (in case file was already lowercased)
+    if config.has_section('Video'):
+        for key_upper, key_lower in [('OutputCX', 'outputcx'), ('OutputCY', 'outputcy'), ('FPSCommon', 'fpscommon')]:
+            val = config.get('Video', key_upper, fallback=None) or config.get('Video', key_lower, fallback=None)
+            if key_upper == 'OutputCX':
+                settings['output_cx'] = val or '1920'
+            elif key_upper == 'OutputCY':
+                settings['output_cy'] = val or '1080'
+            elif key_upper == 'FPSCommon':
+                settings['fps_common'] = val or '60'
+
+    # Determine output mode
+    output_mode = config.get('Output', 'Mode', fallback=None) or config.get('Output', 'mode', fallback='Simple')
+    settings['output_mode'] = output_mode
+
+    if output_mode.lower() == 'advanced' and config.has_section('AdvOut'):
+        settings['rec_encoder'] = (config.get('AdvOut', 'RecEncoder', fallback=None)
+                                   or config.get('AdvOut', 'recencoder', fallback=''))
+        settings['rec_format'] = (config.get('AdvOut', 'RecFormat2', fallback=None)
+                                  or config.get('AdvOut', 'recformat2', fallback='mkv'))
+    elif config.has_section('SimpleOutput'):
+        settings['rec_encoder'] = (config.get('SimpleOutput', 'RecEncoder', fallback=None)
+                                   or config.get('SimpleOutput', 'recencoder', fallback=''))
+        settings['rec_format'] = (config.get('SimpleOutput', 'RecFormat', fallback=None)
+                                  or config.get('SimpleOutput', 'recformat', fallback='mp4'))
+
+    # Encoder JSON settings
+    encoder_json = os.path.join(profile_dir, 'recordEncoder.json')
+    if os.path.exists(encoder_json):
+        try:
+            with open(encoder_json, 'r', encoding='utf-8') as f:
+                enc = json.load(f)
+            settings['rate_control'] = enc.get('rate_control', '')
+            settings['bitrate'] = str(enc.get('bitrate', ''))
+            settings['max_bitrate'] = str(enc.get('max_bitrate', ''))
+            settings['cqp'] = str(enc.get('cqp', ''))
+            settings['target_quality'] = str(enc.get('target_quality', ''))
+            settings['preset'] = enc.get('preset', '')
+        except:
+            pass
+
+    return settings, profile_dir
+
+
+def _ini_replace_value(lines, section, key, value):
+    """Replace a key's value in an INI file's lines, matching case-insensitively."""
+    in_section = False
+    key_lower = key.lower()
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith('[') and stripped.endswith(']'):
+            in_section = (stripped[1:-1] == section)
+            continue
+        if in_section and '=' in stripped:
+            line_key = stripped.split('=', 1)[0].strip()
+            if line_key.lower() == key_lower:
+                lines[i] = f"{line_key}={value}\n"
+                return True
+    return False
+
+
+def save_obs_encoding_settings(settings, profile_dir):
+    """Write encoding settings back to OBS profile files, preserving original formatting."""
+    basic_ini = os.path.join(profile_dir, 'basic.ini')
+
+    with open(basic_ini, 'r', encoding='utf-8-sig') as f:
+        lines = f.readlines()
+
+    # Detect output mode
+    config = _make_case_preserving_parser()
+    config.read(basic_ini, encoding='utf-8-sig')
+    output_mode = config.get('Output', 'Mode', fallback=None) or config.get('Output', 'mode', fallback='Simple')
+
+    # Video settings
+    _ini_replace_value(lines, 'Video', 'OutputCX', settings['output_cx'])
+    _ini_replace_value(lines, 'Video', 'OutputCY', settings['output_cy'])
+    _ini_replace_value(lines, 'Video', 'FPSCommon', settings['fps_common'])
+
+    # Recording output settings
+    if output_mode.lower() == 'advanced':
+        _ini_replace_value(lines, 'AdvOut', 'RecEncoder', settings['rec_encoder'])
+        _ini_replace_value(lines, 'AdvOut', 'RecFormat2', settings['rec_format'])
+    else:
+        _ini_replace_value(lines, 'SimpleOutput', 'RecEncoder', settings['rec_encoder'])
+        _ini_replace_value(lines, 'SimpleOutput', 'RecFormat', settings['rec_format'])
+
+    with open(basic_ini, 'w', encoding='utf-8-sig') as f:
+        f.writelines(lines)
+
+    # Encoder JSON settings
+    encoder_json = os.path.join(profile_dir, 'recordEncoder.json')
+    enc = {}
+    if os.path.exists(encoder_json):
+        try:
+            with open(encoder_json, 'r', encoding='utf-8') as f:
+                enc = json.load(f)
+        except:
+            pass
+
+    if settings.get('rate_control'):
+        enc['rate_control'] = settings['rate_control']
+    for key in ['bitrate', 'max_bitrate', 'cqp', 'target_quality']:
+        val = settings.get(key, '').strip()
+        if val:
+            try:
+                enc[key] = int(val)
+            except ValueError:
+                pass
+    if settings.get('preset'):
+        enc['preset'] = settings['preset']
+
+    with open(encoder_json, 'w', encoding='utf-8') as f:
+        json.dump(enc, f)
+
+
+def is_obs_running():
+    """Check if OBS is currently running."""
+    processes = get_process_list()
+    for name in processes.values():
+        if name.lower() == 'obs64.exe':
+            return True
+    return False
+
+
 # ============== Windows API Functions ==============
 
 def get_visible_windows():
@@ -269,6 +484,7 @@ class GameManagerApp:
         # Create tabs
         self.create_main_tab()
         self.create_settings_tab()
+        self.create_encoding_tab()
 
         # Initial load
         self.refresh_games()
@@ -301,6 +517,7 @@ class GameManagerApp:
         self.stop_btn.pack(side=tk.LEFT)
 
         ttk.Button(btn_frame, text="View Recordings", command=self.open_recordings_viewer).pack(side=tk.RIGHT)
+        ttk.Button(btn_frame, text="Open OBS", command=self.open_obs).pack(side=tk.RIGHT, padx=(0, 5))
 
         # === Games Section ===
         games_frame = ttk.LabelFrame(tab, text="Games", padding=10)
@@ -361,11 +578,50 @@ class GameManagerApp:
 
     def create_settings_tab(self):
         """Settings tab for auto-organization configuration."""
-        tab = ttk.Frame(self.notebook, padding=10)
+        tab = ttk.Frame(self.notebook)
         self.notebook.add(tab, text="Settings")
 
+        # Scrollable container
+        canvas = tk.Canvas(tab, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(tab, orient="vertical", command=canvas.yview)
+        scroll_frame = ttk.Frame(canvas, padding=10)
+
+        scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas_window = canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Make the inner frame expand to canvas width
+        def on_canvas_configure(event):
+            canvas.itemconfig(canvas_window, width=event.width)
+        canvas.bind("<Configure>", on_canvas_configure)
+
+        # Mousewheel scrolling
+        def on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        canvas.bind_all("<MouseWheel>", on_mousewheel, add='+')
+
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # === OBS Executable Path ===
+        obs_exe_frame = ttk.LabelFrame(scroll_frame, text="OBS Executable", padding=10)
+        obs_exe_frame.pack(fill=tk.X, pady=(0, 10))
+
+        obs_exe_path_frame = ttk.Frame(obs_exe_frame)
+        obs_exe_path_frame.pack(fill=tk.X)
+
+        self.obs_exe_var = tk.StringVar(value=self.settings.get('obs_path', ''))
+        self.obs_exe_entry = ttk.Entry(obs_exe_path_frame, textvariable=self.obs_exe_var)
+        self.obs_exe_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        ttk.Button(obs_exe_path_frame, text="Browse", command=self.browse_obs_exe).pack(side=tk.LEFT, padx=(5, 0))
+        ttk.Button(obs_exe_path_frame, text="Auto-Find", command=self.auto_find_obs).pack(side=tk.LEFT, padx=(5, 0))
+
+        self.obs_exe_status = ttk.Label(obs_exe_frame, text="", font=('Segoe UI', 8))
+        self.obs_exe_status.pack(anchor=tk.W, pady=(2, 0))
+        self.update_obs_exe_status()
+
         # === OBS Detection ===
-        obs_frame = ttk.LabelFrame(tab, text="OBS Recording Folder (Auto-Detected)", padding=10)
+        obs_frame = ttk.LabelFrame(scroll_frame, text="OBS Recording Folder (Auto-Detected)", padding=10)
         obs_frame.pack(fill=tk.X, pady=(0, 10))
 
         obs_path_display = self.obs_recording_path or "(Not found - is OBS installed?)"
@@ -373,7 +629,7 @@ class GameManagerApp:
         self.obs_path_label.pack(anchor=tk.W)
 
         # === Auto-Organization ===
-        org_frame = ttk.LabelFrame(tab, text="Automatic Recording Organization", padding=10)
+        org_frame = ttk.LabelFrame(scroll_frame, text="Automatic Recording Organization", padding=10)
         org_frame.pack(fill=tk.X, pady=(0, 10))
 
         # Enable checkbox
@@ -400,7 +656,7 @@ class GameManagerApp:
         ttk.Button(org_frame, text="Save Settings", command=self.save_settings_click).pack(anchor=tk.W, pady=(10, 0))
 
         # === Clip Marker Hotkey ===
-        hotkey_frame = ttk.LabelFrame(tab, text="Clip Marker Hotkey", padding=10)
+        hotkey_frame = ttk.LabelFrame(scroll_frame, text="Clip Marker Hotkey", padding=10)
         hotkey_frame.pack(fill=tk.X, pady=(0, 10))
 
         ttk.Label(hotkey_frame, text="Press this key while recording to mark a moment for clipping:").pack(anchor=tk.W)
@@ -434,7 +690,7 @@ class GameManagerApp:
                  font=('Segoe UI', 8), foreground='gray').pack(anchor=tk.W, pady=(2, 0))
 
         # === Auto-Clip Settings ===
-        autoclip_frame = ttk.LabelFrame(tab, text="Automatic Clip Creation", padding=10)
+        autoclip_frame = ttk.LabelFrame(scroll_frame, text="Automatic Clip Creation", padding=10)
         autoclip_frame.pack(fill=tk.X, pady=(0, 10))
 
         ttk.Label(autoclip_frame, text="Automatically create clips from markers when a recording ends:").pack(anchor=tk.W)
@@ -474,7 +730,7 @@ class GameManagerApp:
                  font=('Segoe UI', 8), foreground='gray').pack(anchor=tk.W, pady=(2, 0))
 
         # === Info ===
-        info_frame = ttk.LabelFrame(tab, text="How It Works", padding=10)
+        info_frame = ttk.LabelFrame(scroll_frame, text="How It Works", padding=10)
         info_frame.pack(fill=tk.X)
 
         info_text = """When a game closes and recording stops, files are organized as:
@@ -488,6 +744,194 @@ Example:
     Minecraft Session 2026-01-17 #1.mp4"""
 
         ttk.Label(info_frame, text=info_text, font=('Consolas', 9)).pack(anchor=tk.W)
+
+    def create_encoding_tab(self):
+        """OBS Encoding settings tab."""
+        tab = ttk.Frame(self.notebook, padding=10)
+        self.notebook.add(tab, text="OBS Encoding")
+
+        # Store profile dir for save operations
+        self.obs_profile_dir = None
+
+        # === Profile Status ===
+        profile_frame = ttk.Frame(tab)
+        profile_frame.pack(fill=tk.X, pady=(0, 10))
+        self.enc_profile_label = ttk.Label(profile_frame, text="", font=('Segoe UI', 8))
+        self.enc_profile_label.pack(side=tk.LEFT)
+        ttk.Button(profile_frame, text="Reload", command=self.reload_encoding_settings).pack(side=tk.RIGHT)
+
+        # === Video Settings ===
+        video_frame = ttk.LabelFrame(tab, text="Video", padding=10)
+        video_frame.pack(fill=tk.X, pady=(0, 10))
+
+        res_frame = ttk.Frame(video_frame)
+        res_frame.pack(fill=tk.X, pady=(0, 5))
+        ttk.Label(res_frame, text="Output Resolution:", width=18).pack(side=tk.LEFT)
+        self.enc_res_var = tk.StringVar()
+        res_values = ['1920x1080', '2560x1440', '3840x2160', '1280x720', '1600x900']
+        self.enc_res_combo = ttk.Combobox(res_frame, textvariable=self.enc_res_var, values=res_values, width=15)
+        self.enc_res_combo.pack(side=tk.LEFT)
+
+        fps_frame = ttk.Frame(video_frame)
+        fps_frame.pack(fill=tk.X)
+        ttk.Label(fps_frame, text="FPS:", width=18).pack(side=tk.LEFT)
+        self.enc_fps_var = tk.StringVar()
+        self.enc_fps_combo = ttk.Combobox(fps_frame, textvariable=self.enc_fps_var,
+                                          values=['30', '60', '120', '144', '240'], width=15)
+        self.enc_fps_combo.pack(side=tk.LEFT)
+
+        # === Recording Output ===
+        rec_frame = ttk.LabelFrame(tab, text="Recording Output", padding=10)
+        rec_frame.pack(fill=tk.X, pady=(0, 10))
+
+        enc_frame = ttk.Frame(rec_frame)
+        enc_frame.pack(fill=tk.X, pady=(0, 5))
+        ttk.Label(enc_frame, text="Encoder:", width=18).pack(side=tk.LEFT)
+        self.enc_encoder_var = tk.StringVar()
+        encoder_values = [
+            'obs_nvenc_hevc_tex', 'obs_nvenc_h264_tex', 'obs_nvenc_av1_tex',
+            'jim_nvenc', 'jim_hevc_nvenc',
+            'obs_x264', 'obs_x265',
+            'amd_amf_h264', 'amd_amf_hevc', 'amd_amf_av1',
+            'obs_qsv11_h264', 'obs_qsv11_hevc', 'obs_qsv11_av1',
+        ]
+        self.enc_encoder_combo = ttk.Combobox(enc_frame, textvariable=self.enc_encoder_var,
+                                               values=encoder_values, width=25)
+        self.enc_encoder_combo.pack(side=tk.LEFT)
+
+        fmt_frame = ttk.Frame(rec_frame)
+        fmt_frame.pack(fill=tk.X)
+        ttk.Label(fmt_frame, text="Format:", width=18).pack(side=tk.LEFT)
+        self.enc_format_var = tk.StringVar()
+        self.enc_format_combo = ttk.Combobox(fmt_frame, textvariable=self.enc_format_var,
+                                              values=['mkv', 'mp4', 'flv', 'ts', 'mov', 'm3u8'],
+                                              state='readonly', width=15)
+        self.enc_format_combo.pack(side=tk.LEFT)
+
+        self.enc_mode_label = ttk.Label(rec_frame, text="", font=('Segoe UI', 8), foreground='gray')
+        self.enc_mode_label.pack(anchor=tk.W, pady=(5, 0))
+
+        # === Encoder Settings ===
+        encoder_frame = ttk.LabelFrame(tab, text="Encoder Settings (recordEncoder.json)", padding=10)
+        encoder_frame.pack(fill=tk.X, pady=(0, 10))
+
+        rc_frame = ttk.Frame(encoder_frame)
+        rc_frame.pack(fill=tk.X, pady=(0, 5))
+        ttk.Label(rc_frame, text="Rate Control:", width=18).pack(side=tk.LEFT)
+        self.enc_rc_var = tk.StringVar()
+        self.enc_rc_combo = ttk.Combobox(rc_frame, textvariable=self.enc_rc_var,
+                                          values=['CQP', 'CBR', 'VBR', 'CQVBR', 'Lossless'],
+                                          state='readonly', width=15)
+        self.enc_rc_combo.pack(side=tk.LEFT)
+
+        br_frame = ttk.Frame(encoder_frame)
+        br_frame.pack(fill=tk.X, pady=(0, 5))
+        ttk.Label(br_frame, text="Bitrate (kbps):", width=18).pack(side=tk.LEFT)
+        self.enc_bitrate_var = tk.StringVar()
+        ttk.Entry(br_frame, textvariable=self.enc_bitrate_var, width=10).pack(side=tk.LEFT)
+
+        maxbr_frame = ttk.Frame(encoder_frame)
+        maxbr_frame.pack(fill=tk.X, pady=(0, 5))
+        ttk.Label(maxbr_frame, text="Max Bitrate (kbps):", width=18).pack(side=tk.LEFT)
+        self.enc_maxbr_var = tk.StringVar()
+        ttk.Entry(maxbr_frame, textvariable=self.enc_maxbr_var, width=10).pack(side=tk.LEFT)
+
+        cqp_frame = ttk.Frame(encoder_frame)
+        cqp_frame.pack(fill=tk.X, pady=(0, 5))
+        ttk.Label(cqp_frame, text="CQP Level:", width=18).pack(side=tk.LEFT)
+        self.enc_cqp_var = tk.StringVar()
+        ttk.Entry(cqp_frame, textvariable=self.enc_cqp_var, width=10).pack(side=tk.LEFT)
+
+        tq_frame = ttk.Frame(encoder_frame)
+        tq_frame.pack(fill=tk.X, pady=(0, 5))
+        ttk.Label(tq_frame, text="Target Quality:", width=18).pack(side=tk.LEFT)
+        self.enc_tq_var = tk.StringVar()
+        ttk.Entry(tq_frame, textvariable=self.enc_tq_var, width=10).pack(side=tk.LEFT)
+
+        preset_frame = ttk.Frame(encoder_frame)
+        preset_frame.pack(fill=tk.X)
+        ttk.Label(preset_frame, text="Preset:", width=18).pack(side=tk.LEFT)
+        self.enc_preset_var = tk.StringVar()
+        self.enc_preset_combo = ttk.Combobox(preset_frame, textvariable=self.enc_preset_var,
+                                              values=['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'], width=15)
+        self.enc_preset_combo.pack(side=tk.LEFT)
+        ttk.Label(preset_frame, text="(p1=fastest, p7=best quality)", font=('Segoe UI', 8),
+                 foreground='gray').pack(side=tk.LEFT, padx=(5, 0))
+
+        # === Save Button ===
+        save_frame = ttk.Frame(tab)
+        save_frame.pack(fill=tk.X, pady=(5, 0))
+        ttk.Button(save_frame, text="Save Encoding Settings", command=self.save_encoding_settings).pack(side=tk.LEFT)
+
+        # Load initial values
+        self.reload_encoding_settings()
+
+    def reload_encoding_settings(self):
+        """Load encoding settings from OBS profile into the UI."""
+        settings, profile_dir = read_obs_encoding_settings()
+        if not settings:
+            self.enc_profile_label.config(text="OBS profile not found", foreground='red')
+            return
+
+        self.obs_profile_dir = profile_dir
+        profile_name = os.path.basename(profile_dir) if profile_dir else "Unknown"
+        self.enc_profile_label.config(text=f"Profile: {profile_name}", foreground='green')
+
+        res = f"{settings.get('output_cx', '1920')}x{settings.get('output_cy', '1080')}"
+        self.enc_res_var.set(res)
+        self.enc_fps_var.set(settings.get('fps_common', '60'))
+
+        self.enc_encoder_var.set(settings.get('rec_encoder', ''))
+        self.enc_format_var.set(settings.get('rec_format', 'mkv'))
+        mode = settings.get('output_mode', 'Simple')
+        self.enc_mode_label.config(text=f"Output mode: {mode}")
+
+        self.enc_rc_var.set(settings.get('rate_control', ''))
+        self.enc_bitrate_var.set(settings.get('bitrate', ''))
+        self.enc_maxbr_var.set(settings.get('max_bitrate', ''))
+        self.enc_cqp_var.set(settings.get('cqp', ''))
+        self.enc_tq_var.set(settings.get('target_quality', ''))
+        self.enc_preset_var.set(settings.get('preset', ''))
+
+    def save_encoding_settings(self):
+        """Save encoding settings back to OBS profile files."""
+        if not self.obs_profile_dir:
+            messagebox.showwarning("Error", "No OBS profile found.")
+            return
+
+        if is_obs_running():
+            if not messagebox.askyesno("OBS Is Running",
+                    "OBS is currently running. Changes may be overwritten when OBS closes.\n\n"
+                    "Save anyway?"):
+                return
+
+        # Parse resolution
+        res = self.enc_res_var.get()
+        if 'x' in res:
+            cx, cy = res.split('x', 1)
+        else:
+            messagebox.showwarning("Invalid", "Resolution must be in WIDTHxHEIGHT format (e.g. 1920x1080)")
+            return
+
+        settings = {
+            'output_cx': cx.strip(),
+            'output_cy': cy.strip(),
+            'fps_common': self.enc_fps_var.get(),
+            'rec_encoder': self.enc_encoder_var.get(),
+            'rec_format': self.enc_format_var.get(),
+            'rate_control': self.enc_rc_var.get(),
+            'bitrate': self.enc_bitrate_var.get(),
+            'max_bitrate': self.enc_maxbr_var.get(),
+            'cqp': self.enc_cqp_var.get(),
+            'target_quality': self.enc_tq_var.get(),
+            'preset': self.enc_preset_var.get(),
+        }
+
+        try:
+            save_obs_encoding_settings(settings, self.obs_profile_dir)
+            messagebox.showinfo("Saved", "OBS encoding settings saved successfully.")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save settings:\n{e}")
 
     def browse_org_path(self):
         path = filedialog.askdirectory(title="Select Organized Recordings Folder")
@@ -755,6 +1199,63 @@ Example:
             )
         else:
             messagebox.showerror("Error", "recordings_viewer.pyw not found")
+
+    def browse_obs_exe(self):
+        """Browse for the OBS executable."""
+        path = filedialog.askopenfilename(
+            title="Select OBS Executable",
+            filetypes=[("Executable", "*.exe"), ("All files", "*.*")],
+            initialdir=os.environ.get('ProgramFiles', 'C:\\')
+        )
+        if path:
+            self.obs_exe_var.set(path)
+            self.settings['obs_path'] = path
+            save_settings(self.settings)
+            self.update_obs_exe_status()
+
+    def auto_find_obs(self):
+        """Automatically find the OBS executable."""
+        found = find_obs_executable()
+        if found:
+            self.obs_exe_var.set(found)
+            self.settings['obs_path'] = found
+            save_settings(self.settings)
+            self.update_obs_exe_status()
+            messagebox.showinfo("OBS Found", f"Found OBS at:\n{found}")
+        else:
+            messagebox.showwarning("Not Found", "Could not find OBS automatically.\nUse Browse to locate it manually.")
+
+    def update_obs_exe_status(self):
+        """Update the OBS executable status label."""
+        path = self.obs_exe_var.get()
+        if path and os.path.isfile(path):
+            self.obs_exe_status.config(text=f"Found: {path}", foreground='green')
+        elif path:
+            self.obs_exe_status.config(text="Path not valid - file does not exist", foreground='red')
+        else:
+            self.obs_exe_status.config(text="Not configured - use Browse or Auto-Find", foreground='gray')
+
+    def open_obs(self):
+        """Launch OBS from the configured path."""
+        path = self.settings.get('obs_path', '')
+        if not path or not os.path.isfile(path):
+            # Try auto-finding before giving up
+            found = find_obs_executable()
+            if found:
+                path = found
+                self.obs_exe_var.set(found)
+                self.settings['obs_path'] = found
+                save_settings(self.settings)
+                self.update_obs_exe_status()
+            else:
+                messagebox.showwarning("OBS Not Found",
+                    "OBS path is not configured.\nGo to Settings tab to set the OBS executable path.")
+                return
+        try:
+            obs_dir = os.path.dirname(path)
+            subprocess.Popen([path], cwd=obs_dir, creationflags=subprocess.DETACHED_PROCESS)
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to launch OBS:\n{e}")
 
     def save_hotkey(self):
         """Save the selected hotkey to settings."""

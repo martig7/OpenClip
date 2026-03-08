@@ -41,7 +41,10 @@ def log(message):
     """Log message to console and file."""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     line = f"[{timestamp}] {message}"
-    print(line)
+    try:
+        print(line)
+    except (OSError, AttributeError):
+        pass  # stdout is None/broken under pythonw
     try:
         with open(LOG_FILE, 'a', encoding='utf-8') as f:
             f.write(line + "\n")
@@ -241,6 +244,7 @@ def remux_to_mp4(source_file):
     try:
         cmd = [
             'ffmpeg', '-y', '-i', source_file,
+            '-map', '0',
             '-c', 'copy',
             '-movflags', '+faststart',
             mp4_path
