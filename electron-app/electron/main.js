@@ -2,68 +2,207 @@ const { app, BrowserWindow, ipcMain, dialog, shell, globalShortcut } = require('
 const path = require('path');
 const fs = require('fs');
 
-// electron-store setup — use a simple JSON file store to avoid ESM issues
-const storePath = path.join(app.getPath('userData'), 'config.json');
+// Electron-only config (window bounds, OBS recording path which Python reads from OBS profile directly)
+const electronConfigPath = path.join(app.getPath('userData'), 'electron.json');
+const electronConfigDefaults = { windowBounds: { width: 1200, height: 800 }, obsRecordingPath: '' };
 
-const storeDefaults = {
-  games: [],
-  settings: {
-    obsRecordingPath: '',
-    destinationPath: '',
-    clipMarkerHotkey: 'F9',
-    autoClip: {
-      enabled: false,
-      bufferBefore: 15,
-      bufferAfter: 15,
-      removeMarkers: true,
-      deleteFullRecording: false,
-    },
-    autoDelete: {
-      enabled: false,
-      maxStorageGB: 50,
-      maxAgeDays: 30,
-      excludeClips: true,
-    },
+// Python shared config paths (constants.js is required later, so derive directly here)
+const _projectRoot = path.join(__dirname, '..', '..');
+const GAMES_CONFIG_FILE = path.join(_projectRoot, 'games_config.json');
+const MANAGER_SETTINGS_FILE = path.join(_projectRoot, 'manager_settings.json');
+const _markersFile = path.join(_projectRoot, 'runtime', 'clip_markers.json');
+
+// Defaults for Python JSON files
+const gamesConfigDefaults = { games: [] };
+const managerSettingsDefaults = {
+  organized_path: '',
+  auto_organize: true,
+  storage_settings: { auto_delete_enabled: false, max_storage_gb: 100, max_age_days: 30, exclude_clips: true },
+  locked_recordings: [],
+  clip_hotkey: 'F9',
+  auto_clip_settings: {
+    enabled: false, buffer_before_seconds: 15, buffer_after_seconds: 15,
+    remove_processed_markers: true, delete_recording_after_clips: false,
   },
-  windowBounds: { width: 1200, height: 800 },
 };
 
-// Simple JSON store (no external dependency)
+function readJson(filePath, defaults) {
+  try { return JSON.parse(fs.readFileSync(filePath, 'utf-8')); }
+  catch { return JSON.parse(JSON.stringify(defaults)); }
+}
+
+function writeJson(filePath, data) {
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+}
+
+// Translate manager_settings.json → Electron settings shape (camelCase)
+function msToElectronSettings(ms, obsRecordingPath) {
+  return {
+    obsRecordingPath: obsRecordingPath || '',
+    destinationPath: ms.organized_path || '',
+    clipMarkerHotkey: ms.clip_hotkey || 'F9',
+    autoClip: {
+      enabled: ms.auto_clip_settings?.enabled || false,
+      bufferBefore: ms.auto_clip_settings?.buffer_before_seconds ?? 15,
+      bufferAfter: ms.auto_clip_settings?.buffer_after_seconds ?? 15,
+      removeMarkers: ms.auto_clip_settings?.remove_processed_markers !== false,
+      deleteFullRecording: ms.auto_clip_settings?.delete_recording_after_clips || false,
+    },
+    autoDelete: {
+      enabled: ms.storage_settings?.auto_delete_enabled || false,
+      maxStorageGB: ms.storage_settings?.max_storage_gb ?? 100,
+      maxAgeDays: ms.storage_settings?.max_age_days ?? 30,
+      excludeClips: ms.storage_settings?.exclude_clips !== false,
+    },
+  };
+}
+
+// Translate Electron settings shape → fields in manager_settings.json
+function electronSettingsToMs(ms, electronSettings) {
+  const updated = { ...ms };
+  if (electronSettings.destinationPath !== undefined) updated.organized_path = electronSettings.destinationPath;
+  if (electronSettings.clipMarkerHotkey !== undefined) updated.clip_hotkey = electronSettings.clipMarkerHotkey;
+  if (electronSettings.autoClip !== undefined) {
+    updated.auto_clip_settings = {
+      ...(ms.auto_clip_settings || {}),
+      enabled: electronSettings.autoClip.enabled || false,
+      buffer_before_seconds: electronSettings.autoClip.bufferBefore ?? 15,
+      buffer_after_seconds: electronSettings.autoClip.bufferAfter ?? 15,
+      remove_processed_markers: electronSettings.autoClip.removeMarkers !== false,
+      delete_recording_after_clips: electronSettings.autoClip.deleteFullRecording || false,
+    };
+  }
+  if (electronSettings.autoDelete !== undefined) {
+    updated.storage_settings = {
+      ...(ms.storage_settings || {}),
+      auto_delete_enabled: electronSettings.autoDelete.enabled || false,
+      max_storage_gb: electronSettings.autoDelete.maxStorageGB ?? 100,
+      max_age_days: electronSettings.autoDelete.maxAgeDays ?? 30,
+      exclude_clips: electronSettings.autoDelete.excludeClips !== false,
+    };
+  }
+  return updated;
+}
+
+// Clip markers: runtime/clip_markers.json (Python) ↔ Electron in-memory format
+function loadElectronMarkers() {
+  try {
+    const data = JSON.parse(fs.readFileSync(_markersFile, 'utf-8'));
+    return (data.markers || []).map(m => ({ game: m.game_name, timestamp: m.timestamp, created: m.created_at }));
+  } catch { return []; }
+}
+
+function saveElectronMarkers(electronMarkers) {
+  fs.mkdirSync(path.dirname(_markersFile), { recursive: true });
+  writeJson(_markersFile, {
+    markers: electronMarkers.map(m => ({ game_name: m.game, timestamp: m.timestamp, created_at: m.created })),
+  });
+}
+
+// Unified store backed by Python JSON files
 const store = {
-  _data: null,
-  _load() {
-    if (this._data) return;
-    try {
-      this._data = JSON.parse(fs.readFileSync(storePath, 'utf-8'));
-    } catch {
-      this._data = { ...storeDefaults };
-      this._save();
-    }
-  },
-  _save() {
-    fs.writeFileSync(storePath, JSON.stringify(this._data, null, 2), 'utf-8');
-  },
+  _gamesData: null,
+  _msData: null,
+  _electronData: null,
+
+  _games()    { if (!this._gamesData)    this._gamesData    = readJson(GAMES_CONFIG_FILE, gamesConfigDefaults); return this._gamesData; },
+  _ms()       { if (!this._msData)       this._msData       = readJson(MANAGER_SETTINGS_FILE, managerSettingsDefaults); return this._msData; },
+  _electron() { if (!this._electronData) this._electronData = readJson(electronConfigPath, electronConfigDefaults); return this._electronData; },
+
+  _saveGames()    { writeJson(GAMES_CONFIG_FILE, this._gamesData); },
+  _saveMs()       { writeJson(MANAGER_SETTINGS_FILE, this._msData); },
+  _saveElectron() { writeJson(electronConfigPath, this._electronData); },
+
   get(key) {
-    this._load();
-    if (!key) return this._data;
-    const keys = key.split('.');
-    let val = this._data;
-    for (const k of keys) {
-      if (val == null) return undefined;
-      val = val[k];
+    if (!key) return null;
+
+    if (key === 'games') {
+      const games = this._games().games || [];
+      // Assign IDs to any games created by the Python app that don't have one
+      let needsSave = false;
+      for (const g of games) {
+        if (!g.id) {
+          g.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+          needsSave = true;
+        }
+      }
+      if (needsSave) this._saveGames();
+      return games;
     }
-    return val !== undefined ? val : keys.reduce((d, k) => d?.[k], storeDefaults);
+    if (key === 'windowBounds') return this._electron().windowBounds || electronConfigDefaults.windowBounds;
+    if (key === 'clipMarkers') return loadElectronMarkers();
+    if (key === 'lockedRecordings') return this._ms().locked_recordings || [];
+    if (key === 'storageSettings') return this._ms().storage_settings || {};
+
+    if (key === 'settings') return msToElectronSettings(this._ms(), this._electron().obsRecordingPath);
+
+    if (key.startsWith('settings.')) {
+      const subKey = key.slice('settings.'.length);
+      const settings = msToElectronSettings(this._ms(), this._electron().obsRecordingPath);
+      const parts = subKey.split('.');
+      let val = settings;
+      for (const p of parts) val = val?.[p];
+      return val;
+    }
+
+    return undefined;
   },
+
   set(key, value) {
-    this._load();
-    const keys = key.split('.');
-    let obj = this._data;
-    for (let i = 0; i < keys.length - 1; i++) {
-      if (obj[keys[i]] == null || typeof obj[keys[i]] !== 'object') obj[keys[i]] = {};
-      obj = obj[keys[i]];
+    if (key === 'games') {
+      this._games().games = value;
+      this._saveGames();
+      return;
     }
-    obj[keys[keys.length - 1]] = value;
-    this._save();
+    if (key === 'windowBounds') {
+      this._electron().windowBounds = value;
+      this._saveElectron();
+      return;
+    }
+    if (key === 'clipMarkers') {
+      saveElectronMarkers(value);
+      return;
+    }
+    if (key === 'lockedRecordings') {
+      this._ms().locked_recordings = value;
+      this._saveMs();
+      return;
+    }
+    if (key === 'storageSettings') {
+      this._ms().storage_settings = value;
+      this._saveMs();
+      return;
+    }
+    if (key === 'settings') {
+      if (value.obsRecordingPath !== undefined) {
+        this._electron().obsRecordingPath = value.obsRecordingPath;
+        this._saveElectron();
+      }
+      this._msData = electronSettingsToMs(this._ms(), value);
+      this._saveMs();
+      return;
+    }
+    if (key.startsWith('settings.')) {
+      const subKey = key.slice('settings.'.length);
+      // obsRecordingPath lives only in electron config
+      if (subKey === 'obsRecordingPath') {
+        this._electron().obsRecordingPath = value;
+        this._saveElectron();
+        return;
+      }
+      // Build a partial electron settings object for the changed key, then merge
+      const current = msToElectronSettings(this._ms(), this._electron().obsRecordingPath);
+      const parts = subKey.split('.');
+      let obj = current;
+      for (let i = 0; i < parts.length - 1; i++) {
+        obj[parts[i]] = obj[parts[i]] || {};
+        obj = obj[parts[i]];
+      }
+      obj[parts[parts.length - 1]] = value;
+      this._msData = electronSettingsToMs(this._ms(), current);
+      this._saveMs();
+      return;
+    }
   },
 };
 
