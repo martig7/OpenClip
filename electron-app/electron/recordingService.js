@@ -26,6 +26,21 @@ function killAllProcesses() {
   activeFFmpeg.clear();
 }
 
+// --- In-progress remux tracking ---
+// Paths currently being read or written by organizeRecordings are hidden from scans
+// to prevent file-access errors and duplicate entries while ffmpeg is running.
+const activeRemuxPaths = new Set();
+
+function markRemuxing(srcPath, destPath) {
+  activeRemuxPaths.add(path.normalize(srcPath).toLowerCase());
+  if (destPath) activeRemuxPaths.add(path.normalize(destPath).toLowerCase());
+}
+
+function unmarkRemuxing(srcPath, destPath) {
+  activeRemuxPaths.delete(path.normalize(srcPath).toLowerCase());
+  if (destPath) activeRemuxPaths.delete(path.normalize(destPath).toLowerCase());
+}
+
 // --- Helpers ---
 
 function parseRecordingInfo(filePath, gameName) {
@@ -102,6 +117,7 @@ function scanRecordings() {
           for (const file of fs.readdirSync(folderPath)) {
             if (!isVideoFile(file)) continue;
             const fp = path.join(folderPath, file);
+            if (activeRemuxPaths.has(path.normalize(fp).toLowerCase())) continue;
             const info = parseRecordingInfo(fp, gameName);
             if (info) { recordings.push(info); seenPaths.add(fp.toLowerCase()); }
           }
@@ -121,6 +137,7 @@ function scanRecordings() {
         if (!obsFilenamePattern.test(nameNoExt)) continue;
         const fp = path.join(obsPath, file);
         if (seenPaths.has(fp.toLowerCase())) continue;
+        if (activeRemuxPaths.has(path.normalize(fp).toLowerCase())) continue;
         const info = parseRecordingInfo(fp, '(Unorganized)');
         if (info) recordings.push(info);
       }
@@ -375,4 +392,6 @@ module.exports = {
   reencodeVideo,
   runAutoDelete,
   killAllProcesses,
+  markRemuxing,
+  unmarkRemuxing,
 };
