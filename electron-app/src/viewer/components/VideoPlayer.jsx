@@ -78,15 +78,6 @@ function VideoPlayer({ recording, onClipCreated }) {
     return () => { cancelled = true }
   }, [recording])
 
-  // Sync HTMLVideoElement audio track enabled state with selectedTracks in clip mode
-  useEffect(() => {
-    const video = videoRef.current
-    if (!video?.audioTracks?.length) return
-    for (let i = 0; i < video.audioTracks.length; i++) {
-      video.audioTracks[i].enabled = !clipMode || selectedTracks.includes(i)
-    }
-  }, [selectedTracks, clipMode])
-
   // Fetch markers when recording changes and duration is known
   useEffect(() => {
     if (!recording || !duration) return
@@ -183,7 +174,9 @@ function VideoPlayer({ recording, onClipCreated }) {
 
   const exitClipMode = useCallback(() => {
     setClipMode(false)
-  }, [])
+    // Reset track selection so all tracks play when not in clip mode
+    setSelectedTracks(audioTracks.map((_, i) => i))
+  }, [audioTracks])
 
   const toggleTrack = useCallback((index) => {
     setSelectedTracks(prev => {
@@ -216,6 +209,7 @@ function VideoPlayer({ recording, onClipCreated }) {
 
       if (response.ok) {
         setClipMode(false)
+        setSelectedTracks(audioTracks.map((_, i) => i))
         if (onClipCreated) {
           onClipCreated(data)
         }
