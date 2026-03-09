@@ -201,8 +201,8 @@ function createClip(sourcePath, startTime, endTime, gameName = 'Unknown', audioT
     //   Track 2+: each selected track individually (preserving original order/titles)
     let audioArgs, codecArgs;
     if (!Array.isArray(audioTracks) || audioTracks.length === 0) {
-      // No specific tracks requested – copy everything as-is
-      audioArgs = [];
+      // No specific tracks requested – explicitly map all streams to preserve them all
+      audioArgs = ['-map', '0'];
       codecArgs = ['-c', 'copy'];
     } else if (audioTracks.length === 1) {
       // Single track – map it directly, stream copy is fine
