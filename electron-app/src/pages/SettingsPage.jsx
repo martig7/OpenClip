@@ -102,6 +102,22 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {/* Watcher */}
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-title">Watcher</div>
+
+          <div className="toggle-row" style={{ marginTop: 8 }}>
+            <div>
+              <div className="toggle-label">Start Watcher on Startup</div>
+              <div className="toggle-desc">Automatically start the game watcher when the app launches</div>
+            </div>
+            <button
+              className={`toggle ${settings.startWatcherOnStartup ? 'on' : ''}`}
+              onClick={() => updateSetting('startWatcherOnStartup', !settings.startWatcherOnStartup)}
+            />
+          </div>
+        </div>
+
         {/* Clip Marker */}
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="card-title">Clip Marker Hotkey</div>
