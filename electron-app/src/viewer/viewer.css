@@ -486,32 +486,6 @@ body {
   box-sizing: border-box;
 }
 
-.clip-tracks-toggle {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  color: var(--text-secondary);
-  font-size: 0.8rem;
-  cursor: pointer;
-  white-space: nowrap;
-  align-self: flex-end;
-  transition: border-color 0.15s, color 0.15s;
-}
-
-.clip-tracks-toggle:hover,
-.clip-tracks-toggle.open {
-  border-color: var(--accent);
-  color: var(--text-primary);
-}
-
-.clip-tracks-chevron {
-  font-size: 0.6rem;
-  opacity: 0.7;
-}
 
 .clip-actions {
   display: flex;
@@ -520,8 +494,8 @@ body {
   align-self: flex-end;
 }
 
-/* Track panel — renders inside .zoom-timeline-wrapper */
-.clip-track-panel {
+/* Audio waveform track panel — renders inside .zoom-timeline-wrapper */
+.audio-waveform-panel {
   padding: 8px 0 0;
   display: flex;
   flex-direction: column;
@@ -529,36 +503,35 @@ body {
   border-top: 1px solid var(--border);
 }
 
-.clip-track-bar {
+.audio-waveform-track {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 12px;
-  border-radius: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
   background: var(--bg-secondary);
+  border: 2px solid transparent;
   cursor: pointer;
-  transition: background 0.12s;
+  transition: border-color 0.15s, background 0.12s;
+  overflow: hidden;
 }
 
-.clip-track-bar:hover {
+.audio-waveform-track:hover {
   background: var(--bg-hover);
 }
 
-.clip-track-bar input[type="checkbox"] {
-  accent-color: var(--accent);
-  width: 14px;
-  height: 14px;
+.audio-waveform-track.selected {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.audio-waveform-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 90px;
+  max-width: 120px;
   flex-shrink: 0;
-  cursor: pointer;
-}
-
-.clip-track-bar--all {
-  background: var(--bg-primary);
-}
-
-.clip-track-bar--all .track-name {
-  color: var(--text-secondary);
-  font-size: 0.8rem;
 }
 
 .track-name {
@@ -580,6 +553,25 @@ body {
   color: var(--text-muted);
   font-size: 0.85rem;
   padding: 4px 0;
+}
+
+/* Waveform-specific overrides scoped to avoid affecting other screens */
+.audio-waveform-track .track-name {
+  font-size: 0.8rem;
+  font-weight: 500;
+  flex: none;
+}
+
+.audio-waveform-track .track-detail {
+  font-size: 0.7rem;
+}
+
+.audio-waveform-canvas {
+  flex: 1;
+  min-width: 0;
+  height: 48px;
+  display: block;
+  border-radius: 4px;
 }
 
 /* Video Info Bar */

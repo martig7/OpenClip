@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
-import { Music, Scissors } from 'lucide-react'
+import { Scissors } from 'lucide-react'
+import { formatTime } from '../utils'
 
 function ClipControls({
   clipStart,
@@ -10,18 +11,7 @@ function ClipControls({
   onCancel,
   onCreate,
   isCreating,
-  audioTracks = [],
-  selectedTracks = [],
-  tracksOpen = false,
-  onTracksToggle,
 }) {
-  const formatTime = (seconds) => {
-    if (!isFinite(seconds)) return '0:00'
-    const mins = Math.floor(seconds / 60)
-    const secs = Math.floor(seconds % 60)
-    return `${mins}:${secs.toString().padStart(2, '0')}`
-  }
-
   const parseTime = (timeStr) => {
     const parts = timeStr.split(':')
     if (parts.length === 2) {
@@ -71,17 +61,6 @@ function ClipControls({
           <label>Duration</label>
           <span>{formatTime(clipDuration)}</span>
         </div>
-
-        {audioTracks.length > 1 && (
-          <button
-            className={`clip-tracks-toggle${tracksOpen ? ' open' : ''}`}
-            onClick={onTracksToggle}
-            title="Audio tracks"
-          >
-            <Music size={13} /> {selectedTracks.length}/{audioTracks.length}
-            <span className="clip-tracks-chevron">{tracksOpen ? '▲' : '▼'}</span>
-          </button>
-        )}
 
         <div className="clip-actions">
           <button className="btn btn-secondary btn-sm" onClick={onCancel} disabled={isCreating}>
