@@ -521,8 +521,8 @@ body {
 }
 
 .audio-waveform-track.selected {
-  border-color: #7c3aed;
-  background: rgba(124, 58, 237, 0.08);
+  border-color: var(--accent);
+  background: var(--accent-dim);
 }
 
 .audio-waveform-info {
