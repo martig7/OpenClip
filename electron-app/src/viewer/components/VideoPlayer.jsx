@@ -182,7 +182,6 @@ function VideoPlayer({ recording, onClipCreated }) {
   const toggleTrack = useCallback((index) => {
     setSelectedTracks(prev => {
       if (prev.includes(index)) {
-        if (prev.length <= 1) return prev
         return prev.filter(i => i !== index)
       }
       return [...prev, index].sort((a, b) => a - b)
