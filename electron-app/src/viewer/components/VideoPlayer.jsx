@@ -54,19 +54,20 @@ function VideoPlayer({ recording, onClipCreated }) {
         if (response.ok && data.tracks) {
           setAudioTracks(data.tracks)
           setSelectedTracks(data.tracks.map((_, i) => i))
-          // Fetch waveform for each track
-          data.tracks.forEach(async (_, i) => {
+          // Fetch waveforms sequentially to avoid CPU/IO spikes
+          for (let i = 0; i < data.tracks.length; i++) {
+            if (cancelled) break
             try {
               const waveRes = await apiFetch(
                 `/api/video/waveform?path=${encodeURIComponent(recording.path)}&track=${i}`
               )
               const waveData = await waveRes.json()
-              if (cancelled) return
+              if (cancelled) break
               if (waveRes.ok && waveData.peaks?.length) {
                 setWaveforms(prev => ({ ...prev, [i]: waveData.peaks }))
               }
             } catch {}
-          })
+          }
         }
       } catch (error) {
         console.error('Failed to fetch audio tracks:', error)
@@ -206,7 +207,7 @@ function VideoPlayer({ recording, onClipCreated }) {
           start_time: clipStart,
           end_time: clipEnd,
           game_name: recording.game_name,
-          audio_tracks: audioTracks.length > 1 && selectedTracks.length < audioTracks.length
+          audio_tracks: audioTracks.length > 1 && selectedTracks.length > 0 && selectedTracks.length < audioTracks.length
             ? selectedTracks : null
         })
       })

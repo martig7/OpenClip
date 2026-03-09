@@ -536,8 +536,8 @@ body {
 
 .track-name {
   color: var(--text-primary);
-  font-size: 0.8rem;
-  font-weight: 500;
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -545,8 +545,25 @@ body {
 
 .track-detail {
   color: var(--text-muted);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   white-space: nowrap;
+}
+
+.track-loading {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  padding: 4px 0;
+}
+
+/* Waveform-specific overrides scoped to avoid affecting other screens */
+.audio-waveform-track .track-name {
+  font-size: 0.8rem;
+  font-weight: 500;
+  flex: none;
+}
+
+.audio-waveform-track .track-detail {
+  font-size: 0.7rem;
 }
 
 .audio-waveform-canvas {
