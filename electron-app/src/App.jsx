@@ -1,5 +1,6 @@
 import { HashRouter, Routes, Route, NavLink } from 'react-router-dom';
 import { Gamepad2, Video, Film, HardDrive, Settings, Sliders } from 'lucide-react';
+import appIcon from '../assets/icon.png';
 import GamesPage from './pages/GamesPage';
 import SettingsPage from './pages/SettingsPage';
 import EncodingPage from './pages/EncodingPage';
@@ -24,7 +25,10 @@ export default function App() {
       <div className="app-layout">
         <div className="titlebar-drag" />
         <nav className="sidebar-nav">
-          <div className="nav-brand">OBS Game Launcher</div>
+          <div className="nav-brand">
+            <img src={appIcon} alt="OpenClip logo" className="nav-brand-logo" />
+            <span>OpenClip</span>
+          </div>
           {navItems.map(({ path, icon: Icon, label }) => (
             <NavLink
               key={path}
