@@ -4,7 +4,8 @@ function Navbar() {
   return (
     <nav className="navbar">
       <div className="navbar-brand">
-        <span>Game Recordings</span>
+        <img src="/icon.png" alt="OpenClip logo" className="navbar-logo" />
+        <span>OpenClip</span>
       </div>
       <div className="nav-tabs">
         <NavLink
