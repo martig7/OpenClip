@@ -354,7 +354,8 @@ function startApiServer(appStore) {
         } catch {}
         return new Promise((resolve) => {
           exec(
-            `"${FFPROBE_PATH}" -v error -show_streams -select_streams a -of json "${filePath}"`,            { encoding: 'utf-8', timeout: 10000 },
+            `"${FFPROBE_PATH}" -v error -show_streams -select_streams a -of json "${filePath}"`,
+            { encoding: 'utf-8', timeout: 10000 },
             (error, stdout) => {
               if (error) { resolve(json(res, { tracks: [] })); return; }
               try {

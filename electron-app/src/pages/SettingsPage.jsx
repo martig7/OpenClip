@@ -1,5 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
-import { FolderOpen, RefreshCw, Wifi, QrCode, Clipboard, Copy, ExternalLink } from 'lucide-react';
+import { FolderOpen, RefreshCw, Wifi, QrCode, Clipboard, Copy } from 'lucide-react';
 import api from '../api';
 
 const HOTKEY_OPTIONS = [
@@ -19,7 +19,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     loadSettings();
-    api.getOBSScriptPath().then(p => setObsScriptPath(p || ''));
+    api.getOBSScriptPath().then(p => setObsScriptPath(p || '')).catch(() => { /* not available in browser dev mode */ });
   }, []);
 
   useEffect(() => {
