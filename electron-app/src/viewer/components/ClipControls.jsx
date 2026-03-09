@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { Music, Scissors } from 'lucide-react'
 
 function ClipControls({
   clipStart,
@@ -77,7 +78,7 @@ function ClipControls({
             onClick={onTracksToggle}
             title="Audio tracks"
           >
-            &#9836; {selectedTracks.length}/{audioTracks.length}
+            <Music size={13} /> {selectedTracks.length}/{audioTracks.length}
             <span className="clip-tracks-chevron">{tracksOpen ? '▲' : '▼'}</span>
           </button>
         )}
@@ -93,7 +94,7 @@ function ClipControls({
           >
             {isCreating
               ? <><span className="spinner" style={{ width: 13, height: 13 }} /> Creating…</>
-              : <>&#9986; Create Clip</>}
+              : <><Scissors size={13} /> Create Clip</>}
           </button>
         </div>
       </div>

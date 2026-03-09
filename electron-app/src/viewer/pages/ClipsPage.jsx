@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { Folder, Calendar, HardDrive, Play, FolderOpen, Trash2, Film, Check, X } from 'lucide-react'
 import Sidebar from '../components/Sidebar'
 import Modal from '../components/Modal'
 import { apiFetch, getBase } from '../apiBase'
@@ -101,9 +102,9 @@ function ClipsPage() {
             <div className="video-info-bar">
               <h2 className="video-title">{selectedClip.filename}</h2>
               <div className="video-meta">
-                <span>&#128193; {selectedClip.game_name}</span>
-                <span>&#128197; {selectedClip.date}</span>
-                <span>&#128190; {selectedClip.size_formatted}</span>
+                <span><Folder size={13} /> {selectedClip.game_name}</span>
+                <span><Calendar size={13} /> {selectedClip.date}</span>
+                <span><HardDrive size={13} /> {selectedClip.size_formatted}</span>
               </div>
               <div className="action-buttons">
                 <button
@@ -114,7 +115,7 @@ function ClipsPage() {
                     body: JSON.stringify({ path: selectedClip.path })
                   })}
                 >
-                  &#9654; Open in Player
+                  <Play size={13} /> Open in Player
                 </button>
                 <button
                   className="btn btn-secondary"
@@ -124,13 +125,13 @@ function ClipsPage() {
                     body: JSON.stringify({ path: selectedClip.path })
                   })}
                 >
-                  &#128194; Show in Explorer
+                  <FolderOpen size={13} /> Show in Explorer
                 </button>
                 <button
                   className="btn btn-danger"
                   onClick={() => setDeleteModal(true)}
                 >
-                  &#128465; Delete
+                  <Trash2 size={13} /> Delete
                 </button>
               </div>
             </div>
@@ -138,7 +139,7 @@ function ClipsPage() {
         ) : (
           <div className="player-container">
             <div className="player-placeholder">
-              <div className="icon">&#127916;</div>
+              <div className="icon"><Film size={40} /></div>
               <p>Select a clip to play</p>
             </div>
           </div>
@@ -157,7 +158,7 @@ function ClipsPage() {
 
       {toast && (
         <div className={`toast ${toast.type}`}>
-          {toast.type === 'success' ? '&#10004;' : '&#10006;'} {toast.message}
+          {toast.type === 'success' ? <Check size={14} /> : <X size={14} />} {toast.message}
         </div>
       )}
     </div>

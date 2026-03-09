@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { Search, FileVideo, Calendar, HardDrive } from 'lucide-react'
 
 function Sidebar({ items, selectedItem, onSelect, title, emptyMessage }) {
   const [searchQuery, setSearchQuery] = useState('')
@@ -29,7 +30,7 @@ function Sidebar({ items, selectedItem, onSelect, title, emptyMessage }) {
       <div className="sidebar-header">
         <h2>{title}</h2>
         <div className="search-box">
-          <span className="search-icon">&#128269;</span>
+          <span className="search-icon"><Search size={14} /></span>
           <input
             type="search"
             placeholder="Search..."
@@ -42,7 +43,7 @@ function Sidebar({ items, selectedItem, onSelect, title, emptyMessage }) {
       <div className="items-list">
         {filteredItems.length === 0 ? (
           <div className="empty-state">
-            <div className="icon">&#128234;</div>
+            <div className="icon"><FileVideo size={40} /></div>
             <h3>No items found</h3>
             <p>{emptyMessage || 'No recordings available'}</p>
           </div>
@@ -58,8 +59,8 @@ function Sidebar({ items, selectedItem, onSelect, title, emptyMessage }) {
                 >
                   <div className="item-name">{item.filename}</div>
                   <div className="item-meta">
-                    <span>&#128197; {item.date}</span>
-                    <span>&#128190; {item.size_formatted}</span>
+                    <span><Calendar size={11} /> {item.date}</span>
+                    <span><HardDrive size={11} /> {item.size_formatted}</span>
                   </div>
                 </div>
               ))}

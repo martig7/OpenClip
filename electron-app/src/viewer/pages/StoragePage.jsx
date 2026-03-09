@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { HardDrive, Film, Scissors, BarChart2, Trash2, Settings, Save, Info, Lock, Unlock, Loader, Package, Check, X } from 'lucide-react'
 import Modal from '../components/Modal'
 import { apiFetch } from '../apiBase'
 
@@ -363,7 +364,7 @@ function StoragePage() {
       <div className="storage-header">
         <div className="storage-stats-grid">
           <div className="stat-card">
-            <div className="stat-icon">💾</div>
+            <div className="stat-icon"><HardDrive size={22} /></div>
             <div className="stat-content">
               <div className="stat-label">Total Storage</div>
               <div className="stat-value">{stats?.total_size_formatted || '0 B'}</div>
@@ -371,7 +372,7 @@ function StoragePage() {
           </div>
 
           <div className="stat-card">
-            <div className="stat-icon">🎬</div>
+            <div className="stat-icon"><Film size={22} /></div>
             <div className="stat-content">
               <div className="stat-label">Recordings</div>
               <div className="stat-value">{stats?.recording_count || 0}</div>
@@ -380,7 +381,7 @@ function StoragePage() {
           </div>
 
           <div className="stat-card">
-            <div className="stat-icon">✂️</div>
+            <div className="stat-icon"><Scissors size={22} /></div>
             <div className="stat-content">
               <div className="stat-label">Clips</div>
               <div className="stat-value">{stats?.clip_count || 0}</div>
@@ -390,7 +391,7 @@ function StoragePage() {
 
           {stats?.disk_usage && (
             <div className="stat-card">
-              <div className="stat-icon">📊</div>
+              <div className="stat-icon"><BarChart2 size={22} /></div>
               <div className="stat-content">
                 <div className="stat-label">Disk Space</div>
                 <div className="stat-value">{stats.disk_usage.free_formatted} free</div>
@@ -445,10 +446,10 @@ function StoragePage() {
                   Clear Selection
                 </button>
                 <button className="btn btn-primary" onClick={() => { setReencodeModal(true); fetchReencodeTracks() }}>
-                  🎬 Reencode Selected ({selectedCount})
+                  <Film size={14} /> Reencode Selected ({selectedCount})
                 </button>
                 <button className="btn btn-danger" onClick={() => setDeleteModal(true)}>
-                  🗑️ Delete Selected ({selectedCount})
+                  <Trash2 size={14} /> Delete Selected ({selectedCount})
                 </button>
               </>
             )}
@@ -459,7 +460,7 @@ function StoragePage() {
       {/* Auto-Delete Settings */}
       {editedSettings && (
         <div className="settings-panel">
-          <h3>⚙️ Auto-Delete Settings</h3>
+          <h3><Settings size={15} /> Auto-Delete Settings</h3>
           <div className="settings-grid">
             <label className="checkbox-label">
               <input
@@ -514,11 +515,11 @@ function StoragePage() {
               onClick={handleSaveSettings}
               disabled={!hasUnsavedChanges()}
             >
-              💾 Save Settings
+              <Save size={14} /> Save Settings
             </button>
           </div>
           <p className="settings-note">
-            ℹ️ Auto-deletion runs when starting the game watcher. Locked recordings are never deleted.
+            <Info size={13} /> Auto-deletion runs when starting the game watcher. Locked recordings are never deleted.
           </p>
         </div>
       )}
@@ -546,10 +547,10 @@ function StoragePage() {
                 </div>
 
                 <div className="item-lock" onClick={() => toggleLock(item.path)} title={isLocked ? 'Unlock' : 'Lock'}>
-                  {isLocked ? '🔒' : '🔓'}
+                  {isLocked ? <Lock size={14} /> : <Unlock size={14} />}
                 </div>
 
-                <div className="item-type-badge">{item.type === 'clip' ? '✂️' : '🎬'}</div>
+                <div className="item-type-badge">{item.type === 'clip' ? <Scissors size={12} /> : <Film size={12} />}</div>
 
                 <div className="item-content">
                   <div className="item-clickable" onClick={() => handleItemClick(item)}>
@@ -690,7 +691,7 @@ function StoragePage() {
                 onClick={handleReencode}
                 disabled={isReencoding}
               >
-                {isReencoding ? '⏳ Processing...' : reencodeSettings.codec === 'copy' ? '📦 Start Re-export' : '🎬 Start Reencoding'}
+                {isReencoding ? <><Loader size={14} /> Processing...</> : reencodeSettings.codec === 'copy' ? <><Package size={14} /> Start Re-export</> : <><Film size={14} /> Start Reencoding</>}
               </button>
             </div>
           </div>
@@ -712,7 +713,7 @@ function StoragePage() {
       {/* Toast Notification */}
       {toast && (
         <div className={`toast ${toast.type}`}>
-          {toast.type === 'success' ? '✓' : '✗'} {toast.message}
+          {toast.type === 'success' ? <Check size={14} /> : <X size={14} />} {toast.message}
         </div>
       )}
     </div>

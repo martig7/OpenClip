@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { Check, X } from 'lucide-react'
 import Sidebar from '../components/Sidebar'
 import VideoPlayer from '../components/VideoPlayer'
 import { apiFetch } from '../apiBase'
@@ -69,7 +70,7 @@ function RecordingsPage() {
 
       {toast && (
         <div className={`toast ${toast.type}`}>
-          {toast.type === 'success' ? '&#10004;' : '&#10006;'} {toast.message}
+          {toast.type === 'success' ? <Check size={14} /> : <X size={14} />} {toast.message}
         </div>
       )}
     </div>

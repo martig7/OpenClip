@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
+import { Film, SkipBack, SkipForward, Play, Pause, Volume2, VolumeX, Folder, Calendar, HardDrive, Scissors, FolderOpen } from 'lucide-react'
 import Timeline from './Timeline'
 import ClipControls from './ClipControls'
 import ZoomTimeline from './ZoomTimeline'
@@ -150,8 +151,11 @@ function VideoPlayer({ recording, onClipCreated }) {
 
   const enterClipMode = useCallback(() => {
     setClipMode(true)
-    setClipStart(currentTime)
-    setClipEnd(Math.min(currentTime + 30, duration))
+    const half = 15
+    const start = Math.max(0, currentTime - half)
+    const end = Math.min(duration, currentTime + half)
+    setClipStart(start)
+    setClipEnd(end)
   }, [currentTime, duration])
 
   const exitClipMode = useCallback(() => {
@@ -216,7 +220,7 @@ function VideoPlayer({ recording, onClipCreated }) {
       <div className="main-content">
         <div className="player-container">
           <div className="player-placeholder">
-            <div className="icon">&#127916;</div>
+            <div className="icon"><Film size={40} /></div>
             <p>Select a recording to play</p>
           </div>
         </div>
@@ -254,13 +258,13 @@ function VideoPlayer({ recording, onClipCreated }) {
 
         <div className="controls-row">
           <button className="control-btn" onClick={() => skip(-10)} title="Rewind 10s">
-            &#9194;
+            <SkipBack size={16} />
           </button>
           <button className="control-btn" onClick={togglePlay} title={isPlaying ? 'Pause' : 'Play'}>
-            {isPlaying ? '\u23F8' : '\u25B6'}
+            {isPlaying ? <Pause size={16} /> : <Play size={16} />}
           </button>
           <button className="control-btn" onClick={() => skip(10)} title="Forward 10s">
-            &#9193;
+            <SkipForward size={16} />
           </button>
 
           <span className="time-display">
@@ -269,7 +273,7 @@ function VideoPlayer({ recording, onClipCreated }) {
 
           <div className="volume-control">
             <button className="control-btn" onClick={toggleMute} title={isMuted ? 'Unmute' : 'Mute'}>
-              {isMuted ? '\u{1F507}' : '\u{1F50A}'}
+              {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
             </button>
             <input
               type="range"
@@ -346,14 +350,14 @@ function VideoPlayer({ recording, onClipCreated }) {
       <div className="video-info-bar">
         <h2 className="video-title">{recording.filename}</h2>
         <div className="video-meta">
-          <span>&#128193; {recording.game_name}</span>
-          <span>&#128197; {recording.date}</span>
-          <span>&#128190; {recording.size_formatted}</span>
+          <span><Folder size={13} /> {recording.game_name}</span>
+          <span><Calendar size={13} /> {recording.date}</span>
+          <span><HardDrive size={13} /> {recording.size_formatted}</span>
         </div>
         <div className="action-buttons">
           {!clipMode && (
             <button className="btn btn-primary" onClick={enterClipMode}>
-              &#9986; Create Clip
+              <Scissors size={13} /> Create Clip
             </button>
           )}
           <button
@@ -364,7 +368,7 @@ function VideoPlayer({ recording, onClipCreated }) {
               body: JSON.stringify({ path: recording.path })
             })}
           >
-            &#9654; Open in Player
+            <Play size={13} /> Open in Player
           </button>
           <button
             className="btn btn-secondary"
@@ -374,7 +378,7 @@ function VideoPlayer({ recording, onClipCreated }) {
               body: JSON.stringify({ path: recording.path })
             })}
           >
-            &#128194; Show in Explorer
+            <FolderOpen size={13} /> Show in Explorer
           </button>
         </div>
       </div>
