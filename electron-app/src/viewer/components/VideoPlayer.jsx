@@ -24,7 +24,7 @@ function VideoPlayer({ recording, onClipCreated }) {
   // Audio tracks state
   const [audioTracks, setAudioTracks] = useState([])
   const [selectedTracks, setSelectedTracks] = useState([])
-  const [tracksOpen, setTracksOpen] = useState(false)
+  const [waveforms, setWaveforms] = useState({})
 
   // Reset state when recording changes
   useEffect(() => {
@@ -35,7 +35,7 @@ function VideoPlayer({ recording, onClipCreated }) {
     setMarkers([])
     setAudioTracks([])
     setSelectedTracks([])
-    setTracksOpen(false)
+    setWaveforms({})
   }, [recording])
 
   // Fetch audio tracks when recording changes
@@ -51,6 +51,18 @@ function VideoPlayer({ recording, onClipCreated }) {
         if (response.ok && data.tracks) {
           setAudioTracks(data.tracks)
           setSelectedTracks(data.tracks.map((_, i) => i))
+          // Fetch waveform for each track
+          data.tracks.forEach(async (_, i) => {
+            try {
+              const waveRes = await apiFetch(
+                `/api/video/waveform?path=${encodeURIComponent(recording.path)}&track=${i}`
+              )
+              const waveData = await waveRes.json()
+              if (waveRes.ok && waveData.peaks?.length) {
+                setWaveforms(prev => ({ ...prev, [i]: waveData.peaks }))
+              }
+            } catch {}
+          })
         }
       } catch (error) {
         console.error('Failed to fetch audio tracks:', error)
@@ -156,7 +168,6 @@ function VideoPlayer({ recording, onClipCreated }) {
 
   const exitClipMode = useCallback(() => {
     setClipMode(false)
-    setTracksOpen(false)
   }, [])
 
   const toggleTrack = useCallback((index) => {
@@ -295,34 +306,10 @@ function VideoPlayer({ recording, onClipCreated }) {
               onClipEndChange={setClipEnd}
               markers={markers}
               onMarkerClick={handleMarkerClick}
-              trackPanel={tracksOpen && audioTracks.length > 1 ? (
-                <div className="clip-track-panel">
-                  <label className="clip-track-bar clip-track-bar--all">
-                    <input
-                      type="checkbox"
-                      checked={selectedTracks.length === audioTracks.length}
-                      onChange={() => setSelectedTracks(
-                        selectedTracks.length === audioTracks.length
-                          ? [0]
-                          : audioTracks.map((_, i) => i)
-                      )}
-                    />
-                    <span className="track-name">All tracks</span>
-                  </label>
-                  {audioTracks.map((track, i) => (
-                    <label key={i} className="clip-track-bar">
-                      <input
-                        type="checkbox"
-                        checked={selectedTracks.includes(i)}
-                        onChange={() => toggleTrack(i)}
-                        disabled={isCreatingClip}
-                      />
-                      <span className="track-name">{track.title || `Track ${i + 1}`}</span>
-                      <span className="track-detail">{track.codec_name} · {track.channels}ch</span>
-                    </label>
-                  ))}
-                </div>
-              ) : null}
+              audioTracks={audioTracks}
+              selectedTracks={selectedTracks}
+              waveforms={waveforms}
+              onTrackToggle={toggleTrack}
             />
 
             <ClipControls
@@ -334,10 +321,6 @@ function VideoPlayer({ recording, onClipCreated }) {
               onCancel={exitClipMode}
               onCreate={handleCreateClip}
               isCreating={isCreatingClip}
-              audioTracks={audioTracks}
-              selectedTracks={selectedTracks}
-              tracksOpen={tracksOpen}
-              onTracksToggle={() => setTracksOpen(v => !v)}
             />
           </>
         )}
