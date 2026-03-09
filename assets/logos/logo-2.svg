@@ -14,6 +14,11 @@
       <stop offset="0%" stop-color="#1e3a5f" stop-opacity="0.9"/>
       <stop offset="100%" stop-color="#0f2040" stop-opacity="0.7"/>
     </linearGradient>
+    <radialGradient id="dot2" cx="38%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#c084fc"/>
+      <stop offset="55%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#0ea5e9"/>
+    </radialGradient>
     <filter id="glow2">
       <feGaussianBlur stdDeviation="4" result="blur"/>
       <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
@@ -54,6 +59,6 @@
   <circle cx="256" cy="256" r="110" fill="#020617"/>
   <circle cx="256" cy="256" r="110" fill="none" stroke="url(#ring2)" stroke-width="3"/>
 
-  <!-- Play triangle with glow -->
-  <polygon points="222,204 222,308 330,256" fill="white" filter="url(#glow2)" opacity="0.95"/>
+  <!-- Recording dot with gradient + glow -->
+  <circle cx="256" cy="256" r="52" fill="url(#dot2)" filter="url(#glow2)"/>
 </svg>
