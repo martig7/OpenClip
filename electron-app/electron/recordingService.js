@@ -5,7 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 const { exec, execFile } = require('child_process');
-const { isVideoFile, formatFileSize, CODEC_MAP } = require('./constants');
+const { isVideoFile, formatFileSize, CODEC_MAP, FFMPEG_PATH } = require('./constants');
 
 let store; // set via init()
 
@@ -223,7 +223,7 @@ function createClip(sourcePath, startTime, endTime, gameName = 'Unknown', audioT
       '-avoid_negative_ts', 'make_zero', outputPath,
     ];
 
-    const proc = execFile('ffmpeg', args, { timeout: 120000 },
+    const proc = execFile(FFMPEG_PATH, args, { timeout: 120000 },
       (error, _stdout, stderr) => {
         activeFFmpeg.delete(proc);
         if (error) return reject(new Error(`FFmpeg error: ${stderr}`));
@@ -270,7 +270,7 @@ function reencodeVideo(sourcePath, { codec = 'h265', crf = 23, preset = 'medium'
       '-c:a', 'copy', outPath,
     ];
 
-    const proc = execFile('ffmpeg', args, { timeout: 600000 },
+    const proc = execFile(FFMPEG_PATH, args, { timeout: 600000 },
       (error, _stdout, stderr) => {
         activeFFmpeg.delete(proc);
         if (error) {

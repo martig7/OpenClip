@@ -1,8 +1,14 @@
 --[[
-    Game Auto-Recorder OBS Script (Lightweight)
+    Open Clip - Auto-Recorder Script
 
-    Reads state from game_state file written by game_watcher.pyw
+    Reads state from a game_state file written by the Open Clip desktop app.
     Very lightweight - just file reads, no process scanning.
+
+    Setup:
+    1. Open OBS → Tools → Scripts → "+", and add this file.
+    2. The path below should auto-populate to your AppData folder.
+       If not, paste the path shown in the app under Settings → OBS Script Setup.
+    3. Run the Open Clip app and enable the watcher.
 ]]
 
 obs = obslua
@@ -15,25 +21,17 @@ local is_recording = false
 local current_game = ""
 local previous_scene = ""  -- Track previous scene to restore after recording
 
--- Get default path (same folder as this script, or user profile)
+-- Get default path from AppData (where Open Clip stores its runtime files)
 function get_default_state_path()
-    -- Try UserProfile location first (most reliable)
+    -- Primary: %APPDATA%\open-clip\runtime\game_state
+    local appdata = os.getenv("APPDATA")
+    if appdata then
+        return appdata .. "\\open-clip\\runtime\\game_state"
+    end
+    -- Fallback: derive via USERPROFILE
     local user_profile = os.getenv("USERPROFILE")
     if user_profile then
-        -- Check common locations (runtime subfolder for temp files)
-        local paths = {
-            user_profile .. "\\Downloads\\OBSGameLauncher\\runtime\\game_state",
-            user_profile .. "\\.config\\OBSGameLauncher\\runtime\\game_state",
-        }
-        for _, path in ipairs(paths) do
-            local f = io.open(path, "r")
-            if f then
-                f:close()
-                return path
-            end
-        end
-        -- Return first path as default even if doesn't exist yet
-        return paths[1]
+        return user_profile .. "\\AppData\\Roaming\\open-clip\\runtime\\game_state"
     end
     return "C:\\game_state"
 end
@@ -169,17 +167,17 @@ end
 -- Script description
 function script_description()
     return [[
-<h2>Game Auto-Recorder</h2>
-<p>Automatically records when games are running.</p>
+<h2>Open Clip - Auto-Recorder</h2>
+<p>Automatically starts and stops recording when your configured games are running.</p>
 <p>Supports automatic scene switching per game.</p>
 <hr>
 <p><b>Setup:</b></p>
 <ol>
-<li>Set the correct path to <code>game_state</code> file below</li>
-<li>Run <code>game_watcher.pyw</code> in the background</li>
-<li>Use the Game Manager to add games and assign scenes</li>
+<li>Open <b>Open Clip</b> and start the watcher.</li>
+<li>The state file path below should auto-populate. If not, copy it from
+    <b>Settings → OBS Script Setup</b> in the app.</li>
 </ol>
-<p><small>Uses file-based communication - minimal CPU impact.</small></p>
+<p><small>Uses file-based communication — minimal CPU impact.</small></p>
 ]]
 end
 
@@ -204,7 +202,7 @@ function script_properties()
             status_text = status_text .. "File exists but empty"
         end
     else
-        status_text = status_text .. "State file not found - check path!"
+        status_text = status_text .. "State file not found — is the watcher running?"
     end
 
     obs.obs_properties_add_text(props, "status_info", status_text, obs.OBS_TEXT_INFO)
@@ -233,23 +231,34 @@ function script_update(settings)
         obs.script_log(obs.LOG_WARNING, "State file path not set!")
     elseif file_exists(state_file_path) then
         obs.script_log(obs.LOG_INFO, "State file found: " .. state_file_path)
-        -- Start timer
         obs.timer_add(check_state, check_interval)
     else
         obs.script_log(obs.LOG_WARNING, "State file not found: " .. state_file_path)
-        obs.script_log(obs.LOG_WARNING, "Make sure game_watcher.pyw is running!")
+        obs.script_log(obs.LOG_WARNING, "Make sure Open Clip is running with the watcher active!")
         -- Still start timer in case file appears later
         obs.timer_add(check_state, check_interval)
     end
 end
 
+-- Vendor request handler for ping (allows the app to detect this script is loaded)
+function vendor_ping(data)
+    return "{}"
+end
+
 -- Script load
 function script_load(settings)
-    obs.script_log(obs.LOG_INFO, "Game Auto-Recorder loaded")
+    obs.script_log(obs.LOG_INFO, "Open Clip recorder loaded")
+
+    -- Register a vendor WebSocket request so the desktop app can detect this script
+    local vendor = obs.obs_websocket_register_vendor("open-clip")
+    if vendor then
+        obs.obs_websocket_vendor_register_request(vendor, "ping", vendor_ping)
+        obs.script_log(obs.LOG_INFO, "Registered WebSocket vendor 'open-clip' for script detection")
+    end
 end
 
 -- Script unload
 function script_unload()
     obs.timer_remove(check_state)
-    obs.script_log(obs.LOG_INFO, "Game Auto-Recorder unloaded")
+    obs.script_log(obs.LOG_INFO, "Open Clip recorder unloaded")
 end

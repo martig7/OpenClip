@@ -1,5 +1,0 @@
-# This folder contains runtime files created by the application:
-# - game_state: Current recording state (read by OBS script)
-# - watcher.pid: PID of the running watcher process
-# - watcher.log: Debug log from the watcher
-# - clip_markers.json: Clip markers created during recording

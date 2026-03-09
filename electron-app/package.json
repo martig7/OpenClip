@@ -1,15 +1,19 @@
 {
-  "name": "obs-game-launcher",
-  "version": "1.0.0",
-  "description": "OBS Game Recording Manager",
+  "name": "open-clip",
+  "version": "1.0.0-beta.1",
+  "description": "Automatic recording manager for OBS Studio — detects games, organizes recordings, and creates clips.",
   "main": "electron/main.js",
   "scripts": {
     "dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron . --dev\"",
-    "build": "vite build && electron-builder",
+    "build": "vite build",
+    "dist": "vite build && electron-builder --win",
+    "release": "vite build && electron-builder --win --publish always",
     "preview": "vite build && electron ."
   },
   "dependencies": {
     "chokidar": "^4.0.3",
+    "ffmpeg-static": "^5.3.0",
+    "ffprobe-static": "^3.1.0",
     "fluent-ffmpeg": "^2.1.3",
     "jimp": "^1.6.0",
     "jsqr": "^1.4.0",
@@ -29,14 +33,59 @@
     "wait-on": "^8.0.3"
   },
   "build": {
-    "appId": "com.obsgamelauncher.app",
-    "productName": "OBS Game Launcher",
+    "appId": "com.openclip.app",
+    "productName": "Open Clip",
+    "copyright": "Copyright © 2026",
+    "icon": "assets/icon.ico",
     "files": [
       "dist/**/*",
       "electron/**/*"
     ],
+    "asarUnpack": [
+      "**/node_modules/koffi/**"
+    ],
+    "extraResources": [
+      {
+        "from": "node_modules/ffmpeg-static/ffmpeg.exe",
+        "to": "ffmpeg/ffmpeg.exe"
+      },
+      {
+        "from": "node_modules/ffprobe-static/bin/win32/x64/ffprobe.exe",
+        "to": "ffmpeg/ffprobe.exe"
+      },
+      {
+        "from": "resources/defaults",
+        "to": "defaults",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "resources/obs_game_recorder.lua",
+        "to": "obs_game_recorder.lua"
+      }
+    ],
     "win": {
-      "target": "nsis"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "signAndEditExecutable": true
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Open Clip",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "martig7",
+      "repo": "OpenClip",
+      "releaseType": "draft"
     }
   }
 }

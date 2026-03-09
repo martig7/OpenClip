@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, Play, Square, Circle, Edit2, Check, X, Gamepad2, RefreshCw, ChevronDown, Image, Wand2, Settings } from 'lucide-react';
+import { Plus, Trash2, Play, Square, Circle, Edit2, Check, X, Gamepad2, RefreshCw, ChevronDown, Image, Wand2, Settings, AlertTriangle } from 'lucide-react';
 import api from '../api';
 
 export default function GamesPage() {
@@ -24,7 +24,15 @@ export default function GamesPage() {
 
   useEffect(() => {
     loadGames();
-    loadWatcherStatus();
+    // Fetch watcher status once, then use the result for both state update and OBS script check
+    api.getWatcherStatus().then(s => {
+      setWatcherStatus(s);
+      if (s.running) {
+        api.isOBSScriptLoaded().then(loaded => {
+          if (!loaded) setScriptWarning(true);
+        }).catch(() => {});
+      }
+    }).catch(() => {});
     // Replace polling with server-push: main process sends full status on any watcher state change
     const unsub = api.onWatcherStatusPush((status) => setWatcherStatus(status));
     return () => unsub();
@@ -147,11 +155,18 @@ export default function GamesPage() {
     navigate('/settings');
   }
 
+  const [scriptWarning, setScriptWarning] = useState(null);
+
   async function toggleWatcher() {
     if (watcherStatus.running) {
       await api.stopWatcher();
+      setScriptWarning(null);
     } else {
       await api.startWatcher();
+      // Check if the OBS script is loaded (non-blocking)
+      api.isOBSScriptLoaded().then(loaded => {
+        if (!loaded) setScriptWarning(true);
+      });
     }
     loadWatcherStatus();
   }
@@ -165,7 +180,7 @@ export default function GamesPage() {
 
       <div className="page-body">
         {/* Watcher Status Card - always visible */}
-        <WatcherStatusCard status={watcherStatus} onToggle={toggleWatcher} />
+        <WatcherStatusCard status={watcherStatus} onToggle={toggleWatcher} scriptWarning={scriptWarning} onDismissWarning={() => setScriptWarning(null)} onGoToSettings={() => navigate('/settings')} />
 
         <div className="card" style={{ marginTop: 16 }}>
           <div className="card-header">
@@ -516,7 +531,7 @@ function parseGameState(gameState) {
   return { label: gameState, color: 'var(--text-muted)' };
 }
 
-function WatcherStatusCard({ status, onToggle }) {
+function WatcherStatusCard({ status, onToggle, scriptWarning, onDismissWarning, onGoToSettings }) {
   const state = parseGameState(status.gameState);
 
   return (
@@ -530,6 +545,38 @@ function WatcherStatusCard({ status, onToggle }) {
           {status.running ? <><Square size={13} /> Stop Watcher</> : <><Play size={13} /> Start Watcher</>}
         </button>
       </div>
+
+      {scriptWarning && status.running && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '8px 12px', marginBottom: 12, borderRadius: 'var(--radius-sm)',
+          background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)',
+          fontSize: 12, color: 'var(--warning, #f59e0b)',
+        }}>
+          <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+          <span style={{ flex: 1 }}>
+            OBS script not detected. Add it in OBS under Tools → Scripts for automatic recording.{' '}
+            <button
+              onClick={onGoToSettings}
+              style={{
+                background: 'none', border: 'none', color: 'var(--primary)',
+                textDecoration: 'underline', cursor: 'pointer', padding: 0, font: 'inherit',
+              }}
+            >
+              <Settings size={11} style={{ verticalAlign: 'middle', marginRight: 2 }} />
+              Setup guide
+            </button>
+          </span>
+          <button
+            className="btn-icon"
+            onClick={onDismissWarning}
+            title="Dismiss"
+            style={{ flexShrink: 0 }}
+          >
+            <X size={13} />
+          </button>
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px', fontSize: 13 }}>
         <div>
