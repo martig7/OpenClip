@@ -30,6 +30,7 @@ const managerSettingsDefaults = {
     enabled: false, buffer_before_seconds: 15, buffer_after_seconds: 15,
     remove_processed_markers: true, delete_recording_after_clips: false,
   },
+  obs_websocket: { host: 'localhost', port: 4455, password: '' },
 };
 
 function readJson(filePath, defaults) {
@@ -66,6 +67,11 @@ function msToElectronSettings(ms, obsRecordingPath) {
       maxAgeDays: ms.storage_settings?.max_age_days ?? 30,
       excludeClips: ms.storage_settings?.exclude_clips !== false,
     },
+    obsWebSocket: {
+      host: ms.obs_websocket?.host || 'localhost',
+      port: ms.obs_websocket?.port ?? 4455,
+      password: ms.obs_websocket?.password || '',
+    },
   };
 }
 
@@ -91,6 +97,14 @@ function electronSettingsToMs(ms, electronSettings) {
       max_storage_gb: electronSettings.autoDelete.maxStorageGB ?? 100,
       max_age_days: electronSettings.autoDelete.maxAgeDays ?? 30,
       exclude_clips: electronSettings.autoDelete.excludeClips !== false,
+    };
+  }
+  if (electronSettings.obsWebSocket !== undefined) {
+    updated.obs_websocket = {
+      ...(ms.obs_websocket || {}),
+      host: electronSettings.obsWebSocket.host || 'localhost',
+      port: electronSettings.obsWebSocket.port ?? 4455,
+      password: electronSettings.obsWebSocket.password || '',
     };
   }
   return updated;
@@ -227,6 +241,7 @@ const { setupGameWatcher } = require('./gameWatcher');
 const { setupFileManager } = require('./fileManager');
 const { readOBSRecordingPath } = require('./obsIntegration');
 const { getProfiles, readEncodingSettings, writeEncodingSettings, isOBSRunning } = require('./obsEncoding');
+const { getOBSScenes, createSceneFromTemplate, testOBSConnection } = require('./obsWebSocket');
 const { startApiServer } = require('./apiServer');
 const { RUNTIME_DIR, STATE_FILE } = require('./constants');
 
@@ -449,6 +464,13 @@ ipcMain.handle('obs:profiles',      () => getProfiles());
 ipcMain.handle('obs:encoding:get',  (_e, profileDir) => readEncodingSettings(profileDir));
 ipcMain.handle('obs:encoding:set',  (_e, profileDir, settings) => { writeEncodingSettings(profileDir, settings); return { success: true }; });
 ipcMain.handle('obs:running',       () => isOBSRunning());
+
+// OBS WebSocket
+ipcMain.handle('obs:ws:test',          () => testOBSConnection(store.get('settings').obsWebSocket));
+ipcMain.handle('obs:ws:scenes',        () => getOBSScenes(store.get('settings').obsWebSocket));
+ipcMain.handle('obs:ws:create-scene',  (_e, newSceneName, templateSceneName) =>
+  createSceneFromTemplate(store.get('settings').obsWebSocket, newSceneName, templateSceneName)
+);
 
 // Dialogs
 ipcMain.handle('dialog:openDirectory', async () => {
