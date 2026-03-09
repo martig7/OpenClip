@@ -72,11 +72,8 @@ function organizeRecordings(store, gameName) {
     }
   }
 
-  // Auto-clip from markers
-  const autoClip = store.get('settings.autoClip');
-  if (autoClip?.enabled) {
-    processAutoClips(store, gameName, targetDir);
-  }
+  // Auto-clip from markers (always process if markers exist)
+  processAutoClips(store, gameName, targetDir);
 }
 
 function getVideoDurationSync(filePath) {
