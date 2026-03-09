@@ -29,3 +29,5 @@ nul
 /frontend/node_modules/
 /electron-app/node_modules/
 /electron-app/dist/
+
+/DEPRECATED
