@@ -379,7 +379,9 @@ function startApiServer(appStore) {
       // GET /api/video/waveform?path=...&track=0
       if (pathname === '/api/video/waveform' && req.method === 'GET') {
         const filePath = query.path;
-        const trackIndex = parseInt(query.track, 10) || 0;
+        const rawTrack = parseInt(query.track, 10);
+        if (isNaN(rawTrack) || rawTrack < 0) return json(res, { error: 'Invalid track index' }, 400);
+        const trackIndex = rawTrack;
         if (!filePath || !fs.existsSync(filePath)) return json(res, { error: 'File not found' }, 404);
         if (!isAllowedPath(filePath)) return json(res, { error: 'Forbidden' }, 403);
 
@@ -391,6 +393,7 @@ function startApiServer(appStore) {
             const sampleRate = Math.max(2, Math.round(NUM_PEAKS / duration));
 
             const ffmpegProc = spawn('ffmpeg', [
+              '-hide_banner', '-loglevel', 'error',
               '-i', filePath,
               '-map', `0:a:${trackIndex}`,
               '-ac', '1',
@@ -400,6 +403,7 @@ function startApiServer(appStore) {
             ]);
 
             req.on('close', () => ffmpegProc.kill());
+            ffmpegProc.stderr.resume(); // drain stderr so the pipe buffer never fills
 
             const chunks = [];
             ffmpegProc.stdout.on('data', chunk => chunks.push(chunk));
@@ -409,9 +413,9 @@ function startApiServer(appStore) {
                 const samples = new Float32Array(buffer.buffer, buffer.byteOffset, Math.floor(buffer.length / 4));
                 if (!samples.length) { resolve(json(res, { peaks: [] })); return; }
 
-                const chunkSize = Math.max(1, Math.floor(samples.length / NUM_PEAKS));
+                const chunkSize = Math.max(1, Math.ceil(samples.length / NUM_PEAKS));
                 const peaks = [];
-                for (let i = 0; i < samples.length; i += chunkSize) {
+                for (let i = 0; i < samples.length && peaks.length < NUM_PEAKS; i += chunkSize) {
                   let max = 0;
                   for (let j = i; j < Math.min(i + chunkSize, samples.length); j++) {
                     const v = Math.abs(samples[j]);
