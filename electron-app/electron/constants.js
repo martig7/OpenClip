@@ -38,7 +38,7 @@ if (!app.isPackaged) {
   try { FFMPEG_PATH = require('ffmpeg-static'); } catch {}
   try { FFPROBE_PATH = require('ffprobe-static').path; } catch {}
 } else {
-  // Production mode — use binaries bundled alongside the app via electron-builder extraFiles
+  // Production mode — use binaries bundled alongside the app via electron-builder extraResources
   FFMPEG_PATH = path.join(process.resourcesPath, 'ffmpeg', 'ffmpeg.exe');
   FFPROBE_PATH = path.join(process.resourcesPath, 'ffmpeg', 'ffprobe.exe');
 }
