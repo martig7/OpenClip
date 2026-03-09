@@ -51,6 +51,7 @@ function normalizePath(p) {
 function msToElectronSettings(ms, obsRecordingPath) {
   return {
     obsRecordingPath: normalizePath(obsRecordingPath) || '',
+    obsExePath: normalizePath(ms.obs_path) || '',
     destinationPath: normalizePath(ms.organized_path) || '',
     clipMarkerHotkey: ms.clip_hotkey || 'F9',
     autoClip: {
@@ -72,6 +73,7 @@ function msToElectronSettings(ms, obsRecordingPath) {
 // Translate Electron settings shape → fields in manager_settings.json
 function electronSettingsToMs(ms, electronSettings) {
   const updated = { ...ms };
+  if (electronSettings.obsExePath !== undefined) updated.obs_path = normalizePath(electronSettings.obsExePath);
   if (electronSettings.destinationPath !== undefined) updated.organized_path = normalizePath(electronSettings.destinationPath);
   if (electronSettings.clipMarkerHotkey !== undefined) updated.clip_hotkey = electronSettings.clipMarkerHotkey;
   if (electronSettings.autoClip !== undefined) {
@@ -443,6 +445,61 @@ ipcMain.handle('watcher:status', () => {
 
 // OBS
 ipcMain.handle('obs:detect-path', () => readOBSRecordingPath());
+
+function findOBSExecutable() {
+  const progFiles = process.env['ProgramFiles'] || 'C:\\Program Files';
+  const progFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+  const localAppData = process.env['LOCALAPPDATA'] || '';
+
+  const candidates = [
+    path.join(progFiles, 'obs-studio', 'bin', '64bit', 'obs64.exe'),
+    path.join(progFilesX86, 'obs-studio', 'bin', '64bit', 'obs64.exe'),
+    path.join(localAppData, 'obs-studio', 'bin', '64bit', 'obs64.exe'),
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+
+  // Check Windows registry
+  const { execSync } = require('child_process');
+  const regPaths = [
+    'HKLM\\SOFTWARE\\OBS Studio',
+    'HKCU\\SOFTWARE\\OBS Studio',
+    'HKLM\\SOFTWARE\\WOW6432Node\\OBS Studio',
+  ];
+  for (const regPath of regPaths) {
+    try {
+      const result = execSync(`reg query "${regPath}" /ve`, { encoding: 'utf-8', timeout: 3000 });
+      const match = result.match(/REG_SZ\s+(.+)/);
+      if (match) {
+        const installDir = match[1].trim();
+        const candidate = path.join(installDir, 'bin', '64bit', 'obs64.exe');
+        if (fs.existsSync(candidate)) return candidate;
+      }
+    } catch {}
+  }
+
+  return null;
+}
+
+ipcMain.handle('obs:launch', () => {
+  let obsPath = store.get('settings.obsExePath') || '';
+  if (!obsPath || !fs.existsSync(obsPath)) {
+    obsPath = findOBSExecutable();
+    if (obsPath) store.set('settings.obsExePath', obsPath);
+  }
+  if (!obsPath) {
+    return { success: false, error: 'OBS executable not found. Please configure the OBS path in Settings.' };
+  }
+  try {
+    const { spawn } = require('child_process');
+    const obsDir = path.dirname(obsPath);
+    spawn(obsPath, [], { cwd: obsDir, detached: true, stdio: 'ignore' }).unref();
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
 
 // OBS Encoding
 ipcMain.handle('obs:profiles',      () => getProfiles());

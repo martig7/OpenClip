@@ -22,6 +22,7 @@ const mockApi = {
   onWatcherState: () => noop,
   onWatcherStatusPush: () => noop,
   detectOBSPath: asyncNoop,
+  launchOBS: async () => ({ success: false }),
   getOBSProfiles: asyncArr,
   getEncodingSettings: asyncNoop,
   setEncodingSettings: asyncNoop,

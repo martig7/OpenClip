@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Play, Square, Circle, Edit2, Check, X, Gamepad2, RefreshCw, ChevronDown, Image } from 'lucide-react';
+import { Plus, Trash2, Play, Square, Circle, Edit2, Check, X, Gamepad2, RefreshCw, ChevronDown, Image, ExternalLink } from 'lucide-react';
 import api from '../api';
 
 export default function GamesPage() {
   const [games, setGames] = useState([]);
   const [watcherStatus, setWatcherStatus] = useState({ running: false, currentGame: null, startedAt: null, gameState: null });
+  const [obsToast, setObsToast] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editScene, setEditScene] = useState('');
@@ -95,6 +96,14 @@ export default function GamesPage() {
     loadWatcherStatus();
   }
 
+  async function openOBS() {
+    const result = await api.launchOBS();
+    if (!result?.success) {
+      setObsToast(result?.error || 'Failed to launch OBS');
+      setTimeout(() => setObsToast(null), 4000);
+    }
+  }
+
   return (
     <>
       <div className="page-header">
@@ -104,7 +113,7 @@ export default function GamesPage() {
 
       <div className="page-body">
         {/* Watcher Status Card - always visible */}
-        <WatcherStatusCard status={watcherStatus} onToggle={toggleWatcher} />
+        <WatcherStatusCard status={watcherStatus} onToggle={toggleWatcher} onOpenOBS={openOBS} />
 
         <div className="card" style={{ marginTop: 16 }}>
           <div className="card-header">
@@ -182,6 +191,8 @@ export default function GamesPage() {
           )}
         </div>
       </div>
+
+      {obsToast && <div className="toast">{obsToast}</div>}
 
       {showAddModal && (
         <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
@@ -335,19 +346,24 @@ function parseGameState(gameState) {
   return { label: gameState, color: 'var(--text-muted)' };
 }
 
-function WatcherStatusCard({ status, onToggle }) {
+function WatcherStatusCard({ status, onToggle, onOpenOBS }) {
   const state = parseGameState(status.gameState);
 
   return (
     <div className="card">
       <div className="card-header">
         <span className="card-title">Watcher Status</span>
-        <button
-          className={`btn btn-sm ${status.running ? 'btn-danger' : 'btn-primary'}`}
-          onClick={onToggle}
-        >
-          {status.running ? <><Square size={13} /> Stop Watcher</> : <><Play size={13} /> Start Watcher</>}
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-secondary btn-sm" onClick={onOpenOBS} title="Open OBS">
+            <ExternalLink size={13} /> Open OBS
+          </button>
+          <button
+            className={`btn btn-sm ${status.running ? 'btn-danger' : 'btn-primary'}`}
+            onClick={onToggle}
+          >
+            {status.running ? <><Square size={13} /> Stop Watcher</> : <><Play size={13} /> Start Watcher</>}
+          </button>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px', fontSize: 13 }}>

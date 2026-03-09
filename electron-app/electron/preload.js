@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld('api', {
 
   // OBS
   detectOBSPath: () => ipcRenderer.invoke('obs:detect-path'),
+  launchOBS: () => ipcRenderer.invoke('obs:launch'),
   getOBSProfiles: () => ipcRenderer.invoke('obs:profiles'),
   getEncodingSettings: (profileDir) => ipcRenderer.invoke('obs:encoding:get', profileDir),
   setEncodingSettings: (profileDir, settings) => ipcRenderer.invoke('obs:encoding:set', profileDir, settings),
