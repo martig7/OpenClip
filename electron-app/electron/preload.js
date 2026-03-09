@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('api', {
 
   // Windows
   getVisibleWindows: () => ipcRenderer.invoke('windows:list'),
+  extractWindowIcon: (processName) => ipcRenderer.invoke('windows:extractIcon', processName),
 
   // Watcher
   startWatcher: () => ipcRenderer.invoke('watcher:start'),
@@ -23,6 +24,11 @@ contextBridge.exposeInMainWorld('api', {
     const handler = (_event, state) => callback(state);
     ipcRenderer.on('watcher:state', handler);
     return () => ipcRenderer.removeListener('watcher:state', handler);
+  },
+  onWatcherStatusPush: (callback) => {
+    const handler = (_event, status) => callback(status);
+    ipcRenderer.on('watcher:status-push', handler);
+    return () => ipcRenderer.removeListener('watcher:status-push', handler);
   },
 
   // OBS
@@ -34,6 +40,7 @@ contextBridge.exposeInMainWorld('api', {
 
   // Dialogs
   openDirectoryDialog: () => ipcRenderer.invoke('dialog:openDirectory'),
+  openFileDialog: (opts) => ipcRenderer.invoke('dialog:openFile', opts),
 
   // Shell
   showInExplorer: (path) => ipcRenderer.invoke('shell:showInExplorer', path),

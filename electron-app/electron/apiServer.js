@@ -66,6 +66,16 @@ function getDiskUsage(dirPath) {
 
 const MAX_BODY_SIZE = 1024 * 1024; // 1 MB
 
+function isAllowedPath(filePath) {
+  if (!filePath) return false;
+  const resolved = path.resolve(filePath);
+  const roots = [
+    store.get('settings.obsRecordingPath'),
+    store.get('settings.destinationPath'),
+  ].filter(Boolean).map(p => path.resolve(p));
+  return roots.some(base => resolved === base || resolved.startsWith(base + path.sep));
+}
+
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let body = '';
@@ -124,6 +134,7 @@ function startApiServer(appStore) {
       if (pathname === '/api/video' && req.method === 'GET') {
         const filePath = query.path;
         if (!filePath) return json(res, { error: 'File not found' }, 404);
+        if (!isAllowedPath(filePath)) return json(res, { error: 'Forbidden' }, 403);
 
         let stat;
         try { stat = fs.statSync(filePath); }
@@ -176,6 +187,7 @@ function startApiServer(appStore) {
       if ((pathname === '/api/clips/delete' || pathname === '/api/delete') && req.method === 'POST') {
         const data = await readBody(req);
         if (!data.path) return json(res, { error: 'Not found' }, 404);
+        if (!isAllowedPath(data.path)) return json(res, { error: 'Forbidden' }, 403);
         const result = service.deleteFile(data.path);
         return json(res, result, result.status || 200);
       }
@@ -315,6 +327,7 @@ function startApiServer(appStore) {
       if (pathname === '/api/reencode' && req.method === 'POST') {
         const data = await readBody(req);
         const { source_path, codec = 'h265', crf = 23, preset = 'medium', replace_original = false, original_size = 0, audio_tracks = null } = data;
+        if (!isAllowedPath(source_path)) return json(res, { error: 'Forbidden' }, 403);
         try {
           const result = await service.reencodeVideo(source_path, {
             codec, crf, preset,
@@ -333,6 +346,7 @@ function startApiServer(appStore) {
       if (pathname === '/api/video/tracks' && req.method === 'GET') {
         const filePath = query.path;
         if (!filePath || !fs.existsSync(filePath)) return json(res, { error: 'File not found' }, 404);
+        if (!isAllowedPath(filePath)) return json(res, { error: 'Forbidden' }, 403);
         return new Promise((resolve) => {
           exec(
             `ffprobe -v error -show_streams -select_streams a -of json "${filePath}"`,
