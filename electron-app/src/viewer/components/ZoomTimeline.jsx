@@ -19,6 +19,7 @@ function ZoomTimeline({
   const containerRef = useRef(null)
   const [zoom, setZoom] = useState(4) // how many times zoomed in (1 = full, higher = more zoomed)
   const [viewCenter, setViewCenter] = useState(0) // center of visible range in seconds
+  const [containerWidth, setContainerWidth] = useState(800)
   const [isDragging, setIsDragging] = useState(false)
   const [dragType, setDragType] = useState(null) // 'seek', 'clipStart', 'clipEnd', 'pan'
   const [panStartX, setPanStartX] = useState(0)
@@ -32,6 +33,16 @@ function ZoomTimeline({
   useEffect(() => {
     setViewCenter((clipStart + clipEnd) / 2)
   }, []) // only on mount
+
+  // Track container width for tick computation
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    setContainerWidth(el.clientWidth)
+    const ro = new ResizeObserver(entries => setContainerWidth(entries[0].contentRect.width))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   // Visible time range
   const visibleDuration = duration / zoom
@@ -50,10 +61,9 @@ function ZoomTimeline({
 
   // Time ruler tick marks
   const ticks = useMemo(() => {
-    if (!duration || !containerRef.current) return []
+    if (!duration) return []
 
-    const width = containerRef.current?.clientWidth || 800
-    const pixelsPerSecond = width / visibleDuration
+    const pixelsPerSecond = containerWidth / visibleDuration
 
     // Choose tick interval based on zoom level
     let interval
@@ -78,7 +88,7 @@ function ZoomTimeline({
       result.push({ time: t, x, isMajor })
     }
     return result
-  }, [duration, actualViewStart, visibleDuration, viewEnd, containerRef.current?.clientWidth])
+  }, [duration, actualViewStart, visibleDuration, viewEnd, containerWidth])
 
   const formatTickTime = (seconds) => {
     const mins = Math.floor(seconds / 60)

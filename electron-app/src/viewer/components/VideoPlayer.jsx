@@ -42,12 +42,15 @@ function VideoPlayer({ recording, onClipCreated }) {
   useEffect(() => {
     if (!recording) return
 
+    let cancelled = false
+
     const fetchTracks = async () => {
       try {
         const response = await apiFetch(
           `/api/video/tracks?path=${encodeURIComponent(recording.path)}`
         )
         const data = await response.json()
+        if (cancelled) return
         if (response.ok && data.tracks) {
           setAudioTracks(data.tracks)
           setSelectedTracks(data.tracks.map((_, i) => i))
@@ -58,6 +61,7 @@ function VideoPlayer({ recording, onClipCreated }) {
                 `/api/video/waveform?path=${encodeURIComponent(recording.path)}&track=${i}`
               )
               const waveData = await waveRes.json()
+              if (cancelled) return
               if (waveRes.ok && waveData.peaks?.length) {
                 setWaveforms(prev => ({ ...prev, [i]: waveData.peaks }))
               }
@@ -70,6 +74,7 @@ function VideoPlayer({ recording, onClipCreated }) {
     }
 
     fetchTracks()
+    return () => { cancelled = true }
   }, [recording])
 
   // Sync HTMLVideoElement audio track enabled state with selectedTracks in clip mode

@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { formatTime } from '../utils'
 
 function ClipControls({
   clipStart,
@@ -10,13 +11,6 @@ function ClipControls({
   onCreate,
   isCreating,
 }) {
-  const formatTime = (seconds) => {
-    if (!isFinite(seconds)) return '0:00'
-    const mins = Math.floor(seconds / 60)
-    const secs = Math.floor(seconds % 60)
-    return `${mins}:${secs.toString().padStart(2, '0')}`
-  }
-
   const parseTime = (timeStr) => {
     const parts = timeStr.split(':')
     if (parts.length === 2) {

@@ -379,7 +379,7 @@ function startApiServer(appStore) {
       // GET /api/video/waveform?path=...&track=0
       if (pathname === '/api/video/waveform' && req.method === 'GET') {
         const filePath = query.path;
-        const trackIndex = parseInt(query.track) || 0;
+        const trackIndex = parseInt(query.track, 10) || 0;
         if (!filePath || !fs.existsSync(filePath)) return json(res, { error: 'File not found' }, 404);
         if (!isAllowedPath(filePath)) return json(res, { error: 'Forbidden' }, 403);
 
@@ -399,6 +399,8 @@ function startApiServer(appStore) {
               'pipe:1'
             ]);
 
+            req.on('close', () => ffmpegProc.kill());
+
             const chunks = [];
             ffmpegProc.stdout.on('data', chunk => chunks.push(chunk));
             ffmpegProc.on('close', () => {
@@ -417,7 +419,7 @@ function startApiServer(appStore) {
                   }
                   peaks.push(max);
                 }
-                const maxPeak = Math.max(...peaks, 0.001);
+                const maxPeak = peaks.reduce((m, p) => p > m ? p : m, 0.001);
                 resolve(json(res, { peaks: peaks.map(p => p / maxPeak), duration }));
               } catch { resolve(json(res, { peaks: [] })); }
             });
