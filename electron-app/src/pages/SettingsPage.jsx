@@ -210,6 +210,7 @@ export default function SettingsPage() {
               onClick={() => updateSetting('startWatcherOnStartup', !settings.startWatcherOnStartup)}
             />
           </div>
+        </div>
 
         {/* OBS WebSocket */}
         <div className="card" style={{ marginBottom: 16 }}>
