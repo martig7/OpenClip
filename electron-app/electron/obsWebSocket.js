@@ -229,4 +229,25 @@ async function testOBSConnection(wsSettings) {
   }
 }
 
-module.exports = { getOBSScenes, createSceneFromTemplate, testOBSConnection };
+/**
+ * Check whether the Open Clip Lua script is loaded in OBS by pinging its
+ * registered vendor WebSocket request.
+ * @param {object} wsSettings - { host, port, password }
+ * @returns {Promise<boolean>} true if the script is loaded
+ */
+async function isOBSScriptLoaded(wsSettings) {
+  try {
+    return await withOBSConnection(wsSettings, async (obs) => {
+      await obs.call('CallVendorRequest', {
+        vendorName: 'open-clip',
+        requestType: 'ping',
+        requestData: {},
+      });
+      return true;
+    });
+  } catch {
+    return false;
+  }
+}
+
+module.exports = { getOBSScenes, createSceneFromTemplate, testOBSConnection, isOBSScriptLoaded };

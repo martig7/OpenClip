@@ -1,5 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
-import { FolderOpen, RefreshCw, Wifi, QrCode, Clipboard } from 'lucide-react';
+import { FolderOpen, RefreshCw, Wifi, QrCode, Clipboard, Copy } from 'lucide-react';
 import api from '../api';
 
 const HOTKEY_OPTIONS = [
@@ -11,6 +11,7 @@ const HOTKEY_OPTIONS = [
 export default function SettingsPage() {
   const [settings, setSettings] = useState(null);
   const [toast, setToast] = useState(null);
+  const [obsScriptPath, setObsScriptPath] = useState('');
 
   // Keep a ref to pasteQRSettings so the document paste listener always calls
   // the latest version (which closes over the current settings value).
@@ -18,6 +19,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     loadSettings();
+    api.getOBSScriptPath().then(p => setObsScriptPath(p || '')).catch(() => { /* not available in browser dev mode */ });
   }, []);
 
   useEffect(() => {
@@ -209,6 +211,46 @@ export default function SettingsPage() {
               className={`toggle ${settings.startWatcherOnStartup ? 'on' : ''}`}
               onClick={() => updateSetting('startWatcherOnStartup', !settings.startWatcherOnStartup)}
             />
+          </div>
+        </div>
+
+        {/* OBS Script Setup */}
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-title">OBS Script Setup</div>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '8px 0 12px' }}>
+            This app writes its game state to a file that the OBS Lua script reads to start/stop recording automatically.
+            Add the script below to OBS once: <strong>Tools → Scripts → "+"</strong> and select the file.
+          </p>
+          <div className="form-group">
+            <label className="form-label">Lua Script Location</label>
+            <div className="form-input-row">
+              <input
+                className="form-input"
+                value={obsScriptPath}
+                readOnly
+                style={{ fontFamily: 'monospace', fontSize: 12 }}
+                placeholder="Loading..."
+              />
+              <button
+                className="btn btn-secondary btn-sm"
+                title="Copy path to clipboard"
+                onClick={() => {
+                  if (obsScriptPath) {
+                    navigator.clipboard.writeText(obsScriptPath);
+                    showToast('Path copied to clipboard');
+                  }
+                }}
+              >
+                <Copy size={13} />
+              </button>
+              <button
+                className="btn btn-secondary btn-sm"
+                title="Show in Explorer"
+                onClick={() => obsScriptPath && api.showInExplorer(obsScriptPath)}
+              >
+                <FolderOpen size={13} />
+              </button>
+            </div>
           </div>
         </div>
 

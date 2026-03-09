@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync, execFileSync, exec } = require('child_process');
-const { isVideoFile, CODEC_MAP } = require('./constants');
+const { isVideoFile, CODEC_MAP, FFMPEG_PATH, FFPROBE_PATH } = require('./constants');
 const service = require('./recordingService');
 
 function getWeekFolder(date) {
@@ -45,7 +45,7 @@ function organizeRecordings(store, gameName) {
         // Probe source for audio stream titles before remux (MKV titles don't survive MP4 remux)
         let trackNames = null;
         try {
-          const probeOut = execFileSync('ffprobe', [
+          const probeOut = execFileSync(FFPROBE_PATH, [
             '-v', 'error', '-show_streams', '-select_streams', 'a', '-of', 'json', src,
           ], { encoding: 'utf-8', timeout: 10000 });
           const streams = JSON.parse(probeOut).streams || [];
@@ -53,7 +53,7 @@ function organizeRecordings(store, gameName) {
           if (names.some(Boolean)) trackNames = names;
         } catch {}
 
-        execFileSync('ffmpeg', [
+        execFileSync(FFMPEG_PATH, [
           '-i', src, '-map', '0', '-c', 'copy', '-movflags', '+faststart', '-y', dest,
         ], { timeout: 120000 });
 
@@ -82,7 +82,7 @@ function organizeRecordings(store, gameName) {
 function getVideoDurationSync(filePath) {
   try {
     const out = execSync(
-      `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filePath}"`,
+      `"${FFPROBE_PATH}" -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filePath}"`,
       { encoding: 'utf-8', timeout: 10000 }
     );
     return parseFloat(out.trim()) || null;
@@ -134,7 +134,7 @@ function processAutoClips(store, gameName, recordingDir) {
 
     try {
       execSync(
-        `ffmpeg -ss ${start} -i "${recording.path}" -t ${clipDuration} -c copy -avoid_negative_ts make_zero "${clipPath}" -y`,
+        `"${FFMPEG_PATH}" -ss ${start} -i "${recording.path}" -t ${clipDuration} -c copy -avoid_negative_ts make_zero "${clipPath}" -y`,
         { timeout: 60000 }
       );
       clipNum++;

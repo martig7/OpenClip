@@ -8,15 +8,16 @@ protocol.registerSchemesAsPrivileged([
 const path = require('path');
 const fs = require('fs');
 
+// Force the userData folder to "open-clip" (lowercase, no spaces) instead of the
+// productName-derived "Open Clip" to avoid path issues.
+app.setPath('userData', path.join(app.getPath('appData'), 'open-clip'));
+
 // Electron-only config (window bounds, OBS recording path which Python reads from OBS profile directly)
 const electronConfigPath = path.join(app.getPath('userData'), 'electron.json');
 const electronConfigDefaults = { windowBounds: { width: 1200, height: 800 }, obsRecordingPath: '' };
 
-// Python shared config paths (constants.js is required later, so derive directly here)
-const _projectRoot = path.join(__dirname, '..', '..');
-const GAMES_CONFIG_FILE = path.join(_projectRoot, 'games_config.json');
-const MANAGER_SETTINGS_FILE = path.join(_projectRoot, 'manager_settings.json');
-const _markersFile = path.join(_projectRoot, 'runtime', 'clip_markers.json');
+// All mutable paths come from constants.js (AppData-based)
+const { USER_DATA, GAMES_CONFIG_FILE, MANAGER_SETTINGS_FILE, MARKERS_FILE, ICONS_DIR } = require('./constants');
 
 // Defaults for Python JSON files
 const gamesConfigDefaults = { games: [] };
@@ -118,7 +119,7 @@ const MAX_MARKERS = 1000;
 
 function loadElectronMarkers() {
   try {
-    const data = JSON.parse(fs.readFileSync(_markersFile, 'utf-8'));
+    const data = JSON.parse(fs.readFileSync(MARKERS_FILE, 'utf-8'));
     return (data.markers || []).map(m => ({ game: m.game_name, timestamp: m.timestamp, created: m.created_at }));
   } catch { return []; }
 }
@@ -127,8 +128,8 @@ function saveElectronMarkers(electronMarkers) {
   const trimmed = electronMarkers.length > MAX_MARKERS
     ? electronMarkers.slice(-MAX_MARKERS)
     : electronMarkers;
-  fs.mkdirSync(path.dirname(_markersFile), { recursive: true });
-  writeJson(_markersFile, {
+  fs.mkdirSync(path.dirname(MARKERS_FILE), { recursive: true });
+  writeJson(MARKERS_FILE, {
     markers: trimmed.map(m => ({ game_name: m.game, timestamp: m.timestamp, created_at: m.created })),
   });
 }
@@ -244,10 +245,35 @@ const { setupGameWatcher } = require('./gameWatcher');
 const { setupFileManager } = require('./fileManager');
 const { readOBSRecordingPath } = require('./obsIntegration');
 const { getProfiles, readEncodingSettings, writeEncodingSettings, isOBSRunning } = require('./obsEncoding');
-const { getOBSScenes, createSceneFromTemplate, testOBSConnection } = require('./obsWebSocket');
+const { getOBSScenes, createSceneFromTemplate, testOBSConnection, isOBSScriptLoaded } = require('./obsWebSocket');
 const { readOBSWebSocketQR } = require('./qrCodeReader');
 const { startApiServer } = require('./apiServer');
 const { RUNTIME_DIR, STATE_FILE } = require('./constants');
+
+// Seed default config files and OBS Lua script into userData on first run
+function seedFirstRun() {
+  const defaultsDir = app.isPackaged
+    ? path.join(process.resourcesPath, 'defaults')
+    : path.join(__dirname, '..', 'resources', 'defaults');
+  const luaSrc = app.isPackaged
+    ? path.join(process.resourcesPath, 'obs_game_recorder.lua')
+    : path.join(__dirname, '..', 'resources', 'obs_game_recorder.lua');
+
+  fs.mkdirSync(USER_DATA, { recursive: true });
+
+  for (const file of ['games_config.json', 'manager_settings.json']) {
+    const dest = path.join(USER_DATA, file);
+    if (!fs.existsSync(dest)) {
+      const src = path.join(defaultsDir, file);
+      if (fs.existsSync(src)) try { fs.copyFileSync(src, dest); } catch {}
+    }
+  }
+
+  const luaDest = path.join(USER_DATA, 'obs_game_recorder.lua');
+  if (!fs.existsSync(luaDest) && fs.existsSync(luaSrc)) {
+    try { fs.copyFileSync(luaSrc, luaDest); } catch {}
+  }
+}
 
 let apiServer = null;
 let apiPort = null;
@@ -281,7 +307,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     backgroundColor: '#0f0f0f',
-    icon: path.join(__dirname, '..', 'assets', 'icon.png'),
+    icon: path.join(__dirname, '..', 'assets', 'icon.ico'),
     titleBarStyle: 'hidden',
     titleBarOverlay: {
       color: '#0f0f0f',
@@ -362,9 +388,8 @@ ipcMain.handle('windows:extractIcon', async (_event, processName) => {
   const { exec } = require('child_process');
   // Allow only safe filename characters to prevent injection and path traversal
   if (!processName || !/^[\w\-. ]+$/.test(processName)) return null;
-  const iconsDir = path.join(_projectRoot, 'icons');
-  fs.mkdirSync(iconsDir, { recursive: true });
-  const outPath = path.join(iconsDir, `${path.basename(processName)}.png`);
+  fs.mkdirSync(ICONS_DIR, { recursive: true });
+  const outPath = path.join(ICONS_DIR, `${path.basename(processName)}.png`);
 
   // Use PowerShell + System.Drawing to extract the exe's associated icon
   const escaped = outPath.replace(/\\/g, '\\\\').replace(/'/g, "''");
@@ -472,6 +497,7 @@ ipcMain.handle('obs:running',       () => isOBSRunning());
 
 // OBS WebSocket
 ipcMain.handle('obs:ws:test',          () => testOBSConnection(store.get('settings').obsWebSocket));
+ipcMain.handle('obs:ws:script-loaded', () => isOBSScriptLoaded(store.get('settings').obsWebSocket));
 ipcMain.handle('obs:ws:scenes', async () => {
   try {
     return await getOBSScenes(store.get('settings').obsWebSocket);
@@ -553,6 +579,9 @@ ipcMain.handle('api:port', async () => {
   return apiPort;
 });
 
+// OBS script setup — returns the path to the Lua script seeded into userData
+ipcMain.handle('obs:script:path', () => path.join(USER_DATA, 'obs_game_recorder.lua'));
+
 app.whenReady().then(() => {
   // Serve local filesystem files (e.g. game icons) via localfile:// protocol.
   // file:// is blocked by Electron's security model when loaded from a different origin.
@@ -560,6 +589,12 @@ app.whenReady().then(() => {
     const filePath = new URL(request.url).pathname.slice(1); // strip leading /
     return net.fetch(`file:///${filePath}`);
   });
+
+  // Seed default configs and OBS script into AppData on first run
+  seedFirstRun();
+  // Ensure runtime and icons directories exist in AppData
+  fs.mkdirSync(RUNTIME_DIR, { recursive: true });
+  fs.mkdirSync(ICONS_DIR, { recursive: true });
 
   ensureGameState();
 
