@@ -240,9 +240,21 @@ function script_update(settings)
     end
 end
 
+-- Vendor request handler for ping (allows the app to detect this script is loaded)
+function vendor_ping(data)
+    return "{}"
+end
+
 -- Script load
 function script_load(settings)
     obs.script_log(obs.LOG_INFO, "Open Clip recorder loaded")
+
+    -- Register a vendor WebSocket request so the desktop app can detect this script
+    local vendor = obs.obs_websocket_register_vendor("open-clip")
+    if vendor then
+        obs.obs_websocket_vendor_register_request(vendor, "ping", vendor_ping)
+        obs.script_log(obs.LOG_INFO, "Registered WebSocket vendor 'open-clip' for script detection")
+    end
 end
 
 -- Script unload

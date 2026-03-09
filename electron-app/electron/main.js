@@ -8,6 +8,10 @@ protocol.registerSchemesAsPrivileged([
 const path = require('path');
 const fs = require('fs');
 
+// Force the userData folder to "open-clip" (lowercase, no spaces) instead of the
+// productName-derived "Open Clip" to avoid path issues.
+app.setPath('userData', path.join(app.getPath('appData'), 'open-clip'));
+
 // Electron-only config (window bounds, OBS recording path which Python reads from OBS profile directly)
 const electronConfigPath = path.join(app.getPath('userData'), 'electron.json');
 const electronConfigDefaults = { windowBounds: { width: 1200, height: 800 }, obsRecordingPath: '' };
@@ -241,7 +245,7 @@ const { setupGameWatcher } = require('./gameWatcher');
 const { setupFileManager } = require('./fileManager');
 const { readOBSRecordingPath } = require('./obsIntegration');
 const { getProfiles, readEncodingSettings, writeEncodingSettings, isOBSRunning } = require('./obsEncoding');
-const { getOBSScenes, createSceneFromTemplate, testOBSConnection } = require('./obsWebSocket');
+const { getOBSScenes, createSceneFromTemplate, testOBSConnection, isOBSScriptLoaded } = require('./obsWebSocket');
 const { readOBSWebSocketQR } = require('./qrCodeReader');
 const { startApiServer } = require('./apiServer');
 const { RUNTIME_DIR, STATE_FILE } = require('./constants');
@@ -493,6 +497,7 @@ ipcMain.handle('obs:running',       () => isOBSRunning());
 
 // OBS WebSocket
 ipcMain.handle('obs:ws:test',          () => testOBSConnection(store.get('settings').obsWebSocket));
+ipcMain.handle('obs:ws:script-loaded', () => isOBSScriptLoaded(store.get('settings').obsWebSocket));
 ipcMain.handle('obs:ws:scenes', async () => {
   try {
     return await getOBSScenes(store.get('settings').obsWebSocket);

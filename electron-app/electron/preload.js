@@ -41,6 +41,7 @@ contextBridge.exposeInMainWorld('api', {
 
   // OBS WebSocket
   testOBSWSConnection: () => ipcRenderer.invoke('obs:ws:test'),
+  isOBSScriptLoaded: () => ipcRenderer.invoke('obs:ws:script-loaded'),
   getOBSWSScenes: () => ipcRenderer.invoke('obs:ws:scenes'),
   createOBSScene: (newSceneName, templateSceneName) => ipcRenderer.invoke('obs:ws:create-scene', newSceneName, templateSceneName),
   readOBSWSQR: (imagePath) => ipcRenderer.invoke('obs:ws:read-qr', imagePath),

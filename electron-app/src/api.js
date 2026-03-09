@@ -27,6 +27,7 @@ const mockApi = {
   setEncodingSettings: asyncNoop,
   isOBSRunning: async () => false,
   testOBSWSConnection: async () => ({ success: false, message: 'Not in Electron' }),
+  isOBSScriptLoaded: async () => false,
   getOBSWSScenes: asyncArr,
   createOBSScene: async () => ({ success: false, message: 'Not in Electron' }),
   readOBSWSQR: async () => ({ success: false, message: 'Not in Electron' }),
