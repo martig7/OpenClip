@@ -60,6 +60,12 @@ body {
   gap: 8px;
 }
 
+.navbar-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+}
+
 .nav-tabs {
   display: flex;
   gap: 5px;
