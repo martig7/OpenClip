@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { FolderOpen, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { FolderOpen, RefreshCw, Wifi, QrCode, Clipboard } from 'lucide-react';
 import api from '../api';
 
 const HOTKEY_OPTIONS = [
@@ -12,8 +12,39 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState(null);
   const [toast, setToast] = useState(null);
 
+  // Keep a ref to pasteQRSettings so the document paste listener always calls
+  // the latest version (which closes over the current settings value).
+  const pasteQRSettingsRef = useRef(null);
+
   useEffect(() => {
     loadSettings();
+  }, []);
+
+  useEffect(() => {
+    // Add keyboard shortcut for pasting QR code (Ctrl+V or Cmd+V)
+    const handlePaste = (e) => {
+      // Don't intercept paste if user is typing in an input field
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+        return;
+      }
+
+      // Synchronous clipboard type check: avoids an async IPC round-trip and
+      // allows e.preventDefault() to actually cancel the paste (which requires
+      // calling it before the event handler yields to await).
+      const hasImage =
+        e.clipboardData &&
+        [...(e.clipboardData.types || [])].some(t => t.startsWith('image') || t === 'Files');
+      if (!hasImage) return;
+
+      e.preventDefault();
+      // Delegate to the latest pasteQRSettings via ref so the handler always
+      // has access to the current settings state even though the effect only
+      // runs once.
+      pasteQRSettingsRef.current?.();
+    };
+
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
   }, []);
 
   async function loadSettings() {
@@ -49,9 +80,72 @@ export default function SettingsPage() {
     if (dir) updateSetting(settingKey, dir);
   }
 
+  async function testWSConnection() {
+    const result = await api.testOBSWSConnection();
+    showToast(result.success ? `Connected: ${result.version}` : `Failed: ${result.message}`);
+  }
+
+  async function pasteQRSettings() {
+    const result = await api.readOBSWSQRFromClipboard();
+    
+    if (!result.success) {
+      showToast(`Failed: ${result.message}`);
+      return;
+    }
+    
+    applyQRSettings(result.settings);
+  }
+  // Keep the ref up-to-date after every render so the document paste listener
+  // (registered once on mount) always calls the latest version of this function.
+  useLayoutEffect(() => {
+    pasteQRSettingsRef.current = pasteQRSettings;
+  });
+
+  async function importQRSettings() {
+    const imagePath = await api.openFileDialog({
+      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'bmp', 'gif', 'webp'] }],
+    });
+    
+    if (!imagePath) return;
+    
+    const result = await api.readOBSWSQR(imagePath);
+    
+    if (!result.success) {
+      showToast(`Failed: ${result.message}`);
+      return;
+    }
+    
+    applyQRSettings(result.settings);
+  }
+
+  function applyQRSettings(qrSettings) {
+    // Update settings with values from QR code
+    const { host, port, password } = qrSettings;
+    const updated = { ...settings };
+    
+    if (!updated.obsWebSocket) {
+      updated.obsWebSocket = {};
+    }
+    
+    if (host !== undefined) {
+      updated.obsWebSocket.host = host;
+    }
+    if (port !== undefined) {
+      updated.obsWebSocket.port = port;
+    }
+    if (password !== undefined) {
+      updated.obsWebSocket.password = password;
+    }
+    
+    setSettings(updated);
+    api.setStore('settings', updated);
+    
+    showToast(`Settings imported: ${host || 'localhost'}:${port || 4455}`);
+  }
+
   function showToast(msg) {
     setToast(msg);
-    setTimeout(() => setToast(null), 3000);
+    setTimeout(() => setToast(null), 4000);
   }
 
   if (!settings) return null;
@@ -115,6 +209,59 @@ export default function SettingsPage() {
               className={`toggle ${settings.startWatcherOnStartup ? 'on' : ''}`}
               onClick={() => updateSetting('startWatcherOnStartup', !settings.startWatcherOnStartup)}
             />
+          </div>
+
+        {/* OBS WebSocket */}
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-title">OBS WebSocket</div>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '8px 0 12px' }}>
+            Connect to OBS via WebSocket to auto-create scenes. Enable WebSocket Server in OBS under Tools → WebSocket Server Settings. 
+            You can manually enter connection details below, or take a screenshot of the QR code in OBS and paste it here (Ctrl+V).
+          </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, marginBottom: 8 }}>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label">Host</label>
+              <input
+                className="form-input"
+                value={settings.obsWebSocket?.host || 'localhost'}
+                onChange={e => updateSetting('obsWebSocket.host', e.target.value)}
+                placeholder="localhost"
+              />
+            </div>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label">Port</label>
+              <input
+                type="number"
+                className="form-input"
+                value={settings.obsWebSocket?.port ?? 4455}
+                onChange={e => updateSetting('obsWebSocket.port', parseInt(e.target.value) || 4455)}
+                style={{ width: 90 }}
+              />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Password (optional)</label>
+            <input
+              type="password"
+              className="form-input"
+              value={settings.obsWebSocket?.password || ''}
+              onChange={e => updateSetting('obsWebSocket.password', e.target.value)}
+              placeholder="Leave blank if no password set"
+            />
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+            <button className="btn btn-secondary btn-sm" onClick={testWSConnection}>
+              <Wifi size={13} /> Test Connection
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={pasteQRSettings} title="Paste QR code image from clipboard (Ctrl+V)">
+              <Clipboard size={13} /> Paste QR Code
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={importQRSettings}>
+              <QrCode size={13} /> Browse for QR Code
+            </button>
           </div>
         </div>
 

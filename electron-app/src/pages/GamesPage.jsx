@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Play, Square, Circle, Edit2, Check, X, Gamepad2, RefreshCw, ChevronDown, Image } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Trash2, Play, Square, Circle, Edit2, Check, X, Gamepad2, RefreshCw, ChevronDown, Image, Wand2, Settings } from 'lucide-react';
 import api from '../api';
 
 export default function GamesPage() {
+  const navigate = useNavigate();
   const [games, setGames] = useState([]);
   const [watcherStatus, setWatcherStatus] = useState({ running: false, currentGame: null, startedAt: null, gameState: null });
   const [showAddModal, setShowAddModal] = useState(false);
@@ -12,6 +14,13 @@ export default function GamesPage() {
   const [visibleWindows, setVisibleWindows] = useState([]);
   const [loadingWindows, setLoadingWindows] = useState(false);
   const [showWindowPicker, setShowWindowPicker] = useState(false);
+  const [autoCreateScene, setAutoCreateScene] = useState(false);
+  const [obsScenes, setObsScenes] = useState([]);
+  const [loadingScenes, setLoadingScenes] = useState(false);
+  const [scenesError, setScenesError] = useState(null);
+  const [templateScene, setTemplateScene] = useState('');
+  const [sceneCreateStatus, setSceneCreateStatus] = useState(null); // { type: 'success'|'error', message }
+  const [toast, setToast] = useState(null);
 
   useEffect(() => {
     loadGames();
@@ -31,10 +40,33 @@ export default function GamesPage() {
 
   async function addGame() {
     if (!newGame.name || !newGame.selector) return;
+
+    // Auto-create the OBS scene before saving the game
+    if (autoCreateScene && newGame.scene) {
+      setSceneCreateStatus(null);
+      try {
+        const result = await api.createOBSScene(newGame.scene, templateScene || null);
+        if (!result.success) {
+          setSceneCreateStatus({ type: 'error', message: result.message });
+          return;
+        }
+        // Show success as a toast after the modal closes so the user sees it
+        showToast(result.message || `Scene "${newGame.scene}" created in OBS`);
+      } catch (err) {
+        setSceneCreateStatus({ type: 'error', message: err.message || 'Failed to create OBS scene' });
+        return;
+      }
+    }
+
     await api.addGame(newGame);
-    setNewGame({ name: '', selector: '', scene: '', icon_path: '' });
+    resetAddModal();
     setShowAddModal(false);
     loadGames();
+  }
+
+  function showToast(msg) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 4000);
   }
 
   async function pickIcon() {
@@ -80,10 +112,39 @@ export default function GamesPage() {
     });
   }
 
-  function openAddModal() {
+  async function loadOBSScenes() {
+    setLoadingScenes(true);
+    setScenesError(null);
+    try {
+      const scenes = await api.getOBSWSScenes();
+      setObsScenes(scenes || []);
+    } catch (err) {
+      setObsScenes([]);
+      setScenesError(err.message || 'Failed to load OBS scenes');
+    } finally {
+      setLoadingScenes(false);
+    }
+  }
+
+  function resetAddModal() {
     setNewGame({ name: '', selector: '', scene: '', icon_path: '' });
+    setAutoCreateScene(false);
+    setTemplateScene('');
+    setObsScenes([]);
+    setScenesError(null);
+    setSceneCreateStatus(null);
+  }
+
+  function openAddModal() {
+    resetAddModal();
     setShowAddModal(true);
     refreshWindows();
+  }
+
+  function goToSettings() {
+    setShowAddModal(false);
+    resetAddModal();
+    navigate('/settings');
   }
 
   async function toggleWatcher() {
@@ -184,7 +245,7 @@ export default function GamesPage() {
       </div>
 
       {showAddModal && (
-        <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
+        <div className="modal-overlay" onClick={() => { resetAddModal(); setShowAddModal(false); }}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <h2>Add Game</h2>
             <p>Add a game to monitor for automatic OBS recording.</p>
@@ -270,6 +331,125 @@ export default function GamesPage() {
                 onChange={e => setNewGame({ ...newGame, scene: e.target.value })}
               />
             </div>
+
+            {newGame.scene && (
+              <div className="form-group" style={{ background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Wand2 size={13} /> Auto-create scene in OBS
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                      Create this scene in OBS, copying sources from a template
+                    </div>
+                  </div>
+                  <button
+                    className={`toggle ${autoCreateScene ? 'on' : ''}`}
+                    onClick={() => {
+                      const next = !autoCreateScene;
+                      setAutoCreateScene(next);
+                      setSceneCreateStatus(null);
+                      if (next && obsScenes.length === 0) loadOBSScenes();
+                    }}
+                  />
+                </div>
+
+                {autoCreateScene && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                      <label className="form-label" style={{ margin: 0, flex: 1 }}>Template scene (optional)</label>
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={loadOBSScenes}
+                        disabled={loadingScenes}
+                        title="Refresh scene list from OBS"
+                      >
+                        <RefreshCw size={12} className={loadingScenes ? 'spinning' : ''} />
+                      </button>
+                    </div>
+                    {loadingScenes ? (
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading scenes from OBS...</div>
+                    ) : scenesError ? (
+                      <div style={{ 
+                        fontSize: 12, 
+                        color: 'var(--danger)', 
+                        padding: '6px 8px', 
+                        background: 'rgba(239,68,68,0.1)', 
+                        borderRadius: 'var(--radius-sm)',
+                        border: '1px solid rgba(239,68,68,0.3)'
+                      }}>
+                        {scenesError}{' '}
+                        <button
+                          onClick={goToSettings}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--primary)',
+                            textDecoration: 'underline',
+                            cursor: 'pointer',
+                            padding: 0,
+                            font: 'inherit',
+                            display: 'inline',
+                          }}
+                        >
+                          <Settings size={12} style={{ verticalAlign: 'middle', marginRight: 2 }} />
+                          Configure WebSocket
+                        </button>
+                      </div>
+                    ) : obsScenes.length === 0 ? (
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                        No scenes found. Make sure OBS is running and{' '}
+                        <button
+                          onClick={goToSettings}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--primary)',
+                            textDecoration: 'underline',
+                            cursor: 'pointer',
+                            padding: 0,
+                            font: 'inherit',
+                            display: 'inline',
+                          }}
+                        >
+                          <Settings size={12} style={{ verticalAlign: 'middle', marginRight: 2 }} />
+                          WebSocket is configured
+                        </button>
+                        .
+                      </div>
+                    ) : (
+                      <select
+                        className="form-input"
+                        value={templateScene}
+                        onChange={e => setTemplateScene(e.target.value)}
+                      >
+                        <option value="">— Create empty scene —</option>
+                        {obsScenes.map(s => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    )}
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
+                      All sources from the selected template will be copied into the new scene
+                    </span>
+                  </div>
+                )}
+
+                {sceneCreateStatus && (
+                  <div style={{
+                    marginTop: 8,
+                    padding: '6px 10px',
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: 12,
+                    background: sceneCreateStatus.type === 'success' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
+                    color: sceneCreateStatus.type === 'success' ? 'var(--success)' : 'var(--danger)',
+                    border: `1px solid ${sceneCreateStatus.type === 'success' ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                  }}>
+                    {sceneCreateStatus.message}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="form-group">
               <label className="form-label">Icon (optional)</label>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -297,12 +477,13 @@ export default function GamesPage() {
               )}
             </div>
             <div className="modal-actions">
-              <button className="btn btn-secondary" onClick={() => setShowAddModal(false)}>Cancel</button>
+              <button className="btn btn-secondary" onClick={() => { resetAddModal(); setShowAddModal(false); }}>Cancel</button>
               <button className="btn btn-primary" onClick={addGame}>Add Game</button>
             </div>
           </div>
         </div>
       )}
+      {toast && <div className="toast">{toast}</div>}
     </>
   );
 }

@@ -38,6 +38,14 @@ contextBridge.exposeInMainWorld('api', {
   setEncodingSettings: (profileDir, settings) => ipcRenderer.invoke('obs:encoding:set', profileDir, settings),
   isOBSRunning: () => ipcRenderer.invoke('obs:running'),
 
+  // OBS WebSocket
+  testOBSWSConnection: () => ipcRenderer.invoke('obs:ws:test'),
+  getOBSWSScenes: () => ipcRenderer.invoke('obs:ws:scenes'),
+  createOBSScene: (newSceneName, templateSceneName) => ipcRenderer.invoke('obs:ws:create-scene', newSceneName, templateSceneName),
+  readOBSWSQR: (imagePath) => ipcRenderer.invoke('obs:ws:read-qr', imagePath),
+  readOBSWSQRFromClipboard: () => ipcRenderer.invoke('obs:ws:read-qr-clipboard'),
+  clipboardHasImage: () => ipcRenderer.invoke('clipboard:hasImage'),
+
   // Dialogs
   openDirectoryDialog: () => ipcRenderer.invoke('dialog:openDirectory'),
   openFileDialog: (opts) => ipcRenderer.invoke('dialog:openFile', opts),
