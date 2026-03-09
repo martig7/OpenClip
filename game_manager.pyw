@@ -477,6 +477,10 @@ class GameManagerApp:
         # Start hotkey listener if configured
         self.start_hotkey_listener()
 
+        # Auto-start watcher on startup if configured
+        if self.settings.get('start_watcher_on_startup', False):
+            self.start_watcher()
+
         # Create notebook (tabs)
         self.notebook = ttk.Notebook(root)
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
@@ -636,6 +640,11 @@ class GameManagerApp:
         self.auto_organize_var = tk.BooleanVar(value=self.settings.get('auto_organize', True))
         ttk.Checkbutton(org_frame, text="Automatically organize recordings when game closes",
                        variable=self.auto_organize_var).pack(anchor=tk.W, pady=(0, 10))
+
+        # Start watcher on startup checkbox
+        self.start_watcher_on_startup_var = tk.BooleanVar(value=self.settings.get('start_watcher_on_startup', False))
+        ttk.Checkbutton(org_frame, text="Start watcher automatically when app launches",
+                       variable=self.start_watcher_on_startup_var).pack(anchor=tk.W, pady=(0, 5))
 
         # Organized Path
         ttk.Label(org_frame, text="Organize recordings into:").pack(anchor=tk.W)
@@ -955,6 +964,7 @@ Example:
 
         self.settings['organized_path'] = organized_path
         self.settings['auto_organize'] = auto_organize
+        self.settings['start_watcher_on_startup'] = self.start_watcher_on_startup_var.get()
 
         if save_settings(self.settings):
             messagebox.showinfo("Settings", f"Settings saved!\n\nOrganized path: {organized_path or '(not set)'}\nAuto-organize: {'Enabled' if auto_organize else 'Disabled'}")
