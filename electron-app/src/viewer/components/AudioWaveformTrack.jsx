@@ -4,6 +4,18 @@ function AudioWaveformTrack({ peaks, duration, viewStart, visibleDuration, isSel
   const canvasRef = useRef(null)
   const containerRef = useRef(null)
 
+  const handleKeyDown = useCallback(
+    (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        if (onClick) {
+          onClick(event)
+        }
+      }
+    },
+    [onClick],
+  )
+
   const draw = useCallback(() => {
     const canvas = canvasRef.current
     const container = containerRef.current
@@ -48,6 +60,10 @@ function AudioWaveformTrack({ peaks, duration, viewStart, visibleDuration, isSel
       ref={containerRef}
       className={`audio-waveform-track${isSelected ? ' selected' : ''}`}
       onClick={onClick}
+      onKeyDown={handleKeyDown}
+      role="button"
+      tabIndex={0}
+      aria-pressed={isSelected}
       title={isSelected ? 'Click to deselect track' : 'Click to select track'}
     >
       <div className="audio-waveform-info">
