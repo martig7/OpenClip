@@ -1,6 +1,8 @@
+import { useEffect } from 'react';
 import { HashRouter, Routes, Route, NavLink } from 'react-router-dom';
 import { Gamepad2, Video, Film, HardDrive, Settings, Sliders } from 'lucide-react';
 import appIcon from '../assets/icon.png';
+import api from './api';
 import GamesPage from './pages/GamesPage';
 import SettingsPage from './pages/SettingsPage';
 import EncodingPage from './pages/EncodingPage';
@@ -20,6 +22,26 @@ const navItems = [
 ];
 
 export default function App() {
+  useEffect(() => {
+    const unsubscribe = api.onMarkerAdded(() => {
+      try {
+        const ctx = new AudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = 880;
+        osc.type = 'sine';
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.15);
+        osc.onended = () => ctx.close();
+      } catch {}
+    });
+    return unsubscribe;
+  }, []);
+
   return (
     <HashRouter>
       <div className="app-layout">
