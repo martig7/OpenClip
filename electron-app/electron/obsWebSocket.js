@@ -26,6 +26,38 @@ function buildWsUrl(wsSettings) {
 }
 
 /**
+ * Parse OBS WebSocket errors into user-friendly messages.
+ * @param {Error} err - The error from obs-websocket-js
+ * @returns {string} User-friendly error message
+ */
+function parseOBSError(err) {
+  const msg = err.message || '';
+  
+  // WebSocket error code 1006: abnormal closure (connection refused)
+  if (err.code === 1006 || msg.includes('1006')) {
+    return 'Cannot connect to OBS. Make sure OBS is running and WebSocket Server is enabled in Tools → WebSocket Server Settings.';
+  }
+  
+  // Authentication errors
+  if (msg.includes('authentication') || msg.includes('password')) {
+    return 'Authentication failed. Check your WebSocket password in Settings.';
+  }
+  
+  // Connection timeout
+  if (msg.includes('timed out') || msg.includes('timeout')) {
+    return 'Connection timed out. Verify OBS is running and the host/port are correct.';
+  }
+  
+  // Connection refused
+  if (msg.includes('ECONNREFUSED') || msg.includes('refused')) {
+    return 'Connection refused. Check that OBS WebSocket Server is enabled and the port is correct.';
+  }
+  
+  // Generic fallback
+  return msg || 'Failed to connect to OBS WebSocket';
+}
+
+/**
  * Connect to OBS WebSocket, run an async callback with the connected client,
  * then disconnect. Returns the callback's result or throws on error.
  * @param {object} wsSettings - { host, port, password }
@@ -42,19 +74,29 @@ async function withOBSConnection(wsSettings, callback) {
   // If the timeout fires first, hook the connect promise so we can disconnect
   // once it eventually resolves — preventing an orphaned background WebSocket.
   const connectPromise = obs.connect(url, password);
-  await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
+  
+  try {
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        connectPromise.then(
+          () => { obs.disconnect().catch(() => {}); },
+          () => { /* connect failed anyway, nothing to clean up */ }
+        );
+        reject(new Error('OBS WebSocket connection timed out'));
+      }, CONNECT_TIMEOUT_MS);
       connectPromise.then(
-        () => { obs.disconnect().catch(() => {}); },
-        () => { /* connect failed anyway, nothing to clean up */ }
+        () => { clearTimeout(timer); resolve(); },
+        (err) => { clearTimeout(timer); reject(err); }
       );
-      reject(new Error('OBS WebSocket connection timed out'));
-    }, CONNECT_TIMEOUT_MS);
-    connectPromise.then(
-      () => { clearTimeout(timer); resolve(); },
-      (err) => { clearTimeout(timer); reject(err); }
-    );
-  });
+    });
+  } catch (err) {
+    // Wrap with user-friendly error message
+    const friendlyMessage = parseOBSError(err);
+    const wrappedError = new Error(friendlyMessage);
+    wrappedError.code = err.code;
+    wrappedError.originalError = err;
+    throw wrappedError;
+  }
 
   try {
     return await callback(obs);
@@ -69,11 +111,16 @@ async function withOBSConnection(wsSettings, callback) {
  * @returns {Promise<string[]>} Array of scene names
  */
 async function getOBSScenes(wsSettings) {
-  return withOBSConnection(wsSettings, async (obs) => {
-    const { scenes } = await obs.call('GetSceneList');
-    // scenes are returned newest-first; keep that order
-    return scenes.map(s => s.sceneName);
-  });
+  try {
+    return await withOBSConnection(wsSettings, async (obs) => {
+      const { scenes } = await obs.call('GetSceneList');
+      // scenes are returned newest-first; keep that order
+      return scenes.map(s => s.sceneName);
+    });
+  } catch (err) {
+    console.error('[obsWebSocket] Failed to get OBS scenes:', err.message);
+    throw err;
+  }
 }
 
 /**
@@ -92,73 +139,78 @@ async function getOBSScenes(wsSettings) {
  */
 async function createSceneFromTemplate(wsSettings, newSceneName, templateSceneName) {
   if (!newSceneName || !newSceneName.trim()) {
-    throw new Error('New scene name is required');
+    return { success: false, message: 'Scene name is required' };
   }
   const trimmedName = newSceneName.trim();
 
-  return withOBSConnection(wsSettings, async (obs) => {
-    // Check that the scene doesn't already exist
-    const { scenes } = await obs.call('GetSceneList');
-    const existingNames = scenes.map(s => s.sceneName);
-    if (existingNames.includes(trimmedName)) {
-      return { success: false, message: `Scene "${trimmedName}" already exists in OBS` };
-    }
+  try {
+    return await withOBSConnection(wsSettings, async (obs) => {
+      // Check that the scene doesn't already exist
+      const { scenes } = await obs.call('GetSceneList');
+      const existingNames = scenes.map(s => s.sceneName);
+      if (existingNames.includes(trimmedName)) {
+        return { success: false, message: `Scene "${trimmedName}" already exists in OBS` };
+      }
 
-    // Create the new (empty) scene
-    await obs.call('CreateScene', { sceneName: trimmedName });
+      // Create the new (empty) scene
+      await obs.call('CreateScene', { sceneName: trimmedName });
 
-    // If no template, we're done
-    if (!templateSceneName || !templateSceneName.trim()) {
-      return { success: true, message: `Scene "${trimmedName}" created successfully` };
-    }
+      // If no template, we're done
+      if (!templateSceneName || !templateSceneName.trim()) {
+        return { success: true, message: `Scene "${trimmedName}" created successfully` };
+      }
 
-    // Attempt to copy sources from the template. If anything unexpected throws
-    // after the scene was already created, remove the empty scene so OBS is not
-    // left in an inconsistent state.
-    try {
-      const trimmedTemplate = templateSceneName.trim();
-      if (!existingNames.includes(trimmedTemplate)) {
+      // Attempt to copy sources from the template. If anything unexpected throws
+      // after the scene was already created, remove the empty scene so OBS is not
+      // left in an inconsistent state.
+      try {
+        const trimmedTemplate = templateSceneName.trim();
+        if (!existingNames.includes(trimmedTemplate)) {
+          return {
+            success: true,
+            message: `Scene "${trimmedName}" created (template "${trimmedTemplate}" not found — created empty)`,
+          };
+        }
+
+        // Get all scene items from the template
+        const { sceneItems } = await obs.call('GetSceneItemList', { sceneName: trimmedTemplate });
+
+        if (!sceneItems || sceneItems.length === 0) {
+          return { success: true, message: `Scene "${trimmedName}" created (template was empty)` };
+        }
+
+        // Duplicate all items in parallel; non-fatal if individual items fail
+        // (e.g. nested scenes may not support DuplicateSceneItem)
+        const results = await Promise.allSettled(
+          sceneItems.map(item =>
+            obs.call('DuplicateSceneItem', {
+              sceneName: trimmedTemplate,
+              sceneItemId: item.sceneItemId,
+              destinationSceneName: trimmedName,
+            })
+          )
+        );
+        results.forEach((result, i) => {
+          if (result.status === 'rejected') {
+            console.warn(`[obsWebSocket] Could not duplicate item "${sceneItems[i].sourceName}": ${result.reason?.message}`);
+          }
+        });
+        const copiedCount = results.filter(r => r.status === 'fulfilled').length;
+
         return {
           success: true,
-          message: `Scene "${trimmedName}" created (template "${trimmedTemplate}" not found — created empty)`,
+          message: `Scene "${trimmedName}" created with ${copiedCount}/${sceneItems.length} sources from "${trimmedTemplate}"`,
         };
+      } catch (err) {
+        // Clean up the newly created scene so OBS isn't left with an empty shell
+        try { await obs.call('RemoveScene', { sceneName: trimmedName }); } catch {}
+        throw err;
       }
-
-      // Get all scene items from the template
-      const { sceneItems } = await obs.call('GetSceneItemList', { sceneName: trimmedTemplate });
-
-      if (!sceneItems || sceneItems.length === 0) {
-        return { success: true, message: `Scene "${trimmedName}" created (template was empty)` };
-      }
-
-      // Duplicate all items in parallel; non-fatal if individual items fail
-      // (e.g. nested scenes may not support DuplicateSceneItem)
-      const results = await Promise.allSettled(
-        sceneItems.map(item =>
-          obs.call('DuplicateSceneItem', {
-            sceneName: trimmedTemplate,
-            sceneItemId: item.sceneItemId,
-            destinationSceneName: trimmedName,
-          })
-        )
-      );
-      results.forEach((result, i) => {
-        if (result.status === 'rejected') {
-          console.warn(`[obsWebSocket] Could not duplicate item "${sceneItems[i].sourceName}": ${result.reason?.message}`);
-        }
-      });
-      const copiedCount = results.filter(r => r.status === 'fulfilled').length;
-
-      return {
-        success: true,
-        message: `Scene "${trimmedName}" created with ${copiedCount}/${sceneItems.length} sources from "${trimmedTemplate}"`,
-      };
-    } catch (err) {
-      // Clean up the newly created scene so OBS isn't left with an empty shell
-      try { await obs.call('RemoveScene', { sceneName: trimmedName }); } catch {}
-      throw err;
-    }
-  });
+    });
+  } catch (err) {
+    console.error('[obsWebSocket] Failed to create scene:', err.message);
+    return { success: false, message: err.message };
+  }
 }
 
 /**

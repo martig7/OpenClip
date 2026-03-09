@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, globalShortcut, protocol, net } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, globalShortcut, protocol, net, clipboard, nativeImage } = require('electron');
 
 // Register custom scheme before app is ready (required by Electron)
 // localfile:///C:/path/to/file.png → main process serves the file safely
@@ -242,6 +242,7 @@ const { setupFileManager } = require('./fileManager');
 const { readOBSRecordingPath } = require('./obsIntegration');
 const { getProfiles, readEncodingSettings, writeEncodingSettings, isOBSRunning } = require('./obsEncoding');
 const { getOBSScenes, createSceneFromTemplate, testOBSConnection } = require('./obsWebSocket');
+const { readOBSWebSocketQR } = require('./qrCodeReader');
 const { startApiServer } = require('./apiServer');
 const { RUNTIME_DIR, STATE_FILE } = require('./constants');
 
@@ -467,10 +468,34 @@ ipcMain.handle('obs:running',       () => isOBSRunning());
 
 // OBS WebSocket
 ipcMain.handle('obs:ws:test',          () => testOBSConnection(store.get('settings').obsWebSocket));
-ipcMain.handle('obs:ws:scenes',        () => getOBSScenes(store.get('settings').obsWebSocket));
+ipcMain.handle('obs:ws:scenes', async () => {
+  try {
+    return await getOBSScenes(store.get('settings').obsWebSocket);
+  } catch (err) {
+    console.error('[main] obs:ws:scenes error:', err.message);
+    throw err; // Re-throw so frontend receives the error
+  }
+});
 ipcMain.handle('obs:ws:create-scene',  (_e, newSceneName, templateSceneName) =>
   createSceneFromTemplate(store.get('settings').obsWebSocket, newSceneName, templateSceneName)
 );
+ipcMain.handle('obs:ws:read-qr', async (_event, imagePath) => {
+  return await readOBSWebSocketQR(imagePath);
+});
+ipcMain.handle('obs:ws:read-qr-clipboard', async () => {
+  const image = clipboard.readImage();
+  if (image.isEmpty()) {
+    return { success: false, message: 'No image in clipboard' };
+  }
+  
+  // Convert native image to PNG buffer
+  const buffer = image.toPNG();
+  return await readOBSWebSocketQR(buffer);
+});
+ipcMain.handle('clipboard:hasImage', () => {
+  const image = clipboard.readImage();
+  return !image.isEmpty();
+});
 
 // Dialogs
 ipcMain.handle('dialog:openDirectory', async () => {
