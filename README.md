@@ -7,8 +7,6 @@ Automatic recording manager for OBS Studio. Detects when your configured games a
 - Windows 10 or later (x64)
 - [OBS Studio](https://obsproject.com/) with the **WebSocket Server** enabled *(Tools → WebSocket Server Settings)*
 
-FFmpeg is bundled — no separate installation needed.
-
 ## Installation
 
 1. Download the latest installer (`Open Clip Setup x.x.x.exe`) from [Releases](https://github.com/martig7/OpenClip/releases).
