@@ -38,13 +38,19 @@ async function withOBSConnection(wsSettings, callback) {
   const url = buildWsUrl(wsSettings);
   const password = (wsSettings && wsSettings.password) || undefined;
 
-  // Race connection against a timeout; clear the timer if connection wins
+  // Race connection against a timeout; clear the timer when connection settles.
+  // If the timeout fires first, hook the connect promise so we can disconnect
+  // once it eventually resolves — preventing an orphaned background WebSocket.
+  const connectPromise = obs.connect(url, password);
   await new Promise((resolve, reject) => {
-    const timer = setTimeout(
-      () => reject(new Error('OBS WebSocket connection timed out')),
-      CONNECT_TIMEOUT_MS
-    );
-    obs.connect(url, password).then(
+    const timer = setTimeout(() => {
+      connectPromise.then(
+        () => { obs.disconnect().catch(() => {}); },
+        () => { /* connect failed anyway, nothing to clean up */ }
+      );
+      reject(new Error('OBS WebSocket connection timed out'));
+    }, CONNECT_TIMEOUT_MS);
+    connectPromise.then(
       () => { clearTimeout(timer); resolve(); },
       (err) => { clearTimeout(timer); reject(err); }
     );
@@ -53,7 +59,7 @@ async function withOBSConnection(wsSettings, callback) {
   try {
     return await callback(obs);
   } finally {
-    try { obs.disconnect(); } catch {}
+    try { await obs.disconnect(); } catch {}
   }
 }
 
@@ -106,43 +112,52 @@ async function createSceneFromTemplate(wsSettings, newSceneName, templateSceneNa
       return { success: true, message: `Scene "${trimmedName}" created successfully` };
     }
 
-    const trimmedTemplate = templateSceneName.trim();
-    if (!existingNames.includes(trimmedTemplate)) {
+    // Attempt to copy sources from the template. If anything unexpected throws
+    // after the scene was already created, remove the empty scene so OBS is not
+    // left in an inconsistent state.
+    try {
+      const trimmedTemplate = templateSceneName.trim();
+      if (!existingNames.includes(trimmedTemplate)) {
+        return {
+          success: true,
+          message: `Scene "${trimmedName}" created (template "${trimmedTemplate}" not found — created empty)`,
+        };
+      }
+
+      // Get all scene items from the template
+      const { sceneItems } = await obs.call('GetSceneItemList', { sceneName: trimmedTemplate });
+
+      if (!sceneItems || sceneItems.length === 0) {
+        return { success: true, message: `Scene "${trimmedName}" created (template was empty)` };
+      }
+
+      // Duplicate all items in parallel; non-fatal if individual items fail
+      // (e.g. nested scenes may not support DuplicateSceneItem)
+      const results = await Promise.allSettled(
+        sceneItems.map(item =>
+          obs.call('DuplicateSceneItem', {
+            sceneName: trimmedTemplate,
+            sceneItemId: item.sceneItemId,
+            destinationSceneName: trimmedName,
+          })
+        )
+      );
+      results.forEach((result, i) => {
+        if (result.status === 'rejected') {
+          console.warn(`[obsWebSocket] Could not duplicate item "${sceneItems[i].sourceName}": ${result.reason?.message}`);
+        }
+      });
+      const copiedCount = results.filter(r => r.status === 'fulfilled').length;
+
       return {
         success: true,
-        message: `Scene "${trimmedName}" created (template "${trimmedTemplate}" not found — created empty)`,
+        message: `Scene "${trimmedName}" created with ${copiedCount}/${sceneItems.length} sources from "${trimmedTemplate}"`,
       };
+    } catch (err) {
+      // Clean up the newly created scene so OBS isn't left with an empty shell
+      try { await obs.call('RemoveScene', { sceneName: trimmedName }); } catch {}
+      throw err;
     }
-
-    // Get all scene items from the template
-    const { sceneItems } = await obs.call('GetSceneItemList', { sceneName: trimmedTemplate });
-
-    if (!sceneItems || sceneItems.length === 0) {
-      return { success: true, message: `Scene "${trimmedName}" created (template was empty)` };
-    }
-
-    // Duplicate all items in parallel; non-fatal if individual items fail
-    // (e.g. nested scenes may not support DuplicateSceneItem)
-    const results = await Promise.allSettled(
-      sceneItems.map(item =>
-        obs.call('DuplicateSceneItem', {
-          sceneName: trimmedTemplate,
-          sceneItemId: item.sceneItemId,
-          destinationSceneName: trimmedName,
-        })
-      )
-    );
-    results.forEach((result, i) => {
-      if (result.status === 'rejected') {
-        console.warn(`[obsWebSocket] Could not duplicate item "${sceneItems[i].sourceName}": ${result.reason?.message}`);
-      }
-    });
-    const copiedCount = results.filter(r => r.status === 'fulfilled').length;
-
-    return {
-      success: true,
-      message: `Scene "${trimmedName}" created with ${copiedCount}/${sceneItems.length} sources from "${trimmedTemplate}"`,
-    };
   });
 }
 
