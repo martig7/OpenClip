@@ -181,6 +181,8 @@ function VideoPlayer({ recording, onClipCreated }) {
   const toggleTrack = useCallback((index) => {
     setSelectedTracks(prev => {
       if (prev.includes(index)) {
+        // Prevent deselecting the last selected track
+        if (prev.length === 1) return prev
         return prev.filter(i => i !== index)
       }
       return [...prev, index].sort((a, b) => a - b)
@@ -318,6 +320,7 @@ function VideoPlayer({ recording, onClipCreated }) {
               selectedTracks={selectedTracks}
               waveforms={waveforms}
               onTrackToggle={toggleTrack}
+              isCreatingClip={isCreatingClip}
             />
 
             <ClipControls

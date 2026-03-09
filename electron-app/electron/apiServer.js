@@ -345,8 +345,8 @@ function startApiServer(appStore) {
       // GET /api/video/tracks?path=...
       if (pathname === '/api/video/tracks' && req.method === 'GET') {
         const filePath = query.path;
-        if (!filePath || !fs.existsSync(filePath)) return json(res, { error: 'File not found' }, 404);
-        if (!isAllowedPath(filePath)) return json(res, { error: 'Forbidden' }, 403);
+        if (!filePath || !isAllowedPath(filePath)) return json(res, { error: 'Forbidden' }, 403);
+        if (!fs.existsSync(filePath)) return json(res, { error: 'File not found' }, 404);
         // Load sidecar track names if present (written during MKV→MP4 remux)
         let sidecarNames = null;
         try {
@@ -382,8 +382,8 @@ function startApiServer(appStore) {
         const rawTrack = parseInt(query.track, 10);
         if (isNaN(rawTrack) || rawTrack < 0) return json(res, { error: 'Invalid track index' }, 400);
         const trackIndex = rawTrack;
-        if (!filePath || !fs.existsSync(filePath)) return json(res, { error: 'File not found' }, 404);
-        if (!isAllowedPath(filePath)) return json(res, { error: 'Forbidden' }, 403);
+        if (!filePath || !isAllowedPath(filePath)) return json(res, { error: 'Forbidden' }, 403);
+        if (!fs.existsSync(filePath)) return json(res, { error: 'File not found' }, 404);
 
         return new Promise((resolve) => {
           getVideoDuration(filePath).then(duration => {
