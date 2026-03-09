@@ -46,7 +46,9 @@ export default function GamesPage() {
           setSceneCreateStatus({ type: 'error', message: result.message });
           return;
         }
-        setSceneCreateStatus({ type: 'success', message: result.message });
+        // Success: modal closes immediately after, so an in-modal status message
+        // would be cleared by resetAddModal() before the user sees it. Success
+        // is implied by the game appearing in the list.
       } catch (err) {
         setSceneCreateStatus({ type: 'error', message: err.message || 'Failed to create OBS scene' });
         return;
