@@ -23,6 +23,7 @@ const gamesConfigDefaults = { games: [] };
 const managerSettingsDefaults = {
   organized_path: '',
   auto_organize: true,
+  start_watcher_on_startup: false,
   storage_settings: { auto_delete_enabled: false, max_storage_gb: 100, max_age_days: 30, exclude_clips: true },
   locked_recordings: [],
   clip_hotkey: 'F9',
@@ -52,6 +53,7 @@ function msToElectronSettings(ms, obsRecordingPath) {
   return {
     obsRecordingPath: normalizePath(obsRecordingPath) || '',
     destinationPath: normalizePath(ms.organized_path) || '',
+    startWatcherOnStartup: ms.start_watcher_on_startup || false,
     clipMarkerHotkey: ms.clip_hotkey || 'F9',
     autoClip: {
       enabled: ms.auto_clip_settings?.enabled || false,
@@ -73,6 +75,7 @@ function msToElectronSettings(ms, obsRecordingPath) {
 function electronSettingsToMs(ms, electronSettings) {
   const updated = { ...ms };
   if (electronSettings.destinationPath !== undefined) updated.organized_path = normalizePath(electronSettings.destinationPath);
+  if (electronSettings.startWatcherOnStartup !== undefined) updated.start_watcher_on_startup = electronSettings.startWatcherOnStartup;
   if (electronSettings.clipMarkerHotkey !== undefined) updated.clip_hotkey = electronSettings.clipMarkerHotkey;
   if (electronSettings.autoClip !== undefined) {
     updated.auto_clip_settings = {
@@ -529,6 +532,18 @@ app.whenReady().then(() => {
 
   createWindow();
   registerHotkey();
+
+  // Auto-start watcher on startup if configured
+  if (store.get('settings.startWatcherOnStartup')) {
+    ensureGameState();
+    const { runAutoDelete } = require('./recordingService');
+    try { runAutoDelete(); } catch {}
+    watcherStartedAt = Date.now();
+    watcher = setupGameWatcher(store, (state) => {
+      currentGame = state.currentGame;
+      pushWatcherStatus();
+    });
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
