@@ -82,8 +82,9 @@ function parseOBSWebSocketQR(qrData) {
         result.port = parseInt(url.port, 10);
       }
       
-      // Check for password in query params
-      const password = url.searchParams.get('password') || url.searchParams.get('pass');
+      // Check for password: OBS 28+ encodes it as the username in
+      // obswebsocket://password@host:port URIs; fall back to query params.
+      const password = url.username || url.searchParams.get('password') || url.searchParams.get('pass');
       if (password) {
         result.password = password;
       }

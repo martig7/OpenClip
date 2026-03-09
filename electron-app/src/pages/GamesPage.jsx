@@ -20,6 +20,7 @@ export default function GamesPage() {
   const [scenesError, setScenesError] = useState(null);
   const [templateScene, setTemplateScene] = useState('');
   const [sceneCreateStatus, setSceneCreateStatus] = useState(null); // { type: 'success'|'error', message }
+  const [toast, setToast] = useState(null);
 
   useEffect(() => {
     loadGames();
@@ -49,9 +50,8 @@ export default function GamesPage() {
           setSceneCreateStatus({ type: 'error', message: result.message });
           return;
         }
-        // Success: modal closes immediately after, so an in-modal status message
-        // would be cleared by resetAddModal() before the user sees it. Success
-        // is implied by the game appearing in the list.
+        // Show success as a toast after the modal closes so the user sees it
+        showToast(result.message || `Scene "${newGame.scene}" created in OBS`);
       } catch (err) {
         setSceneCreateStatus({ type: 'error', message: err.message || 'Failed to create OBS scene' });
         return;
@@ -62,6 +62,11 @@ export default function GamesPage() {
     resetAddModal();
     setShowAddModal(false);
     loadGames();
+  }
+
+  function showToast(msg) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 4000);
   }
 
   async function pickIcon() {
@@ -478,6 +483,7 @@ export default function GamesPage() {
           </div>
         </div>
       )}
+      {toast && <div className="toast">{toast}</div>}
     </>
   );
 }

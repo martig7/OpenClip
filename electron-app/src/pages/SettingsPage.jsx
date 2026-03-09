@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { FolderOpen, RefreshCw, Wifi, QrCode, Clipboard } from 'lucide-react';
 import api from '../api';
 
@@ -12,50 +12,37 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState(null);
   const [toast, setToast] = useState(null);
 
+  // Keep a ref to pasteQRSettings so the document paste listener always calls
+  // the latest version (which closes over the current settings value).
+  const pasteQRSettingsRef = useRef(null);
+
   useEffect(() => {
     loadSettings();
   }, []);
 
   useEffect(() => {
     // Add keyboard shortcut for pasting QR code (Ctrl+V or Cmd+V)
-    const handlePaste = async (e) => {
+    const handlePaste = (e) => {
       // Don't intercept paste if user is typing in an input field
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
         return;
       }
-      
-      // Check if clipboard has an image
-      const hasImage = await api.clipboardHasImage();
-      if (hasImage) {
-        e.preventDefault();
-        const result = await api.readOBSWSQRFromClipboard();
-        
-        if (!result.success) {
-          setToast(`Failed: ${result.message}`);
-          setTimeout(() => setToast(null), 4000);
-          return;
-        }
-        
-        // Update settings with values from QR code
-        const { host, port, password } = result.settings;
-        setSettings(prev => {
-          const updated = { ...prev };
-          if (!updated.obsWebSocket) {
-            updated.obsWebSocket = {};
-          }
-          if (host !== undefined) updated.obsWebSocket.host = host;
-          if (port !== undefined) updated.obsWebSocket.port = port;
-          if (password !== undefined) updated.obsWebSocket.password = password;
-          
-          api.setStore('settings', updated);
-          return updated;
-        });
-        
-        setToast(`Settings imported: ${host || 'localhost'}:${port || 4455}`);
-        setTimeout(() => setToast(null), 4000);
-      }
+
+      // Synchronous clipboard type check: avoids an async IPC round-trip and
+      // allows e.preventDefault() to actually cancel the paste (which requires
+      // calling it before the event handler yields to await).
+      const hasImage =
+        e.clipboardData &&
+        [...(e.clipboardData.types || [])].some(t => t.startsWith('image') || t === 'Files');
+      if (!hasImage) return;
+
+      e.preventDefault();
+      // Delegate to the latest pasteQRSettings via ref so the handler always
+      // has access to the current settings state even though the effect only
+      // runs once.
+      pasteQRSettingsRef.current?.();
     };
-    
+
     document.addEventListener('paste', handlePaste);
     return () => document.removeEventListener('paste', handlePaste);
   }, []);
@@ -108,6 +95,11 @@ export default function SettingsPage() {
     
     applyQRSettings(result.settings);
   }
+  // Keep the ref up-to-date after every render so the document paste listener
+  // (registered once on mount) always calls the latest version of this function.
+  useLayoutEffect(() => {
+    pasteQRSettingsRef.current = pasteQRSettings;
+  });
 
   async function importQRSettings() {
     const imagePath = await api.openFileDialog({
