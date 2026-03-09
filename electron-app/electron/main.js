@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, globalShortcut, protocol, net, clipboard, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, globalShortcut, protocol, net, clipboard } = require('electron');
 
 // Register custom scheme before app is ready (required by Electron)
 // localfile:///C:/path/to/file.png → main process serves the file safely
