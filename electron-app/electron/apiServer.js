@@ -9,7 +9,7 @@ const { exec, execSync, spawn } = require('child_process');
 const { shell } = require('electron');
 const url = require('url');
 
-const { MIME_TYPES, MARKERS_FILE, formatFileSize } = require('./constants');
+const { MIME_TYPES, MARKERS_FILE, formatFileSize, FFMPEG_PATH, FFPROBE_PATH } = require('./constants');
 const service = require('./recordingService');
 
 let store; // set in startApiServer
@@ -31,7 +31,7 @@ function saveMarkers(data) {
 function getVideoDuration(filePath) {
   return new Promise((resolve) => {
     exec(
-      `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filePath}"`,
+      `"${FFPROBE_PATH}" -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filePath}"`,
       { encoding: 'utf-8', timeout: 10000 },
       (error, stdout) => {
         if (error) return resolve(null);
@@ -354,8 +354,7 @@ function startApiServer(appStore) {
         } catch {}
         return new Promise((resolve) => {
           exec(
-            `ffprobe -v error -show_streams -select_streams a -of json "${filePath}"`,
-            { encoding: 'utf-8', timeout: 10000 },
+            `"${FFPROBE_PATH}" -v error -show_streams -select_streams a -of json "${filePath}"`,            { encoding: 'utf-8', timeout: 10000 },
             (error, stdout) => {
               if (error) { resolve(json(res, { tracks: [] })); return; }
               try {
@@ -392,7 +391,7 @@ function startApiServer(appStore) {
             const NUM_PEAKS = 2000;
             const sampleRate = Math.max(2, Math.round(NUM_PEAKS / duration));
 
-            const ffmpegProc = spawn('ffmpeg', [
+            const ffmpegProc = spawn(FFMPEG_PATH, [
               '-hide_banner', '-loglevel', 'error',
               '-i', filePath,
               '-map', `0:a:${trackIndex}`,

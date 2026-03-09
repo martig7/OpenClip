@@ -1,0 +1,20 @@
+{
+  "games": [
+    {
+      "name": "Minecraft",
+      "selector": "Minecraft*",
+      "icon_path": "",
+      "scene": "Playing",
+      "enabled": true,
+      "id": "mmiboqzh63u"
+    },
+    {
+      "name": "Overwatch",
+      "selector": "Overwatch.exe",
+      "icon_path": "",
+      "scene": "OW",
+      "enabled": true,
+      "id": "mmiboqzhhp7"
+    }
+  ]
+}

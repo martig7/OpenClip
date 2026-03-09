@@ -1,0 +1,25 @@
+{
+  "organized_path": "",
+  "auto_organize": true,
+  "start_watcher_on_startup": false,
+  "storage_settings": {
+    "auto_delete_enabled": false,
+    "max_storage_gb": 100,
+    "max_age_days": 30,
+    "exclude_clips": true
+  },
+  "locked_recordings": [],
+  "clip_hotkey": "F9",
+  "auto_clip_settings": {
+    "enabled": false,
+    "buffer_before_seconds": 15,
+    "buffer_after_seconds": 15,
+    "remove_processed_markers": true,
+    "delete_recording_after_clips": false
+  },
+  "obs_websocket": {
+    "host": "localhost",
+    "port": 4455,
+    "password": ""
+  }
+}
