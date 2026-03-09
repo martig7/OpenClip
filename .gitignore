@@ -9,8 +9,9 @@
 /__pycache__/
 
 # User configuration (may contain personal paths)
-/manager_settings.json
-/games_config.json
+manager_settings.json
+games_config.json
+clip_markers.json
 
 # Claude Code
 /.claude
