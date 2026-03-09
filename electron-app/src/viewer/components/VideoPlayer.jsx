@@ -72,6 +72,15 @@ function VideoPlayer({ recording, onClipCreated }) {
     fetchTracks()
   }, [recording])
 
+  // Sync HTMLVideoElement audio track enabled state with selectedTracks in clip mode
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video?.audioTracks?.length) return
+    for (let i = 0; i < video.audioTracks.length; i++) {
+      video.audioTracks[i].enabled = !clipMode || selectedTracks.includes(i)
+    }
+  }, [selectedTracks, clipMode])
+
   // Fetch markers when recording changes and duration is known
   useEffect(() => {
     if (!recording || !duration) return
