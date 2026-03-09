@@ -79,6 +79,7 @@ export default function SettingsPage() {
     const path = await api.detectOBSPath();
     if (path) {
       updateSetting('obsRecordingPath', path);
+      showToast(`Detected OBS path: ${path}`);
     } else {
       showToast('Could not detect OBS recording path');
     }
