@@ -24,6 +24,7 @@ function VideoPlayer({ recording, onClipCreated }) {
   // Audio tracks state
   const [audioTracks, setAudioTracks] = useState([])
   const [selectedTracks, setSelectedTracks] = useState([])
+  const [tracksOpen, setTracksOpen] = useState(false)
 
   // Reset state when recording changes
   useEffect(() => {
@@ -34,6 +35,7 @@ function VideoPlayer({ recording, onClipCreated }) {
     setMarkers([])
     setAudioTracks([])
     setSelectedTracks([])
+    setTracksOpen(false)
   }, [recording])
 
   // Fetch audio tracks when recording changes
@@ -154,6 +156,17 @@ function VideoPlayer({ recording, onClipCreated }) {
 
   const exitClipMode = useCallback(() => {
     setClipMode(false)
+    setTracksOpen(false)
+  }, [])
+
+  const toggleTrack = useCallback((index) => {
+    setSelectedTracks(prev => {
+      if (prev.includes(index)) {
+        if (prev.length <= 1) return prev
+        return prev.filter(i => i !== index)
+      }
+      return [...prev, index].sort((a, b) => a - b)
+    })
   }, [])
 
   const handleCreateClip = useCallback(async () => {
@@ -282,7 +295,36 @@ function VideoPlayer({ recording, onClipCreated }) {
               onClipEndChange={setClipEnd}
               markers={markers}
               onMarkerClick={handleMarkerClick}
+              trackPanel={tracksOpen && audioTracks.length > 1 ? (
+                <div className="clip-track-panel">
+                  <label className="clip-track-bar clip-track-bar--all">
+                    <input
+                      type="checkbox"
+                      checked={selectedTracks.length === audioTracks.length}
+                      onChange={() => setSelectedTracks(
+                        selectedTracks.length === audioTracks.length
+                          ? [0]
+                          : audioTracks.map((_, i) => i)
+                      )}
+                    />
+                    <span className="track-name">All tracks</span>
+                  </label>
+                  {audioTracks.map((track, i) => (
+                    <label key={i} className="clip-track-bar">
+                      <input
+                        type="checkbox"
+                        checked={selectedTracks.includes(i)}
+                        onChange={() => toggleTrack(i)}
+                        disabled={isCreatingClip}
+                      />
+                      <span className="track-name">{track.title || `Track ${i + 1}`}</span>
+                      <span className="track-detail">{track.codec_name} · {track.channels}ch</span>
+                    </label>
+                  ))}
+                </div>
+              ) : null}
             />
+
             <ClipControls
               clipStart={clipStart}
               clipEnd={clipEnd}
@@ -294,7 +336,8 @@ function VideoPlayer({ recording, onClipCreated }) {
               isCreating={isCreatingClip}
               audioTracks={audioTracks}
               selectedTracks={selectedTracks}
-              onSelectedTracksChange={setSelectedTracks}
+              tracksOpen={tracksOpen}
+              onTracksToggle={() => setTracksOpen(v => !v)}
             />
           </>
         )}

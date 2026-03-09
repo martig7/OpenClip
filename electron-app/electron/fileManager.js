@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { execSync, exec } = require('child_process');
+const { execSync, execFileSync, exec } = require('child_process');
 const { isVideoFile, CODEC_MAP } = require('./constants');
 const service = require('./recordingService');
 
@@ -40,9 +40,28 @@ function organizeRecordings(store, gameName) {
     const dest = path.join(targetDir, newName);
 
     if (ext.toLowerCase() !== '.mp4') {
-      // Remux to MP4, preserving all audio tracks (-map 0) and optimizing for streaming (-movflags +faststart)
+      // Remux to MP4, preserving all audio tracks
       try {
-        execSync(`ffmpeg -i "${src}" -map 0 -c copy -movflags +faststart "${dest}" -y`, { timeout: 120000 });
+        // Probe source for audio stream titles before remux (MKV titles don't survive MP4 remux)
+        let trackNames = null;
+        try {
+          const probeOut = execFileSync('ffprobe', [
+            '-v', 'error', '-show_streams', '-select_streams', 'a', '-of', 'json', src,
+          ], { encoding: 'utf-8', timeout: 10000 });
+          const streams = JSON.parse(probeOut).streams || [];
+          const names = streams.map(s => s.tags?.title || s.tags?.TITLE || null);
+          if (names.some(Boolean)) trackNames = names;
+        } catch {}
+
+        execFileSync('ffmpeg', [
+          '-i', src, '-map', '0', '-c', 'copy', '-movflags', '+faststart', '-y', dest,
+        ], { timeout: 120000 });
+
+        // Save track names in a sidecar file so they survive the container conversion
+        if (trackNames) {
+          fs.writeFileSync(dest + '.tracks.json', JSON.stringify(trackNames));
+        }
+
         fs.unlinkSync(src);
       } catch {
         // Fallback: just move the file

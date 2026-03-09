@@ -9,7 +9,8 @@ function ZoomTimeline({
   onClipStartChange,
   onClipEndChange,
   markers = [],
-  onMarkerClick
+  onMarkerClick,
+  trackPanel = null,
 }) {
   const containerRef = useRef(null)
   const [zoom, setZoom] = useState(4) // how many times zoomed in (1 = full, higher = more zoomed)
@@ -351,6 +352,8 @@ function ZoomTimeline({
           </div>
         )}
       </div>
+
+      {trackPanel}
     </div>
   )
 }
