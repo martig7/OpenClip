@@ -54,11 +54,7 @@ export default function GamesPage() {
     }
 
     await api.addGame(newGame);
-    setNewGame({ name: '', selector: '', scene: '', icon_path: '' });
-    setAutoCreateScene(false);
-    setTemplateScene('');
-    setObsScenes([]);
-    setSceneCreateStatus(null);
+    resetAddModal();
     setShowAddModal(false);
     loadGames();
   }
@@ -113,16 +109,21 @@ export default function GamesPage() {
       setObsScenes(scenes || []);
     } catch {
       setObsScenes([]);
+    } finally {
+      setLoadingScenes(false);
     }
-    setLoadingScenes(false);
   }
 
-  function openAddModal() {
+  function resetAddModal() {
     setNewGame({ name: '', selector: '', scene: '', icon_path: '' });
     setAutoCreateScene(false);
     setTemplateScene('');
     setObsScenes([]);
     setSceneCreateStatus(null);
+  }
+
+  function openAddModal() {
+    resetAddModal();
     setShowAddModal(true);
     refreshWindows();
   }
@@ -225,7 +226,7 @@ export default function GamesPage() {
       </div>
 
       {showAddModal && (
-        <div className="modal-overlay" onClick={() => { setShowAddModal(false); setSceneCreateStatus(null); }}>
+        <div className="modal-overlay" onClick={() => { resetAddModal(); setShowAddModal(false); }}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <h2>Add Game</h2>
             <p>Add a game to monitor for automatic OBS recording.</p>
@@ -413,7 +414,7 @@ export default function GamesPage() {
               )}
             </div>
             <div className="modal-actions">
-              <button className="btn btn-secondary" onClick={() => { setShowAddModal(false); setSceneCreateStatus(null); }}>Cancel</button>
+              <button className="btn btn-secondary" onClick={() => { resetAddModal(); setShowAddModal(false); }}>Cancel</button>
               <button className="btn btn-primary" onClick={addGame}>Add Game</button>
             </div>
           </div>

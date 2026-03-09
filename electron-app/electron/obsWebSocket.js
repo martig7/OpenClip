@@ -5,10 +5,14 @@ const DEFAULT_WS_HOST = 'localhost';
 const DEFAULT_WS_PORT = 4455;
 const CONNECT_TIMEOUT_MS = 5000;
 
+// Cache the ESM import — obs-websocket-js v5 is ESM-only
+let _obsWebSocketClass = null;
 async function getOBSWebSocket() {
-  // obs-websocket-js v5 is ESM-only; use dynamic import to load it in CommonJS context
-  const mod = await import('obs-websocket-js');
-  return mod.default;
+  if (!_obsWebSocketClass) {
+    const mod = await import('obs-websocket-js');
+    _obsWebSocketClass = mod.default;
+  }
+  return _obsWebSocketClass;
 }
 
 /**
@@ -34,13 +38,17 @@ async function withOBSConnection(wsSettings, callback) {
   const url = buildWsUrl(wsSettings);
   const password = (wsSettings && wsSettings.password) || undefined;
 
-  // Race connection against a timeout
-  await Promise.race([
-    obs.connect(url, password),
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('OBS WebSocket connection timed out')), CONNECT_TIMEOUT_MS)
-    ),
-  ]);
+  // Race connection against a timeout; clear the timer if connection wins
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error('OBS WebSocket connection timed out')),
+      CONNECT_TIMEOUT_MS
+    );
+    obs.connect(url, password).then(
+      () => { clearTimeout(timer); resolve(); },
+      (err) => { clearTimeout(timer); reject(err); }
+    );
+  });
 
   try {
     return await callback(obs);
@@ -113,22 +121,23 @@ async function createSceneFromTemplate(wsSettings, newSceneName, templateSceneNa
       return { success: true, message: `Scene "${trimmedName}" created (template was empty)` };
     }
 
-    // Duplicate each item from template into the new scene.
-    // DuplicateSceneItem copies the item (and its source) into the destination scene.
-    let copiedCount = 0;
-    for (const item of sceneItems) {
-      try {
-        await obs.call('DuplicateSceneItem', {
+    // Duplicate all items in parallel; non-fatal if individual items fail
+    // (e.g. nested scenes may not support DuplicateSceneItem)
+    const results = await Promise.allSettled(
+      sceneItems.map(item =>
+        obs.call('DuplicateSceneItem', {
           sceneName: trimmedTemplate,
           sceneItemId: item.sceneItemId,
           destinationSceneName: trimmedName,
-        });
-        copiedCount++;
-      } catch (err) {
-        // Non-fatal: some items (e.g. nested scenes) may fail to duplicate
-        console.warn(`[obsWebSocket] Could not duplicate item "${item.sourceName}": ${err.message}`);
+        })
+      )
+    );
+    results.forEach((result, i) => {
+      if (result.status === 'rejected') {
+        console.warn(`[obsWebSocket] Could not duplicate item "${sceneItems[i].sourceName}": ${result.reason?.message}`);
       }
-    }
+    });
+    const copiedCount = results.filter(r => r.status === 'fulfilled').length;
 
     return {
       success: true,
