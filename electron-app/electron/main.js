@@ -1,4 +1,10 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, globalShortcut } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, globalShortcut, protocol, net } = require('electron');
+
+// Register custom scheme before app is ready (required by Electron)
+// localfile:///C:/path/to/file.png → main process serves the file safely
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'localfile', privileges: { secure: true, supportFetchAPI: true, corsEnabled: true } },
+]);
 const path = require('path');
 const fs = require('fs');
 
@@ -91,6 +97,8 @@ function electronSettingsToMs(ms, electronSettings) {
 }
 
 // Clip markers: runtime/clip_markers.json (Python) ↔ Electron in-memory format
+const MAX_MARKERS = 1000;
+
 function loadElectronMarkers() {
   try {
     const data = JSON.parse(fs.readFileSync(_markersFile, 'utf-8'));
@@ -99,9 +107,12 @@ function loadElectronMarkers() {
 }
 
 function saveElectronMarkers(electronMarkers) {
+  const trimmed = electronMarkers.length > MAX_MARKERS
+    ? electronMarkers.slice(-MAX_MARKERS)
+    : electronMarkers;
   fs.mkdirSync(path.dirname(_markersFile), { recursive: true });
   writeJson(_markersFile, {
-    markers: electronMarkers.map(m => ({ game_name: m.game, timestamp: m.timestamp, created_at: m.created })),
+    markers: trimmed.map(m => ({ game_name: m.game, timestamp: m.timestamp, created_at: m.created })),
   });
 }
 
@@ -325,6 +336,37 @@ ipcMain.handle('games:update', (_event, id, updates) => {
   return games;
 });
 
+// Extract the icon for a running process and save it as a PNG.
+// Returns the saved icon path, or null if it couldn't be extracted.
+ipcMain.handle('windows:extractIcon', async (_event, processName) => {
+  const { exec } = require('child_process');
+  // Allow only safe filename characters to prevent injection and path traversal
+  if (!processName || !/^[\w\-. ]+$/.test(processName)) return null;
+  const iconsDir = path.join(_projectRoot, 'icons');
+  fs.mkdirSync(iconsDir, { recursive: true });
+  const outPath = path.join(iconsDir, `${path.basename(processName)}.png`);
+
+  // Use PowerShell + System.Drawing to extract the exe's associated icon
+  const escaped = outPath.replace(/\\/g, '\\\\').replace(/'/g, "''");
+  const cmd = `powershell -NoProfile -Command `
+    + `"$p = Get-Process -Name '${processName}' -ErrorAction SilentlyContinue | `
+    + `Where-Object {$_.Path} | Select-Object -First 1; `
+    + `if ($p) { `
+    + `Add-Type -AssemblyName System.Drawing; `
+    + `$icon = [System.Drawing.Icon]::ExtractAssociatedIcon($p.Path); `
+    + `$bmp = $icon.ToBitmap(); `
+    + `$bmp.Save('${escaped}', [System.Drawing.Imaging.ImageFormat]::Png); `
+    + `Write-Output $p.Path `
+    + `} else { Write-Output '' }"`;
+
+  return new Promise((resolve) => {
+    exec(cmd, { encoding: 'utf-8', timeout: 8000 }, (error, stdout) => {
+      if (error || !stdout.trim()) return resolve(null);
+      resolve(fs.existsSync(outPath) ? outPath : null);
+    });
+  });
+});
+
 // Windows - enumerate visible windows for game selector
 ipcMain.handle('windows:list', async () => {
   const { exec } = require('child_process');
@@ -350,6 +392,17 @@ ipcMain.handle('windows:list', async () => {
   });
 });
 
+function pushWatcherStatus() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('watcher:status-push', {
+      running: !!watcher,
+      currentGame,
+      startedAt: watcherStartedAt,
+      gameState: readGameState(),
+    });
+  }
+}
+
 // Watcher
 ipcMain.handle('watcher:start', () => {
   if (watcher) return { running: true };
@@ -362,10 +415,9 @@ ipcMain.handle('watcher:start', () => {
   watcherStartedAt = Date.now();
   watcher = setupGameWatcher(store, (state) => {
     currentGame = state.currentGame;
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('watcher:state', state);
-    }
+    pushWatcherStatus();
   });
+  pushWatcherStatus();
   return { running: true };
 });
 ipcMain.handle('watcher:stop', () => {
@@ -376,6 +428,7 @@ ipcMain.handle('watcher:stop', () => {
     currentGame = null;
     try { fs.writeFileSync(STATE_FILE, 'IDLE', 'utf-8'); } catch {}
   }
+  pushWatcherStatus();
   return { running: false };
 });
 ipcMain.handle('watcher:status', () => {
@@ -400,6 +453,10 @@ ipcMain.handle('obs:running',       () => isOBSRunning());
 // Dialogs
 ipcMain.handle('dialog:openDirectory', async () => {
   const result = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory'] });
+  return result.canceled ? null : result.filePaths[0];
+});
+ipcMain.handle('dialog:openFile', async (_event, opts = {}) => {
+  const result = await dialog.showOpenDialog(mainWindow, { properties: ['openFile'], ...opts });
   return result.canceled ? null : result.filePaths[0];
 });
 
@@ -446,6 +503,13 @@ ipcMain.handle('api:port', async () => {
 });
 
 app.whenReady().then(() => {
+  // Serve local filesystem files (e.g. game icons) via localfile:// protocol.
+  // file:// is blocked by Electron's security model when loaded from a different origin.
+  protocol.handle('localfile', (request) => {
+    const filePath = new URL(request.url).pathname.slice(1); // strip leading /
+    return net.fetch(`file:///${filePath}`);
+  });
+
   ensureGameState();
 
   // Auto-detect OBS recording path on startup if not set
@@ -474,5 +538,7 @@ app.on('window-all-closed', () => {
   if (watcher) watcher.stop();
   if (apiServer) apiServer.close();
   globalShortcut.unregisterAll();
+  const { killAllProcesses } = require('./recordingService');
+  killAllProcesses();
   app.quit();
 });

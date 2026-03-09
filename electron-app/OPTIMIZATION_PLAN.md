@@ -25,26 +25,26 @@ Added 5-second TTL cache to `recordingService.js` for `scanRecordings()` and `sc
 
 ---
 
-## Phase 3: Reliability
+## Phase 3: Reliability [COMPLETED]
 
-### 6. FFmpeg Process Cleanup
-Track spawned `ffmpeg` child processes in a `Set`. On `before-quit` / `window-all-closed`, kill them all and clean up partial output files. Currently orphaned on exit.
+### 6. FFmpeg Process Cleanup [DONE]
+Added `activeFFmpeg` Map in `recordingService.js` tracking spawned `exec` processes and their output paths. Both `createClip` and `reencodeVideo` register/deregister processes. `killAllProcesses()` kills all active processes and deletes their partial output files. Called from `app.on('window-all-closed')` in `main.js`.
 
-### 7. Request Body Size Limit
-`readBody()` has no cap -- add a 1MB limit and return 413 if exceeded.
+### 7. Request Body Size Limit [DONE]
+`readBody()` enforces a 1MB cap and returns 413 if exceeded. Already implemented.
 
-### 8. Clip Markers Bounds
-`clipMarkers` array grows unbounded. Add a `MAX_MARKERS` cap (e.g., 1000) and trim oldest on overflow. Optionally auto-purge markers older than N days on startup.
+### 8. Clip Markers Bounds [DONE]
+Added `MAX_MARKERS = 1000` constant in `main.js`. `saveElectronMarkers()` now trims to the newest 1000 entries before writing.
 
-### 9. Store Write Debouncing
-`store.set()` calls `writeFileSync` synchronously every time. Debounce with a 100-200ms `setTimeout`, with an immediate flush on `before-quit`.
+### 9. Store Write Debouncing [WON'T FIX]
+Window bounds already debounced via 500ms resize timer. All other writes (games, storageSettings, lockedRecordings, settings) are rare user-triggered actions — adding debounce complexity provides negligible benefit.
 
 ---
 
-## Phase 4: Polish
+## Phase 4: Polish [COMPLETED]
 
-### 10. Fix Duplicate Watcher Polling
-`GamesPage.jsx` polls `watcher:status` every 2s AND subscribes to `watcher:state` IPC. Remove the polling; keep only the IPC subscription + one initial fetch on mount.
+### 10. Fix Duplicate Watcher Polling [DONE]
+Removed the 2-second `setInterval` from `GamesPage.jsx`. Added `pushWatcherStatus()` in `main.js` that sends a `watcher:status-push` IPC event with full status (`running`, `currentGame`, `startedAt`, `gameState`). Called on watcher start, stop, and every game state change. `GamesPage` subscribes via `onWatcherStatusPush` and keeps one initial `loadWatcherStatus()` fetch.
 
-### 11. Path Traversal Validation
-`/api/video`, `/api/delete`, `/api/reencode` accept arbitrary paths. Validate all paths resolve within `obsRecordingPath` or `destinationPath`. Important even for localhost.
+### 11. Path Traversal Validation [DONE]
+Added `isAllowedPath(filePath)` helper in `apiServer.js` that resolves the path and checks it falls within `obsRecordingPath` or `destinationPath`. Applied to `/api/video`, `/api/delete`, `/api/clips/delete`, `/api/reencode`, and `/api/video/tracks`. Returns 403 Forbidden for paths outside allowed roots.

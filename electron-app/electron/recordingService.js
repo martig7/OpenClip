@@ -4,13 +4,26 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { exec } = require('child_process');
+const { exec, execFile } = require('child_process');
 const { isVideoFile, formatFileSize, CODEC_MAP } = require('./constants');
 
 let store; // set via init()
 
 function init(appStore) {
   store = appStore;
+}
+
+// --- FFmpeg process tracking (item 6) ---
+
+// Map<ChildProcess, outputPath|null> — outputPath is deleted on kill if it exists
+const activeFFmpeg = new Map();
+
+function killAllProcesses() {
+  for (const [proc, outPath] of activeFFmpeg) {
+    try { proc.kill(); } catch {}
+    if (outPath) try { if (fs.existsSync(outPath)) fs.unlinkSync(outPath); } catch {}
+  }
+  activeFFmpeg.clear();
 }
 
 // --- Helpers ---
@@ -158,10 +171,10 @@ function countClipsForDate(clipsPath, gameName, dateStr) {
 // --- Mutations ---
 
 function buildAudioMapArgs(audioTracks) {
-  // Returns FFmpeg args for selective audio track mapping.
+  // Returns FFmpeg args array for selective audio track mapping.
   // audioTracks: array of 0-based audio stream indices, or null/undefined for all.
-  if (!Array.isArray(audioTracks) || audioTracks.length === 0) return '';
-  return `-map 0:v:0 ${audioTracks.map(i => `-map 0:a:${i}`).join(' ')}`;
+  if (!Array.isArray(audioTracks) || audioTracks.length === 0) return [];
+  return ['-map', '0:v:0', ...audioTracks.map(i => ['-map', `0:a:${i}`]).flat()];
 }
 
 function createClip(sourcePath, startTime, endTime, gameName = 'Unknown', audioTracks = null) {
@@ -182,18 +195,24 @@ function createClip(sourcePath, startTime, endTime, gameName = 'Unknown', audioT
     const outputFilename = `${gameName} Clip ${dateStr} #${clipNum}.mp4`;
     const outputPath = path.join(clipsPath, outputFilename);
     const duration = endTime - startTime;
-    const mapArgs = buildAudioMapArgs(audioTracks);
+    const mapArgsList = buildAudioMapArgs(audioTracks);
 
-    exec(
-      `ffmpeg -y -ss ${startTime} -i "${sourcePath}" -t ${duration} ${mapArgs} -c copy -avoid_negative_ts make_zero "${outputPath}"`,
-      { timeout: 120000 },
+    const args = [
+      '-y', '-ss', String(startTime), '-i', sourcePath,
+      '-t', String(duration), ...mapArgsList,
+      '-c', 'copy', '-avoid_negative_ts', 'make_zero', outputPath,
+    ];
+
+    const proc = execFile('ffmpeg', args, { timeout: 120000 },
       (error, _stdout, stderr) => {
+        activeFFmpeg.delete(proc);
         if (error) return reject(new Error(`FFmpeg error: ${stderr}`));
         invalidateCache();
         const info = parseRecordingInfo(outputPath, gameName);
         resolve(info || { filename: outputFilename, path: outputPath });
       }
     );
+    activeFFmpeg.set(proc, outputPath);
   });
 }
 
@@ -208,6 +227,8 @@ function deleteFile(filePath) {
   }
 }
 
+const VALID_PRESETS = new Set(['ultrafast', 'superfast', 'veryfast', 'faster', 'fast', 'medium', 'slow', 'slower', 'veryslow']);
+
 function reencodeVideo(sourcePath, { codec = 'h265', crf = 23, preset = 'medium', replaceOriginal = false, originalSize = 0, audioTracks = null } = {}) {
   return new Promise((resolve, reject) => {
     if (!sourcePath || !fs.existsSync(sourcePath)) {
@@ -215,14 +236,22 @@ function reencodeVideo(sourcePath, { codec = 'h265', crf = 23, preset = 'medium'
     }
 
     const encoder = CODEC_MAP[codec] || 'libx265';
+    const safeCrf = Math.max(0, Math.min(51, Math.round(Number(crf) || 23)));
+    const safePreset = VALID_PRESETS.has(preset) ? preset : 'medium';
     const base = sourcePath.replace(/\.[^.]+$/, '');
     const outPath = replaceOriginal ? `${base}_temp.mp4` : `${base}_reencoded_${codec}.mp4`;
-    const mapArgs = buildAudioMapArgs(audioTracks);
+    const mapArgsList = buildAudioMapArgs(audioTracks);
 
-    exec(
-      `ffmpeg -y -i "${sourcePath}" ${mapArgs} -c:v ${encoder} -crf ${crf} -preset ${preset} -c:a copy "${outPath}"`,
-      { timeout: 600000 },
+    const args = [
+      '-y', '-i', sourcePath,
+      ...mapArgsList,
+      '-c:v', encoder, '-crf', String(safeCrf), '-preset', safePreset,
+      '-c:a', 'copy', outPath,
+    ];
+
+    const proc = execFile('ffmpeg', args, { timeout: 600000 },
       (error, _stdout, stderr) => {
+        activeFFmpeg.delete(proc);
         if (error) {
           try { if (fs.existsSync(outPath)) fs.unlinkSync(outPath); } catch {}
           return reject(new Error(`FFmpeg error: ${stderr}`));
@@ -251,6 +280,7 @@ function reencodeVideo(sourcePath, { codec = 'h265', crf = 23, preset = 'medium'
         });
       }
     );
+    activeFFmpeg.set(proc, outPath);
   });
 }
 
@@ -323,4 +353,5 @@ module.exports = {
   deleteFile,
   reencodeVideo,
   runAutoDelete,
+  killAllProcesses,
 };

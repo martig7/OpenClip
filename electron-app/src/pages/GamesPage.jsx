@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Play, Square, Circle, Edit2, Check, X, Gamepad2, RefreshCw, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, Play, Square, Circle, Edit2, Check, X, Gamepad2, RefreshCw, ChevronDown, Image } from 'lucide-react';
 import api from '../api';
 
 export default function GamesPage() {
@@ -8,7 +8,7 @@ export default function GamesPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editScene, setEditScene] = useState('');
-  const [newGame, setNewGame] = useState({ name: '', selector: '', scene: '' });
+  const [newGame, setNewGame] = useState({ name: '', selector: '', scene: '', icon_path: '' });
   const [visibleWindows, setVisibleWindows] = useState([]);
   const [loadingWindows, setLoadingWindows] = useState(false);
   const [showWindowPicker, setShowWindowPicker] = useState(false);
@@ -16,12 +16,9 @@ export default function GamesPage() {
   useEffect(() => {
     loadGames();
     loadWatcherStatus();
-    const unsub = api.onWatcherState((state) => {
-      setWatcherStatus(prev => ({ ...prev, currentGame: state.currentGame }));
-    });
-    // Auto-refresh watcher status every 2 seconds
-    const interval = setInterval(loadWatcherStatus, 2000);
-    return () => { unsub(); clearInterval(interval); };
+    // Replace polling with server-push: main process sends full status on any watcher state change
+    const unsub = api.onWatcherStatusPush((status) => setWatcherStatus(status));
+    return () => unsub();
   }, []);
 
   async function loadGames() {
@@ -35,9 +32,16 @@ export default function GamesPage() {
   async function addGame() {
     if (!newGame.name || !newGame.selector) return;
     await api.addGame(newGame);
-    setNewGame({ name: '', selector: '', scene: '' });
+    setNewGame({ name: '', selector: '', scene: '', icon_path: '' });
     setShowAddModal(false);
     loadGames();
+  }
+
+  async function pickIcon() {
+    const filePath = await api.openFileDialog({
+      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'ico', 'bmp', 'gif', 'webp'] }],
+    });
+    if (filePath) setNewGame(g => ({ ...g, icon_path: filePath }));
   }
 
   async function removeGame(id) {
@@ -64,15 +68,20 @@ export default function GamesPage() {
   }
 
   function selectWindow(win) {
-    setNewGame({
-      name: newGame.name || win.process,
+    setNewGame(g => ({
+      ...g,
+      name: g.name || win.process,
       selector: win.title,
-      scene: newGame.scene,
-    });
+    }));
     setShowWindowPicker(false);
+    // Try to extract the exe icon in the background
+    api.extractWindowIcon(win.process).then(iconPath => {
+      if (iconPath) setNewGame(g => ({ ...g, icon_path: iconPath }));
+    });
   }
 
   function openAddModal() {
+    setNewGame({ name: '', selector: '', scene: '', icon_path: '' });
     setShowAddModal(true);
     refreshWindows();
   }
@@ -119,9 +128,9 @@ export default function GamesPage() {
                     onClick={() => toggleGame(game.id)}
                     title={game.enabled ? 'Enabled' : 'Disabled'}
                   />
-                  {game.icon && (
+                  {game.icon_path && (
                     <img
-                      src={`file:///${game.icon.replace(/\\/g, '/')}`}
+                      src={`localfile:///${game.icon_path.replace(/\\/g, '/')}`}
                       alt=""
                       style={{ width: 24, height: 24, objectFit: 'contain', borderRadius: 4, flexShrink: 0 }}
                       onError={e => { e.currentTarget.style.display = 'none'; }}
@@ -260,6 +269,32 @@ export default function GamesPage() {
                 value={newGame.scene}
                 onChange={e => setNewGame({ ...newGame, scene: e.target.value })}
               />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Icon (optional)</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {newGame.icon_path && (
+                  <img
+                    src={`localfile:///${newGame.icon_path.replace(/\\/g, '/')}`}
+                    alt=""
+                    style={{ width: 32, height: 32, objectFit: 'contain', borderRadius: 4, flexShrink: 0 }}
+                    onError={e => { e.currentTarget.style.display = 'none'; }}
+                  />
+                )}
+                <button className="btn btn-secondary btn-sm" onClick={pickIcon} style={{ flex: 1 }}>
+                  <Image size={13} /> {newGame.icon_path ? 'Change Icon' : 'Choose Icon'}
+                </button>
+                {newGame.icon_path && (
+                  <button className="btn-icon" onClick={() => setNewGame(g => ({ ...g, icon_path: '' }))} title="Remove icon">
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+              {newGame.icon_path && (
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
+                  {newGame.icon_path}
+                </span>
+              )}
             </div>
             <div className="modal-actions">
               <button className="btn btn-secondary" onClick={() => setShowAddModal(false)}>Cancel</button>
