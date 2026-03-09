@@ -1,4 +1,5 @@
 import { useRef, useState, useCallback, useEffect, useMemo } from 'react'
+import AudioWaveformTrack from './AudioWaveformTrack'
 
 function ZoomTimeline({
   currentTime,
@@ -10,7 +11,10 @@ function ZoomTimeline({
   onClipEndChange,
   markers = [],
   onMarkerClick,
-  trackPanel = null,
+  audioTracks = [],
+  selectedTracks = [],
+  waveforms = {},
+  onTrackToggle,
 }) {
   const containerRef = useRef(null)
   const [zoom, setZoom] = useState(4) // how many times zoomed in (1 = full, higher = more zoomed)
@@ -353,7 +357,24 @@ function ZoomTimeline({
         )}
       </div>
 
-      {trackPanel}
+      {/* Audio waveform tracks */}
+      {audioTracks.length > 0 && (
+        <div className="audio-waveform-panel">
+          {audioTracks.map((track, i) => (
+            <AudioWaveformTrack
+              key={i}
+              peaks={waveforms[i] || null}
+              duration={duration}
+              viewStart={actualViewStart}
+              visibleDuration={visibleDuration}
+              isSelected={selectedTracks.includes(i)}
+              onClick={() => onTrackToggle?.(i)}
+              label={track.title || `Track ${i + 1}`}
+              detail={`${track.codec_name} · ${track.channels}ch`}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

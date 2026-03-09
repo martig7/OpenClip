@@ -9,10 +9,6 @@ function ClipControls({
   onCancel,
   onCreate,
   isCreating,
-  audioTracks = [],
-  selectedTracks = [],
-  tracksOpen = false,
-  onTracksToggle,
 }) {
   const formatTime = (seconds) => {
     if (!isFinite(seconds)) return '0:00'
@@ -70,17 +66,6 @@ function ClipControls({
           <label>Duration</label>
           <span>{formatTime(clipDuration)}</span>
         </div>
-
-        {audioTracks.length > 1 && (
-          <button
-            className={`clip-tracks-toggle${tracksOpen ? ' open' : ''}`}
-            onClick={onTracksToggle}
-            title="Audio tracks"
-          >
-            &#9836; {selectedTracks.length}/{audioTracks.length}
-            <span className="clip-tracks-chevron">{tracksOpen ? '▲' : '▼'}</span>
-          </button>
-        )}
 
         <div className="clip-actions">
           <button className="btn btn-secondary btn-sm" onClick={onCancel} disabled={isCreating}>
