@@ -11,7 +11,7 @@ FFmpeg is bundled — no separate installation needed.
 
 ## Installation
 
-1. Download the latest installer (`Open Clip Setup x.x.x.exe`) from [Releases](https://github.com/martig7/OBSGameLauncher/releases).
+1. Download the latest installer (`Open Clip Setup x.x.x.exe`) from [Releases](https://github.com/martig7/OpenClip/releases).
 2. Run the installer. Open Clip will be added to your Start Menu and Desktop.
 3. Launch **Open Clip** and complete the one-time setup:
    - Set your OBS recording folder and organized destination folder under **Settings → Recording Paths**.

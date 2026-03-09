@@ -24,15 +24,15 @@ export default function GamesPage() {
 
   useEffect(() => {
     loadGames();
-    loadWatcherStatus();
-    // If the watcher is already running (e.g. auto-start on startup), check the script
+    // Fetch watcher status once, then use the result for both state update and OBS script check
     api.getWatcherStatus().then(s => {
+      setWatcherStatus(s);
       if (s.running) {
         api.isOBSScriptLoaded().then(loaded => {
           if (!loaded) setScriptWarning(true);
-        });
+        }).catch(() => {});
       }
-    });
+    }).catch(() => {});
     // Replace polling with server-push: main process sends full status on any watcher state change
     const unsub = api.onWatcherStatusPush((status) => setWatcherStatus(status));
     return () => unsub();
