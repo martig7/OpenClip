@@ -42,6 +42,9 @@ contextBridge.exposeInMainWorld('api', {
   testOBSWSConnection: () => ipcRenderer.invoke('obs:ws:test'),
   getOBSWSScenes: () => ipcRenderer.invoke('obs:ws:scenes'),
   createOBSScene: (newSceneName, templateSceneName) => ipcRenderer.invoke('obs:ws:create-scene', newSceneName, templateSceneName),
+  readOBSWSQR: (imagePath) => ipcRenderer.invoke('obs:ws:read-qr', imagePath),
+  readOBSWSQRFromClipboard: () => ipcRenderer.invoke('obs:ws:read-qr-clipboard'),
+  clipboardHasImage: () => ipcRenderer.invoke('clipboard:hasImage'),
 
   // Dialogs
   openDirectoryDialog: () => ipcRenderer.invoke('dialog:openDirectory'),

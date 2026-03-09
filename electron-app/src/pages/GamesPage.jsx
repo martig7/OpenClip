@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Play, Square, Circle, Edit2, Check, X, Gamepad2, RefreshCw, ChevronDown, Image, Wand2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Trash2, Play, Square, Circle, Edit2, Check, X, Gamepad2, RefreshCw, ChevronDown, Image, Wand2, Settings } from 'lucide-react';
 import api from '../api';
 
 export default function GamesPage() {
+  const navigate = useNavigate();
   const [games, setGames] = useState([]);
   const [watcherStatus, setWatcherStatus] = useState({ running: false, currentGame: null, startedAt: null, gameState: null });
   const [showAddModal, setShowAddModal] = useState(false);
@@ -15,6 +17,7 @@ export default function GamesPage() {
   const [autoCreateScene, setAutoCreateScene] = useState(false);
   const [obsScenes, setObsScenes] = useState([]);
   const [loadingScenes, setLoadingScenes] = useState(false);
+  const [scenesError, setScenesError] = useState(null);
   const [templateScene, setTemplateScene] = useState('');
   const [sceneCreateStatus, setSceneCreateStatus] = useState(null); // { type: 'success'|'error', message }
 
@@ -106,11 +109,13 @@ export default function GamesPage() {
 
   async function loadOBSScenes() {
     setLoadingScenes(true);
+    setScenesError(null);
     try {
       const scenes = await api.getOBSWSScenes();
       setObsScenes(scenes || []);
-    } catch {
+    } catch (err) {
       setObsScenes([]);
+      setScenesError(err.message || 'Failed to load OBS scenes');
     } finally {
       setLoadingScenes(false);
     }
@@ -121,6 +126,7 @@ export default function GamesPage() {
     setAutoCreateScene(false);
     setTemplateScene('');
     setObsScenes([]);
+    setScenesError(null);
     setSceneCreateStatus(null);
   }
 
@@ -128,6 +134,12 @@ export default function GamesPage() {
     resetAddModal();
     setShowAddModal(true);
     refreshWindows();
+  }
+
+  function goToSettings() {
+    setShowAddModal(false);
+    resetAddModal();
+    navigate('/settings');
   }
 
   async function toggleWatcher() {
@@ -352,9 +364,53 @@ export default function GamesPage() {
                     </div>
                     {loadingScenes ? (
                       <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading scenes from OBS...</div>
+                    ) : scenesError ? (
+                      <div style={{ 
+                        fontSize: 12, 
+                        color: 'var(--danger)', 
+                        padding: '6px 8px', 
+                        background: 'rgba(239,68,68,0.1)', 
+                        borderRadius: 'var(--radius-sm)',
+                        border: '1px solid rgba(239,68,68,0.3)'
+                      }}>
+                        {scenesError}{' '}
+                        <button
+                          onClick={goToSettings}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--primary)',
+                            textDecoration: 'underline',
+                            cursor: 'pointer',
+                            padding: 0,
+                            font: 'inherit',
+                            display: 'inline',
+                          }}
+                        >
+                          <Settings size={12} style={{ verticalAlign: 'middle', marginRight: 2 }} />
+                          Configure WebSocket
+                        </button>
+                      </div>
                     ) : obsScenes.length === 0 ? (
                       <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                        No scenes found — make sure OBS is running and WebSocket is configured in Settings.
+                        No scenes found. Make sure OBS is running and{' '}
+                        <button
+                          onClick={goToSettings}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--primary)',
+                            textDecoration: 'underline',
+                            cursor: 'pointer',
+                            padding: 0,
+                            font: 'inherit',
+                            display: 'inline',
+                          }}
+                        >
+                          <Settings size={12} style={{ verticalAlign: 'middle', marginRight: 2 }} />
+                          WebSocket is configured
+                        </button>
+                        .
                       </div>
                     ) : (
                       <select
