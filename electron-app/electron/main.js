@@ -269,8 +269,10 @@ function seedFirstRun() {
     }
   }
 
+  // Always overwrite the Lua script — it's app-bundled, not user-edited,
+  // so reinstalling should always deploy the latest version.
   const luaDest = path.join(USER_DATA, 'obs_game_recorder.lua');
-  if (!fs.existsSync(luaDest) && fs.existsSync(luaSrc)) {
+  if (fs.existsSync(luaSrc)) {
     try { fs.copyFileSync(luaSrc, luaDest); } catch {}
   }
 }
