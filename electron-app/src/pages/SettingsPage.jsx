@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FolderOpen, RefreshCw } from 'lucide-react';
+import { FolderOpen, RefreshCw, Wifi } from 'lucide-react';
 import api from '../api';
 
 const HOTKEY_OPTIONS = [
@@ -49,9 +49,14 @@ export default function SettingsPage() {
     if (dir) updateSetting(settingKey, dir);
   }
 
+  async function testWSConnection() {
+    const result = await api.testOBSWSConnection();
+    showToast(result.success ? `Connected: ${result.version}` : `Failed: ${result.message}`);
+  }
+
   function showToast(msg) {
     setToast(msg);
-    setTimeout(() => setToast(null), 3000);
+    setTimeout(() => setToast(null), 4000);
   }
 
   if (!settings) return null;
@@ -100,6 +105,51 @@ export default function SettingsPage() {
               </button>
             </div>
           </div>
+        </div>
+
+        {/* OBS WebSocket */}
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-title">OBS WebSocket</div>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '8px 0 12px' }}>
+            Connect to OBS via WebSocket to auto-create scenes. Enable WebSocket Server in OBS under Tools → WebSocket Server Settings.
+          </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, marginBottom: 8 }}>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label">Host</label>
+              <input
+                className="form-input"
+                value={settings.obsWebSocket?.host || 'localhost'}
+                onChange={e => updateSetting('obsWebSocket.host', e.target.value)}
+                placeholder="localhost"
+              />
+            </div>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label">Port</label>
+              <input
+                type="number"
+                className="form-input"
+                value={settings.obsWebSocket?.port ?? 4455}
+                onChange={e => updateSetting('obsWebSocket.port', parseInt(e.target.value) || 4455)}
+                style={{ width: 90 }}
+              />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Password (optional)</label>
+            <input
+              type="password"
+              className="form-input"
+              value={settings.obsWebSocket?.password || ''}
+              onChange={e => updateSetting('obsWebSocket.password', e.target.value)}
+              placeholder="Leave blank if no password set"
+            />
+          </div>
+
+          <button className="btn btn-secondary btn-sm" onClick={testWSConnection} style={{ marginTop: 4 }}>
+            <Wifi size={13} /> Test Connection
+          </button>
         </div>
 
         {/* Clip Marker */}
