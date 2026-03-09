@@ -195,12 +195,32 @@ function createClip(sourcePath, startTime, endTime, gameName = 'Unknown', audioT
     const outputFilename = `${gameName} Clip ${dateStr} #${clipNum}.mp4`;
     const outputPath = path.join(clipsPath, outputFilename);
     const duration = endTime - startTime;
-    const mapArgsList = buildAudioMapArgs(audioTracks);
+
+    // Build audio args: when multiple specific tracks are selected, produce:
+    //   Track 1: amix of all selected tracks (for universal playback)
+    //   Track 2+: each selected track individually (preserving original order/titles)
+    let audioArgs, codecArgs;
+    if (!Array.isArray(audioTracks) || audioTracks.length === 0) {
+      // No specific tracks requested – copy everything as-is
+      audioArgs = [];
+      codecArgs = ['-c', 'copy'];
+    } else if (audioTracks.length === 1) {
+      // Single track – map it directly, stream copy is fine
+      audioArgs = ['-map', '0:v:0', '-map', `0:a:${audioTracks[0]}`];
+      codecArgs = ['-c', 'copy'];
+    } else {
+      // Multiple tracks – mix into one combined track, then keep individual tracks
+      const filterInputs = audioTracks.map(i => `[0:a:${i}]`).join('');
+      const filterComplex = `${filterInputs}amix=inputs=${audioTracks.length}:duration=longest:normalize=0[mixed]`;
+      const individualMaps = audioTracks.map(i => ['-map', `0:a:${i}`]).flat();
+      audioArgs = ['-map', '0:v:0', '-filter_complex', filterComplex, '-map', '[mixed]', ...individualMaps];
+      codecArgs = ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k'];
+    }
 
     const args = [
       '-y', '-ss', String(startTime), '-i', sourcePath,
-      '-t', String(duration), ...mapArgsList,
-      '-c', 'copy', '-avoid_negative_ts', 'make_zero', outputPath,
+      '-t', String(duration), ...audioArgs, ...codecArgs,
+      '-avoid_negative_ts', 'make_zero', outputPath,
     ];
 
     const proc = execFile('ffmpeg', args, { timeout: 120000 },
