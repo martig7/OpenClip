@@ -219,6 +219,7 @@ function createClip(sourcePath, startTime, endTime, gameName = 'Unknown', audioT
 function deleteFile(filePath) {
   try {
     fs.unlinkSync(filePath);
+    try { fs.unlinkSync(filePath + '.tracks.json'); } catch {}
     invalidateCache();
     return { success: true };
   } catch (e) {

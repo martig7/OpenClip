@@ -347,6 +347,11 @@ function startApiServer(appStore) {
         const filePath = query.path;
         if (!filePath || !fs.existsSync(filePath)) return json(res, { error: 'File not found' }, 404);
         if (!isAllowedPath(filePath)) return json(res, { error: 'Forbidden' }, 403);
+        // Load sidecar track names if present (written during MKV→MP4 remux)
+        let sidecarNames = null;
+        try {
+          sidecarNames = JSON.parse(fs.readFileSync(filePath + '.tracks.json', 'utf-8'));
+        } catch {}
         return new Promise((resolve) => {
           exec(
             `ffprobe -v error -show_streams -select_streams a -of json "${filePath}"`,
@@ -362,7 +367,7 @@ function startApiServer(appStore) {
                   channels: s.channels || 0,
                   channel_layout: s.channel_layout || '',
                   sample_rate: s.sample_rate || '',
-                  title: s.tags?.title || s.tags?.handler_name || `Track ${i + 1}`,
+                  title: sidecarNames?.[i] || s.tags?.title || s.tags?.TITLE || `Track ${i + 1}`,
                 }));
                 resolve(json(res, { tracks }));
               } catch { resolve(json(res, { tracks: [] })); }

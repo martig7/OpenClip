@@ -11,7 +11,8 @@ function ClipControls({
   isCreating,
   audioTracks = [],
   selectedTracks = [],
-  onSelectedTracksChange
+  tracksOpen = false,
+  onTracksToggle,
 }) {
   const formatTime = (seconds) => {
     if (!isFinite(seconds)) return '0:00'
@@ -32,39 +33,20 @@ function ClipControls({
 
   const handleStartChange = useCallback((e) => {
     const time = parseTime(e.target.value)
-    if (time >= 0 && time < clipEnd) {
-      onClipStartChange(Math.min(time, duration))
-    }
+    if (time >= 0 && time < clipEnd) onClipStartChange(Math.min(time, duration))
   }, [clipEnd, duration, onClipStartChange])
 
   const handleEndChange = useCallback((e) => {
     const time = parseTime(e.target.value)
-    if (time > clipStart && time <= duration) {
-      onClipEndChange(time)
-    }
+    if (time > clipStart && time <= duration) onClipEndChange(time)
   }, [clipStart, duration, onClipEndChange])
 
   const clipDuration = clipEnd - clipStart
 
-  const toggleTrack = useCallback((index) => {
-    if (!onSelectedTracksChange) return
-    onSelectedTracksChange(prev => {
-      if (prev.includes(index)) {
-        if (prev.length <= 1) return prev // must keep at least one
-        return prev.filter(i => i !== index)
-      }
-      return [...prev, index].sort((a, b) => a - b)
-    })
-  }, [onSelectedTracksChange])
-
   return (
     <div className="clip-controls">
-      <div className="clip-controls-header">
-        <h3>&#9986; Create Clip</h3>
-      </div>
-
-      <div className="clip-times">
-        <div className="clip-time-input">
+      <div className="clip-controls-row">
+        <div className="clip-field">
           <label>Start</label>
           <input
             type="text"
@@ -74,7 +56,7 @@ function ClipControls({
           />
         </div>
 
-        <div className="clip-time-input">
+        <div className="clip-field">
           <label>End</label>
           <input
             type="text"
@@ -84,53 +66,36 @@ function ClipControls({
           />
         </div>
 
-        <div className="clip-duration">
-          <span>Duration: {formatTime(clipDuration)}</span>
+        <div className="clip-field clip-field--readonly">
+          <label>Duration</label>
+          <span>{formatTime(clipDuration)}</span>
         </div>
-      </div>
 
-      {audioTracks.length > 1 && (
-        <div className="clip-tracks">
-          <label className="clip-tracks-label">Audio Tracks</label>
-          <div className="track-list">
-            {audioTracks.map((track, i) => (
-              <label key={i} className="track-item">
-                <input
-                  type="checkbox"
-                  checked={selectedTracks.includes(i)}
-                  onChange={() => toggleTrack(i)}
-                  disabled={isCreating}
-                />
-                <span className="track-name">{track.title || `Track ${i + 1}`}</span>
-                <span className="track-detail">{track.codec_name} · {track.channels}ch</span>
-              </label>
-            ))}
-          </div>
+        {audioTracks.length > 1 && (
+          <button
+            className={`clip-tracks-toggle${tracksOpen ? ' open' : ''}`}
+            onClick={onTracksToggle}
+            title="Audio tracks"
+          >
+            &#9836; {selectedTracks.length}/{audioTracks.length}
+            <span className="clip-tracks-chevron">{tracksOpen ? '▲' : '▼'}</span>
+          </button>
+        )}
+
+        <div className="clip-actions">
+          <button className="btn btn-secondary btn-sm" onClick={onCancel} disabled={isCreating}>
+            Cancel
+          </button>
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={onCreate}
+            disabled={isCreating || clipDuration <= 0}
+          >
+            {isCreating
+              ? <><span className="spinner" style={{ width: 13, height: 13 }} /> Creating…</>
+              : <>&#9986; Create Clip</>}
+          </button>
         </div>
-      )}
-
-      <div className="clip-actions">
-        <button
-          className="btn btn-secondary"
-          onClick={onCancel}
-          disabled={isCreating}
-        >
-          Cancel
-        </button>
-        <button
-          className="btn btn-primary"
-          onClick={onCreate}
-          disabled={isCreating || clipDuration <= 0}
-        >
-          {isCreating ? (
-            <>
-              <span className="spinner" style={{ width: 16, height: 16 }} />
-              Creating...
-            </>
-          ) : (
-            <>&#9986; Create Clip</>
-          )}
-        </button>
       </div>
     </div>
   )
