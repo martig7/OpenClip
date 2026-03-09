@@ -17,27 +17,28 @@ function RecordingsPage() {
       const response = await apiFetch('/api/recordings')
       const data = await response.json()
       setRecordings(data)
-
-      // Auto-select recording from URL parameter
-      const pathParam = searchParams.get('path')
-      if (pathParam && data.length > 0) {
-        const recording = data.find(r => r.path === pathParam)
-        if (recording) {
-          setSelectedRecording(recording)
-          // Clear the URL parameter
-          setSearchParams({})
-        }
-      }
+      return data
     } catch (error) {
       console.error('Failed to fetch recordings:', error)
     } finally {
       setLoading(false)
     }
-  }, [searchParams, setSearchParams])
+  }, [])
 
   useEffect(() => {
-    fetchRecordings()
-  }, [fetchRecordings])
+    fetchRecordings().then(data => {
+      if (!data) return
+      const pathParam = searchParams.get('path')
+      if (pathParam) {
+        const recording = data.find(r => r.path === pathParam)
+        if (recording) {
+          setSelectedRecording(recording)
+          setSearchParams({})
+        }
+      }
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleClipCreated = useCallback((clip) => {
     setToast({ type: 'success', message: `Clip created: ${clip.filename}` })
