@@ -803,10 +803,23 @@ function StoragePage() {
                   <div
                     key={game}
                     className="sv2-usage-seg"
-                    style={{ width: `${(bytes / totalBytes) * 100}%`, background: gameColors[game] || '#666' }}
+                    style={{
+                      width: `${(bytes / (stats?.disk_usage?.total || totalBytes)) * 100}%`,
+                      background: gameColors[game] || '#666'
+                    }}
                     title={`${game}: ${formatBytes(bytes)}`}
                   />
                 ))}
+              {stats?.disk_usage && stats.disk_usage.used - totalBytes > 0 && (
+                <div
+                  className="sv2-usage-seg"
+                  style={{
+                    width: `${((stats.disk_usage.used - totalBytes) / stats.disk_usage.total) * 100}%`,
+                    background: '#3a3a3a'
+                  }}
+                  title={`Other: ${formatBytes(stats.disk_usage.used - totalBytes)}`}
+                />
+              )}
             </div>
             {stats?.disk_usage && (
               <div className="sv2-disk-note">
