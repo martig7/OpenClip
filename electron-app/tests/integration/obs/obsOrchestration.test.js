@@ -15,8 +15,8 @@
  *   afterAll   — kill the OBS process and delete the temp config directory
  */
 
-import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
-import { isOBSAvailable, startOBS } from './obsHelper.js';
+import { describe, it, expect, beforeAll, beforeEach, afterAll, afterEach } from 'vitest';
+import { isOBSAvailable, startOBS, findFreePort } from './obsHelper.js';
 import {
   getOBSScenes,
   createSceneFromTemplate,
@@ -30,23 +30,42 @@ describe.skipIf(!obsAvailable)('OBS Orchestration – live OBS instance', () => 
   /** @type {{ wsSettings: object, stop: () => void }} */
   let obsInstance;
   let ws; // shorthand alias used in every test
+  /** A free port with nothing listening on it, used for "unreachable OBS" tests. */
+  let unusedPort;
 
   // Start a single OBS process for the entire test file.
   // We allow up to 60 s for OBS to boot and the WebSocket server to become
   // reachable — this covers slow CI runners.
+  // If OBS fails to start (e.g. the WebSocket plugin is missing) we set
+  // obsInstance to null so that beforeEach can skip all tests gracefully.
   beforeAll(async () => {
-    obsInstance = await startOBS({ initialScenes: ['Scene'] });
-    ws = obsInstance.wsSettings;
+    unusedPort = await findFreePort();
+    try {
+      obsInstance = await startOBS({ initialScenes: ['Scene'] });
+      ws = obsInstance.wsSettings;
+    } catch (err) {
+      console.warn(
+        `[OBS Integration] Could not start OBS WebSocket server; all tests will be skipped.\n` +
+          `  Reason: ${err.message}`
+      );
+      obsInstance = null;
+      ws = null;
+    }
   }, 60_000);
 
   afterAll(() => {
     obsInstance?.stop();
   });
 
+  // Skip every individual test when OBS failed to start.
+  beforeEach(({ skip }) => {
+    if (!obsInstance) skip();
+  });
+
   // After each test, delete every scene except the seed 'Scene' so that the
   // next test always starts from a clean, known state.
   afterEach(async () => {
-    await _cleanupScenes(ws, 'Scene');
+    if (ws) await _cleanupScenes(ws, 'Scene');
   });
 
   // ── testOBSConnection ────────────────────────────────────────────────────
@@ -62,8 +81,8 @@ describe.skipIf(!obsAvailable)('OBS Orchestration – live OBS instance', () => 
     });
 
     it('returns failure when nothing is listening on the port', async () => {
-      // Port 1 is a reserved port that will always be refused.
-      const result = await testOBSConnection({ host: '127.0.0.1', port: 1 });
+      // Use a port we acquired and released — nothing is listening on it.
+      const result = await testOBSConnection({ host: '127.0.0.1', port: unusedPort });
 
       expect(result.success).toBe(false);
       expect(typeof result.message).toBe('string');
@@ -88,7 +107,7 @@ describe.skipIf(!obsAvailable)('OBS Orchestration – live OBS instance', () => 
     });
 
     it('throws with a user-friendly message when OBS is unreachable', async () => {
-      await expect(getOBSScenes({ host: '127.0.0.1', port: 1 })).rejects.toThrow();
+      await expect(getOBSScenes({ host: '127.0.0.1', port: unusedPort })).rejects.toThrow();
     });
   });
 
@@ -169,7 +188,7 @@ describe.skipIf(!obsAvailable)('OBS Orchestration – live OBS instance', () => 
 
     it('returns failure when OBS is unreachable', async () => {
       const result = await createSceneFromTemplate(
-        { host: '127.0.0.1', port: 1 },
+        { host: '127.0.0.1', port: unusedPort },
         'Unreachable',
         null
       );

@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import { configDefaults } from 'vitest/config';
 
 const electronMockPath = fileURLToPath(new URL('./tests/mocks/electron.js', import.meta.url));
 
@@ -29,7 +30,7 @@ export default defineConfig(({ mode }) => ({
     globals: true,
     environment: 'node',
     setupFiles: ['./tests/setup.js'],
-    exclude: ['tests/integration/**', 'node_modules/**'],
+    exclude: [...configDefaults.exclude, 'tests/integration/**'],
     server: {
       deps: {
         // Force 'electron' npm package through Vite's transform so the

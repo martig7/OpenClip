@@ -31,11 +31,15 @@ const OBS_BINARY = process.env.OBS_BINARY || 'obs';
 // ------------------------------------------------------------------
 
 /**
- * Returns true when the OBS binary is present in PATH (or at $OBS_BINARY).
+ * Returns true when the OBS binary can be executed (cross-platform check).
  */
 export function isOBSAvailable() {
-  const result = spawnSync('which', [OBS_BINARY], { stdio: 'ignore' });
-  return result.status === 0;
+  try {
+    const result = spawnSync(OBS_BINARY, ['--version'], { stdio: 'ignore' });
+    return result.status === 0;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -84,18 +88,29 @@ export async function startOBS({
     }
   });
 
+  // Guard against spawn errors (e.g. ENOENT when the binary is missing or
+  // EACCES when it is not executable).  Without this, Node.js would throw an
+  // unhandled 'error' event and crash the entire Vitest process.
+  let spawnError = null;
+  obsProcess.on('error', (err) => {
+    spawnError = err;
+    stopping = true;
+    _rmTemp(tmpBase);
+  });
+
   // Wait for the WebSocket server to be reachable.
   try {
-    await waitForPort('127.0.0.1', wsPort, startupTimeoutMs);
+    await waitForPort('127.0.0.1', wsPort, startupTimeoutMs, () => spawnError);
   } catch (err) {
     stopping = true;
-    obsProcess.kill('SIGTERM');
+    if (!spawnError) obsProcess.kill('SIGTERM');
     _rmTemp(tmpBase);
+    const cause = spawnError || err;
     throw new Error(
       `OBS WebSocket server did not become reachable on port ${wsPort} within ` +
         `${startupTimeoutMs}ms. Make sure OBS ${OBS_BINARY} supports --headless ` +
         `(OBS 28+) and that the obs-websocket plugin is installed.\n` +
-        `Original error: ${err.message}`
+        `Original error: ${cause.message}`
     );
   }
 
@@ -119,7 +134,7 @@ export async function startOBS({
 // ------------------------------------------------------------------
 
 /** Find a free TCP port by briefly binding to :0. */
-function findFreePort() {
+export function findFreePort() {
   return new Promise((resolve, reject) => {
     const srv = net.createServer();
     srv.listen(0, '127.0.0.1', () => {
@@ -133,12 +148,22 @@ function findFreePort() {
 /**
  * Poll until a TCP port is accepting connections, or the timeout expires.
  * Uses a 500 ms retry interval.
+ *
+ * @param {() => Error|null} [getSpawnError]  Optional callback that returns a
+ *   spawn error if one occurred, allowing the poller to abort early.
  */
-function waitForPort(host, port, timeoutMs) {
+function waitForPort(host, port, timeoutMs, getSpawnError) {
   return new Promise((resolve, reject) => {
     const deadline = Date.now() + timeoutMs;
 
     function attempt() {
+      // Abort early if the process emitted a spawn error.
+      const spawnErr = typeof getSpawnError === 'function' ? getSpawnError() : null;
+      if (spawnErr) {
+        reject(spawnErr);
+        return;
+      }
+
       const sock = net.createConnection({ host, port });
       sock.on('connect', () => {
         sock.destroy();
