@@ -15,7 +15,8 @@
     "test:coverage": "vitest run --coverage",
     "test:api": "vitest run tests/api/",
     "test:unit": "vitest run tests/unit/",
-    "test:components": "vitest run tests/components/"
+    "test:components": "vitest run tests/components/",
+    "test:integration": "vitest run --config vite.integration.config.js"
   },
   "dependencies": {
     "chokidar": "^4.0.3",
