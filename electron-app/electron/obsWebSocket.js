@@ -360,7 +360,8 @@ async function addAudioSourceToScenes(wsSettings, sceneNames, inputKind, inputNa
       for (const sceneName of sceneNames) {
         try {
           // First, check if the source is already in this scene — if so, skip entirely
-          const { sceneItems } = await obs.call('GetSceneItemList', { sceneName }).catch(() => ({ sceneItems: [] }));
+          const listResult = await obs.call('GetSceneItemList', { sceneName }).catch(() => null);
+          const sceneItems = listResult?.sceneItems ?? [];
           const alreadyInScene = sceneItems.some(item => item.sourceName === inputName);
           if (alreadyInScene) {
             results.push({ scene: sceneName, status: 'already present' });
@@ -388,7 +389,7 @@ async function addAudioSourceToScenes(wsSettings, sceneNames, inputKind, inputNa
             try {
               await obs.call('GetInputSettings', { inputName });
               await obs.call('CreateSceneItem', { sceneName, sourceName: inputName });
-              results.push({ scene: sceneName, status: 'added' });
+              results.push({ scene: sceneName, status: 'added (existing source)' });
             } catch (itemErr) {
               results.push({ scene: sceneName, status: 'error', error: itemErr.message });
             }
