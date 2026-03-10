@@ -25,20 +25,20 @@ function RecordingsPage() {
     }
   }, [])
 
+  const initialPathParam = searchParams.get('path')
+
   useEffect(() => {
     fetchRecordings().then(data => {
       if (!data) return
-      const pathParam = searchParams.get('path')
-      if (pathParam) {
-        const recording = data.find(r => r.path === pathParam)
+      if (initialPathParam) {
+        const recording = data.find(r => r.path === initialPathParam)
         if (recording) {
           setSelectedRecording(recording)
           setSearchParams({})
         }
       }
     })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [fetchRecordings, initialPathParam, setSearchParams])
 
   const handleClipCreated = useCallback((clip) => {
     setToast({ type: 'success', message: `Clip created: ${clip.filename}` })
