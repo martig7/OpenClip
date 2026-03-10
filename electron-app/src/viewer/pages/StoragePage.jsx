@@ -122,8 +122,55 @@ function drawRoundRect(ctx, x, y, w, h, r) {
   ctx.closePath()
 }
 
-// Normalise file path separators to backslashes for locked-recordings Set lookups (Windows paths)
-function normPath(p) { return p.replace(/\//g, '\\') }
+// ── Spatial grid index for O(1) hit-testing ─────────────────────────────────
+// Divides base-space layout into GRID_CELLS×GRID_CELLS buckets.
+// Built once when treemapLayout changes; getItemAt then only searches the single matching bucket.
+// 16×16 = 256 buckets: low memory overhead, and each bucket holds ~1–4 items for typical libraries
+// of a few hundred files, giving near-O(1) hit-test performance vs. the O(n) linear alternative.
+const GRID_CELLS = 16
+
+// Tooltip sizing constants — kept in sync with the .sv2-tooltip CSS rule (max-width: 280px)
+const TOOLTIP_W = 280  // matches CSS max-width
+const TOOLTIP_H = 56   // conservative height estimate for two lines of text
+const TOOLTIP_PAD = 14 // gap between cursor and tooltip corner
+
+function buildHitIndex(layout) {
+  if (!layout.length) return null
+  let maxX = 0, maxY = 0
+  for (const item of layout) {
+    if (item.rx + item.rw > maxX) maxX = item.rx + item.rw
+    if (item.ry + item.rh > maxY) maxY = item.ry + item.rh
+  }
+  const cellW = maxX / GRID_CELLS
+  const cellH = maxY / GRID_CELLS
+  const buckets = Array.from({ length: GRID_CELLS * GRID_CELLS }, () => [])
+  for (const item of layout) {
+    const c0 = Math.max(0, Math.floor(item.rx / cellW))
+    const c1 = Math.min(GRID_CELLS - 1, Math.floor((item.rx + item.rw) / cellW))
+    const r0 = Math.max(0, Math.floor(item.ry / cellH))
+    const r1 = Math.min(GRID_CELLS - 1, Math.floor((item.ry + item.rh) / cellH))
+    for (let r = r0; r <= r1; r++) {
+      for (let c = c0; c <= c1; c++) {
+        buckets[r * GRID_CELLS + c].push(item)
+      }
+    }
+  }
+  return { buckets, cellW, cellH, maxX, maxY }
+}
+
+function hitTestIndex(index, lx, ly) {
+  if (!index) return null
+  if (lx < 0 || ly < 0 || lx > index.maxX || ly > index.maxY) return null
+  const col = Math.min(GRID_CELLS - 1, Math.floor(lx / index.cellW))
+  const row = Math.min(GRID_CELLS - 1, Math.floor(ly / index.cellH))
+  const bucket = index.buckets[row * GRID_CELLS + col]
+  for (const item of bucket) {
+    if (lx >= item.rx && lx <= item.rx + item.rw &&
+        ly >= item.ry && ly <= item.ry + item.rh) return item
+  }
+  return null
+}
+
 
 function StoragePage() {
   const navigate = useNavigate()
@@ -161,6 +208,10 @@ function StoragePage() {
   const gameColorsRef = useRef({})
   // Holds the latest drawCanvas closure so hot-path handlers always call the up-to-date version
   const drawCanvasRef = useRef(null)
+  const ctxRef = useRef(null)           // cached Canvas 2D context
+  const hitIndexRef = useRef(null)      // spatial grid index for O(1) hit-testing
+  const tooltipItemRef = useRef(null)   // last hovered item path, used to skip redundant setTooltip calls
+  const tooltipRafRef = useRef(null)    // RAF handle for mousemove throttling
   const zoomRef = useRef(1)
   const panRef = useRef({ x: 0, y: 0 })
   const dragRef = useRef(null)
@@ -202,8 +253,10 @@ function StoragePage() {
       const canvas = canvasRef.current
       if (!canvas) return
       const dpr = window.devicePixelRatio || 1
-      canvas.width = w * dpr
-      canvas.height = h * dpr
+      canvas.width = Math.round(w * dpr)
+      canvas.height = Math.round(h * dpr)
+      // Invalidate cached context when canvas element is resized
+      ctxRef.current = canvas.getContext('2d')
     }
     const ro = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect
@@ -486,7 +539,11 @@ function StoragePage() {
   drawCanvasRef.current = () => {
     const canvas = canvasRef.current
     if (!canvas || !canvas.width || !canvas.height) return
-    const ctx = canvas.getContext('2d')
+    // Use the cached 2D context; acquire it once on first draw or after a resize
+    if (!ctxRef.current || ctxRef.current.canvas !== canvas) {
+      ctxRef.current = canvas.getContext('2d')
+    }
+    const ctx = ctxRef.current
     const dpr = window.devicePixelRatio || 1
     const cssW = canvas.width / dpr
     const cssH = canvas.height / dpr
@@ -523,7 +580,7 @@ function StoragePage() {
 
       const color = colors[item.game_name] || '#888'
       const isSelected = selected.has(item.path)
-      const isLocked = locked.has(normPath(item.path))
+      const isLocked = locked.has(item.path)
       const minDim = Math.min(w, h)
 
       // Background
@@ -602,23 +659,25 @@ function StoragePage() {
     rafRef.current = requestAnimationFrame(() => { rafRef.current = null; drawCanvasRef.current() })
   }, [])
 
-  // Sync render-relevant state into refs and request a canvas redraw
-  useEffect(() => { layoutRef.current = treemapLayout; requestRedraw() }, [treemapLayout, requestRedraw])
+  // Sync render-relevant state into refs and request a canvas redraw.
+  // For lockedRecordings, convert backslash paths → forward slashes to match item.path format,
+  // so per-frame normPath() calls are unnecessary.
+  useEffect(() => { layoutRef.current = treemapLayout; hitIndexRef.current = buildHitIndex(treemapLayout); requestRedraw() }, [treemapLayout, requestRedraw])
   useEffect(() => { selectedItemsRef.current = selectedItems; requestRedraw() }, [selectedItems, requestRedraw])
-  useEffect(() => { lockedRef.current = lockedRecordings; requestRedraw() }, [lockedRecordings, requestRedraw])
+  useEffect(() => {
+    lockedRef.current = new Set([...lockedRecordings].map(p => p.replace(/\\/g, '/')))
+    requestRedraw()
+  }, [lockedRecordings, requestRedraw])
   useEffect(() => { gameColorsRef.current = gameColors; requestRedraw() }, [gameColors, requestRedraw])
   useEffect(() => { requestRedraw() }, [zoom, requestRedraw])
 
-  // Hit-test: canvas (CSS) pixel → layout item
+  // Hit-test: canvas (CSS) pixel → layout item (uses spatial grid index for O(1) lookup)
   const getItemAt = useCallback((canvasX, canvasY) => {
     const z = zoomRef.current
     const { x: px, y: py } = panRef.current
     const lx = (canvasX - px) / z
     const ly = (canvasY - py) / z
-    return layoutRef.current.find(item =>
-      lx >= item.rx && lx <= item.rx + item.rw &&
-      ly >= item.ry && ly <= item.ry + item.rh
-    ) ?? null
+    return hitTestIndex(hitIndexRef.current, lx, ly)
   }, [])
 
   // Is the click within the lock-button area (top-right corner of block)?
@@ -650,20 +709,39 @@ function StoragePage() {
   }, [getItemAt, handleItemClick])
 
   const handleCanvasMouseMove = useCallback((e) => {
-    const rect = canvasRef.current.getBoundingClientRect()
-    const cx = e.clientX - rect.left
-    const cy = e.clientY - rect.top
-    const item = getItemAt(cx, cy)
-    if (item) {
-      const isLocked = lockedRef.current.has(normPath(item.path))
-      setTooltip({
-        x: e.clientX, y: e.clientY,
-        text: `${item.game_name} · ${item.filename}\n${item.size_formatted} · ${item.date}${isLocked ? ' · [Locked]' : ''}`
-      })
-    } else {
-      setTooltip(null)
-    }
+    // Throttle: only process one mousemove per animation frame
+    if (tooltipRafRef.current) return
+    tooltipRafRef.current = requestAnimationFrame(() => {
+      tooltipRafRef.current = null
+      if (!canvasRef.current) return
+      const rect = canvasRef.current.getBoundingClientRect()
+      const cx = e.clientX - rect.left
+      const cy = e.clientY - rect.top
+      const item = getItemAt(cx, cy)
+      const newPath = item ? item.path : null
+      // Skip redundant state updates when the hovered item hasn't changed
+      if (newPath === tooltipItemRef.current) return
+      tooltipItemRef.current = newPath
+      if (item) {
+        const isLocked = lockedRef.current.has(item.path)
+        setTooltip({
+          x: e.clientX, y: e.clientY,
+          text: `${item.game_name} · ${item.filename}\n${item.size_formatted} · ${item.date}${isLocked ? ' · [Locked]' : ''}`
+        })
+      } else {
+        setTooltip(null)
+      }
+    })
   }, [getItemAt])
+
+  // Pre-compute clamped tooltip position so the render path avoids recalculating on every render
+  const tooltipPos = useMemo(() => {
+    if (!tooltip) return null
+    return {
+      left: Math.min(tooltip.x + TOOLTIP_PAD, window.innerWidth  - TOOLTIP_W - TOOLTIP_PAD),
+      top:  Math.min(tooltip.y + TOOLTIP_PAD, window.innerHeight - TOOLTIP_H - TOOLTIP_PAD),
+    }
+  }, [tooltip])
 
   if (loading) {
     return (
@@ -783,16 +861,17 @@ function StoragePage() {
           onClick={handleCanvasClick}
           onDoubleClick={handleCanvasDblClick}
           onMouseMove={handleCanvasMouseMove}
-          onMouseLeave={() => setTooltip(null)}
+          onMouseLeave={() => {
+            if (tooltipRafRef.current) { cancelAnimationFrame(tooltipRafRef.current); tooltipRafRef.current = null }
+            tooltipItemRef.current = null
+            setTooltip(null)
+          }}
         />
       </div>
 
-      {/* Hover tooltip */}
-      {tooltip && (
-        <div
-          className="sv2-tooltip"
-          style={{ left: tooltip.x + 14, top: tooltip.y + 14 }}
-        >
+      {/* Hover tooltip — positioned near cursor, clamped to viewport edges */}
+      {tooltipPos && (
+        <div className="sv2-tooltip" style={{ left: tooltipPos.left, top: tooltipPos.top }}>
           {tooltip.text.split('\n').map((line, i) => <div key={i}>{line}</div>)}
         </div>
       )}
