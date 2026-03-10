@@ -438,7 +438,13 @@ ipcMain.handle('windows:extractIcon', async (_event, processName) => {
 ipcMain.handle('windows:list', async () => {
   const { exec } = require('child_process');
   return new Promise((resolve) => {
-    const cmd = `powershell -Command "Get-Process | Where-Object {$_.MainWindowTitle -ne ''} | Select-Object ProcessName, MainWindowTitle | ConvertTo-Json"`;
+    // Collect the exact EXE path and Window Class using embedded C# so OBS window capture inputs can be perfectly matched
+    const cmd = `powershell -NoProfile -Command `
+      + `"Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; using System.Text; public class Win32 { [DllImport(\\"user32.dll\\")] public static extern int GetWindowThreadProcessId(IntPtr hWnd, out int lpdwProcessId); [DllImport(\\"user32.dll\\", SetLastError = true, CharSet=CharSet.Auto)] public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount); }'; `
+      + `Get-Process | Where-Object { $_.MainWindowTitle -ne '' -and $_.MainWindowHandle -ne 0 } | Select-Object ProcessName, MainWindowTitle, `
+      + `@{Name='Executable';Expression={ $_.MainModule.FileName }}, `
+      + `@{Name='Class';Expression={ $sb = New-Object System.Text.StringBuilder(256); [Win32]::GetClassName($_.MainWindowHandle, $sb, $sb.Capacity) | Out-Null; $sb.ToString() }} | ConvertTo-Json"`;
+
     exec(cmd, { encoding: 'utf-8', timeout: 5000 }, (error, stdout) => {
       if (error) return resolve([]);
       try {
@@ -450,6 +456,8 @@ ipcMain.handle('windows:list', async () => {
           .map(p => ({
             title: p.MainWindowTitle,
             process: p.ProcessName,
+            exe: p.Executable ? require('path').basename(p.Executable) : `${p.ProcessName}.exe`,
+            windowClass: p.Class || p.ProcessName,
           }))
         );
       } catch {

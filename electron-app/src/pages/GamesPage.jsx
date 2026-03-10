@@ -5,6 +5,7 @@ import api from '../api';
 
 // Human-readable metadata for known OBS audio input kinds
 const AUDIO_KIND_META = {
+  magic_game_audio: { label: 'Auto Game Audio', icon: 'app', description: 'Automatically captures the respective game window' },
   wasapi_output_capture: { label: 'Desktop Audio', icon: 'music', description: 'Captures all system/game audio output' },
   wasapi_input_capture: { label: 'Microphone / Input', icon: 'mic', description: 'Captures microphone or audio input device' },
   wasapi_process_output_capture: { label: 'Application Audio', icon: 'app', description: 'Captures audio from a specific application' },
@@ -74,11 +75,22 @@ export default function GamesPage() {
     let cancelled = false;
     (async () => {
       const results = await Promise.all(
-        namesArray.map(name =>
-          api.getInputAudioTracks(name)
+        namesArray.map(async name => {
+          if (name === 'Game Audio') {
+            for (const game of games) {
+              if (game.scene) {
+                try {
+                  const tracks = await api.getInputAudioTracks(`Game Audio (${game.name})`);
+                  return { name, tracks };
+                } catch { continue; }
+              }
+            }
+            return { name, tracks: {} };
+          }
+          return api.getInputAudioTracks(name)
             .then(tracks => ({ name, tracks }))
-            .catch(() => ({ name, tracks: {} }))
-        )
+            .catch(() => ({ name, tracks: {} }));
+        })
       );
       if (cancelled) return;
       setTrackData(prev => {
@@ -88,7 +100,7 @@ export default function GamesPage() {
       });
     })();
     return () => { cancelled = true; };
-  }, [editGameModal?.sceneAudioSources, masterAudioSources]);
+  }, [editGameModal?.sceneAudioSources, masterAudioSources, games]);
 
   async function toggleTrack(inputName, trackNum) {
     const current = trackData[inputName] || {};
@@ -98,7 +110,17 @@ export default function GamesPage() {
     setTrackData(prev => ({ ...prev, [inputName]: updated }));
     setTrackLoading(prev => ({ ...prev, [inputName]: true }));
     try {
-      await api.setInputAudioTracks(inputName, updated);
+      if (inputName === 'Game Audio') {
+        const promises = [];
+        for (const game of games) {
+          if (game.scene) {
+            promises.push(api.setInputAudioTracks(`Game Audio (${game.name})`, updated).catch(() => {}));
+          }
+        }
+        await Promise.all(promises);
+      } else {
+        await api.setInputAudioTracks(inputName, updated);
+      }
     } catch {
       // Revert on failure
       setTrackData(prev => ({ ...prev, [inputName]: current }));
@@ -223,6 +245,9 @@ export default function GamesPage() {
       ...g,
       name: g.name || win.process,
       selector: win.title,
+      exe: win.exe,
+      windowClass: win.windowClass,
+      windowMatchPriority: 0,
     }));
     setShowWindowPicker(false);
     // Try to extract the exe icon in the background
@@ -246,7 +271,7 @@ export default function GamesPage() {
   }
 
   function resetAddModal() {
-    setNewGame({ name: '', selector: '', scene: '', icon_path: '' });
+    setNewGame({ name: '', selector: '', exe: '', windowClass: '', windowMatchPriority: 0, scene: '', icon_path: '' });
     setAutoCreateScene(false);
     setCreateMode('scratch');
     setTemplateScene('');
@@ -300,6 +325,13 @@ export default function GamesPage() {
           .filter(i => i.inputKind === 'wasapi_process_output_capture')
           .map(i => i.inputName)
       );
+
+      combined.unshift({
+        name: 'Game Audio',
+        kind: 'magic_game_audio',
+        source: 'app',
+      });
+
       for (const app of (runningApps || [])) {
         if (!obsAppNames.has(app.name) && !obsNames.has(app.name)) {
           const windowTitle = windowTitleMap.get(app.name.toLowerCase()) || '';
@@ -337,8 +369,25 @@ export default function GamesPage() {
     if (sceneNames.length > 0) {
       setApplyingSource(entry.name);
       try {
-        const result = await api.addAudioSourceToScenes(sceneNames, entry.kind, entry.name, entry.inputSettings || {});
-        showToast(result.message || `"${entry.name}" applied to scenes`);
+        if (entry.kind === 'magic_game_audio') {
+          for (const game of games) {
+            if (game.scene) {
+              const exeGuess = game.exe || (game.selector.toLowerCase().endsWith('.exe') ? game.selector : `${game.selector}.exe`);
+              const windowClassGuess = game.windowClass || game.selector;
+              const titleGuess = game.selector;
+              await api.addAudioSourceToScenes(
+                [game.scene], 
+                'wasapi_process_output_capture', 
+                `Game Audio (${game.name})`, 
+                { window: `${titleGuess}:${windowClassGuess}:${exeGuess}`, window_match_priority: game.windowMatchPriority !== undefined ? game.windowMatchPriority : 0 }
+              ).catch(() => {});
+            }
+          }
+          showToast(`"Game Audio" applied to scenes`);
+        } else {
+          const result = await api.addAudioSourceToScenes(sceneNames, entry.kind, entry.name, entry.inputSettings || {});
+          showToast(result.message || `"${entry.name}" applied to scenes`);
+        }
       } catch (err) {
         showToast(`Failed to add to scenes: ${err.message}`);
       } finally {
@@ -835,15 +884,33 @@ export default function GamesPage() {
                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                       >
                         <div style={{ color: 'var(--text-primary)' }}>{win.title}</div>
-                        <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{win.process}</div>
+                        <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>[{win.exe}] {win.windowClass !== win.process ? win.windowClass : ''}</div>
                       </div>
                     ))
                   )}
                 </div>
               )}
+              {newGame.selector && newGame.exe && (
+                <span style={{ fontSize: 11, color: 'var(--primary)', marginTop: 4, display: 'block' }}>
+                  ✓ Exact match binding set: {newGame.exe}
+                </span>
+              )}
               <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
                 Pick a running window or type a window title / process name to match
               </span>
+            </div>
+            {/* Window Match Priority */}
+            <div className="form-group">
+              <label className="form-label">Window Match Priority</label>
+              <select
+                className="form-input"
+                value={newGame.windowMatchPriority !== undefined ? newGame.windowMatchPriority : 0}
+                onChange={e => setNewGame({ ...newGame, windowMatchPriority: parseInt(e.target.value, 10) })}
+              >
+                <option value={0}>Match title, otherwise find window of same type</option>
+                <option value={1}>Match title, otherwise find window of same executable</option>
+                <option value={2}>Match executable</option>
+              </select>
             </div>
             <div className="form-group">
               <label className="form-label">OBS Scene (optional)</label>
@@ -1263,6 +1330,10 @@ function EditGameModal({
   const [modalAudioError, setModalAudioError] = useState(null);
   const modalAudioDropdownRef = useRef(null);
 
+  const [showWindowPicker, setShowWindowPicker] = useState(false);
+  const [loadingWindows, setLoadingWindows] = useState(false);
+  const [visibleWindows, setVisibleWindows] = useState([]);
+
   // Close modal audio dropdown on outside click
   useEffect(() => {
     if (!showModalAudioDropdown) return;
@@ -1307,6 +1378,13 @@ function EditGameModal({
       const obsAppNames = new Set(
         (obsInputs || []).filter(i => i.inputKind === 'wasapi_process_output_capture').map(i => i.inputName)
       );
+
+      combined.unshift({
+        name: 'Game Audio',
+        kind: 'magic_game_audio',
+        source: 'app',
+      });
+
       for (const app of (runningApps || [])) {
         if (!obsAppNames.has(app.name) && !obsNames.has(app.name)) {
           const windowTitle = windowTitleMap.get(app.name.toLowerCase()) || '';
@@ -1348,15 +1426,94 @@ function EditGameModal({
         {/* Selector */}
         <div className="form-group">
           <label className="form-label">Window Selector</label>
-          <input
-            className="form-input"
-            value={game.selector || ''}
-            onChange={e => onChangeGame({ selector: e.target.value })}
-            placeholder="e.g. VALORANT or valorant.exe"
-          />
+          <div className="form-input-row">
+            <input
+              className="form-input"
+              value={game.selector || ''}
+              onChange={e => onChangeGame({ selector: e.target.value, exe: '', windowClass: '' })}
+              placeholder="e.g. VALORANT or valorant.exe"
+            />
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={async () => {
+                if (!showWindowPicker) {
+                  setLoadingWindows(true);
+                  const windows = await api.getVisibleWindows();
+                  setVisibleWindows(windows);
+                  setLoadingWindows(false);
+                }
+                setShowWindowPicker(!showWindowPicker);
+              }}
+              title="Pick from running windows"
+            >
+              <ChevronDown size={13} />
+            </button>
+          </div>
+          {showWindowPicker && (
+            <div style={{
+              marginTop: 4,
+              background: 'var(--bg-tertiary)',
+              border: '1px solid var(--border-light)',
+              borderRadius: 'var(--radius-sm)',
+              maxHeight: 180,
+              overflowY: 'auto',
+            }}>
+              {visibleWindows.length === 0 ? (
+                <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-muted)' }}>
+                  {loadingWindows ? 'Loading...' : 'No windows found. Click again to refresh.'}
+                </div>
+              ) : (
+                visibleWindows.map((win, i) => (
+                  <div
+                    key={i}
+                    onClick={() => {
+                      onChangeGame({ 
+                        selector: win.title, 
+                        exe: win.exe, 
+                        windowClass: win.windowClass,
+                        windowMatchPriority: game.windowMatchPriority !== undefined ? game.windowMatchPriority : 0
+                      });
+                      setShowWindowPicker(false);
+                    }}
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: 12,
+                      cursor: 'pointer',
+                      borderBottom: '1px solid var(--border)',
+                      transition: 'background 0.1s',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <div style={{ color: 'var(--text-primary)' }}>{win.title}</div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>[{win.exe}] {win.windowClass !== win.process ? win.windowClass : ''}</div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+          {game.selector && game.exe && (
+            <span style={{ fontSize: 11, color: 'var(--primary)', marginTop: 4, display: 'block' }}>
+              ✓ Exact match binding set: {game.exe}
+            </span>
+          )}
           <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
             Window title or process name to match for auto-recording
           </span>
+        </div>
+
+        {/* Window Match Priority */}
+        <div className="form-group">
+          <label className="form-label">Window Match Priority</label>
+          <select
+            className="form-input"
+            value={game.windowMatchPriority !== undefined ? game.windowMatchPriority : 0}
+            onChange={e => onChangeGame({ windowMatchPriority: parseInt(e.target.value, 10) })}
+          >
+            <option value={0}>Match title, otherwise find window of same type</option>
+            <option value={1}>Match title, otherwise find window of same executable</option>
+            <option value={2}>Match executable</option>
+          </select>
         </div>
 
         {/* Scene */}
@@ -1448,7 +1605,7 @@ function EditGameModal({
                                 {groupLabel}
                               </div>
                               {items.map((entry, i) => {
-                                const alreadyInScene = sceneAudioSources.some(s => s.inputName === entry.name);
+                                const alreadyInScene = sceneAudioSources.some(s => s.inputName === entry.name || (entry.kind === 'magic_game_audio' && s.inputName.startsWith('Game Audio (')));
                                 const meta = AUDIO_KIND_META[entry.kind];
                                 return (
                                   <button
@@ -1456,7 +1613,14 @@ function EditGameModal({
                                     disabled={alreadyInScene}
                                     onClick={() => {
                                       if (!alreadyInScene) {
-                                        onAddSourceToScene(game.scene, { name: entry.name, kind: entry.kind, inputSettings: entry.inputSettings || {} });
+                                        if (entry.kind === 'magic_game_audio') {
+                                          const exeGuess = game.exe || (game.selector.toLowerCase().endsWith('.exe') ? game.selector : `${game.selector}.exe`);
+                                          const windowClassGuess = game.windowClass || game.selector;
+                                          const titleGuess = game.selector;
+                                          onAddSourceToScene(game.scene, { name: `Game Audio (${game.name})`, kind: 'wasapi_process_output_capture', inputSettings: { window: `${titleGuess}:${windowClassGuess}:${exeGuess}`, window_match_priority: game.windowMatchPriority !== undefined ? game.windowMatchPriority : 0 } });
+                                        } else {
+                                          onAddSourceToScene(game.scene, { name: entry.name, kind: entry.kind, inputSettings: entry.inputSettings || {} });
+                                        }
                                         setShowModalAudioDropdown(false);
                                       }
                                     }}
@@ -1507,10 +1671,11 @@ function EditGameModal({
               ) : (
                 <div style={{ background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-sm)', overflow: 'hidden', marginBottom: 10 }}>
                   {sceneAudioSources.map((src, i) => {
-                    const isInMaster = masterNames.has(src.inputName);
+                    const isInMaster = masterNames.has(src.inputName) || (src.inputName.startsWith('Game Audio (') && masterNames.has('Game Audio'));
                     const meta = AUDIO_KIND_META[src.inputKind];
                     const tracks = trackData[src.inputName] || {};
                     const isTrackLoading = trackLoading[src.inputName];
+                    const displayName = src.inputName.startsWith('Game Audio (') ? 'Game Audio' : src.inputName;
                     return (
                       <div
                         key={i}
@@ -1523,7 +1688,7 @@ function EditGameModal({
                           <AudioIcon kind={src.inputKind} size={14} />
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {src.inputName}
+                              {displayName}
                             </div>
                             <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{meta?.label || src.inputKind}</div>
                           </div>
@@ -1617,7 +1782,7 @@ function EditGameModal({
                   >
                     <option value="">Add from master list…</option>
                     {masterAudioSources
-                      .filter(s => !sceneAudioSources.some(sc => sc.inputName === s.name))
+                      .filter(s => !sceneAudioSources.some(sc => sc.inputName === s.name || (s.kind === 'magic_game_audio' && sc.inputName.startsWith('Game Audio ('))))
                       .map((s, i) => (
                         <option key={i} value={s.name}>{s.name}</option>
                       ))}
@@ -1628,7 +1793,14 @@ function EditGameModal({
                     onClick={() => {
                       const src = masterAudioSources.find(s => s.name === addFromMaster);
                       if (src) {
-                        onAddSourceToScene(game.scene, { name: src.name, kind: src.kind });
+                        if (src.kind === 'magic_game_audio') {
+                          const exeGuess = game.exe || (game.selector.toLowerCase().endsWith('.exe') ? game.selector : `${game.selector}.exe`);
+                          const windowClassGuess = game.windowClass || game.selector;
+                          const titleGuess = game.selector;
+                          onAddSourceToScene(game.scene, { name: `Game Audio (${game.name})`, kind: 'wasapi_process_output_capture', inputSettings: { window: `[${exeGuess}]:${windowClassGuess}:${titleGuess}`, window_match_priority: game.windowMatchPriority !== undefined ? game.windowMatchPriority : 0 } });
+                        } else {
+                          onAddSourceToScene(game.scene, { name: src.name, kind: src.kind, inputSettings: src.inputSettings || {} });
+                        }
                         setAddFromMaster('');
                       }
                     }}
