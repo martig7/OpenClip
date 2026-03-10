@@ -33,6 +33,15 @@ async function organizeRecordings(store, gameName) {
     // Only process files modified in the last 10 minutes
     if (now - stat.mtime > 10 * 60 * 1000) continue;
 
+    // Wait for file to stabilize — OBS may still be writing/finalizing
+    await new Promise(r => setTimeout(r, 2000));
+    let statCheck;
+    try { statCheck = fs.statSync(src); } catch { continue; }
+    if (stat.size !== statCheck.size) {
+      console.warn(`[organize] Skipping ${file} — file size changed, still being written`);
+      continue;
+    }
+
     fs.mkdirSync(targetDir, { recursive: true });
 
     const dateStr = now.toISOString().slice(0, 10);
@@ -231,4 +240,76 @@ function setupFileManager(ipcMain, store) {
   });
 }
 
-module.exports = { setupFileManager, organizeRecordings };
+async function organizeSpecificRecording(store, filePath, gameName) {
+  const destPath = store.get('settings.destinationPath');
+  if (!destPath) throw new Error('No destination path configured');
+  if (!fs.existsSync(filePath)) throw new Error('Recording file not found');
+
+  // Verify file is stable (not still being written)
+  const stat1 = fs.statSync(filePath);
+  await new Promise(r => setTimeout(r, 1500));
+  let stat2;
+  try { stat2 = fs.statSync(filePath); } catch { throw new Error('Cannot access file'); }
+  if (stat1.size !== stat2.size) throw new Error('File is still being written — please wait a moment and try again');
+
+  // Use the file's mtime as the reference date so the recording lands in the correct week
+  const recordingDate = stat2.mtime;
+  const weekFolder = `${gameName} - ${getWeekFolder(recordingDate)}`;
+  const targetDir = path.join(destPath, weekFolder);
+  fs.mkdirSync(targetDir, { recursive: true });
+
+  const dateStr = recordingDate.toISOString().slice(0, 10);
+  const existing = fs.readdirSync(targetDir).filter(f => isVideoFile(f) && f.includes(dateStr));
+  const sessionNum = existing.length + 1;
+  const ext = path.extname(filePath);
+  const destFilename = `${gameName} Session ${dateStr} #${sessionNum}.mp4`;
+  const dest = path.join(targetDir, destFilename);
+
+  if (ext.toLowerCase() !== '.mp4') {
+    service.markRemuxing(filePath, dest);
+    let finalPath = dest;
+    try {
+      let trackNames = null;
+      try {
+        const { stdout } = await execFileAsync(FFPROBE_PATH, [
+          '-v', 'error', '-show_streams', '-select_streams', 'a', '-of', 'json', filePath,
+        ], { encoding: 'utf-8', timeout: 10000 });
+        const streams = JSON.parse(stdout).streams || [];
+        const names = streams.map(s => s.tags?.title || s.tags?.TITLE || null);
+        if (names.some(Boolean)) trackNames = names;
+      } catch {}
+
+      await execFileAsync(FFMPEG_PATH, [
+        '-i', filePath, '-map', '0', '-c', 'copy', '-movflags', '+faststart', '-y', dest,
+      ], { timeout: 120000 });
+
+      if (trackNames) fs.writeFileSync(dest + '.tracks.json', JSON.stringify(trackNames));
+      fs.unlinkSync(filePath);
+    } catch (err) {
+      try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch {}
+      // Fallback: move with original extension
+      const fallbackName = `${gameName} Session ${dateStr} #${sessionNum}${ext}`;
+      finalPath = path.join(targetDir, fallbackName);
+      try {
+        fs.renameSync(filePath, finalPath);
+      } catch (renameErr) {
+        service.unmarkRemuxing(filePath, dest);
+        throw new Error(`Could not move file (it may still be open by OBS): ${renameErr.message}`);
+      }
+    } finally {
+      service.unmarkRemuxing(filePath, dest);
+      service.invalidateCache();
+    }
+    return { success: true, path: finalPath, filename: path.basename(finalPath) };
+  } else {
+    try {
+      fs.renameSync(filePath, dest);
+    } catch (err) {
+      throw new Error(`Could not move file (it may still be open by OBS): ${err.message}`);
+    }
+    service.invalidateCache();
+    return { success: true, path: dest, filename: destFilename };
+  }
+}
+
+module.exports = { setupFileManager, organizeRecordings, organizeSpecificRecording };

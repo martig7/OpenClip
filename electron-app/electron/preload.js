@@ -60,6 +60,7 @@ contextBridge.exposeInMainWorld('api', {
   getRecordings: () => ipcRenderer.invoke('recordings:list'),
   deleteRecording: (path) => ipcRenderer.invoke('recordings:delete', path),
   getVideoURL: (filePath) => ipcRenderer.invoke('video:getURL', filePath),
+  organizeRecording: (filePath, gameName) => ipcRenderer.invoke('recordings:organize', { filePath, gameName }),
 
   // Clips
   getClips: () => ipcRenderer.invoke('clips:list'),

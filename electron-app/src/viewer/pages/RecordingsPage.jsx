@@ -4,6 +4,7 @@ import { Check, X } from 'lucide-react'
 import Sidebar from '../components/Sidebar'
 import VideoPlayer from '../components/VideoPlayer'
 import { apiFetch } from '../apiBase'
+import api from '../../api'
 
 function RecordingsPage() {
   const [recordings, setRecordings] = useState([])
@@ -11,6 +12,7 @@ function RecordingsPage() {
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState(null)
   const [searchParams, setSearchParams] = useSearchParams()
+  const [games, setGames] = useState([])
 
   const fetchRecordings = useCallback(async () => {
     try {
@@ -38,11 +40,24 @@ function RecordingsPage() {
         }
       }
     })
+    api.getGames().then(g => setGames(g || [])).catch(() => {})
   }, [fetchRecordings, initialPathParam, setSearchParams])
 
   const handleClipCreated = useCallback((clip) => {
     setToast({ type: 'success', message: `Clip created: ${clip.filename}` })
     setTimeout(() => setToast(null), 3000)
+  }, [])
+
+  const handleOrganized = useCallback((result) => {
+    setToast({ type: 'success', message: `Organized: ${result.filename}` })
+    setTimeout(() => setToast(null), 4000)
+    setSelectedRecording(null)
+    fetchRecordings()
+  }, [fetchRecordings])
+
+  const handleOrganizeError = useCallback((msg) => {
+    setToast({ type: 'error', message: msg })
+    setTimeout(() => setToast(null), 5000)
   }, [])
 
   if (loading) {
@@ -67,6 +82,9 @@ function RecordingsPage() {
       <VideoPlayer
         recording={selectedRecording}
         onClipCreated={handleClipCreated}
+        games={games}
+        onOrganized={handleOrganized}
+        onOrganizeError={handleOrganizeError}
       />
 
       {toast && (

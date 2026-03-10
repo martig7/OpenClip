@@ -41,6 +41,7 @@ const mockApi = {
   getRecordings: asyncArr,
   deleteRecording: asyncNoop,
   getVideoURL: asyncNoop,
+  organizeRecording: asyncNoop,
   getClips: asyncArr,
   createClip: asyncNoop,
   deleteClip: asyncNoop,

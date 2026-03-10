@@ -590,6 +590,12 @@ ipcMain.handle('api:port', async () => {
 // OBS script setup — returns the path to the Lua script seeded into userData
 ipcMain.handle('obs:script:path', () => path.join(USER_DATA, 'obs_game_recorder.lua'));
 
+// Manual organize a specific recording
+ipcMain.handle('recordings:organize', async (_event, { filePath, gameName }) => {
+  const { organizeSpecificRecording } = require('./fileManager');
+  return organizeSpecificRecording(store, filePath, gameName);
+});
+
 // Auto-updater
 function setupAutoUpdater() {
   autoUpdater.autoDownload = true;

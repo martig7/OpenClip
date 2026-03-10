@@ -1,12 +1,13 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
-import { Film, SkipBack, SkipForward, Play, Pause, Volume2, VolumeX, Folder, Calendar, HardDrive, Scissors, FolderOpen } from 'lucide-react'
+import { Film, SkipBack, SkipForward, Play, Pause, Volume2, VolumeX, Folder, Calendar, HardDrive, Scissors, FolderOpen, MoveRight } from 'lucide-react'
 import Timeline from './Timeline'
 import ClipControls from './ClipControls'
 import ZoomTimeline from './ZoomTimeline'
 import { apiFetch, apiPost, getBase } from '../apiBase'
 import { formatTime } from '../utils'
+import api from '../../api'
 
-function VideoPlayer({ recording, onClipCreated }) {
+function VideoPlayer({ recording, onClipCreated, games = [], onOrganized, onOrganizeError }) {
   const videoRef = useRef(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -28,6 +29,13 @@ function VideoPlayer({ recording, onClipCreated }) {
   const [selectedTracks, setSelectedTracks] = useState([])
   const [waveforms, setWaveforms] = useState({})
 
+  // Organize state
+  const [organizeMode, setOrganizeMode] = useState(false)
+  const [organizeGame, setOrganizeGame] = useState('')
+  const [isOrganizing, setIsOrganizing] = useState(false)
+
+  const isUnorganized = recording?.game_name === '(Unorganized)'
+
   // Reset state when recording changes
   useEffect(() => {
     setIsPlaying(false)
@@ -38,6 +46,8 @@ function VideoPlayer({ recording, onClipCreated }) {
     setAudioTracks([])
     setSelectedTracks([])
     setWaveforms({})
+    setOrganizeMode(false)
+    setOrganizeGame('')
   }, [recording])
 
   // Fetch audio tracks when recording changes
@@ -226,6 +236,24 @@ function VideoPlayer({ recording, onClipCreated }) {
     }
   }, [recording, clipStart, clipEnd, isCreatingClip, onClipCreated, audioTracks, selectedTracks])
 
+  const handleOrganize = useCallback(async () => {
+    if (!recording || !organizeGame || isOrganizing) return
+    setIsOrganizing(true)
+    try {
+      const result = await api.organizeRecording(recording.path, organizeGame)
+      if (result && result.success) {
+        setOrganizeMode(false)
+        if (onOrganized) onOrganized(result)
+      } else {
+        if (onOrganizeError) onOrganizeError(result?.error || 'Organize failed')
+      }
+    } catch (err) {
+      if (onOrganizeError) onOrganizeError(err.message || 'Organize failed')
+    } finally {
+      setIsOrganizing(false)
+    }
+  }, [recording, organizeGame, isOrganizing, onOrganized, onOrganizeError])
+
   if (!recording) {
     return (
       <div className="main-content">
@@ -332,14 +360,30 @@ function VideoPlayer({ recording, onClipCreated }) {
       </div>
 
       <div className="video-info-bar">
-        <h2 className="video-title">{recording.filename}</h2>
-        <div className="video-meta">
-          <span><Folder size={13} /> {recording.game_name}</span>
-          <span><Calendar size={13} /> {recording.date}</span>
-          <span><HardDrive size={13} /> {recording.size_formatted}</span>
+        <div className="video-info-top">
+          <div>
+            <h2 className="video-title">{recording.filename}</h2>
+            <div className="video-meta">
+              <span><Folder size={13} /> {recording.game_name}</span>
+              <span><Calendar size={13} /> {recording.date}</span>
+              <span><HardDrive size={13} /> {recording.size_formatted}</span>
+            </div>
+          </div>
+          {isUnorganized && (
+            <span className="unorganized-badge">Unorganized</span>
+          )}
         </div>
         <div className="action-buttons">
-          {!clipMode && (
+          {isUnorganized && !clipMode && (
+            <button
+              className={`btn btn-organize${organizeMode ? ' active' : ''}`}
+              onClick={() => setOrganizeMode(o => !o)}
+              disabled={isOrganizing}
+            >
+              <MoveRight size={13} /> Organize
+            </button>
+          )}
+          {!clipMode && !isUnorganized && (
             <button className="btn btn-primary" onClick={enterClipMode}>
               <Scissors size={13} /> Create Clip
             </button>
@@ -358,6 +402,50 @@ function VideoPlayer({ recording, onClipCreated }) {
           </button>
         </div>
       </div>
+
+      {isUnorganized && organizeMode && (
+        <div className="organize-panel">
+          <div className="organize-header">
+            <MoveRight size={13} />
+            Move to organized library
+          </div>
+          <div className="organize-row">
+            <select
+              className="organize-select"
+              value={organizeGame}
+              onChange={e => setOrganizeGame(e.target.value)}
+              disabled={isOrganizing}
+            >
+              <option value="">— Select game —</option>
+              {games.map(g => (
+                <option key={g.id} value={g.name}>{g.name}</option>
+              ))}
+            </select>
+            <button
+              className="btn btn-organize"
+              onClick={handleOrganize}
+              disabled={!organizeGame || isOrganizing}
+            >
+              {isOrganizing
+                ? <><div className="spinner-sm" /> Organizing…</>
+                : <><MoveRight size={13} /> Organize</>
+              }
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={() => setOrganizeMode(false)}
+              disabled={isOrganizing}
+            >
+              Cancel
+            </button>
+          </div>
+          {organizeGame && (
+            <div className="organize-preview">
+              Will be saved as: <strong>{organizeGame}</strong> Session &gt; Week folder &gt; MP4
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
