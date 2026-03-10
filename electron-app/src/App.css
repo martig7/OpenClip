@@ -602,7 +602,7 @@
   position: absolute;
   top: -2px;
   height: 10px;
-  background: rgba(99, 102, 241, 0.3);
+  background: var(--accent-dim);
   border: 1px solid var(--accent);
   border-radius: 2px;
   pointer-events: none;

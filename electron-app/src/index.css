@@ -5,23 +5,42 @@
 }
 
 :root {
-  --bg-primary: #0f0f0f;
-  --bg-secondary: #1a1a1a;
-  --bg-tertiary: #242424;
-  --bg-hover: #2a2a2a;
-  --bg-active: #333333;
-  --border: #2a2a2a;
-  --border-light: #3a3a3a;
-  --text-primary: #e8e8e8;
-  --text-secondary: #a0a0a0;
-  --text-muted: #666666;
-  --accent: #6366f1;
-  --accent-hover: #818cf8;
-  --accent-muted: rgba(99, 102, 241, 0.15);
-  --success: #22c55e;
-  --warning: #f59e0b;
-  --danger: #ef4444;
-  --danger-hover: #dc2626;
+  /* ── Surfaces ── */
+  --bg-primary:    #0f0f0f;
+  --bg-secondary:  #181818;
+  --bg-tertiary:   #212121;
+  --bg-hover:      #2a2a2a;
+  --bg-active:     #333333;
+
+  /* ── Borders ── */
+  --border:        #333333;
+  --border-light:  #3d3d3d;
+
+  /* ── Text ── */
+  --text-primary:   #ffffff;
+  --text-secondary: #aaaaaa;
+  --text-muted:     #666666;
+
+  /* ── Accent — violet/purple ── */
+  --accent:        #7c3aed;
+  --accent-hover:  #8b5cf6;
+  --accent-light:  #a78bfa;
+  --accent-muted:  rgba(124, 58, 237, 0.15);
+  --accent-dim:    rgba(124, 58, 237, 0.2);
+
+  /* ── Semantic ── */
+  --success:       #22c55e;
+  --warning:       #f59e0b;
+  --danger:        #ef4444;
+  --danger-hover:  #dc2626;
+
+  /* ── Amber — markers & unorganized state ── */
+  --amber:         #f59e0b;
+  --amber-light:   #fbbf24;
+  --amber-muted:   rgba(245, 158, 11, 0.12);
+  --amber-border:  rgba(245, 158, 11, 0.35);
+
+  /* ── Radii ── */
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;

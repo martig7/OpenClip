@@ -317,7 +317,7 @@ function createWindow() {
     icon: path.join(__dirname, '..', 'assets', 'icon.ico'),
     titleBarStyle: 'hidden',
     titleBarOverlay: {
-      color: '#0f0f0f',
+      color: '#181818',
       symbolColor: '#a0a0a0',
       height: 36,
     },
