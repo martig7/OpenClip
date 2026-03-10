@@ -36,30 +36,16 @@ describe.skipIf(!obsAvailable)('OBS Orchestration – live OBS instance', () => 
   // Start a single OBS process for the entire test file.
   // We allow up to 60 s for OBS to boot and the WebSocket server to become
   // reachable — this covers slow CI runners.
-  // If OBS fails to start (e.g. the WebSocket plugin is missing) we set
-  // obsInstance to null so that beforeEach can skip all tests gracefully.
+  // If OBS fails to start the error propagates from beforeAll so that Vitest
+  // marks the whole suite as failed rather than silently skipping all tests.
   beforeAll(async () => {
     unusedPort = await findFreePort();
-    try {
-      obsInstance = await startOBS({ initialScenes: ['Scene'] });
-      ws = obsInstance.wsSettings;
-    } catch (err) {
-      console.warn(
-        `[OBS Integration] Could not start OBS WebSocket server; all tests will be skipped.\n` +
-          `  Reason: ${err.message}`
-      );
-      obsInstance = null;
-      ws = null;
-    }
+    obsInstance = await startOBS({ initialScenes: ['Scene'] });
+    ws = obsInstance.wsSettings;
   }, 60_000);
 
   afterAll(() => {
     obsInstance?.stop();
-  });
-
-  // Skip every individual test when OBS failed to start.
-  beforeEach(({ skip }) => {
-    if (!obsInstance) skip();
   });
 
   // After each test, delete every scene except the seed 'Scene' so that the

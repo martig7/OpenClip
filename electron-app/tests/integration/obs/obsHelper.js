@@ -108,8 +108,15 @@ export async function startOBS({
   });
 
   // Wait for the WebSocket server to be reachable.
+  // The early-abort callback detects both spawn errors (ENOENT/EACCES) and
+  // unexpected early exits (e.g. SIGABRT when OBS crashes on startup), so the
+  // test fails immediately rather than waiting the full timeout.
   try {
-    await waitForPort('127.0.0.1', wsPort, startupTimeoutMs, () => spawnError);
+    await waitForPort('127.0.0.1', wsPort, startupTimeoutMs, () => {
+      if (spawnError) return spawnError;
+      if (exited && !stopping) return new Error('OBS process exited unexpectedly');
+      return null;
+    });
   } catch (err) {
     stopping = true;
     if (!spawnError) obsProcess.kill('SIGTERM');
