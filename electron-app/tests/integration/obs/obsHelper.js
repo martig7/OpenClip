@@ -141,6 +141,15 @@ export async function startOBS({
     extraEnv = process.env.DISPLAY ? {} : { QT_QPA_PLATFORM: 'offscreen' };
   }
 
+  // Wipe any leftover obsConfigDir from a previous run before writing a fresh
+  // config.  On Windows with --portable the config root is fixed to the OBS
+  // install tree, so a failed stop() cleanup (e.g. EPERM while OBS holds file
+  // locks) leaves stale crash-marker files.  OBS detects those on the next
+  // startup and shows a "did not shut down properly / run in Safe Mode?"
+  // dialog that blocks headless and CI runs indefinitely.  Deleting the
+  // directory here guarantees every run starts from a pristine config.
+  _rmTemp(obsConfigDir);
+
   _writeOBSConfig(obsConfigDir, wsPort, initialScenes);
 
   let stopping = false;
