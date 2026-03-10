@@ -95,24 +95,46 @@ export async function startOBS({
   initialScenes = ['Scene'],
   startupTimeoutMs = 45_000,
 } = {}) {
+  // On Windows, --portable is the only reliable way to isolate the OBS config,
+  // and --portable derives the config root from the binary's location.  If
+  // OBS_BINARY is not an absolute path (e.g. just "obs64"), we cannot derive
+  // that path — fail immediately with a clear diagnostic rather than running
+  // tests against the developer's real OBS configuration or failing obscurely.
+  if (isWindows && !path.isAbsolute(OBS_BINARY)) {
+    throw new Error(
+      `On Windows, OBS_BINARY must be an absolute path to obs64.exe so that ` +
+      `--portable mode can isolate the test configuration. ` +
+      `Current value: "${OBS_BINARY}". ` +
+      `Set OBS_BINARY to the full path of obs64.exe, e.g.: ` +
+      `C:\\Program Files\\obs-studio\\bin\\64bit\\obs64.exe`
+    );
+  }
+
   const wsPort = await findFreePort();
 
   // ── Determine config directory and spawn arguments ──────────────────────
   // Linux/macOS: create a fresh temp dir and point OBS at it via XDG_CONFIG_HOME.
   // Windows: OBS ignores env var overrides for its config path; use --portable
   // instead, which fixes the config root to <binDir>/../../config.  We derive
-  // that path from OBS_BINARY and delete it in stop() after the tests finish.
-  let tmpBase, obsConfigDir, obsArgs, extraEnv;
+  // obsConfigDir from OBS_BINARY and clean it up in stop() after the tests
+  // finish.  We only delete obsConfigDir (the obs-studio subtree we created),
+  // not the parent config/ directory which may have been pre-existing.
+  let tmpBase, obsConfigDir, cleanupDir, obsArgs, extraEnv;
 
-  if (isWindows && path.isAbsolute(OBS_BINARY)) {
+  if (isWindows) {
     const binDir = path.dirname(OBS_BINARY);
     tmpBase = path.resolve(binDir, '..', '..', 'config');
     obsConfigDir = join(tmpBase, 'obs-studio');
+    // Only remove the obs-studio subtree we wrote, not the pre-existing
+    // portable config root (tmpBase), to avoid data loss on existing installs.
+    cleanupDir = obsConfigDir;
     obsArgs = ['--headless', '--portable'];
     extraEnv = {};
   } else {
     tmpBase = mkdtempSync(join(tmpdir(), 'openclip-obs-test-'));
     obsConfigDir = join(tmpBase, 'obs-studio');
+    // We created the entire tmpBase temp dir — clean up the whole thing.
+    cleanupDir = tmpBase;
     obsArgs = ['--headless'];
     // When no X display is available (e.g. CI without Xvfb), tell Qt to use
     // the offscreen platform so OBS does not abort on startup.
@@ -156,7 +178,7 @@ export async function startOBS({
   obsProcess.on('error', (err) => {
     spawnError = err;
     stopping = true;
-    _rmTemp(tmpBase);
+    _rmTemp(cleanupDir);
   });
 
   // Wait for the WebSocket server to be reachable.
@@ -172,7 +194,7 @@ export async function startOBS({
   } catch (err) {
     stopping = true;
     if (!spawnError) obsProcess.kill('SIGTERM');
-    _rmTemp(tmpBase);
+    _rmTemp(cleanupDir);
     const cause = spawnError || err;
     throw new Error(
       `OBS WebSocket server did not become reachable on port ${wsPort} within ` +
@@ -205,7 +227,7 @@ export async function startOBS({
   } catch (err) {
     stopping = true;
     obsProcess.kill('SIGTERM');
-    _rmTemp(tmpBase);
+    _rmTemp(cleanupDir);
     const authHint = actualWsConfig.auth_required
       ? ` Auth is enabled in the config (auth_required=true); password was read from ${wsConfigPath}.`
       : '';
@@ -237,11 +259,11 @@ export async function startOBS({
         // On Windows, the process may hold file locks briefly after SIGTERM.
         // Wait for exit before attempting directory removal to avoid EPERM.
         if (isWindows) {
-          obsProcess.once('exit', () => _rmTemp(tmpBase));
+          obsProcess.once('exit', () => _rmTemp(cleanupDir));
           return;
         }
       }
-      _rmTemp(tmpBase);
+      _rmTemp(cleanupDir);
     },
   };
 }
