@@ -5,22 +5,25 @@
  * testing.  Each call to startOBS():
  *
  *   1. Finds a free TCP port for the OBS WebSocket server.
- *   2. Creates an isolated, temporary OBS configuration directory so the test
- *      instance never touches the developer's real OBS settings.
- *   3. Spawns `obs --headless` (or the binary set via $OBS_BINARY) with
- *      XDG_CONFIG_HOME pointing at that temporary directory.
+ *   2. Creates an isolated OBS configuration directory so the test instance
+ *      never touches the developer's real OBS settings.
+ *   3. Spawns `obs --headless` (Linux/macOS) or `obs64 --headless --portable`
+ *      (Windows) with the config directory pre-written.
  *   4. Waits until the WebSocket server is accepting TCP connections.
  *   5. Performs a full OBS WebSocket protocol handshake to confirm the server
  *      is genuinely the OBS WebSocket plugin (not just a stray TCP listener).
  *   6. Returns an object with the wsSettings and a stop() function that kills
- *      the process and removes the temp directory.
+ *      the process and removes the config directory.
  *
  * Enabling the OBS WebSocket server in headless mode
  * ──────────────────────────────────────────────────
  * OBS Studio 28+ bundles the obs-websocket plugin.  In headless mode the
  * plugin reads its configuration from:
  *
- *   $XDG_CONFIG_HOME/obs-studio/plugin_config/obs-websocket/config.json
+ *   Linux/macOS: $XDG_CONFIG_HOME/obs-studio/plugin_config/obs-websocket/config.json
+ *   Windows:     <obs-install>/config/obs-studio/plugin_config/obs-websocket/config.json
+ *                (via the --portable flag, which fixes the config root to
+ *                 <obs-install>/config/ relative to the binary)
  *
  * startOBS() writes that file with server_enabled=true and a randomly chosen
  * port before spawning OBS, so the WebSocket server starts automatically.
@@ -28,18 +31,34 @@
  * ignored or the plugin is missing, startOBS() throws with an actionable
  * diagnostic rather than silently passing or waiting for the full timeout.
  *
+ * Windows note: OBS ignores XDG_CONFIG_HOME and APPDATA env var overrides
+ * because it resolves its config path via Win32 registry APIs.  --portable
+ * is the only reliable way to use an isolated config on Windows.  The
+ * portable config root is always <binDir>/../../config, so we derive it from
+ * the OBS_BINARY path and clean it up in stop().  On Windows, set OBS_BINARY
+ * to the full path of obs64.exe; the repo-local install is auto-detected.
+ *
  * isOBSAvailable() returns false when OBS is not installed, allowing test
  * suites to call describe.skipIf(!isOBSAvailable()) so they are silently
  * skipped in environments without OBS (e.g. local developer machines).
  */
 
 import { spawnSync, spawn } from 'child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs';
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
-import { join } from 'path';
+import path, { join } from 'path';
+import { fileURLToPath } from 'url';
 import net from 'net';
 
-const OBS_BINARY = process.env.OBS_BINARY || 'obs';
+const isWindows = process.platform === 'win32';
+
+// On Windows, auto-detect the repo-local OBS install (obs-studio/ in the repo
+// root, four directories above this file: <repo>/electron-app/tests/integration/obs/).
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const _repoLocalObs = path.resolve(__dirname, '../../../../obs-studio/bin/64bit/obs64.exe');
+
+const OBS_BINARY = process.env.OBS_BINARY
+  || (isWindows && existsSync(_repoLocalObs) ? _repoLocalObs : isWindows ? 'obs64' : 'obs');
 
 // ------------------------------------------------------------------
 // Public helpers
@@ -77,29 +96,47 @@ export async function startOBS({
   startupTimeoutMs = 45_000,
 } = {}) {
   const wsPort = await findFreePort();
-  const tmpBase = mkdtempSync(join(tmpdir(), 'openclip-obs-test-'));
-  const obsConfigDir = join(tmpBase, 'obs-studio');
+
+  // ── Determine config directory and spawn arguments ──────────────────────
+  // Linux/macOS: create a fresh temp dir and point OBS at it via XDG_CONFIG_HOME.
+  // Windows: OBS ignores env var overrides for its config path; use --portable
+  // instead, which fixes the config root to <binDir>/../../config.  We derive
+  // that path from OBS_BINARY and delete it in stop() after the tests finish.
+  let tmpBase, obsConfigDir, obsArgs, extraEnv;
+
+  if (isWindows && path.isAbsolute(OBS_BINARY)) {
+    const binDir = path.dirname(OBS_BINARY);
+    tmpBase = path.resolve(binDir, '..', '..', 'config');
+    obsConfigDir = join(tmpBase, 'obs-studio');
+    obsArgs = ['--headless', '--portable'];
+    extraEnv = {};
+  } else {
+    tmpBase = mkdtempSync(join(tmpdir(), 'openclip-obs-test-'));
+    obsConfigDir = join(tmpBase, 'obs-studio');
+    obsArgs = ['--headless'];
+    // When no X display is available (e.g. CI without Xvfb), tell Qt to use
+    // the offscreen platform so OBS does not abort on startup.
+    extraEnv = process.env.DISPLAY ? {} : { QT_QPA_PLATFORM: 'offscreen' };
+  }
 
   _writeOBSConfig(obsConfigDir, wsPort, initialScenes);
 
   let stopping = false;
   let exited = false;
 
-  // When no X display is available (e.g. CI without Xvfb), tell Qt to use the
-  // offscreen platform so OBS does not abort on startup trying to connect to a
-  // display server.  When DISPLAY is already set (e.g. by xvfb-run), we leave
-  // QT_QPA_PLATFORM alone so Qt can use the real virtual display.
-  const extraEnv = process.env.DISPLAY
-    ? {}
-    : { QT_QPA_PLATFORM: 'offscreen' };
-
-  const obsProcess = spawn(OBS_BINARY, ['--headless'], {
+  const obsProcess = spawn(OBS_BINARY, obsArgs, {
     env: {
       ...process.env,
       ...extraEnv,
-      // Override the XDG config home so OBS uses our isolated temp directory.
-      XDG_CONFIG_HOME: tmpBase,
+      // Override the XDG config home on Linux/macOS so OBS uses our isolated
+      // temp directory.  On Windows, --portable handles config isolation.
+      ...(isWindows ? {} : { XDG_CONFIG_HOME: tmpBase }),
     },
+    // On Windows, OBS resolves its data files (locale, themes, plugins) relative
+    // to its working directory.  It looks for <cwd>/../../data/obs-studio when
+    // the cwd is the bin/64bit/ directory inside the install tree.  Without this,
+    // OBS fails with "Failed to load locale" and exits immediately.
+    ...(isWindows ? { cwd: path.dirname(OBS_BINARY) } : {}),
     // Suppress OBS output unless the caller sets OBS_DEBUG=1.
     stdio: process.env.OBS_DEBUG ? 'inherit' : 'ignore',
     detached: false,
@@ -141,6 +178,7 @@ export async function startOBS({
       `OBS WebSocket server did not become reachable on port ${wsPort} within ` +
         `${startupTimeoutMs}ms. Make sure OBS ${OBS_BINARY} supports --headless ` +
         `(OBS 28+) and that the obs-websocket plugin is installed.\n` +
+        (isWindows ? 'On Windows, set OBS_BINARY to the full path of obs64.exe.\n' : '') +
         `Original error: ${cause.message}`
     );
   }
@@ -196,6 +234,12 @@ export async function startOBS({
       stopping = true;
       if (!exited) {
         obsProcess.kill('SIGTERM');
+        // On Windows, the process may hold file locks briefly after SIGTERM.
+        // Wait for exit before attempting directory removal to avoid EPERM.
+        if (isWindows) {
+          obsProcess.once('exit', () => _rmTemp(tmpBase));
+          return;
+        }
       }
       _rmTemp(tmpBase);
     },

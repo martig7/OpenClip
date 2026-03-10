@@ -30,4 +30,7 @@ nul
 /electron-app/node_modules/
 /electron-app/dist/
 
+# OBS Studio local install (for integration testing on Windows)
+/obs-studio/
+
 /DEPRECATED/
