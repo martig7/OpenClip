@@ -32,6 +32,14 @@ export async function apiFetch(path, options) {
   return fetch(url, options);
 }
 
+export async function apiPost(path, data) {
+  return apiFetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+}
+
 // Synchronous getter for video src URLs (for <video> elements)
 // Falls back to relative path if port not yet known
 export function getBase() {
