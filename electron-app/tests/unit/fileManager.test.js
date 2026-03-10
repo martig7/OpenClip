@@ -43,11 +43,13 @@ describe('getWeekFolder', () => {
     const src = path.join(obsDir, 'video.mp4')
     fs.writeFileSync(src, Buffer.alloc(1024))
 
-    // Mock execFileSync to succeed (ffprobe probe call) and execFile for ffmpeg
+    // Mock execFile (used via execFileAsync/promisify) to succeed (ffprobe probe call)
     const cp = await import('child_process')
-    cp.execFileSync.mockReturnValue('{"streams":[]}')
+    cp.execFile.mockImplementation((bin, args, opts, callback) => {
+      callback(null, { stdout: '{"streams":[]}', stderr: '' })
+    })
 
-    organizeRecordings(store, 'TestGame')
+    await organizeRecordings(store, 'TestGame')
 
     // Directory should exist - name contains "Week of"
     const entries = fs.readdirSync(destDir)
@@ -82,7 +84,7 @@ describe('organizeRecordings', () => {
     const old = new Date(Date.now() - 11 * 60 * 1000)
     fs.utimesSync(src, old, old)
 
-    organizeRecordings(store, 'Game')
+    await organizeRecordings(store, 'Game')
 
     // File should still be in obsDir
     expect(fs.existsSync(src)).toBe(true)
@@ -94,7 +96,7 @@ describe('organizeRecordings', () => {
     const src = path.join(obsDir, 'video.mp4')
     fs.writeFileSync(src, Buffer.alloc(1024))
 
-    organizeRecordings(store, 'MyGame')
+    await organizeRecordings(store, 'MyGame')
 
     const destEntries = fs.readdirSync(destDir)
     expect(destEntries).toHaveLength(1)
@@ -108,16 +110,19 @@ describe('organizeRecordings', () => {
     const src = path.join(obsDir, 'video.mkv')
     fs.writeFileSync(src, Buffer.alloc(1024))
 
-    // ffprobe returns empty streams; ffmpeg execFileSync call creates the dest file
-    cp.execFileSync.mockImplementation((bin, args) => {
-      if (args.includes('-show_streams')) return '{"streams":[]}'
-      // ffmpeg call — create the output file
-      const outPath = args[args.length - 1]
-      fs.writeFileSync(outPath, Buffer.alloc(512))
-      return ''
+    // execFile is used via promisify (execFileAsync); mock its callback-style interface
+    cp.execFile.mockImplementation((bin, args, opts, callback) => {
+      if (args.includes('-show_streams')) {
+        callback(null, { stdout: '{"streams":[]}', stderr: '' })
+      } else {
+        // ffmpeg call — create the output file
+        const outPath = args[args.length - 1]
+        fs.writeFileSync(outPath, Buffer.alloc(512))
+        callback(null, { stdout: '', stderr: '' })
+      }
     })
 
-    organizeRecordings(store, 'MyGame')
+    await organizeRecordings(store, 'MyGame')
 
     // Original MKV should be gone
     expect(fs.existsSync(src)).toBe(false)
@@ -133,18 +138,19 @@ describe('organizeRecordings', () => {
     const src = path.join(obsDir, 'video.mkv')
     fs.writeFileSync(src, Buffer.alloc(1024))
 
-    cp.execFileSync.mockImplementation((bin, args) => {
+    cp.execFile.mockImplementation((bin, args, opts, callback) => {
       if (args.includes('-show_streams')) {
-        return JSON.stringify({
+        callback(null, { stdout: JSON.stringify({
           streams: [{ tags: { title: 'Game Audio' } }, { tags: { title: 'Discord' } }],
-        })
+        }), stderr: '' })
+      } else {
+        const outPath = args[args.length - 1]
+        fs.writeFileSync(outPath, Buffer.alloc(512))
+        callback(null, { stdout: '', stderr: '' })
       }
-      const outPath = args[args.length - 1]
-      fs.writeFileSync(outPath, Buffer.alloc(512))
-      return ''
     })
 
-    organizeRecordings(store, 'MyGame')
+    await organizeRecordings(store, 'MyGame')
 
     const destEntries = fs.readdirSync(destDir)
     const weekDir = path.join(destDir, destEntries[0])
@@ -161,12 +167,12 @@ describe('organizeRecordings', () => {
     // First file
     const src1 = path.join(obsDir, 'video1.mp4')
     fs.writeFileSync(src1, Buffer.alloc(1024))
-    organizeRecordings(store, 'MyGame')
+    await organizeRecordings(store, 'MyGame')
 
     // Second file
     const src2 = path.join(obsDir, 'video2.mp4')
     fs.writeFileSync(src2, Buffer.alloc(1024))
-    organizeRecordings(store, 'MyGame')
+    await organizeRecordings(store, 'MyGame')
 
     const destEntries = fs.readdirSync(destDir)
     const weekDir = path.join(destDir, destEntries[0])
@@ -189,6 +195,6 @@ describe('organizeRecordings', () => {
     fs.writeFileSync(src, Buffer.alloc(1024))
 
     // Should not throw even with empty markers
-    expect(() => organizeRecordings(store, 'MyGame')).not.toThrow()
+    await organizeRecordings(store, 'MyGame')
   })
 })

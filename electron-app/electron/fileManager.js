@@ -1,8 +1,11 @@
 const fs = require('fs');
 const path = require('path');
-const { execSync, execFileSync, exec } = require('child_process');
+const { execSync, execFile, exec } = require('child_process');
+const { promisify } = require('util');
 const { isVideoFile, CODEC_MAP, FFMPEG_PATH, FFPROBE_PATH } = require('./constants');
 const service = require('./recordingService');
+
+const execFileAsync = promisify(execFile);
 
 function getWeekFolder(date) {
   const d = new Date(date);
@@ -13,7 +16,7 @@ function getWeekFolder(date) {
   return `Week of ${months[monday.getMonth()]} ${monday.getDate()} ${monday.getFullYear()}`;
 }
 
-function organizeRecordings(store, gameName) {
+async function organizeRecordings(store, gameName) {
   const obsPath = store.get('settings.obsRecordingPath');
   const destPath = store.get('settings.destinationPath');
   if (!obsPath || !destPath || !fs.existsSync(obsPath)) return;
@@ -46,7 +49,7 @@ function organizeRecordings(store, gameName) {
         // Probe source for audio stream titles before remux (MKV titles don't survive MP4 remux)
         let trackNames = null;
         try {
-          const probeOut = execFileSync(FFPROBE_PATH, [
+          const { stdout: probeOut } = await execFileAsync(FFPROBE_PATH, [
             '-v', 'error', '-show_streams', '-select_streams', 'a', '-of', 'json', src,
           ], { encoding: 'utf-8', timeout: 10000 });
           const streams = JSON.parse(probeOut).streams || [];
@@ -54,7 +57,7 @@ function organizeRecordings(store, gameName) {
           if (names.some(Boolean)) trackNames = names;
         } catch {}
 
-        execFileSync(FFMPEG_PATH, [
+        await execFileAsync(FFMPEG_PATH, [
           '-i', src, '-map', '0', '-c', 'copy', '-movflags', '+faststart', '-y', dest,
         ], { timeout: 120000 });
 
