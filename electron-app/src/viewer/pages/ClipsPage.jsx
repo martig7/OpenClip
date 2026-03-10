@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { Folder, Calendar, HardDrive, Play, FolderOpen, Trash2, Film, Check, X } from 'lucide-react'
 import Sidebar from '../components/Sidebar'
 import Modal from '../components/Modal'
-import { apiFetch, getBase } from '../apiBase'
+import { apiFetch, apiPost, getBase } from '../apiBase'
 
 function ClipsPage() {
   const [clips, setClips] = useState([])
@@ -18,37 +18,34 @@ function ClipsPage() {
       const response = await apiFetch('/api/clips')
       const data = await response.json()
       setClips(data)
-
-      // Auto-select clip from URL parameter
-      const pathParam = searchParams.get('path')
-      if (pathParam && data.length > 0) {
-        const clip = data.find(c => c.path === pathParam)
-        if (clip) {
-          setSelectedClip(clip)
-          // Clear the URL parameter
-          setSearchParams({})
-        }
-      }
+      return data
     } catch (error) {
       console.error('Failed to fetch clips:', error)
     } finally {
       setLoading(false)
     }
-  }, [searchParams, setSearchParams])
+  }, [])
+
+  const initialPathParam = searchParams.get('path')
 
   useEffect(() => {
-    fetchClips()
-  }, [fetchClips])
+    fetchClips().then(data => {
+      if (!data) return
+      if (initialPathParam) {
+        const clip = data.find(c => c.path === initialPathParam)
+        if (clip) {
+          setSelectedClip(clip)
+          setSearchParams({})
+        }
+      }
+    })
+  }, [fetchClips, initialPathParam, setSearchParams])
 
   const handleDelete = useCallback(async () => {
     if (!selectedClip) return
 
     try {
-      const response = await apiFetch('/api/clips/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: selectedClip.path })
-      })
+      const response = await apiPost('/api/clips/delete', { path: selectedClip.path })
 
       if (response.ok) {
         setSelectedClip(null)
@@ -109,21 +106,13 @@ function ClipsPage() {
               <div className="action-buttons">
                 <button
                   className="btn btn-secondary"
-                  onClick={() => apiFetch('/api/open-external', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ path: selectedClip.path })
-                  })}
+                  onClick={() => apiPost('/api/open-external', { path: selectedClip.path })}
                 >
                   <Play size={13} /> Open in Player
                 </button>
                 <button
                   className="btn btn-secondary"
-                  onClick={() => apiFetch('/api/show-in-explorer', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ path: selectedClip.path })
-                  })}
+                  onClick={() => apiPost('/api/show-in-explorer', { path: selectedClip.path })}
                 >
                   <FolderOpen size={13} /> Show in Explorer
                 </button>
