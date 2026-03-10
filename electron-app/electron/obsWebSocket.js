@@ -214,11 +214,41 @@ async function createSceneFromTemplate(wsSettings, newSceneName, templateSceneNa
 }
 
 /**
+ * Fit a scene item to the OBS canvas using inner scaling bounds.
+ * Non-fatal: silently skips if sceneItemId is missing or OBS calls fail.
+ *
+ * @param {object} obs - Connected OBS WebSocket instance
+ * @param {string} sceneName - Scene that contains the item
+ * @param {number|undefined} sceneItemId - ID returned by CreateInput
+ */
+async function fitSourceToCanvas(obs, sceneName, sceneItemId) {
+  if (sceneItemId == null) return;
+  try {
+    const { baseWidth, baseHeight } = await obs.call('GetVideoSettings');
+    await obs.call('SetSceneItemTransform', {
+      sceneName,
+      sceneItemId,
+      sceneItemTransform: {
+        positionX: 0,
+        positionY: 0,
+        alignment: 5, // OBS_ALIGN_LEFT | OBS_ALIGN_TOP
+        boundsType: 'OBS_BOUNDS_SCALE_INNER',
+        boundsAlignment: 0,
+        boundsWidth: baseWidth,
+        boundsHeight: baseHeight,
+      },
+    });
+  } catch {
+    // non-fatal: source is still added; transform falls back to OBS default
+  }
+}
+
+/**
  * Create a new OBS scene from scratch with optional window capture and audio sources.
  *
  * Steps:
  *  1. Create the new scene
- *  2. Optionally add a game_capture (or window_capture fallback) source
+ *  2. Optionally add a game_capture or window_capture source, then fit it to the canvas
  *  3. Optionally add desktop audio (wasapi_output_capture) source
  *  4. Optionally add microphone (wasapi_input_capture) source
  *
@@ -226,7 +256,13 @@ async function createSceneFromTemplate(wsSettings, newSceneName, templateSceneNa
  * @param {string} sceneName - Name for the new scene
  * @param {object} [options]
  * @param {string}  [options.windowTitle]     - Window title to use for game/window capture
+ * @param {string}  [options.exe]             - Executable filename (e.g. 'game.exe') for the OBS window string
+ * @param {string}  [options.windowClass]     - Window class name for the OBS window string
  * @param {boolean} [options.addWindowCapture] - Whether to add a window/game capture source
+ * @param {'game_capture'|'window_capture'} [options.captureKind='game_capture']
+ *        Controls which OBS source kind to use for the video capture:
+ *        'game_capture' uses game_capture (Windows-only, best for full-screen games);
+ *        'window_capture' uses window_capture (cross-platform).
  * @param {boolean} [options.addDesktopAudio]  - Whether to add a desktop audio source
  * @param {boolean} [options.addMicAudio]      - Whether to add a microphone audio source
  * @returns {Promise<{ success: boolean, message: string }>}
@@ -236,7 +272,7 @@ async function createSceneFromScratch(wsSettings, sceneName, options = {}) {
     return { success: false, message: 'Scene name is required' };
   }
   const trimmedName = sceneName.trim();
-  const { windowTitle, addWindowCapture, addDesktopAudio, addMicAudio } = options;
+  const { windowTitle, exe, windowClass, addWindowCapture, addDesktopAudio, addMicAudio, captureKind = 'game_capture' } = options;
 
   try {
     return await withOBSConnection(wsSettings, async (obs) => {
@@ -256,35 +292,45 @@ async function createSceneFromScratch(wsSettings, sceneName, options = {}) {
       // Add game/window capture source
       if (addWindowCapture && windowTitle && windowTitle.trim()) {
         const trimmedWindow = windowTitle.trim();
-        // Try game_capture first (Windows-only, best for games); fall back to window_capture
-        let captureAdded = false;
-        try {
-          await obs.call('CreateInput', {
-            sceneName: trimmedName,
-            inputName: `${trimmedName} - Game Capture`,
-            inputKind: 'game_capture',
-            inputSettings: {
-              capture_mode: 'window',
-              window: trimmedWindow,
-            },
-          });
-          addedSources.push('game capture');
-          captureAdded = true;
-        } catch {
-          // game_capture unavailable (Linux/macOS); try window_capture
-        }
+        // Build OBS window string in canonical Title:Class:Exe format.
+        // All three capture kinds (game_capture, window_capture, wasapi_process_output_capture)
+        // share the same parser in OBS window-helpers.c: split on ':', index 0=Title, 1=Class, 2=Exe.
+        // The bracketed [exe]:Class:Title format is only the UI display label — never a stored value.
+        const windowStr = (exe && windowClass)
+          ? `${trimmedWindow}:${windowClass}:${exe}`
+          : trimmedWindow;
 
-        if (!captureAdded) {
+        // captureKind selects the OBS source kind:
+        //   'game_capture'  – Windows-only, best for full-screen games
+        //   'window_capture'– cross-platform alternative
+        if (captureKind === 'window_capture') {
           try {
-            await obs.call('CreateInput', {
+            const { sceneItemId } = (await obs.call('CreateInput', {
               sceneName: trimmedName,
               inputName: `${trimmedName} - Window Capture`,
               inputKind: 'window_capture',
-              inputSettings: { window: trimmedWindow },
-            });
+              inputSettings: { window: windowStr },
+            })) ?? {};
             addedSources.push('window capture');
+            await fitSourceToCanvas(obs, trimmedName, sceneItemId);
           } catch (err) {
             sourceErrors.push(`window capture: ${err.message}`);
+          }
+        } else {
+          try {
+            const { sceneItemId } = (await obs.call('CreateInput', {
+              sceneName: trimmedName,
+              inputName: `${trimmedName} - Game Capture`,
+              inputKind: 'game_capture',
+              inputSettings: {
+                capture_mode: 'window',
+                window: windowStr,
+              },
+            })) ?? {};
+            addedSources.push('game capture');
+            await fitSourceToCanvas(obs, trimmedName, sceneItemId);
+          } catch (err) {
+            sourceErrors.push(`game capture: ${err.message}`);
           }
         }
       }

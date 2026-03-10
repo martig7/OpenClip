@@ -92,11 +92,13 @@ async function buildAvailableAudioInputs() {
     api.getVisibleWindows().catch(() => []),
   ]);
 
-  // Build process name → window title map for constructing the OBS window selector
+  // Build process name → window title/class maps for constructing the OBS window selector
   const windowTitleMap = new Map();
+  const windowClassMap = new Map();
   for (const w of (windows || [])) {
     const proc = (w.process || '').toLowerCase();
     if (!windowTitleMap.has(proc)) windowTitleMap.set(proc, w.title || '');
+    if (!windowClassMap.has(proc)) windowClassMap.set(proc, w.windowClass || '');
   }
 
   const combined = [];
@@ -126,14 +128,16 @@ async function buildAvailableAudioInputs() {
   for (const app of (runningApps || [])) {
     if (!obsAppNames.has(app.name) && !obsNames.has(app.name)) {
       const windowTitle = windowTitleMap.get(app.name.toLowerCase()) || '';
-      // Standardised OBS window string: [exe.exe]:ClassName:WindowTitle
+      const windowClass = windowClassMap.get(app.name.toLowerCase()) || '';
+      // OBS window string canonical format: Title:ClassName:Exe.exe
+      // (matches the Title:Class:Exe order used by OBS window-helpers.c for all capture kinds)
       combined.push({
         name: app.name,
         kind: 'wasapi_process_output_capture',
         source: 'app',
         exe: app.exe,
         hasWindow: app.hasWindow,
-        inputSettings: { window: `[${app.exe}]::${windowTitle}` },
+        inputSettings: { window: `${windowTitle}:${windowClass}:${app.exe}` },
       });
     }
   }
@@ -152,6 +156,7 @@ export default function GamesPage() {
   const [showWindowPicker, setShowWindowPicker] = useState(false);
   const [autoCreateScene, setAutoCreateScene] = useState(false);
   const [createMode, setCreateMode] = useState('scratch'); // 'scratch' | 'template'
+  const [capturePref, setCapturePref] = useState('game_capture'); // 'game_capture' | 'window_capture'
   const [obsScenes, setObsScenes] = useState([]);
   const [loadingScenes, setLoadingScenes] = useState(false);
   const [scenesError, setScenesError] = useState(null);
@@ -312,7 +317,10 @@ export default function GamesPage() {
         if (createMode === 'scratch') {
           result = await api.createOBSSceneFromScratch(newGame.scene, {
             windowTitle: newGame.selector,
+            exe: newGame.exe,
+            windowClass: newGame.windowClass,
             addWindowCapture: true,
+            captureKind: capturePref,
           });
         } else {
           result = await api.createOBSScene(newGame.scene, templateScene || null);
@@ -321,8 +329,49 @@ export default function GamesPage() {
           setSceneCreateStatus({ type: 'error', message: result.message });
           return;
         }
+
+        // Add all master audio sources to the newly created scene
+        const masterToAdd = masterAudioSources;
+        if (masterToAdd.length > 0) {
+          await Promise.all(masterToAdd.map(source => {
+            if (source.kind === 'magic_game_audio') {
+              const exeGuess = newGame.exe || (newGame.selector.toLowerCase().endsWith('.exe') ? newGame.selector : `${newGame.selector}.exe`);
+              const windowClassGuess = newGame.windowClass || newGame.selector;
+              const titleGuess = newGame.selector;
+              return api.addAudioSourceToScenes(
+                [newGame.scene],
+                'wasapi_process_output_capture',
+                `Game Audio (${newGame.name})`,
+                { window: `${titleGuess}:${windowClassGuess}:${exeGuess}`, window_match_priority: newGame.windowMatchPriority ?? 0 }
+              ).catch(() => {});
+            }
+            return api.addAudioSourceToScenes(
+              [newGame.scene],
+              source.kind,
+              source.name,
+              source.inputSettings || {}
+            ).catch(() => {});
+          }));
+
+          // Apply master-list track routing to each newly added source.
+          // Game Audio (GameName) is always a fresh input — it must be explicitly routed;
+          // other sources are global OBS inputs whose routing is also applied for consistency.
+          await Promise.all(masterToAdd.map(source => {
+            const masterKey = source.kind === 'magic_game_audio' ? 'Game Audio' : source.name;
+            const tracks = trackData[masterKey];
+            if (!tracks || Object.keys(tracks).length === 0) return Promise.resolve();
+            const obsInputName = source.kind === 'magic_game_audio'
+              ? `Game Audio (${newGame.name})`
+              : source.name;
+            return api.setInputAudioTracks(obsInputName, tracks).catch(() => {});
+          }));
+        }
+
         // Show success as a toast after the modal closes so the user sees it
-        showToast(result.message || `Scene "${newGame.scene}" created in OBS`);
+        const sourceNote = masterToAdd.length > 0
+          ? ` + ${masterToAdd.length} master source${masterToAdd.length > 1 ? 's' : ''}`
+          : '';
+        showToast((result.message || `Scene "${newGame.scene}" created in OBS`) + sourceNote);
       } catch (err) {
         setSceneCreateStatus({ type: 'error', message: err.message || 'Failed to create OBS scene' });
         return;
@@ -398,6 +447,7 @@ export default function GamesPage() {
     setNewGame({ name: '', selector: '', exe: '', windowClass: '', windowMatchPriority: 0, scene: '', icon_path: '' });
     setAutoCreateScene(false);
     setCreateMode('scratch');
+    setCapturePref('game_capture');
     setTemplateScene('');
     setObsScenes([]);
     setScenesError(null);
@@ -461,7 +511,7 @@ export default function GamesPage() {
                 [game.scene],
                 'wasapi_process_output_capture',
                 `Game Audio (${game.name})`,
-                { window: `[${exeGuess}]:${windowClassGuess}:${titleGuess}`, window_match_priority: game.windowMatchPriority !== undefined ? game.windowMatchPriority : 0 }
+                { window: `${titleGuess}:${windowClassGuess}:${exeGuess}`, window_match_priority: game.windowMatchPriority !== undefined ? game.windowMatchPriority : 0 }
               ).catch(() => {});
             });
           await Promise.all(addPromises);
@@ -1084,10 +1134,13 @@ export default function GamesPage() {
 
                     {createMode === 'scratch' && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {/* Capture type header row */}
                         <div style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
                           <Check size={14} style={{ color: 'var(--success)', flexShrink: 0 }} />
                           <span>
-                            <span style={{ fontWeight: 500 }}>Window / game capture</span>
+                            <span style={{ fontWeight: 500 }}>
+                              {capturePref === 'window_capture' ? 'Window Capture' : 'Game Capture'}
+                            </span>
                             {newGame.selector && (
                               <span style={{ color: 'var(--text-muted)', marginLeft: 4 }}>
                                 — <em>{newGame.selector}</em>
@@ -1095,6 +1148,29 @@ export default function GamesPage() {
                             )}
                           </span>
                         </div>
+
+                        {/* Capture kind picker */}
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          {[
+                            { key: 'game_capture', label: 'Game Capture' },
+                            { key: 'window_capture', label: 'Window Capture' },
+                          ].map(({ key, label }) => (
+                            <button
+                              key={key}
+                              className={`btn btn-sm ${capturePref === key ? 'btn-primary' : 'btn-secondary'}`}
+                              style={{ flex: 1, fontSize: 11 }}
+                              onClick={() => setCapturePref(key)}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          {capturePref === 'window_capture'
+                            ? 'Cross-platform. Use if Game Capture doesn’t work for this title.'
+                            : 'Best for games on Windows. Fits source to canvas automatically.'}
+                        </span>
+
                         <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                           Audio sources are managed in the <strong>Scene Audio Sources</strong> card on the main Games page.
                         </span>
@@ -1484,6 +1560,10 @@ function EditGameModal({
   // State for 'add from master' dropdown inside the modal
   const [addFromMaster, setAddFromMaster] = useState('');
 
+  // ── Feature 4: video capture source picker ────────────────────────────────
+  // 'game_capture' | 'window_capture'
+  const [editCapturePref, setEditCapturePref] = useState('game_capture');
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 560 }}>
@@ -1619,6 +1699,61 @@ function EditGameModal({
           )}
         </div>
 
+        {/* Video Capture Source */}
+        {game.scene && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Gamepad2 size={13} />
+              Video Capture Source
+            </div>
+            <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+              {[
+                { key: 'game_capture', label: 'Game Capture' },
+                { key: 'window_capture', label: 'Window Capture' },
+              ].map(({ key, label }) => (
+                <button
+                  key={key}
+                  className={`btn btn-sm ${editCapturePref === key ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ flex: 1, fontSize: 11 }}
+                  onClick={() => setEditCapturePref(key)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', flex: 1 }}>
+                {editCapturePref === 'game_capture'
+                  ? 'Best for games on Windows. Uses OBS Game Capture.'
+                  : 'Cross-platform. Uses OBS Window Capture.'}
+              </span>
+              <button
+                className="btn btn-secondary btn-sm"
+                style={{ fontSize: 11, whiteSpace: 'nowrap' }}
+                onClick={() => {
+                  const exeGuess = game.exe || (game.selector.toLowerCase().endsWith('.exe') ? game.selector : `${game.selector}.exe`);
+                  const windowClassGuess = game.windowClass || game.selector;
+                  const titleGuess = game.selector;
+                  const windowStr = (game.exe && game.windowClass)
+                    ? `${titleGuess}:${windowClassGuess}:${exeGuess}`
+                    : titleGuess;
+                  const sourceSuffix = editCapturePref === 'game_capture' ? 'Game Capture' : 'Window Capture';
+                  const inputSettings = editCapturePref === 'game_capture'
+                    ? { capture_mode: 'window', window: windowStr }
+                    : { window: windowStr };
+                  onAddSourceToScene(game.scene, {
+                    name: `${game.scene} - ${sourceSuffix}`,
+                    kind: editCapturePref,
+                    inputSettings,
+                  });
+                }}
+              >
+                <Plus size={12} /> Add to scene
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Audio Sources section */}
         <div style={{ marginTop: 4, marginBottom: 16 }}>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1695,7 +1830,7 @@ function EditGameModal({
                                           const exeGuess = game.exe || (game.selector.toLowerCase().endsWith('.exe') ? game.selector : `${game.selector}.exe`);
                                           const windowClassGuess = game.windowClass || game.selector;
                                           const titleGuess = game.selector;
-                                          onAddSourceToScene(game.scene, { name: `Game Audio (${game.name})`, kind: 'wasapi_process_output_capture', inputSettings: { window: `[${exeGuess}]:${windowClassGuess}:${titleGuess}`, window_match_priority: game.windowMatchPriority !== undefined ? game.windowMatchPriority : 0 } });
+                                          onAddSourceToScene(game.scene, { name: `Game Audio (${game.name})`, kind: 'wasapi_process_output_capture', inputSettings: { window: `${titleGuess}:${windowClassGuess}:${exeGuess}`, window_match_priority: game.windowMatchPriority !== undefined ? game.windowMatchPriority : 0 } });
                                         } else {
                                           onAddSourceToScene(game.scene, { name: entry.name, kind: entry.kind, inputSettings: entry.inputSettings || {} });
                                         }
@@ -1907,7 +2042,7 @@ function EditGameModal({
                           const exeGuess = game.exe || (game.selector.toLowerCase().endsWith('.exe') ? game.selector : `${game.selector}.exe`);
                           const windowClassGuess = game.windowClass || game.selector;
                           const titleGuess = game.selector;
-                          onAddSourceToScene(game.scene, { name: `Game Audio (${game.name})`, kind: 'wasapi_process_output_capture', inputSettings: { window: `[${exeGuess}]:${windowClassGuess}:${titleGuess}`, window_match_priority: game.windowMatchPriority !== undefined ? game.windowMatchPriority : 0 } });
+                          onAddSourceToScene(game.scene, { name: `Game Audio (${game.name})`, kind: 'wasapi_process_output_capture', inputSettings: { window: `${titleGuess}:${windowClassGuess}:${exeGuess}`, window_match_priority: game.windowMatchPriority !== undefined ? game.windowMatchPriority : 0 } });
                         } else {
                           onAddSourceToScene(game.scene, { name: src.name, kind: src.kind, inputSettings: src.inputSettings || {} });
                         }
