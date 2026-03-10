@@ -1,7 +1,5 @@
 import { vi } from 'vitest'
 import { createRequire } from 'module'
-import os from 'os'
-import path from 'path'
 
 // ─── Electron mock ──────────────────────────────────────────────────────────
 // Inject directly into Node's CJS require cache so that CJS backend files
@@ -10,31 +8,11 @@ import path from 'path'
 
 const _req = createRequire(import.meta.url)
 const _electronPath = _req.resolve('electron')
-const _base = path.join(os.tmpdir(), 'openclip-test', 'userData')
 
-const _electronMock = {
-  app: {
-    getPath: (key) => {
-      const map = {
-        userData: _base,
-        appData: path.join(os.tmpdir(), 'openclip-test', 'appData'),
-        temp: path.join(os.tmpdir(), 'openclip-test', 'temp'),
-      }
-      return map[key] ?? _base
-    },
-    isPackaged: false,
-  },
-  shell: {
-    openPath: () => Promise.resolve(''),
-    showItemInFolder: () => {},
-  },
-  ipcMain: { handle: () => {} },
-  ipcRenderer: {
-    invoke: () => Promise.resolve(),
-    on: () => {},
-    removeListener: () => {},
-  },
-}
+// Load the single canonical mock from __mocks__/electron.js
+// Path is relative to this file (electron-app/tests/setup.js):
+// '../' goes to electron-app/, then '__mocks__/electron.js' is the target.
+const _electronMock = _req('../__mocks__/electron.js')
 
 _req.cache[_electronPath] = {
   id: _electronPath,
