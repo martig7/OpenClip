@@ -54,8 +54,62 @@ export default function GamesPage() {
   // Edit game modal
   const [editGameModal, setEditGameModal] = useState(null); // { game, sceneAudioSources, loading }
 
+  // Track parity and labels
+  const [trackLabels, setTrackLabels] = useState(['Track 1', 'Track 2', 'Track 3', 'Track 4', 'Track 5', 'Track 6']);
+  const [showTrackEditor, setShowTrackEditor] = useState(false);
+  const [tempTrackLabels, setTempTrackLabels] = useState([]);
+  const [savingTrackLabels, setSavingTrackLabels] = useState(false);
+  const [trackData, setTrackData] = useState({});
+  const [trackLoading, setTrackLoading] = useState({}); // { [inputName]: bool }
+
+  // Load track info whenever scene audio sources or master audio sources change
+  useEffect(() => {
+    const allInputNames = new Set([
+      ...(editGameModal?.sceneAudioSources || []).map(s => s.inputName),
+      ...masterAudioSources.map(s => s.name)
+    ]);
+    const namesArray = Array.from(allInputNames);
+    if (namesArray.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      const results = await Promise.all(
+        namesArray.map(name =>
+          api.getInputAudioTracks(name)
+            .then(tracks => ({ name, tracks }))
+            .catch(() => ({ name, tracks: {} }))
+        )
+      );
+      if (cancelled) return;
+      setTrackData(prev => {
+        const next = { ...prev };
+        for (const { name, tracks } of results) next[name] = tracks;
+        return next;
+      });
+    })();
+    return () => { cancelled = true; };
+  }, [editGameModal?.sceneAudioSources, masterAudioSources]);
+
+  async function toggleTrack(inputName, trackNum) {
+    const current = trackData[inputName] || {};
+    const newVal = !current[String(trackNum)];
+    const updated = { ...current, [String(trackNum)]: newVal };
+    // Optimistic update
+    setTrackData(prev => ({ ...prev, [inputName]: updated }));
+    setTrackLoading(prev => ({ ...prev, [inputName]: true }));
+    try {
+      await api.setInputAudioTracks(inputName, updated);
+    } catch {
+      // Revert on failure
+      setTrackData(prev => ({ ...prev, [inputName]: current }));
+    } finally {
+      setTrackLoading(prev => ({ ...prev, [inputName]: false }));
+    }
+  }
+
   useEffect(() => {
     loadGames();
+    loadTrackLabels();
     api.getWatcherStatus().then(s => {
       setWatcherStatus(s);
       if (s.running) {
@@ -82,6 +136,13 @@ export default function GamesPage() {
 
   async function loadGames() {
     setGames(await api.getGames());
+  }
+
+  async function loadTrackLabels() {
+    try {
+      const labels = await api.getTrackNames();
+      if (labels && labels.length === 6) setTrackLabels(labels);
+    } catch {}
   }
 
   async function loadWatcherStatus() {
@@ -454,7 +515,19 @@ export default function GamesPage() {
         {/* Scene Audio Sources card */}
         <div className="card" style={{ marginTop: 16 }}>
           <div className="card-header">
-            <span className="card-title">Scene Audio Sources</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span className="card-title">Scene Audio Sources</span>
+              <button
+                className="btn btn-secondary btn-sm"
+                style={{ padding: '3px 8px', fontSize: 10 }}
+                onClick={() => {
+                  setTempTrackLabels([...trackLabels]);
+                  setShowTrackEditor(true);
+                }}
+              >
+                <Edit2 size={10} style={{ marginRight: 4 }} /> Edit Track Labels
+              </button>
+            </div>
             <div style={{ position: 'relative' }} ref={audioDropdownRef}>
               <button
                 className="btn btn-primary btn-sm"
@@ -621,28 +694,66 @@ export default function GamesPage() {
             masterAudioSources.map(src => {
               const meta = AUDIO_KIND_META[src.kind];
               const isApplying = applyingSource === src.name;
+              const tracks = trackData[src.name] || {};
+              const isTrackLoading = trackLoading[src.name];
+              
               return (
-                <div key={src.name} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 16px', borderBottom: '1px solid var(--border)' }}>
+                <div key={src.name} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, padding: '9px 16px', borderBottom: '1px solid var(--border)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 'var(--radius-sm)', background: 'var(--bg-tertiary)', flexShrink: 0 }}>
                     <AudioIcon kind={src.kind} size={15} />
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ flex: 1, minWidth: 200 }}>
                     <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{src.name}</div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{meta?.label || src.kind}</div>
                   </div>
-                  {isApplying && (
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <RefreshCw size={11} className="spinning" /> Applying…
-                    </span>
-                  )}
-                  <button
-                    className="btn-icon"
-                    onClick={() => removeMasterSource(src.name)}
-                    title="Remove from master list"
-                    style={{ color: 'var(--danger)', flexShrink: 0 }}
-                  >
-                    <Trash2 size={14} />
-                  </button>
+
+                  {/* Feature 3: Master Track routing chips */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 0' }}>
+                    <span style={{ fontSize: 10, color: 'var(--text-muted)', marginRight: 2 }}>Tracks:</span>
+                    {[1, 2, 3, 4, 5, 6].map(num => {
+                      const active = tracks[String(num)] === true;
+                      return (
+                        <button
+                          key={num}
+                          title={`${trackLabels[num - 1] || `Track ${num}`}: ${active ? 'active' : 'inactive'}`}
+                          disabled={isTrackLoading}
+                          onClick={() => toggleTrack(src.name, num)}
+                          style={{
+                            width: 22, height: 22,
+                            borderRadius: 4,
+                            border: active ? '1.5px solid var(--primary)' : '1.5px solid var(--border-light)',
+                            background: active ? 'var(--primary)' : 'var(--bg-secondary)',
+                            color: active ? '#fff' : 'var(--text-muted)',
+                            fontSize: 10, fontWeight: 600,
+                            cursor: isTrackLoading ? 'default' : 'pointer',
+                            opacity: isTrackLoading ? 0.6 : 1,
+                            transition: 'background 0.12s, border-color 0.12s, color 0.12s',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            lineHeight: 1,
+                          }}
+                        >
+                          {num}
+                        </button>
+                      );
+                    })}
+                    {isTrackLoading && <RefreshCw size={11} className="spinning" style={{ color: 'var(--text-muted)', marginLeft: 2 }} />}
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, minWidth: 70, justifyContent: 'flex-end' }}>
+                    {isApplying && (
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <RefreshCw size={11} className="spinning" /> Applying…
+                      </span>
+                    )}
+                    <button
+                      className="btn-icon"
+                      onClick={() => removeMasterSource(src.name)}
+                      title="Remove from master list"
+                      style={{ color: 'var(--danger)', marginLeft: 8 }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
               );
             })
@@ -937,6 +1048,56 @@ export default function GamesPage() {
         </div>
       )}
 
+      {/* Track Editor Modal */}
+      {showTrackEditor && (
+        <div className="modal-overlay" onClick={() => !savingTrackLabels && setShowTrackEditor(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h2>Edit Track Labels</h2>
+            <p>Customize the names of OBS audio tracks to easily identify them (e.g. "Stream Mix", "VOD Track"). These names will be saved to your OBS profile.</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 16 }}>
+              {[0, 1, 2, 3, 4, 5].map(idx => (
+                <div key={idx} className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Track {idx + 1}</label>
+                  <input
+                    className="form-input"
+                    value={tempTrackLabels[idx] || ''}
+                    placeholder={`Track ${idx + 1}`}
+                    disabled={savingTrackLabels}
+                    onChange={e => {
+                      const newArr = [...tempTrackLabels];
+                      newArr[idx] = e.target.value;
+                      setTempTrackLabels(newArr);
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="modal-actions" style={{ marginTop: 24 }}>
+              <button className="btn btn-secondary" onClick={() => setShowTrackEditor(false)} disabled={savingTrackLabels}>Cancel</button>
+              <button
+                className="btn btn-primary"
+                disabled={savingTrackLabels}
+                onClick={async () => {
+                  setSavingTrackLabels(true);
+                  try {
+                    await api.setTrackNames(tempTrackLabels);
+                    setTrackLabels(tempTrackLabels);
+                    showToast('Track labels updated successfully');
+                    setShowTrackEditor(false);
+                  } catch (err) {
+                    showToast('Failed to save track labels');
+                  } finally {
+                    setSavingTrackLabels(false);
+                  }
+                }}
+              >
+                {savingTrackLabels ? <RefreshCw size={14} className="spinning" /> : 'Save Labels'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Edit Game Modal */}
       {editGameModal && (
         <EditGameModal
@@ -948,6 +1109,15 @@ export default function GamesPage() {
           onClose={() => setEditGameModal(null)}
           onAddSourceToScene={addSourceToScene}
           onRemoveSourceFromScene={removeSourceFromScene}
+          onAddMasterSource={addMasterSource}
+          trackData={trackData}
+          trackLoading={trackLoading}
+          toggleTrack={toggleTrack}
+          trackLabels={trackLabels}
+          setTrackLabels={async (newLabels) => {
+            setTrackLabels(newLabels);
+            await api.setTrackNames(newLabels).catch(() => {});
+          }}
         />
       )}
 
@@ -1074,9 +1244,14 @@ function WatcherStatusCard({ status, onToggle, scriptWarning, onDismissWarning, 
  *  2. Full audio-source add dropdown (same as master list) to add any source directly to this scene.
  *  3. Per-source track-routing toggles (tracks 1–6) via OBS WebSocket.
  */
-function EditGameModal({ modal, masterAudioSources, otherGameScenes, onChangeGame, onSave, onClose, onAddSourceToScene, onRemoveSourceFromScene }) {
+function EditGameModal({
+  modal, masterAudioSources, otherGameScenes, onChangeGame, onSave, onClose,
+  onAddSourceToScene, onRemoveSourceFromScene, onAddMasterSource,
+  trackData, trackLoading, toggleTrack, trackLabels, setTrackLabels
+}) {
   const { game, sceneAudioSources, loading } = modal;
   const masterNames = new Set(masterAudioSources.map(s => s.name));
+
 
   // ── Feature 1: duplicate scene detection ─────────────────────────────────
   const isDuplicateScene = game.scene && otherGameScenes && otherGameScenes.has(game.scene);
@@ -1147,48 +1322,8 @@ function EditGameModal({ modal, masterAudioSources, otherGameScenes, onChangeGam
   }
 
   // ── Feature 3: audio track routing ───────────────────────────────────────
-  // trackData: { [inputName]: { '1': bool, ..., '6': bool } }
-  const [trackData, setTrackData] = useState({});
-  const [trackLoading, setTrackLoading] = useState({}); // { [inputName]: bool }
+  // Passed down as props: trackData, trackLoading, toggleTrack
 
-  // Load track info whenever scene audio sources change
-  useEffect(() => {
-    if (!sceneAudioSources || sceneAudioSources.length === 0) return;
-    let cancelled = false;
-    (async () => {
-      const results = await Promise.all(
-        sceneAudioSources.map(s =>
-          api.getInputAudioTracks(s.inputName)
-            .then(tracks => ({ name: s.inputName, tracks }))
-            .catch(() => ({ name: s.inputName, tracks: {} }))
-        )
-      );
-      if (cancelled) return;
-      setTrackData(prev => {
-        const next = { ...prev };
-        for (const { name, tracks } of results) next[name] = tracks;
-        return next;
-      });
-    })();
-    return () => { cancelled = true; };
-  }, [sceneAudioSources]);
-
-  async function toggleTrack(inputName, trackNum) {
-    const current = trackData[inputName] || {};
-    const newVal = !current[String(trackNum)];
-    const updated = { ...current, [String(trackNum)]: newVal };
-    // Optimistic update
-    setTrackData(prev => ({ ...prev, [inputName]: updated }));
-    setTrackLoading(prev => ({ ...prev, [inputName]: true }));
-    try {
-      await api.setInputAudioTracks(inputName, updated);
-    } catch {
-      // Revert on failure
-      setTrackData(prev => ({ ...prev, [inputName]: current }));
-    } finally {
-      setTrackLoading(prev => ({ ...prev, [inputName]: false }));
-    }
-  }
 
   // State for 'add from master' dropdown inside the modal
   const [addFromMaster, setAddFromMaster] = useState('');
@@ -1402,8 +1537,26 @@ function EditGameModal({ modal, masterAudioSources, otherGameScenes, onChangeGam
                               padding: '1px 6px',
                               flexShrink: 0,
                               whiteSpace: 'nowrap',
+                              display: 'flex', alignItems: 'center', gap: 4,
                             }}>
                               Not in master list
+                              <button
+                                className="btn-icon"
+                                onClick={() => {
+                                  onAddMasterSource({
+                                    name: src.inputName,
+                                    kind: src.inputKind,
+                                  });
+                                }}
+                                title="Add to Master List"
+                                style={{
+                                  color: '#d97706', padding: 0, 
+                                  marginLeft: 2, marginRight: -2, width: 14, height: 14,
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                }}
+                              >
+                                <Plus size={11} strokeWidth={3} />
+                              </button>
                             </span>
                           )}
                           <button
@@ -1424,7 +1577,7 @@ function EditGameModal({ modal, masterAudioSources, otherGameScenes, onChangeGam
                             return (
                               <button
                                 key={num}
-                                title={`Track ${num}: ${active ? 'active' : 'inactive'}`}
+                                title={`${trackLabels?.[num - 1] || `Track ${num}`}: ${active ? 'active' : 'inactive'}`}
                                 disabled={isTrackLoading}
                                 onClick={() => toggleTrack(src.inputName, num)}
                                 style={{

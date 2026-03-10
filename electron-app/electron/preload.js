@@ -51,6 +51,8 @@ contextBridge.exposeInMainWorld('api', {
   getSceneAudioSources: (sceneName) => ipcRenderer.invoke('obs:ws:get-scene-audio-sources', sceneName),
   getInputAudioTracks: (inputName) => ipcRenderer.invoke('obs:ws:get-input-audio-tracks', inputName),
   setInputAudioTracks: (inputName, tracks) => ipcRenderer.invoke('obs:ws:set-input-audio-tracks', inputName, tracks),
+  getTrackNames: () => ipcRenderer.invoke('obs:ws:get-track-names'),
+  setTrackNames: (names) => ipcRenderer.invoke('obs:ws:set-track-names', names),
   listWindowsAudioDevices: () => ipcRenderer.invoke('windows:list-audio-devices'),
   listRunningApps: () => ipcRenderer.invoke('windows:list-running-apps'),
   readOBSWSQR: (imagePath) => ipcRenderer.invoke('obs:ws:read-qr', imagePath),

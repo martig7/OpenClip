@@ -246,7 +246,22 @@ const { setupGameWatcher } = require('./gameWatcher');
 const { setupFileManager } = require('./fileManager');
 const { readOBSRecordingPath } = require('./obsIntegration');
 const { getProfiles, readEncodingSettings, writeEncodingSettings, isOBSRunning } = require('./obsEncoding');
-const { getOBSScenes, createSceneFromTemplate, createSceneFromScratch, addAudioSourceToScenes, removeAudioSourceFromScenes, testOBSConnection, getOBSAudioInputs, getSceneAudioSources, getInputAudioTracks, setInputAudioTracks } = require('./obsWebSocket');
+const {
+  getOBSScenes,
+  checkSceneExists,
+  createSceneFromTemplate,
+  createSceneFromScratch,
+  addAudioSourceToScenes,
+  removeAudioSourceFromScenes,
+  getOBSAudioInputs,
+  removeAudioSourceGlobally,
+  getSceneAudioSources,
+  testOBSConnection,
+  getInputAudioTracks,
+  setInputAudioTracks,
+  getTrackNames,
+  setTrackNames
+} = require('./obsWebSocket');
 const { readOBSWebSocketQR } = require('./qrCodeReader');
 const { startApiServer } = require('./apiServer');
 const { RUNTIME_DIR, STATE_FILE, SCRIPT_MARKER_FILE } = require('./constants');
@@ -554,6 +569,12 @@ ipcMain.handle('obs:ws:get-input-audio-tracks', async (_e, inputName) => {
 ipcMain.handle('obs:ws:set-input-audio-tracks', async (_e, inputName, tracks) => {
   return setInputAudioTracks(store.get('settings').obsWebSocket, inputName, tracks);
 });
+ipcMain.handle('obs:ws:get-track-names', () =>
+  getTrackNames(store.get('settings').obsWebSocket)
+);
+ipcMain.handle('obs:ws:set-track-names', (_e, names) =>
+  setTrackNames(store.get('settings').obsWebSocket, names)
+);
 ipcMain.handle('windows:list-audio-devices', async () => {
   const { exec } = require('child_process');
   // Try Get-AudioDevice (AudioDeviceCmdlets) first; fall back to WMI

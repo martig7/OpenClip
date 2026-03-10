@@ -611,4 +611,54 @@ async function setInputAudioTracks(wsSettings, inputName, tracks) {
   }
 }
 
-module.exports = { getOBSScenes, createSceneFromTemplate, createSceneFromScratch, addAudioSourceToScenes, removeAudioSourceFromScenes, testOBSConnection, getOBSAudioInputs, getSceneAudioSources, getInputAudioTracks, setInputAudioTracks };
+/**
+ * Get the names of tracks 1-6 from the OBS active profile.
+ * Checks both AdvOut and SimpleOutput categories as different streaming modes use different sections.
+ * @returns {Promise<string[]>} Array of 6 track names.
+ */
+async function getTrackNames(wsSettings) {
+  try {
+    return await withOBSConnection(wsSettings, async (obs) => {
+      const names = ['Track 1', 'Track 2', 'Track 3', 'Track 4', 'Track 5', 'Track 6'];
+      for (let i = 1; i <= 6; i++) {
+        const paramName = `Track${i}Name`;
+        try {
+          const adv = await obs.call('GetProfileParameter', { parameterCategory: 'AdvOut', parameterName: paramName });
+          if (adv.parameterValue) { names[i - 1] = adv.parameterValue; continue; }
+        } catch {}
+        try {
+          const simple = await obs.call('GetProfileParameter', { parameterCategory: 'SimpleOutput', parameterName: paramName });
+          if (simple.parameterValue) { names[i - 1] = simple.parameterValue; }
+        } catch {}
+      }
+      return names;
+    });
+  } catch (err) {
+    console.error('[obsWebSocket] Failed to get track names:', err.message);
+    return ['Track 1', 'Track 2', 'Track 3', 'Track 4', 'Track 5', 'Track 6']; // fallback
+  }
+}
+
+/**
+ * Update the names of tracks 1-6 in both Advanced and Simple output properties of the profile.
+ * @param {string[]} names Array of 6 track names.
+ */
+async function setTrackNames(wsSettings, names) {
+  try {
+    return await withOBSConnection(wsSettings, async (obs) => {
+      for (let i = 1; i <= 6; i++) {
+        const paramName = `Track${i}Name`;
+        const val = names[i - 1] || `Track ${i}`;
+        // Set both so they remain in sync regardless of the output mode
+        try { await obs.call('SetProfileParameter', { parameterCategory: 'AdvOut', parameterName: paramName, parameterValue: val }); } catch {}
+        try { await obs.call('SetProfileParameter', { parameterCategory: 'SimpleOutput', parameterName: paramName, parameterValue: val }); } catch {}
+      }
+      return { success: true };
+    });
+  } catch (err) {
+    console.error('[obsWebSocket] Failed to set track names:', err.message);
+    throw err;
+  }
+}
+
+module.exports = { getOBSScenes, createSceneFromTemplate, createSceneFromScratch, addAudioSourceToScenes, removeAudioSourceFromScenes, testOBSConnection, getOBSAudioInputs, getSceneAudioSources, getInputAudioTracks, setInputAudioTracks, getTrackNames, setTrackNames };
