@@ -30,10 +30,10 @@ nul
 /electron-app/node_modules/
 /electron-app/dist/
 
+/DEPRECATED/
+
 # OBS Studio local install (for integration testing on Windows)
 /obs-studio/
 
 # OBS Studio installer (downloaded in CI, never committed)
 /OBS-Studio-*-Installer.exe
-
-/DEPRECATED/
