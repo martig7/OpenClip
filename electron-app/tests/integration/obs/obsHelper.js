@@ -34,7 +34,7 @@
  */
 
 import { spawnSync, spawn } from 'child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import net from 'net';
@@ -145,6 +145,16 @@ export async function startOBS({
     );
   }
 
+  // Read back the actual WebSocket config that OBS wrote (or kept) after
+  // startup.  OBS may regenerate the plugin config on first run — for example
+  // some versions reset auth_required to true with a fresh random password.
+  // By reading the on-disk config we always use the credentials OBS is
+  // actually enforcing, so the handshake and subsequent test calls never fail
+  // due to a stale or mismatched password.
+  const wsConfigPath = join(obsConfigDir, 'plugin_config', 'obs-websocket', 'config.json');
+  const actualWsConfig = _readOBSWebSocketConfig(wsConfigPath);
+  const wsPassword = actualWsConfig.auth_required ? (actualWsConfig.server_password || '') : undefined;
+
   // Verify the OBS WebSocket protocol handshake.  A plain TCP connection
   // succeeding is not enough — something other than the OBS WebSocket plugin
   // could be listening on the port, OR the plugin could be installed but
@@ -153,23 +163,33 @@ export async function startOBS({
   // an actionable diagnostic so tests never silently succeed against a
   // non-functional server.
   try {
-    await _verifyOBSWebSocketHandshake('127.0.0.1', wsPort);
+    await _verifyOBSWebSocketHandshake('127.0.0.1', wsPort, wsPassword);
   } catch (err) {
     stopping = true;
     obsProcess.kill('SIGTERM');
     _rmTemp(tmpBase);
+    const authHint = actualWsConfig.auth_required
+      ? ` Auth is enabled in the config (auth_required=true); password was read from ${wsConfigPath}.`
+      : '';
     throw new Error(
       `OBS is running and port ${wsPort} is open, but the WebSocket server did not ` +
         `complete the OBS protocol handshake. The server is enabled via ` +
         `${obsConfigDir}/plugin_config/obs-websocket/config.json — verify that ` +
-        `OBS ${OBS_BINARY} is version 28+ and that the obs-websocket plugin is installed.\n` +
+        `OBS ${OBS_BINARY} is version 28+ and that the obs-websocket plugin is installed.` +
+        `${authHint}\n` +
         `Original error: ${err.message}`
     );
   }
 
   return {
     /** WebSocket settings object ready for use with obsWebSocket.js helpers. */
-    wsSettings: { host: '127.0.0.1', port: wsPort },
+    wsSettings: {
+      host: '127.0.0.1',
+      port: wsPort,
+      // Only include password when OBS actually requires auth.  This matches
+      // the shape expected by obsWebSocket.js (password field is optional).
+      ...(wsPassword !== undefined && { password: wsPassword }),
+    },
 
     /** Kill the OBS process and clean up the temp directory. */
     stop() {
@@ -324,16 +344,22 @@ function _writeOBSConfig(obsConfigDir, wsPort, initialScenes) {
  *
  * This is intentionally a lightweight check — we only care that the server is
  * reachable and speaks the obs-websocket v5 protocol.  No OBS calls are made.
+ *
+ * @param {string} host
+ * @param {number} port
+ * @param {string|undefined} password  Supply when auth_required is true in the
+ *   OBS WebSocket config; omit (or pass undefined) for no-auth servers.
  */
-async function _verifyOBSWebSocketHandshake(host, port) {
+async function _verifyOBSWebSocketHandshake(host, port, password) {
   const { default: OBSWebSocket } = await import('obs-websocket-js');
   const obs = new OBSWebSocket();
   try {
     // connect() performs the full WebSocket upgrade + obs-websocket v5
     // identification handshake.  It throws if the server is not an OBS
-    // WebSocket server or if auth is required but no password was supplied
-    // (our test config sets auth_required=false, so no password is needed).
-    await obs.connect(`ws://${host}:${port}`);
+    // WebSocket server or if auth is required but the wrong password was
+    // supplied.  We pass the password read back from the on-disk config so
+    // we always use the credentials OBS is actually enforcing.
+    await obs.connect(`ws://${host}:${port}`, password);
   } finally {
     // Always disconnect, even if connect() threw (it may have partially opened
     // a socket).  Disconnect errors are suppressed because the connect error is
@@ -343,6 +369,27 @@ async function _verifyOBSWebSocketHandshake(host, port) {
         console.debug(`[obsHelper] _verifyOBSWebSocketHandshake: disconnect error: ${e.message}`);
       }
     });
+  }
+}
+
+/**
+ * Read the obs-websocket config.json that OBS (re)wrote during startup and
+ * return its parsed contents.  Falls back to the pre-written defaults if the
+ * file cannot be read (e.g. OBS didn't touch it), so callers always get a
+ * usable object.
+ *
+ * @param {string} configPath  Absolute path to the obs-websocket config.json.
+ * @returns {{ auth_required: boolean, server_password?: string, server_enabled: boolean }}
+ */
+function _readOBSWebSocketConfig(configPath) {
+  try {
+    return JSON.parse(readFileSync(configPath, 'utf8'));
+  } catch (e) {
+    if (process.env.OBS_DEBUG) {
+      console.debug(`[obsHelper] Could not read OBS WebSocket config at ${configPath}: ${e.message}`);
+    }
+    // Safe defaults — match what _writeOBSConfig wrote before OBS started.
+    return { auth_required: false, server_enabled: true };
   }
 }
 

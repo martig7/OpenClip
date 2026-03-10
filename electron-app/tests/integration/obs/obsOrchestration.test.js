@@ -26,6 +26,18 @@ import {
 // ─── Skip the whole suite when OBS is not installed ───────────────────────
 const obsAvailable = isOBSAvailable();
 
+if (!obsAvailable) {
+  console.warn(
+    '\n[OBS Integration] OBS Studio binary not found — all tests in this suite are ' +
+    'being skipped.\n' +
+    'To run these tests locally, install OBS Studio 28+ with the obs-websocket plugin:\n' +
+    '  Ubuntu/Debian: sudo apt-get install obs-studio\n' +
+    '  macOS:         brew install --cask obs\n' +
+    '  Windows:       https://obsproject.com/download\n' +
+    'Set $OBS_BINARY if the obs binary is not named "obs" on your system.\n'
+  );
+}
+
 describe.skipIf(!obsAvailable)('OBS Orchestration – live OBS instance', () => {
   /** @type {{ wsSettings: object, stop: () => void }} */
   let obsInstance;

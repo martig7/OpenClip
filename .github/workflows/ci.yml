@@ -54,6 +54,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y obs-studio xvfb
 
+      - name: Verify OBS is runnable
+        run: obs --version
+
       - name: Run OBS integration tests
         working-directory: electron-app
-        run: xvfb-run -a npm run test:integration
+        run: xvfb-run -a npm run test:integration -- --reporter=verbose
