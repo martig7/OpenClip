@@ -1980,14 +1980,18 @@ body {
   cursor: grab;
   user-select: none;
   -webkit-user-select: none;
+  position: relative;
 }
 
 .sv2-treemap-container.dragging {
   cursor: grabbing;
 }
 
-.sv2-treemap {
-  position: relative;
+/* Canvas fills the container — rendering is done imperatively, not via React DOM */
+.sv2-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .sv2-empty {
@@ -1997,6 +2001,22 @@ body {
   height: 200px;
   color: var(--text-muted);
   font-size: 0.9rem;
+}
+
+/* Hover tooltip for canvas items */
+.sv2-tooltip {
+  position: fixed;
+  z-index: 9999;
+  background: var(--bg-secondary, #1e1e1e);
+  border: 1px solid var(--border, #444);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  color: var(--text-primary, #eee);
+  pointer-events: none;
+  max-width: 280px;
+  line-height: 1.5;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 /* ── File blocks ── */
