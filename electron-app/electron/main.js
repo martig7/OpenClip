@@ -245,10 +245,10 @@ const { setupGameWatcher } = require('./gameWatcher');
 const { setupFileManager } = require('./fileManager');
 const { readOBSRecordingPath } = require('./obsIntegration');
 const { getProfiles, readEncodingSettings, writeEncodingSettings, isOBSRunning } = require('./obsEncoding');
-const { getOBSScenes, createSceneFromTemplate, testOBSConnection, isOBSScriptLoaded } = require('./obsWebSocket');
+const { getOBSScenes, createSceneFromTemplate, testOBSConnection } = require('./obsWebSocket');
 const { readOBSWebSocketQR } = require('./qrCodeReader');
 const { startApiServer } = require('./apiServer');
-const { RUNTIME_DIR, STATE_FILE } = require('./constants');
+const { RUNTIME_DIR, STATE_FILE, SCRIPT_MARKER_FILE } = require('./constants');
 
 // Seed default config files and OBS Lua script into userData on first run
 function seedFirstRun() {
@@ -503,7 +503,7 @@ ipcMain.handle('obs:running',       () => isOBSRunning());
 
 // OBS WebSocket
 ipcMain.handle('obs:ws:test',          () => testOBSConnection(store.get('settings').obsWebSocket));
-ipcMain.handle('obs:ws:script-loaded', () => isOBSScriptLoaded(store.get('settings').obsWebSocket));
+ipcMain.handle('obs:ws:script-loaded', () => fs.existsSync(SCRIPT_MARKER_FILE));
 ipcMain.handle('obs:ws:scenes', async () => {
   try {
     return await getOBSScenes(store.get('settings').obsWebSocket);

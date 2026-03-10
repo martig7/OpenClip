@@ -36,6 +36,19 @@ function get_default_state_path()
     return "C:\\game_state"
 end
 
+-- Get path for the script-loaded marker file
+function get_script_marker_path()
+    local appdata = os.getenv("APPDATA")
+    if appdata then
+        return appdata .. "\\open-clip\\runtime\\script_loaded"
+    end
+    local user_profile = os.getenv("USERPROFILE")
+    if user_profile then
+        return user_profile .. "\\AppData\\Roaming\\open-clip\\runtime\\script_loaded"
+    end
+    return "C:\\script_loaded"
+end
+
 -- Read first line from file
 function read_state_file()
     if state_file_path == "" then
@@ -156,10 +169,15 @@ function check_state()
             previous_scene = ""
         end
 
-    elseif status == "STOPPED" then
-        -- Watcher stopped
-        if is_recording then
-            obs.script_log(obs.LOG_WARNING, "Game watcher stopped while recording!")
+    elseif status == "STOPPED" and is_recording then
+        -- Watcher stopped while recording — stop recording
+        obs.script_log(obs.LOG_WARNING, "Game watcher stopped — stopping recording")
+        obs.obs_frontend_recording_stop()
+        is_recording = false
+        current_game = ""
+        if previous_scene ~= "" then
+            switch_to_scene(previous_scene)
+            previous_scene = ""
         end
     end
 end
@@ -240,25 +258,23 @@ function script_update(settings)
     end
 end
 
--- Vendor request handler for ping (allows the app to detect this script is loaded)
-function vendor_ping(data)
-    return "{}"
-end
-
 -- Script load
 function script_load(settings)
     obs.script_log(obs.LOG_INFO, "Open Clip recorder loaded")
 
-    -- Register a vendor WebSocket request so the desktop app can detect this script
-    local vendor = obs.obs_websocket_register_vendor("open-clip")
-    if vendor then
-        obs.obs_websocket_vendor_register_request(vendor, "ping", vendor_ping)
-        obs.script_log(obs.LOG_INFO, "Registered WebSocket vendor 'open-clip' for script detection")
+    -- Write marker file so the Open Clip app can detect this script is loaded
+    local marker = io.open(get_script_marker_path(), "w")
+    if marker then
+        marker:close()
     end
 end
 
 -- Script unload
 function script_unload()
     obs.timer_remove(check_state)
+
+    -- Remove marker file so the app knows the script is no longer loaded
+    os.remove(get_script_marker_path())
+
     obs.script_log(obs.LOG_INFO, "Open Clip recorder unloaded")
 end

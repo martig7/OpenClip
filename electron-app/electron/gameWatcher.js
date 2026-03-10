@@ -28,6 +28,7 @@ function setupGameWatcher(store, onStateChange) {
   fs.mkdirSync(RUNTIME_DIR, { recursive: true });
   try { fs.writeFileSync(LOG_FILE, '', 'utf-8'); } catch {}
   try { fs.writeFileSync(PID_FILE, String(process.pid), 'utf-8'); } catch {}
+  writeGameState('IDLE');
   log(`Watcher started (pid ${process.pid})`);
 
   function poll() {
@@ -64,6 +65,7 @@ function setupGameWatcher(store, onStateChange) {
   return {
     stop() {
       stopped = true;
+      writeGameState('STOPPED');
       log('Watcher stopped');
       try { fs.unlinkSync(PID_FILE); } catch {}
     },
