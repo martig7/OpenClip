@@ -26,20 +26,20 @@ function ClipsPage() {
     }
   }, [])
 
+  const initialPathParam = searchParams.get('path')
+
   useEffect(() => {
     fetchClips().then(data => {
       if (!data) return
-      const pathParam = searchParams.get('path')
-      if (pathParam) {
-        const clip = data.find(c => c.path === pathParam)
+      if (initialPathParam) {
+        const clip = data.find(c => c.path === initialPathParam)
         if (clip) {
           setSelectedClip(clip)
           setSearchParams({})
         }
       }
     })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [fetchClips, initialPathParam, setSearchParams])
 
   const handleDelete = useCallback(async () => {
     if (!selectedClip) return
