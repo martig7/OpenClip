@@ -15,6 +15,59 @@ const AUDIO_KIND_META = {
   pulse_input_capture: { label: 'Microphone (Linux)', icon: 'mic', description: 'Captures PulseAudio input device' },
 };
 
+/**
+ * Extract the exe filename from an OBS wasapi_process_output_capture window string.
+ * Handles formats:
+ *   "[exe.exe]:WindowClass:Window Title"
+ *   "Window Title:WindowClass:exe.exe"
+ *   "Window Title::exe.exe"
+ */
+function extractExeFromWindowStr(windowStr) {
+  if (!windowStr) return null;
+  // Format: [exe.exe]:class:title
+  const bracketMatch = windowStr.match(/^\[([^\]]+\.exe)\]/i);
+  if (bracketMatch) return bracketMatch[1].toLowerCase();
+  // Format: title:class:exe.exe  or  title::exe.exe
+  const parts = windowStr.split(':').map(p => p.trim()).filter(Boolean);
+  for (let i = parts.length - 1; i >= 0; i--) {
+    if (parts[i].toLowerCase().endsWith('.exe')) return parts[i].toLowerCase();
+  }
+  return null;
+}
+
+/**
+ * Return a comparable window key for an application audio source.
+ * Used to detect two sources targeting the same window/process.
+ *
+ * Priority:
+ *  1. "Game Audio (X)" → "x"  (magic_game_audio or derived sources)
+ *  2. OBS window string exe → stripped exe name
+ *  3. Source name ending in .exe → stripped
+ *  4. Source name as-is (lowercased)
+ */
+function getAppAudioWindowKey(sourceName, inputSettingsWindow) {
+  // "Game Audio (GameName)" → game name as the key
+  const gameAudioMatch = sourceName.match(/^Game Audio \((.+)\)$/i);
+  if (gameAudioMatch) return gameAudioMatch[1].toLowerCase();
+
+  // Extract exe from OBS window string and strip the .exe suffix
+  if (inputSettingsWindow) {
+    const exe = extractExeFromWindowStr(inputSettingsWindow);
+    if (exe) return exe.replace(/\.exe$/i, '');
+  }
+
+  // Source name itself ends in .exe
+  const lc = sourceName.toLowerCase();
+  if (lc.endsWith('.exe')) return lc.slice(0, -4);
+
+  return lc;
+}
+
+/** Returns true for OBS input kinds that capture per-application audio. */
+function isAppAudioKind(kind) {
+  return kind === 'wasapi_process_output_capture' || kind === 'magic_game_audio';
+}
+
 function AudioIcon({ kind, size = 15 }) {
   const meta = AUDIO_KIND_META[kind];
   if (!meta) return <Music size={size} />;
@@ -364,6 +417,18 @@ export default function GamesPage() {
     setMasterAudioSources(prev => [...prev, newSource]);
     setShowAudioDropdown(false);
 
+    // Warn if this new app audio source would duplicate another master source targeting the same window
+    if (isAppAudioKind(entry.kind)) {
+      const newKey = getAppAudioWindowKey(entry.name, entry.inputSettings?.window);
+      const conflict = masterAudioSources.find(s =>
+        isAppAudioKind(s.kind) &&
+        getAppAudioWindowKey(s.name, s.inputSettings?.window) === newKey
+      );
+      if (conflict) {
+        showToast(`⚠ OBS doesn't support two Application Audio sources for the same window — OBS will default to "${conflict.name}" (the first source added).`);
+      }
+    }
+
     // Apply to all game scenes immediately, skipping any that already have this source
     const sceneNames = getGameSceneNames();
     if (sceneNames.length > 0) {
@@ -419,16 +484,30 @@ export default function GamesPage() {
     try {
       const result = await api.addAudioSourceToScenes([sceneName], source.kind, source.name, source.inputSettings || {});
       if (result.success) {
+        let conflictWarning = null;
         setEditGameModal(prev => {
           if (!prev) return null;
           const already = prev.sceneAudioSources.some(s => s.inputName === source.name);
           if (already) return prev;
+          // Warn if this new app audio source duplicates an existing one for the same window in this scene
+          if (isAppAudioKind(source.kind)) {
+            const newKey = getAppAudioWindowKey(source.name, source.inputSettings?.window);
+            const duplicate = prev.sceneAudioSources.find(s =>
+              isAppAudioKind(s.inputKind) &&
+              getAppAudioWindowKey(s.inputName, s.inputSettings?.window) === newKey
+            );
+            if (duplicate) conflictWarning = duplicate.inputName;
+          }
           return {
             ...prev,
-            sceneAudioSources: [...prev.sceneAudioSources, { inputName: source.name, inputKind: source.kind }],
+            sceneAudioSources: [...prev.sceneAudioSources, { inputName: source.name, inputKind: source.kind, inputSettings: source.inputSettings || {} }],
           };
         });
-        showToast(`"${source.name}" added to scene`);
+        if (conflictWarning) {
+          showToast(`⚠ OBS doesn't support two Application Audio sources for the same window — OBS will default to "${conflictWarning}" (the first source added).`);
+        } else {
+          showToast(`"${source.name}" added to scene`);
+        }
       } else {
         showToast(`Warning: ${result.message}`);
       }
@@ -1663,6 +1742,37 @@ function EditGameModal({
             </div>
           ) : (
             <>
+              {/* Warn if two Application Audio sources share the same window in this scene */}
+              {(() => {
+                const appSources = sceneAudioSources.filter(s => isAppAudioKind(s.inputKind));
+                if (appSources.length < 2) return null;
+                const keyGroups = {};
+                for (const s of appSources) {
+                  const key = getAppAudioWindowKey(s.inputName, s.inputSettings?.window);
+                  if (!keyGroups[key]) keyGroups[key] = [];
+                  keyGroups[key].push(s.inputName);
+                }
+                const duplicated = Object.values(keyGroups).filter(g => g.length >= 2);
+                if (duplicated.length === 0) return null;
+                return (
+                  <div style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 7,
+                    padding: '7px 10px', marginBottom: 8,
+                    background: 'rgba(245,158,11,0.10)',
+                    border: '1px solid rgba(245,158,11,0.35)',
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: 12, color: '#f59e0b',
+                  }}>
+                    <AlertTriangle size={13} style={{ flexShrink: 0, marginTop: 1 }} />
+                    <span>
+                      This scene has two Application Audio sources targeting the same window
+                      {duplicated.map(g => ` (${g.join(' and ')})`).join(', ')}.
+                      {' '}OBS doesn't support this — it will default to the first source added.
+                    </span>
+                  </div>
+                );
+              })()}
+
               {/* List of existing scene audio sources */}
               {sceneAudioSources.length === 0 ? (
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '8px 10px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-sm)' }}>
