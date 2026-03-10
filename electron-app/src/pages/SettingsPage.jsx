@@ -332,6 +332,24 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {/* View */}
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-title">View</div>
+
+          <div className="form-group" style={{ marginTop: 8 }}>
+            <label className="form-label">Storage View</label>
+            <div className="toggle-desc" style={{ marginBottom: 6 }}>Choose how recordings and clips are displayed</div>
+            <select
+              className="form-input"
+              value={settings.listView !== false ? 'list' : 'grid'}
+              onChange={e => updateSetting('listView', e.target.value === 'list')}
+            >
+              <option value="list">List</option>
+              <option value="grid">Grid</option>
+            </select>
+          </div>
+        </div>
+
         {/* OBS Script Setup */}
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="card-title">OBS Script Setup</div>

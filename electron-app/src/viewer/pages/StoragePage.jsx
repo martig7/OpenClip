@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { HardDrive, Film, Trash2, Save, Info, Loader, Package, Check, X, ZoomIn, ZoomOut, Filter } from 'lucide-react'
+import { HardDrive, Film, Scissors, Lock, Unlock, Trash2, Save, Info, Loader, Package, Check, X, ZoomIn, ZoomOut, Filter } from 'lucide-react'
 import Modal from '../components/Modal'
 import { apiFetch, apiPost } from '../apiBase'
+import api from '../../api'
 
 const GAME_PALETTE = [
   '#7c3aed', // violet-700
@@ -178,6 +179,7 @@ function StoragePage() {
   const [settings, setSettings] = useState(null)
   const [editedSettings, setEditedSettings] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [listView, setListView] = useState(null)
   const [selectedItems, setSelectedItems] = useState(new Set())
   const [deleteModal, setDeleteModal] = useState(false)
   const [reencodeModal, setReencodeModal] = useState(false)
@@ -243,10 +245,14 @@ function StoragePage() {
   useEffect(() => {
     fetchStats()
     fetchSettings()
+    api.getStore('settings').then(s => {
+      if (s) setListView(s.listView ?? true)
+    }).catch(() => {})
   }, [fetchStats, fetchSettings])
 
-  // ResizeObserver for treemap container — also sizes the canvas to match
+  // ResizeObserver for treemap container — also sizes the canvas to match (grid mode only)
   useEffect(() => {
+    if (listView) return
     const el = containerRef.current
     if (!el) return
     const sizeCanvas = (w, h) => {
@@ -274,10 +280,11 @@ function StoragePage() {
       sizeCanvas(w, h)
     }
     return () => ro.disconnect()
-  }, [loading])
+  }, [loading, listView])
 
-  // Non-passive wheel: zoom toward cursor (map-style); reads refs for fresh values
+  // Non-passive wheel: zoom toward cursor (map-style); reads refs for fresh values (grid mode only)
   useEffect(() => {
+    if (listView) return
     const el = containerRef.current
     if (!el) return
     const onWheel = (e) => {
@@ -301,7 +308,7 @@ function StoragePage() {
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
-  }, [loading])
+  }, [loading, listView])
 
   const showToast = useCallback((type, message) => {
     setToast({ type, message })
@@ -526,9 +533,10 @@ function StoragePage() {
 
   // Layout is computed at base (zoom=1) dimensions; zoom is applied via coordinate scaling in render.
   // This keeps squarify out of the zoom hot-path — only re-runs when items or container size change.
+  // Skip in list view to avoid unnecessary computation.
   const treemapLayout = useMemo(
-    () => squarifiedTreemap(items, baseSize.w, baseSize.h),
-    [items, baseSize.w, baseSize.h]
+    () => listView ? [] : squarifiedTreemap(items, baseSize.w, baseSize.h),
+    [listView, items, baseSize.w, baseSize.h]
   )
 
   // Keep viewport refs in sync so wheel/zoom handlers always read fresh values
@@ -763,7 +771,8 @@ function StoragePage() {
     }
   }, [tooltip])
 
-  if (loading) {
+
+  if (loading || listView === null) {
     return (
       <div className="page-content">
         <div className="loading"><div className="spinner" /></div>
@@ -794,10 +803,23 @@ function StoragePage() {
                   <div
                     key={game}
                     className="sv2-usage-seg"
-                    style={{ width: `${(bytes / totalBytes) * 100}%`, background: gameColors[game] || '#666' }}
+                    style={{
+                      width: `${(bytes / (stats?.disk_usage?.total || totalBytes)) * 100}%`,
+                      background: gameColors[game] || '#666'
+                    }}
                     title={`${game}: ${formatBytes(bytes)}`}
                   />
                 ))}
+              {stats?.disk_usage && stats.disk_usage.used - totalBytes > 0 && (
+                <div
+                  className="sv2-usage-seg"
+                  style={{
+                    width: `${((stats.disk_usage.used - totalBytes) / stats.disk_usage.total) * 100}%`,
+                    background: '#3a3a3a'
+                  }}
+                  title={`Other: ${formatBytes(stats.disk_usage.used - totalBytes)}`}
+                />
+              )}
             </div>
             {stats?.disk_usage && (
               <div className="sv2-disk-note">
@@ -808,11 +830,13 @@ function StoragePage() {
         )}
 
         <div className="sv2-topbar-right">
-          <div className="sv2-zoom-ctrl">
-            <button onClick={() => zoomBy(0.8)} title="Zoom out"><ZoomOut size={13} /></button>
-            <button className="sv2-zoom-pct" onClick={() => { setZoom(1); zoomRef.current = 1; panRef.current = { x: 0, y: 0 }; flushRedraw() }} title="Reset view">{Math.round(zoom * 100)}%</button>
-            <button onClick={() => zoomBy(1.25)} title="Zoom in"><ZoomIn size={13} /></button>
-          </div>
+          {!listView && (
+            <div className="sv2-zoom-ctrl">
+              <button onClick={() => zoomBy(0.8)} title="Zoom out"><ZoomOut size={13} /></button>
+              <button className="sv2-zoom-pct" onClick={() => { setZoom(1); zoomRef.current = 1; panRef.current = { x: 0, y: 0 }; flushRedraw() }} title="Reset view">{Math.round(zoom * 100)}%</button>
+              <button onClick={() => zoomBy(1.25)} title="Zoom in"><ZoomIn size={13} /></button>
+            </div>
+          )}
           {selectedCount > 0 && (
             <span className="sv2-sel-pill">{selectedCount} selected</span>
           )}
@@ -842,52 +866,113 @@ function StoragePage() {
         </div>
       )}
 
-      {/* ── Treemap (canvas-rendered for performance) ── */}
-      <div
-        className={`sv2-treemap-container${isDragging ? ' dragging' : ''}`}
-        ref={containerRef}
-        onMouseDown={e => {
-          if (e.button !== 0) return
-          dragRef.current = { startX: e.clientX, startY: e.clientY, startPanX: panRef.current.x, startPanY: panRef.current.y, moved: false }
-          const onMove = (me) => {
-            const dx = me.clientX - dragRef.current.startX
-            const dy = me.clientY - dragRef.current.startY
-            if (!dragRef.current.moved && Math.hypot(dx, dy) > 4) {
-              dragRef.current.moved = true
-              setIsDragging(true)
-            }
-            if (dragRef.current.moved) {
-              panRef.current = { x: dragRef.current.startPanX + dx, y: dragRef.current.startPanY + dy }
-              // Redraw directly via RAF — no React state update during drag
-              flushRedraw()
-            }
+      {/* ── File list / Treemap ── */}
+      {listView ? (
+        <div className="sv2-list-container">
+          {items.length === 0
+            ? <div className="sv2-empty">No files match the current filter</div>
+            : (
+              <table className="sv2-list-table">
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>Name</th>
+                    <th>Game</th>
+                    <th>Type</th>
+                    <th>Date</th>
+                    <th>Size</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map(item => {
+                    const isSelected = selectedItems.has(item.path)
+                    const isLocked = lockedRecordings.has(item.path.replace(/\//g, '\\'))
+                    const color = gameColors[item.game_name] || '#888'
+                    return (
+                      <tr
+                        key={item.path}
+                        className={`sv2-list-row${isSelected ? ' sel' : ''}${isLocked ? ' locked' : ''}`}
+                        onClick={() => toggleSelection(item.path)}
+                        onDoubleClick={() => handleItemClick(item)}
+                        title={isLocked ? '🔒 Locked' : undefined}
+                      >
+                        <td className="sv2-list-color-cell">
+                          <span className="sv2-list-color-dot" style={{ background: color }} />
+                        </td>
+                        <td className="sv2-list-name">{item.filename}</td>
+                        <td className="sv2-list-game" style={{ color }}>{item.game_name}</td>
+                        <td className="sv2-list-type">
+                          {item.type === 'clip' ? <><Scissors size={11} /> Clip</> : <><Film size={11} /> Recording</>}
+                        </td>
+                        <td className="sv2-list-date">{item.date}</td>
+                        <td className="sv2-list-size">{item.size_formatted}</td>
+                        <td className="sv2-list-actions">
+                          <button
+                            className="sv2-list-lockbtn"
+                            onClick={(e) => toggleLock(e, item.path)}
+                            title={isLocked ? 'Unlock' : 'Lock'}
+                          >
+                            {isLocked ? <Lock size={11} /> : <Unlock size={11} />}
+                          </button>
+                          {isSelected && <Check size={12} className="sv2-list-check" />}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )
           }
-          const onUp = () => {
-            const wasDrag = dragRef.current?.moved
-            dragRef.current = null
-            setIsDragging(false)
-            window.removeEventListener('mousemove', onMove)
-            window.removeEventListener('mouseup', onUp)
-            // Swallow the synthetic click that fires after mouseup so blocks don't get selected
-            if (wasDrag) window.addEventListener('click', e => e.stopPropagation(), { capture: true, once: true })
-          }
-          window.addEventListener('mousemove', onMove)
-          window.addEventListener('mouseup', onUp)
-        }}
-      >
-        <canvas
-          ref={canvasRef}
-          className="sv2-canvas"
-          onClick={handleCanvasClick}
-          onDoubleClick={handleCanvasDblClick}
-          onMouseMove={handleCanvasMouseMove}
-          onMouseLeave={() => {
-            if (tooltipRafRef.current) { cancelAnimationFrame(tooltipRafRef.current); tooltipRafRef.current = null }
-            tooltipItemRef.current = null
-            setTooltip(null)
+        </div>
+      ) : (
+        /* ── Treemap (canvas-rendered for performance) ── */
+        <div
+          className={`sv2-treemap-container${isDragging ? ' dragging' : ''}`}
+          ref={containerRef}
+          onMouseDown={e => {
+            if (e.button !== 0) return
+            dragRef.current = { startX: e.clientX, startY: e.clientY, startPanX: panRef.current.x, startPanY: panRef.current.y, moved: false }
+            const onMove = (me) => {
+              const dx = me.clientX - dragRef.current.startX
+              const dy = me.clientY - dragRef.current.startY
+              if (!dragRef.current.moved && Math.hypot(dx, dy) > 4) {
+                dragRef.current.moved = true
+                setIsDragging(true)
+              }
+              if (dragRef.current.moved) {
+                panRef.current = { x: dragRef.current.startPanX + dx, y: dragRef.current.startPanY + dy }
+                // Redraw directly via RAF — no React state update during drag
+                flushRedraw()
+              }
+            }
+            const onUp = () => {
+              const wasDrag = dragRef.current?.moved
+              dragRef.current = null
+              setIsDragging(false)
+              window.removeEventListener('mousemove', onMove)
+              window.removeEventListener('mouseup', onUp)
+              // Swallow the synthetic click that fires after mouseup so blocks don't get selected
+              if (wasDrag) window.addEventListener('click', e => e.stopPropagation(), { capture: true, once: true })
+            }
+            window.addEventListener('mousemove', onMove)
+            window.addEventListener('mouseup', onUp)
           }}
-        />
-      </div>
+        >
+          <canvas
+            ref={canvasRef}
+            className="sv2-canvas"
+            onClick={handleCanvasClick}
+            onDoubleClick={handleCanvasDblClick}
+            onMouseMove={handleCanvasMouseMove}
+            onMouseLeave={() => {
+              if (tooltipRafRef.current) { cancelAnimationFrame(tooltipRafRef.current); tooltipRafRef.current = null }
+              tooltipItemRef.current = null
+              setTooltip(null)
+            }}
+          />
+        </div>
+      )}
 
       {/* Hover tooltip — positioned near cursor, clamped to viewport edges */}
       {tooltipPos && (

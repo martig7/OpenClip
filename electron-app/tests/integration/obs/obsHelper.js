@@ -141,6 +141,15 @@ export async function startOBS({
     extraEnv = process.env.DISPLAY ? {} : { QT_QPA_PLATFORM: 'offscreen' };
   }
 
+  // Wipe any leftover obsConfigDir from a previous run before writing a fresh
+  // config.  On Windows with --portable the config root is fixed to the OBS
+  // install tree, so a failed stop() cleanup (e.g. EPERM while OBS holds file
+  // locks) leaves stale crash-marker files.  OBS detects those on the next
+  // startup and shows a "did not shut down properly / run in Safe Mode?"
+  // dialog that blocks headless and CI runs indefinitely.  Deleting the
+  // directory here guarantees every run starts from a pristine config.
+  _rmTemp(obsConfigDir);
+
   _writeOBSConfig(obsConfigDir, wsPort, initialScenes);
 
   let stopping = false;
@@ -404,12 +413,13 @@ function _writeOBSConfig(obsConfigDir, wsPort, initialScenes) {
 
 /**
  * Open a real OBS WebSocket protocol connection to verify the server is
- * genuinely the obs-websocket plugin and is accepting requests.  Disconnects
- * immediately after a successful handshake.  Throws if the handshake fails
- * for any reason (TCP refused, WS upgrade rejected, protocol mismatch, etc.).
+ * genuinely the obs-websocket plugin and is fully ready to serve requests.
+ * Calls GetVersion after connecting so that startOBS() only returns once OBS
+ * can handle real API calls — not merely when the TCP port is open or the WS
+ * handshake completes.  This prevents a race on slow CI runners where the
+ * first test's GetVersion call arrives before OBS has finished initialising.
  *
- * This is intentionally a lightweight check — we only care that the server is
- * reachable and speaks the obs-websocket v5 protocol.  No OBS calls are made.
+ * Throws if the handshake or GetVersion call fails for any reason.
  *
  * @param {string} host
  * @param {number} port
@@ -426,10 +436,13 @@ async function _verifyOBSWebSocketHandshake(host, port, password) {
     // supplied.  We pass the password read back from the on-disk config so
     // we always use the credentials OBS is actually enforcing.
     await obs.connect(`ws://${host}:${port}`, password);
+    // Call GetVersion to confirm OBS is fully initialised and ready to handle
+    // requests.  The WS handshake alone only proves the plugin is loaded; OBS
+    // may still be setting up its scene/source subsystems at that point.
+    await obs.call('GetVersion');
   } finally {
-    // Always disconnect, even if connect() threw (it may have partially opened
-    // a socket).  Disconnect errors are suppressed because the connect error is
-    // the one that matters; log at debug level in case it helps troubleshooting.
+    // Always disconnect, even if connect() or GetVersion threw.  Disconnect
+    // errors are suppressed because the earlier error is the one that matters.
     obs.disconnect().catch((e) => {
       if (process.env.OBS_DEBUG) {
         console.debug(`[obsHelper] _verifyOBSWebSocketHandshake: disconnect error: ${e.message}`);
