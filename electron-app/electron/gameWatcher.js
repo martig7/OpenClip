@@ -50,11 +50,7 @@ function setupGameWatcher(store, onStateChange) {
 
       setTimeout(() => {
         const { organizeRecordings } = require('./fileManager');
-        try {
-          organizeRecordings(store, stoppedGame);
-        } catch (err) {
-          log(`Organize failed: ${err.stack || err.message}`);
-        }
+        organizeRecordings(store, stoppedGame).catch(err => log(`Organize failed: ${err.stack || err.message}`));
       }, 2000);
     }
 
