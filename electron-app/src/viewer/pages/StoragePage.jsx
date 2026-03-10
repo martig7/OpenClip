@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { HardDrive, Film, Scissors, Trash2, Settings, Save, Info, Lock, Unlock, Loader, Package, Check, X, ZoomIn, ZoomOut, Filter } from 'lucide-react'
+import { HardDrive, Film, Trash2, Save, Info, Loader, Package, Check, X, ZoomIn, ZoomOut, Filter } from 'lucide-react'
 import Modal from '../components/Modal'
 import { apiFetch, apiPost } from '../apiBase'
 
@@ -102,6 +102,29 @@ function squarifiedTreemap(items, w, h) {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── Canvas rendering helpers ─────────────────────────────────────────────────
+function hexToRgba(hex, alpha) {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  return `rgba(${r},${g},${b},${alpha})`
+}
+
+function drawRoundRect(ctx, x, y, w, h, r) {
+  if (w <= 0 || h <= 0) return
+  r = Math.min(r, w / 2, h / 2)
+  ctx.beginPath()
+  ctx.moveTo(x + r, y)
+  ctx.arcTo(x + w, y, x + w, y + h, r)
+  ctx.arcTo(x + w, y + h, x, y + h, r)
+  ctx.arcTo(x, y + h, x, y, r)
+  ctx.arcTo(x, y, x + w, y, r)
+  ctx.closePath()
+}
+
+// Normalise file path separators to backslashes for locked-recordings Set lookups (Windows paths)
+function normPath(p) { return p.replace(/\//g, '\\') }
+
 function StoragePage() {
   const navigate = useNavigate()
   const [stats, setStats] = useState(null)
@@ -125,12 +148,19 @@ function StoragePage() {
   const [sortBy, setSortBy] = useState('date')
   const [lockedRecordings, setLockedRecordings] = useState(new Set())
   const [zoom, setZoom] = useState(1)
-  const [panX, setPanX] = useState(0)
-  const [panY, setPanY] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [baseSize, setBaseSize] = useState({ w: 0, h: 0 })
-  const treemapRef = useRef(null)
+  const [tooltip, setTooltip] = useState(null)
+  const containerRef = useRef(null)
+  const canvasRef = useRef(null)
+  const rafRef = useRef(null)
+  const layoutRef = useRef([])
+  const selectedItemsRef = useRef(new Set())
+  const lockedRef = useRef(new Set())
+  const gameColorsRef = useRef({})
+  // Holds the latest drawCanvas closure so hot-path handlers always call the up-to-date version
+  const drawCanvasRef = useRef(null)
   const zoomRef = useRef(1)
   const panRef = useRef({ x: 0, y: 0 })
   const dragRef = useRef(null)
@@ -164,23 +194,38 @@ function StoragePage() {
     fetchSettings()
   }, [fetchStats, fetchSettings])
 
-  // ResizeObserver for treemap container dimensions
+  // ResizeObserver for treemap container — also sizes the canvas to match
   useEffect(() => {
-    const el = treemapRef.current
+    const el = containerRef.current
     if (!el) return
+    const sizeCanvas = (w, h) => {
+      const canvas = canvasRef.current
+      if (!canvas) return
+      const dpr = window.devicePixelRatio || 1
+      canvas.width = w * dpr
+      canvas.height = h * dpr
+    }
     const ro = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect
-      if (width > 10 && height > 10) setBaseSize({ w: Math.floor(width), h: Math.floor(height) })
+      if (width > 10 && height > 10) {
+        const w = Math.floor(width), h = Math.floor(height)
+        setBaseSize({ w, h })
+        sizeCanvas(w, h)
+      }
     })
     ro.observe(el)
     const r = el.getBoundingClientRect()
-    if (r.width > 10) setBaseSize({ w: Math.floor(r.width), h: Math.floor(r.height) })
+    if (r.width > 10) {
+      const w = Math.floor(r.width), h = Math.floor(r.height)
+      setBaseSize({ w, h })
+      sizeCanvas(w, h)
+    }
     return () => ro.disconnect()
   }, [loading])
 
   // Non-passive wheel: zoom toward cursor (map-style); reads refs for fresh values
   useEffect(() => {
-    const el = treemapRef.current
+    const el = containerRef.current
     if (!el) return
     const onWheel = (e) => {
       e.preventDefault()
@@ -198,8 +243,8 @@ function StoragePage() {
       zoomRef.current = newZoom
       panRef.current = { x: newPanX, y: newPanY }
       setZoom(newZoom)
-      setPanX(newPanX)
-      setPanY(newPanY)
+      // Redraw canvas directly via RAF without waiting for React render cycle
+      flushRedraw()
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
@@ -221,7 +266,7 @@ function StoragePage() {
 
   const toggleLock = useCallback(async (e, path) => {
     e.stopPropagation()
-    const normalizedPath = path.replace(/\//g, '\\')
+    const normalizedPath = normPath(path)
     const isLocked = lockedRecordings.has(normalizedPath)
     try {
       const response = await apiPost('/api/storage/lock', { path, locked: !isLocked })
@@ -387,7 +432,7 @@ function StoragePage() {
 
   // Zoom toward the viewport centre (used by ± buttons)
   const zoomBy = useCallback((factor) => {
-    const el = treemapRef.current
+    const el = containerRef.current
     if (!el) return
     const rect = el.getBoundingClientRect()
     const anchorX = rect.width / 2
@@ -402,9 +447,8 @@ function StoragePage() {
     zoomRef.current = newZoom
     panRef.current = { x: newPanX, y: newPanY }
     setZoom(newZoom)
-    setPanX(newPanX)
-    setPanY(newPanY)
-  }, [])
+    flushRedraw()
+  }, []) // flushRedraw reads from rafRef/drawCanvasRef which are always current
 
   const gameColors = useMemo(() => {
     if (!stats) return {}
@@ -436,13 +480,190 @@ function StoragePage() {
 
   // Keep viewport refs in sync so wheel/zoom handlers always read fresh values
   zoomRef.current = zoom
-  panRef.current = { x: panX, y: panY }
 
-  // Viewport bounds in base (zoom=1) layout space — used to cull off-screen blocks
-  const visMinX = baseSize.w ? -panX / zoom : 0
-  const visMinY = baseSize.h ? -panY / zoom : 0
-  const visMaxX = visMinX + (baseSize.w ? baseSize.w / zoom : 0)
-  const visMaxY = visMinY + (baseSize.h ? baseSize.h / zoom : 0)
+  // ── Canvas drawing (imperative, does not touch React DOM) ────────────────────
+  // drawCanvasRef.current is updated every render so hot-path handlers always call the latest closure
+  drawCanvasRef.current = () => {
+    const canvas = canvasRef.current
+    if (!canvas || !canvas.width || !canvas.height) return
+    const ctx = canvas.getContext('2d')
+    const dpr = window.devicePixelRatio || 1
+    const cssW = canvas.width / dpr
+    const cssH = canvas.height / dpr
+
+    ctx.save()
+    ctx.scale(dpr, dpr)
+    ctx.clearRect(0, 0, cssW, cssH)
+
+    const layout = layoutRef.current
+    const z = zoomRef.current
+    const { x: px, y: py } = panRef.current
+    const selected = selectedItemsRef.current
+    const locked = lockedRef.current
+    const colors = gameColorsRef.current
+
+    if (!layout.length) {
+      ctx.fillStyle = '#888'
+      ctx.font = '14px system-ui, sans-serif'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText('No files match the current filter', cssW / 2, cssH / 2)
+      ctx.restore()
+      return
+    }
+
+    for (const item of layout) {
+      const x = item.rx * z + px + CELL_GAP / 2
+      const y = item.ry * z + py + CELL_GAP / 2
+      const w = Math.max(0, item.rw * z - CELL_GAP)
+      const h = Math.max(0, item.rh * z - CELL_GAP)
+      if (w < 1 || h < 1) continue
+      // Frustum cull — skip blocks fully outside the viewport
+      if (x + w < 0 || x > cssW || y + h < 0 || y > cssH) continue
+
+      const color = colors[item.game_name] || '#888'
+      const isSelected = selected.has(item.path)
+      const isLocked = locked.has(normPath(item.path))
+      const minDim = Math.min(w, h)
+
+      // Background
+      ctx.fillStyle = isSelected ? hexToRgba(color, 0.14) : '#1e1e1e'
+      drawRoundRect(ctx, x, y, w, h, Math.min(4, minDim / 4))
+      ctx.fill()
+
+      // Border
+      ctx.strokeStyle = isSelected ? color : isLocked ? '#f59e0b' : '#3a3a3a'
+      ctx.lineWidth = isSelected ? 2 : 1
+      ctx.stroke()
+
+      // Color bar at top
+      const barH = Math.min(4, h)
+      ctx.fillStyle = color
+      ctx.fillRect(x, y, w, barH)
+
+      // Text labels (only when large enough)
+      ctx.textBaseline = 'alphabetic'
+      ctx.textAlign = 'left'
+      if (minDim >= 52) {
+        ctx.fillStyle = color
+        ctx.font = 'bold 10px system-ui, sans-serif'
+        ctx.fillText(item.game_name, x + 5, y + 17, w - 28)
+      }
+      if (minDim >= 80) {
+        ctx.fillStyle = '#999'
+        ctx.font = '9px system-ui, sans-serif'
+        ctx.fillText(item.filename, x + 5, y + 29, w - 10)
+        ctx.fillText(item.size_formatted, x + 5, y + 41, w - 10)
+      }
+
+      // Lock indicator — drawn as a small padlock shape (top-right corner)
+      if (isLocked && minDim >= 36) {
+        const lx = x + w - 12, ly = y + 5, lw = 7, lh = 6, lr = 1.5
+        ctx.fillStyle = '#f59e0b'
+        // shackle (arc)
+        ctx.beginPath()
+        ctx.arc(lx + lw / 2, ly + 1, lw / 2 - 0.5, Math.PI, 0)
+        ctx.lineWidth = 1.5
+        ctx.strokeStyle = '#f59e0b'
+        ctx.stroke()
+        // body (rectangle)
+        ctx.fillRect(lx, ly + lr, lw, lh)
+      }
+
+      // Selection checkmark badge — top-left corner
+      if (isSelected) {
+        const br = 8, bcx = x + br + 3, bcy = y + br + 3
+        ctx.beginPath()
+        ctx.arc(bcx, bcy, br, 0, Math.PI * 2)
+        ctx.fillStyle = color
+        ctx.fill()
+        ctx.fillStyle = '#fff'
+        ctx.font = 'bold 9px system-ui, sans-serif'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText('✓', bcx, bcy)
+      }
+    }
+    ctx.restore()
+  }
+
+  // Schedule a canvas redraw via requestAnimationFrame (coalesces rapid calls)
+  const requestRedraw = useCallback(() => {
+    if (rafRef.current) return
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null
+      drawCanvasRef.current()
+    })
+  }, [])
+
+  // Immediately cancel any pending RAF frame and schedule a new one (used by hot-path handlers)
+  const flushRedraw = useCallback(() => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    rafRef.current = requestAnimationFrame(() => { rafRef.current = null; drawCanvasRef.current() })
+  }, [])
+
+  // Sync render-relevant state into refs and request a canvas redraw
+  useEffect(() => { layoutRef.current = treemapLayout; requestRedraw() }, [treemapLayout, requestRedraw])
+  useEffect(() => { selectedItemsRef.current = selectedItems; requestRedraw() }, [selectedItems, requestRedraw])
+  useEffect(() => { lockedRef.current = lockedRecordings; requestRedraw() }, [lockedRecordings, requestRedraw])
+  useEffect(() => { gameColorsRef.current = gameColors; requestRedraw() }, [gameColors, requestRedraw])
+  useEffect(() => { requestRedraw() }, [zoom, requestRedraw])
+
+  // Hit-test: canvas (CSS) pixel → layout item
+  const getItemAt = useCallback((canvasX, canvasY) => {
+    const z = zoomRef.current
+    const { x: px, y: py } = panRef.current
+    const lx = (canvasX - px) / z
+    const ly = (canvasY - py) / z
+    return layoutRef.current.find(item =>
+      lx >= item.rx && lx <= item.rx + item.rw &&
+      ly >= item.ry && ly <= item.ry + item.rh
+    ) ?? null
+  }, [])
+
+  // Is the click within the lock-button area (top-right corner of block)?
+  const isLockArea = useCallback((item, canvasX, canvasY) => {
+    const z = zoomRef.current
+    const { x: px, y: py } = panRef.current
+    const bx = item.rx * z + px + CELL_GAP / 2
+    const by = item.ry * z + py + CELL_GAP / 2
+    const bw = Math.max(0, item.rw * z - CELL_GAP)
+    return canvasX >= bx + bw - 22 && canvasY >= by && canvasY <= by + 22
+  }, [])
+
+  const handleCanvasClick = useCallback((e) => {
+    if (dragRef.current?.moved) return
+    const rect = canvasRef.current.getBoundingClientRect()
+    const item = getItemAt(e.clientX - rect.left, e.clientY - rect.top)
+    if (!item) return
+    if (isLockArea(item, e.clientX - rect.left, e.clientY - rect.top)) {
+      toggleLock(e, item.path)
+    } else {
+      toggleSelection(item.path)
+    }
+  }, [getItemAt, isLockArea, toggleLock, toggleSelection])
+
+  const handleCanvasDblClick = useCallback((e) => {
+    const rect = canvasRef.current.getBoundingClientRect()
+    const item = getItemAt(e.clientX - rect.left, e.clientY - rect.top)
+    if (item) handleItemClick(item)
+  }, [getItemAt, handleItemClick])
+
+  const handleCanvasMouseMove = useCallback((e) => {
+    const rect = canvasRef.current.getBoundingClientRect()
+    const cx = e.clientX - rect.left
+    const cy = e.clientY - rect.top
+    const item = getItemAt(cx, cy)
+    if (item) {
+      const isLocked = lockedRef.current.has(normPath(item.path))
+      setTooltip({
+        x: e.clientX, y: e.clientY,
+        text: `${item.game_name} · ${item.filename}\n${item.size_formatted} · ${item.date}${isLocked ? ' · [Locked]' : ''}`
+      })
+    } else {
+      setTooltip(null)
+    }
+  }, [getItemAt])
 
   if (loading) {
     return (
@@ -491,7 +712,7 @@ function StoragePage() {
         <div className="sv2-topbar-right">
           <div className="sv2-zoom-ctrl">
             <button onClick={() => zoomBy(0.8)} title="Zoom out"><ZoomOut size={13} /></button>
-            <button className="sv2-zoom-pct" onClick={() => { setZoom(1); setPanX(0); setPanY(0); zoomRef.current = 1; panRef.current = { x: 0, y: 0 } }} title="Reset view">{Math.round(zoom * 100)}%</button>
+            <button className="sv2-zoom-pct" onClick={() => { setZoom(1); zoomRef.current = 1; panRef.current = { x: 0, y: 0 }; flushRedraw() }} title="Reset view">{Math.round(zoom * 100)}%</button>
             <button onClick={() => zoomBy(1.25)} title="Zoom in"><ZoomIn size={13} /></button>
           </div>
           {selectedCount > 0 && (
@@ -523,13 +744,13 @@ function StoragePage() {
         </div>
       )}
 
-      {/* ── Treemap ── */}
+      {/* ── Treemap (canvas-rendered for performance) ── */}
       <div
         className={`sv2-treemap-container${isDragging ? ' dragging' : ''}`}
-        ref={treemapRef}
+        ref={containerRef}
         onMouseDown={e => {
           if (e.button !== 0) return
-          dragRef.current = { startX: e.clientX, startY: e.clientY, startPanX: panX, startPanY: panY, moved: false }
+          dragRef.current = { startX: e.clientX, startY: e.clientY, startPanX: panRef.current.x, startPanY: panRef.current.y, moved: false }
           const onMove = (me) => {
             const dx = me.clientX - dragRef.current.startX
             const dy = me.clientY - dragRef.current.startY
@@ -538,11 +759,9 @@ function StoragePage() {
               setIsDragging(true)
             }
             if (dragRef.current.moved) {
-              const newPanX = dragRef.current.startPanX + dx
-              const newPanY = dragRef.current.startPanY + dy
-              panRef.current = { x: newPanX, y: newPanY }
-              setPanX(newPanX)
-              setPanY(newPanY)
+              panRef.current = { x: dragRef.current.startPanX + dx, y: dragRef.current.startPanY + dy }
+              // Redraw directly via RAF — no React state update during drag
+              flushRedraw()
             }
           }
           const onUp = () => {
@@ -558,74 +777,25 @@ function StoragePage() {
           window.addEventListener('mouseup', onUp)
         }}
       >
-        {items.length === 0
-          ? <div className="sv2-empty">No files match the current filter</div>
-          : (
-            <div
-              className="sv2-treemap"
-              style={{
-                width: baseSize.w * zoom,
-                height: baseSize.h * zoom,
-                transform: `translate(${panX}px, ${panY}px)`,
-              }}
-            >
-              {treemapLayout.map(item => {
-                // Cull blocks that are entirely outside the visible viewport
-                if (item.rx + item.rw <= visMinX || item.rx >= visMaxX ||
-                    item.ry + item.rh <= visMinY || item.ry >= visMaxY) return null
-                const x = item.rx * zoom
-                const y = item.ry * zoom
-                const w = Math.max(0, item.rw * zoom - CELL_GAP)
-                const h = Math.max(0, item.rh * zoom - CELL_GAP)
-                const isSelected = selectedItems.has(item.path)
-                const isLocked = lockedRecordings.has(item.path.replace(/\//g, '\\'))
-                const color = gameColors[item.game_name] || '#888'
-                const minDim = Math.min(w, h)  // screen pixels
-                const showText = minDim >= 52
-                const showFilename = minDim >= 80
-
-                return (
-                  <div
-                    key={item.path}
-                    className={`sv2-block${isSelected ? ' sel' : ''}${isLocked ? ' locked' : ''}`}
-                    style={{
-                      position: 'absolute',
-                      left: x + CELL_GAP / 2,
-                      top: y + CELL_GAP / 2,
-                      width: w,
-                      height: h,
-                      '--gc': color,
-                    }}
-                    title={`${item.game_name}\n${item.filename}\n${item.size_formatted} · ${item.date}${isLocked ? '\n🔒 Locked' : ''}`}
-                    onClick={() => toggleSelection(item.path)}
-                    onDoubleClick={() => handleItemClick(item)}
-                  >
-                    <div className="sv2-block-bar" style={{ background: color }} />
-                    {showText && (
-                      <div className="sv2-block-body">
-                        <div className="sv2-block-game" style={{ color }}>{item.game_name}</div>
-                        {showFilename && <div className="sv2-block-fname">{item.filename}</div>}
-                        <div className="sv2-block-size">{item.size_formatted}</div>
-                      </div>
-                    )}
-                    <div className="sv2-block-type">
-                      {item.type === 'clip' ? <Scissors size={8} /> : <Film size={8} />}
-                    </div>
-                    <button
-                      className="sv2-block-lockbtn"
-                      onClick={(e) => toggleLock(e, item.path)}
-                      title={isLocked ? 'Unlock' : 'Lock'}
-                    >
-                      {isLocked ? <Lock size={9} /> : <Unlock size={9} />}
-                    </button>
-                    {isSelected && <div className="sv2-block-checkmark"><Check size={10} /></div>}
-                  </div>
-                )
-              })}
-            </div>
-          )
-        }
+        <canvas
+          ref={canvasRef}
+          className="sv2-canvas"
+          onClick={handleCanvasClick}
+          onDoubleClick={handleCanvasDblClick}
+          onMouseMove={handleCanvasMouseMove}
+          onMouseLeave={() => setTooltip(null)}
+        />
       </div>
+
+      {/* Hover tooltip */}
+      {tooltip && (
+        <div
+          className="sv2-tooltip"
+          style={{ left: tooltip.x + 14, top: tooltip.y + 14 }}
+        >
+          {tooltip.text.split('\n').map((line, i) => <div key={i}>{line}</div>)}
+        </div>
+      )}
 
       {/* ── Settings / Options Modal ── */}
       {settingsOpen && (
