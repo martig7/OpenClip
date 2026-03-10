@@ -15,7 +15,7 @@ app.setPath('userData', path.join(app.getPath('appData'), 'open-clip'));
 
 // Electron-only config (window bounds, OBS recording path which Python reads from OBS profile directly)
 const electronConfigPath = path.join(app.getPath('userData'), 'electron.json');
-const electronConfigDefaults = { windowBounds: { width: 1200, height: 800 }, obsRecordingPath: '' };
+const electronConfigDefaults = { windowBounds: { width: 1200, height: 800 }, obsRecordingPath: '', listView: true };
 
 // All mutable paths come from constants.js (AppData-based)
 const { USER_DATA, GAMES_CONFIG_FILE, MANAGER_SETTINGS_FILE, MARKERS_FILE, ICONS_DIR } = require('./constants');
@@ -52,12 +52,13 @@ function normalizePath(p) {
 }
 
 // Translate manager_settings.json → Electron settings shape (camelCase)
-function msToElectronSettings(ms, obsRecordingPath) {
+function msToElectronSettings(ms, obsRecordingPath, electronData) {
   return {
     obsRecordingPath: normalizePath(obsRecordingPath) || '',
     destinationPath: normalizePath(ms.organized_path) || '',
     startWatcherOnStartup: ms.start_watcher_on_startup || false,
     clipMarkerHotkey: ms.clip_hotkey || 'F9',
+    listView: electronData?.listView !== false,
     autoClip: {
       enabled: ms.auto_clip_settings?.enabled || false,
       bufferBefore: ms.auto_clip_settings?.buffer_before_seconds ?? 15,
@@ -170,11 +171,11 @@ const store = {
     if (key === 'lockedRecordings') return this._ms().locked_recordings || [];
     if (key === 'storageSettings') return this._ms().storage_settings || {};
 
-    if (key === 'settings') return msToElectronSettings(this._ms(), this._electron().obsRecordingPath);
+    if (key === 'settings') return msToElectronSettings(this._ms(), this._electron().obsRecordingPath, this._electron());
 
     if (key.startsWith('settings.')) {
       const subKey = key.slice('settings.'.length);
-      const settings = msToElectronSettings(this._ms(), this._electron().obsRecordingPath);
+      const settings = msToElectronSettings(this._ms(), this._electron().obsRecordingPath, this._electron());
       const parts = subKey.split('.');
       let val = settings;
       for (const p of parts) val = val?.[p];
@@ -214,6 +215,10 @@ const store = {
         this._electron().obsRecordingPath = normalizePath(value.obsRecordingPath);
         this._saveElectron();
       }
+      if (value.listView !== undefined) {
+        this._electron().listView = value.listView;
+        this._saveElectron();
+      }
       this._msData = electronSettingsToMs(this._ms(), value);
       this._saveMs();
       return;
@@ -226,8 +231,14 @@ const store = {
         this._saveElectron();
         return;
       }
+      // listView lives only in electron config
+      if (subKey === 'listView') {
+        this._electron().listView = value;
+        this._saveElectron();
+        return;
+      }
       // Build a partial electron settings object for the changed key, then merge
-      const current = msToElectronSettings(this._ms(), this._electron().obsRecordingPath);
+      const current = msToElectronSettings(this._ms(), this._electron().obsRecordingPath, this._electron());
       const parts = subKey.split('.');
       let obj = current;
       for (let i = 0; i < parts.length - 1; i++) {

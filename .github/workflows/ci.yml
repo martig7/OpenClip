@@ -50,6 +50,9 @@ jobs:
         with:
           path: obs-studio
           key: obs-studio-32.0.4-windows-x64
+          # Always save the cache even when subsequent steps (tests) fail, so a
+          # failed test run doesn't force a full OBS re-download on the next attempt.
+          save-always: true
 
       - name: Install OBS Studio
         if: steps.cache-obs.outputs.cache-hit != 'true'
