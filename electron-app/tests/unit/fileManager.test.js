@@ -30,19 +30,9 @@ afterEach(() => {
 // getWeekFolder
 // ─────────────────────────────────────────────────────────────────
 describe('getWeekFolder', () => {
-  // Import fresh each describe to avoid module cache issues
-  let getWeekFolder
-
-  beforeEach(async () => {
-    vi.resetModules()
-    const mod = await import('../../electron/fileManager.js')
-    // getWeekFolder is not exported directly, test via organizeRecordings naming
-    // We'll test it indirectly by checking directory names created
-    getWeekFolder = null // tested below via directory inspection
-  })
+  // getWeekFolder is not exported directly; test indirectly via directory names created
 
   it('uses prior Monday for a Wednesday date', async () => {
-    vi.resetModules()
     // We'll verify by creating a file and checking the target dir
     const store = makeMockStore({
       settings: { obsRecordingPath: obsDir, destinationPath: destDir, autoClip: null },
