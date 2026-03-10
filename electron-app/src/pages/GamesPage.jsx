@@ -819,7 +819,19 @@ export default function GamesPage() {
               <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', opacity: 0.7 }}>Click <strong>Add Source</strong> to pick from OBS inputs or Windows audio devices.</div>
             </div>
           ) : (
-            masterAudioSources.map(src => {
+            <>
+              {/* Track label header row */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-end', padding: '5px 16px 2px', borderBottom: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', gap: 5, marginRight: 82 }}>
+                  {[1, 2, 3, 4, 5, 6].map(num => (
+                    <div key={num} style={{ width: 22, textAlign: 'center', fontSize: 9, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1 }}>
+                      {trackLabels[num - 1] || `T${num}`}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {masterAudioSources.map(src => {
               const meta = AUDIO_KIND_META[src.kind];
               const isApplying = applyingSource === src.name;
               const tracks = trackData[src.name] || {};
@@ -835,9 +847,8 @@ export default function GamesPage() {
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{meta?.label || src.kind}</div>
                   </div>
 
-                  {/* Feature 3: Master Track routing chips */}
+                  {/* Track routing chips */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 0' }}>
-                    <span style={{ fontSize: 10, color: 'var(--text-muted)', marginRight: 2 }}>Tracks:</span>
                     {[1, 2, 3, 4, 5, 6].map(num => {
                       const active = tracks[String(num)] === true;
                       return (
@@ -884,7 +895,8 @@ export default function GamesPage() {
                   </div>
                 </div>
               );
-            })
+            })}
+            </>
           )}
 
           {masterAudioSources.length > 0 && (
@@ -1780,6 +1792,17 @@ function EditGameModal({
                 </div>
               ) : (
                 <div style={{ background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-sm)', overflow: 'hidden', marginBottom: 10 }}>
+                  {/* Track label header row */}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-end', padding: '5px 12px 2px', borderBottom: '1px solid var(--border)' }}>
+                    <div style={{ display: 'flex', gap: 5, marginRight: 32 }}>
+                      {[1, 2, 3, 4, 5, 6].map(num => (
+                        <div key={num} style={{ width: 22, textAlign: 'center', fontSize: 9, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1 }}>
+                          {trackLabels?.[num - 1] || `T${num}`}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
                   {sceneAudioSources.map((src, i) => {
                     const isInMaster = masterNames.has(src.inputName) || (src.inputName.startsWith('Game Audio (') && masterNames.has('Game Audio'));
                     const meta = AUDIO_KIND_META[src.inputKind];
@@ -1791,62 +1814,43 @@ function EditGameModal({
                         key={i}
                         style={{
                           borderBottom: i < sceneAudioSources.length - 1 ? '1px solid var(--border)' : 'none',
-                          padding: '8px 12px',
+                          padding: '7px 12px',
+                          display: 'flex', alignItems: 'center', gap: 10,
                         }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <AudioIcon kind={src.inputKind} size={14} />
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {displayName}
-                            </div>
-                            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{meta?.label || src.inputKind}</div>
+                        <AudioIcon kind={src.inputKind} size={14} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {displayName}
                           </div>
-                          {!isInMaster && (
-                            <span style={{
-                              fontSize: 10, fontWeight: 500,
-                              color: '#f59e0b',
-                              background: 'rgba(245,158,11,0.12)',
-                              border: '1px solid rgba(245,158,11,0.3)',
-                              borderRadius: 4,
-                              padding: '1px 6px',
-                              flexShrink: 0,
-                              whiteSpace: 'nowrap',
-                              display: 'flex', alignItems: 'center', gap: 4,
-                            }}>
-                              Not in master list
-                              <button
-                                className="btn-icon"
-                                onClick={() => {
-                                  onAddMasterSource({
-                                    name: src.inputName,
-                                    kind: src.inputKind,
-                                  });
-                                }}
-                                title="Add to Master List"
-                                style={{
-                                  color: '#d97706', padding: 0, 
-                                  marginLeft: 2, marginRight: -2, width: 14, height: 14,
-                                  display: 'flex', alignItems: 'center', justifyContent: 'center'
-                                }}
-                              >
-                                <Plus size={11} strokeWidth={3} />
-                              </button>
-                            </span>
-                          )}
-                          <button
-                            className="btn-icon"
-                            onClick={() => onRemoveSourceFromScene(game.scene, src.inputName)}
-                            title="Remove from scene"
-                            style={{ color: 'var(--danger)', flexShrink: 0 }}
-                          >
-                            <Trash2 size={13} />
-                          </button>
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{meta?.label || src.inputKind}</div>
                         </div>
+                        {!isInMaster && (
+                          <span style={{
+                            fontSize: 10, fontWeight: 500,
+                            color: '#f59e0b',
+                            background: 'rgba(245,158,11,0.12)',
+                            border: '1px solid rgba(245,158,11,0.3)',
+                            borderRadius: 4,
+                            padding: '1px 6px',
+                            flexShrink: 0,
+                            whiteSpace: 'nowrap',
+                            display: 'flex', alignItems: 'center', gap: 4,
+                          }}>
+                            Not in master list
+                            <button
+                              className="btn-icon"
+                              onClick={() => { onAddMasterSource({ name: src.inputName, kind: src.inputKind }); }}
+                              title="Add to Master List"
+                              style={{ color: '#d97706', padding: 0, marginLeft: 2, marginRight: -2, width: 14, height: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            >
+                              <Plus size={11} strokeWidth={3} />
+                            </button>
+                          </span>
+                        )}
 
-                        {/* Feature 3: Track routing chips */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 6, paddingLeft: 24 }}>
-                          <span style={{ fontSize: 10, color: 'var(--text-muted)', marginRight: 2 }}>Tracks:</span>
+                        {/* Track routing chips — inline */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
                           {[1, 2, 3, 4, 5, 6].map(num => {
                             const active = tracks[String(num)] === true;
                             return (
@@ -1873,8 +1877,17 @@ function EditGameModal({
                               </button>
                             );
                           })}
-                          {isTrackLoading && <RefreshCw size={11} className="spinning" style={{ color: 'var(--text-muted)', marginLeft: 2 }} />}
+                          {isTrackLoading && <RefreshCw size={11} className="spinning" style={{ color: 'var(--text-muted)' }} />}
                         </div>
+
+                        <button
+                          className="btn-icon"
+                          onClick={() => onRemoveSourceFromScene(game.scene, src.inputName)}
+                          title="Remove from scene"
+                          style={{ color: 'var(--danger)', flexShrink: 0 }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
                       </div>
                     );
                   })}
