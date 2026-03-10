@@ -1,5 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
-import { FolderOpen, RefreshCw, Wifi, QrCode, Clipboard, Copy } from 'lucide-react';
+import { FolderOpen, RefreshCw, Wifi, QrCode, Clipboard, Copy, Save } from 'lucide-react';
 import api from '../api';
 
 const HOTKEY_OPTIONS = [
@@ -10,6 +10,7 @@ const HOTKEY_OPTIONS = [
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState(null);
+  const [isDirty, setIsDirty] = useState(false);
   const [toast, setToast] = useState(null);
   const [obsScriptPath, setObsScriptPath] = useState('');
 
@@ -54,7 +55,7 @@ export default function SettingsPage() {
     setSettings(s);
   }
 
-  async function updateSetting(path, value) {
+  function updateSetting(path, value) {
     const keys = path.split('.');
     const updated = { ...settings };
     let obj = updated;
@@ -64,7 +65,14 @@ export default function SettingsPage() {
     }
     obj[keys[keys.length - 1]] = value;
     setSettings(updated);
-    await api.setStore('settings', updated);
+    setIsDirty(true);
+  }
+
+  async function saveSettings() {
+    await api.setStore('settings', settings);
+    await api.registerHotkey();
+    setIsDirty(false);
+    showToast('Settings saved');
   }
 
   async function detectOBSPath() {
@@ -140,9 +148,8 @@ export default function SettingsPage() {
     }
     
     setSettings(updated);
-    api.setStore('settings', updated);
-    
-    showToast(`Settings imported: ${host || 'localhost'}:${port || 4455}`);
+    setIsDirty(true);
+    showToast(`OBS WebSocket imported: ${host || 'localhost'}:${port || 4455}`);
   }
 
   function showToast(msg) {
@@ -154,9 +161,24 @@ export default function SettingsPage() {
 
   return (
     <>
-      <div className="page-header">
-        <h1>Settings</h1>
-        <p>Configure recording paths, hotkeys, and automation</p>
+      <div className="page-header" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+        <div>
+          <h1>Settings</h1>
+          <p>Configure recording paths, hotkeys, and automation</p>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 2 }}>
+          {isDirty && (
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Unsaved changes</span>
+          )}
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={saveSettings}
+            disabled={!isDirty}
+            style={{ opacity: isDirty ? 1 : 0.4 }}
+          >
+            <Save size={13} /> Save Settings
+          </button>
+        </div>
       </div>
 
       <div className="page-body" style={{ maxWidth: 640 }}>
@@ -316,10 +338,7 @@ export default function SettingsPage() {
             <select
               className="form-input"
               value={settings.clipMarkerHotkey || 'F9'}
-              onChange={e => {
-                updateSetting('clipMarkerHotkey', e.target.value);
-                api.registerHotkey();
-              }}
+              onChange={e => updateSetting('clipMarkerHotkey', e.target.value)}
               style={{ width: 160 }}
             >
               {HOTKEY_OPTIONS.map(k => (
