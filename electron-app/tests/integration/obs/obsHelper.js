@@ -9,9 +9,24 @@
  *      instance never touches the developer's real OBS settings.
  *   3. Spawns `obs --headless` (or the binary set via $OBS_BINARY) with
  *      XDG_CONFIG_HOME pointing at that temporary directory.
- *   4. Waits until the WebSocket server is accepting connections.
- *   5. Returns an object with the wsSettings and a stop() function that kills
+ *   4. Waits until the WebSocket server is accepting TCP connections.
+ *   5. Performs a full OBS WebSocket protocol handshake to confirm the server
+ *      is genuinely the OBS WebSocket plugin (not just a stray TCP listener).
+ *   6. Returns an object with the wsSettings and a stop() function that kills
  *      the process and removes the temp directory.
+ *
+ * Enabling the OBS WebSocket server in headless mode
+ * ──────────────────────────────────────────────────
+ * OBS Studio 28+ bundles the obs-websocket plugin.  In headless mode the
+ * plugin reads its configuration from:
+ *
+ *   $XDG_CONFIG_HOME/obs-studio/plugin_config/obs-websocket/config.json
+ *
+ * startOBS() writes that file with server_enabled=true and a randomly chosen
+ * port before spawning OBS, so the WebSocket server starts automatically.
+ * Step 5 (protocol handshake) verifies this actually worked — if the file was
+ * ignored or the plugin is missing, startOBS() throws with an actionable
+ * diagnostic rather than silently passing or waiting for the full timeout.
  *
  * isOBSAvailable() returns false when OBS is not installed, allowing test
  * suites to call describe.skipIf(!isOBSAvailable()) so they are silently
@@ -127,6 +142,28 @@ export async function startOBS({
         `${startupTimeoutMs}ms. Make sure OBS ${OBS_BINARY} supports --headless ` +
         `(OBS 28+) and that the obs-websocket plugin is installed.\n` +
         `Original error: ${cause.message}`
+    );
+  }
+
+  // Verify the OBS WebSocket protocol handshake.  A plain TCP connection
+  // succeeding is not enough — something other than the OBS WebSocket plugin
+  // could be listening on the port, OR the plugin could be installed but
+  // disabled (server_enabled=false in its config).  Attempting a real
+  // obs-websocket-js connection catches both cases and throws immediately with
+  // an actionable diagnostic so tests never silently succeed against a
+  // non-functional server.
+  try {
+    await _verifyOBSWebSocketHandshake('127.0.0.1', wsPort);
+  } catch (err) {
+    stopping = true;
+    obsProcess.kill('SIGTERM');
+    _rmTemp(tmpBase);
+    throw new Error(
+      `OBS is running and port ${wsPort} is open, but the WebSocket server did not ` +
+        `complete the OBS protocol handshake. The server is enabled via ` +
+        `${obsConfigDir}/plugin_config/obs-websocket/config.json — verify that ` +
+        `OBS ${OBS_BINARY} is version 28+ and that the obs-websocket plugin is installed.\n` +
+        `Original error: ${err.message}`
     );
   }
 
@@ -277,6 +314,36 @@ function _writeOBSConfig(obsConfigDir, wsPort, initialScenes) {
       transitions: [{ duration: 300, id: 'cut_transition', name: 'Cut', settings: {} }],
     })
   );
+}
+
+/**
+ * Open a real OBS WebSocket protocol connection to verify the server is
+ * genuinely the obs-websocket plugin and is accepting requests.  Disconnects
+ * immediately after a successful handshake.  Throws if the handshake fails
+ * for any reason (TCP refused, WS upgrade rejected, protocol mismatch, etc.).
+ *
+ * This is intentionally a lightweight check — we only care that the server is
+ * reachable and speaks the obs-websocket v5 protocol.  No OBS calls are made.
+ */
+async function _verifyOBSWebSocketHandshake(host, port) {
+  const { default: OBSWebSocket } = await import('obs-websocket-js');
+  const obs = new OBSWebSocket();
+  try {
+    // connect() performs the full WebSocket upgrade + obs-websocket v5
+    // identification handshake.  It throws if the server is not an OBS
+    // WebSocket server or if auth is required but no password was supplied
+    // (our test config sets auth_required=false, so no password is needed).
+    await obs.connect(`ws://${host}:${port}`);
+  } finally {
+    // Always disconnect, even if connect() threw (it may have partially opened
+    // a socket).  Disconnect errors are suppressed because the connect error is
+    // the one that matters; log at debug level in case it helps troubleshooting.
+    obs.disconnect().catch((e) => {
+      if (process.env.OBS_DEBUG) {
+        console.debug(`[obsHelper] _verifyOBSWebSocketHandshake: disconnect error: ${e.message}`);
+      }
+    });
+  }
 }
 
 function _rmTemp(dir) {
