@@ -2283,3 +2283,130 @@ body {
   font-weight: 600;
   color: var(--success);
 }
+
+/* ── List view ── */
+.sv2-list-container {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.sv2-list-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.83rem;
+}
+
+.sv2-list-table thead th {
+  padding: 7px 12px;
+  text-align: left;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.sv2-list-row {
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.sv2-list-row:hover {
+  background: var(--bg-hover);
+}
+
+.sv2-list-row.sel {
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.sv2-list-row.locked {
+  opacity: 0.7;
+}
+
+.sv2-list-row td {
+  padding: 7px 12px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.sv2-list-color-cell {
+  width: 20px;
+  padding-right: 0 !important;
+}
+
+.sv2-list-color-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sv2-list-name {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.sv2-list-game {
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.sv2-list-type {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.sv2-list-date,
+.sv2-list-size {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.sv2-list-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 16px !important;
+}
+
+.sv2-list-lockbtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  padding: 3px;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.1s, color 0.1s, background 0.1s;
+}
+
+.sv2-list-row:hover .sv2-list-lockbtn,
+.sv2-list-row.locked .sv2-list-lockbtn {
+  opacity: 1;
+}
+
+.sv2-list-lockbtn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.sv2-list-check {
+  color: var(--accent);
+  flex-shrink: 0;
+}

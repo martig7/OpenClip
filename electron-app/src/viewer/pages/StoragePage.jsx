@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { HardDrive, Film, Scissors, Trash2, Settings, Save, Info, Lock, Unlock, Loader, Package, Check, X, ZoomIn, ZoomOut, Filter } from 'lucide-react'
 import Modal from '../components/Modal'
 import { apiFetch, apiPost } from '../apiBase'
+import api from '../../api'
 
 const GAME_PALETTE = [
   '#7c3aed', // violet-700
@@ -108,6 +109,7 @@ function StoragePage() {
   const [settings, setSettings] = useState(null)
   const [editedSettings, setEditedSettings] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [listView, setListView] = useState(true)
   const [selectedItems, setSelectedItems] = useState(new Set())
   const [deleteModal, setDeleteModal] = useState(false)
   const [reencodeModal, setReencodeModal] = useState(false)
@@ -162,10 +164,14 @@ function StoragePage() {
   useEffect(() => {
     fetchStats()
     fetchSettings()
+    api.getStore('settings').then(s => {
+      if (s) setListView(s.listView ?? true)
+    }).catch(() => {})
   }, [fetchStats, fetchSettings])
 
-  // ResizeObserver for treemap container dimensions
+  // ResizeObserver for treemap container dimensions (grid mode only)
   useEffect(() => {
+    if (listView) return
     const el = treemapRef.current
     if (!el) return
     const ro = new ResizeObserver(([entry]) => {
@@ -176,10 +182,11 @@ function StoragePage() {
     const r = el.getBoundingClientRect()
     if (r.width > 10) setBaseSize({ w: Math.floor(r.width), h: Math.floor(r.height) })
     return () => ro.disconnect()
-  }, [loading])
+  }, [loading, listView])
 
-  // Non-passive wheel: zoom toward cursor (map-style); reads refs for fresh values
+  // Non-passive wheel: zoom toward cursor (map-style); reads refs for fresh values (grid mode only)
   useEffect(() => {
+    if (listView) return
     const el = treemapRef.current
     if (!el) return
     const onWheel = (e) => {
@@ -203,7 +210,7 @@ function StoragePage() {
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
-  }, [loading])
+  }, [loading, listView])
 
   const showToast = useCallback((type, message) => {
     setToast({ type, message })
@@ -429,9 +436,10 @@ function StoragePage() {
 
   // Layout is computed at base (zoom=1) dimensions; zoom is applied via coordinate scaling in render.
   // This keeps squarify out of the zoom hot-path — only re-runs when items or container size change.
+  // Skip in list view to avoid unnecessary computation.
   const treemapLayout = useMemo(
-    () => squarifiedTreemap(items, baseSize.w, baseSize.h),
-    [items, baseSize.w, baseSize.h]
+    () => listView ? [] : squarifiedTreemap(items, baseSize.w, baseSize.h),
+    [listView, items, baseSize.w, baseSize.h]
   )
 
   // Keep viewport refs in sync so wheel/zoom handlers always read fresh values
@@ -489,11 +497,13 @@ function StoragePage() {
         )}
 
         <div className="sv2-topbar-right">
-          <div className="sv2-zoom-ctrl">
-            <button onClick={() => zoomBy(0.8)} title="Zoom out"><ZoomOut size={13} /></button>
-            <button className="sv2-zoom-pct" onClick={() => { setZoom(1); setPanX(0); setPanY(0); zoomRef.current = 1; panRef.current = { x: 0, y: 0 } }} title="Reset view">{Math.round(zoom * 100)}%</button>
-            <button onClick={() => zoomBy(1.25)} title="Zoom in"><ZoomIn size={13} /></button>
-          </div>
+          {!listView && (
+            <div className="sv2-zoom-ctrl">
+              <button onClick={() => zoomBy(0.8)} title="Zoom out"><ZoomOut size={13} /></button>
+              <button className="sv2-zoom-pct" onClick={() => { setZoom(1); setPanX(0); setPanY(0); zoomRef.current = 1; panRef.current = { x: 0, y: 0 } }} title="Reset view">{Math.round(zoom * 100)}%</button>
+              <button onClick={() => zoomBy(1.25)} title="Zoom in"><ZoomIn size={13} /></button>
+            </div>
+          )}
           {selectedCount > 0 && (
             <span className="sv2-sel-pill">{selectedCount} selected</span>
           )}
@@ -523,109 +533,170 @@ function StoragePage() {
         </div>
       )}
 
-      {/* ── Treemap ── */}
-      <div
-        className={`sv2-treemap-container${isDragging ? ' dragging' : ''}`}
-        ref={treemapRef}
-        onMouseDown={e => {
-          if (e.button !== 0) return
-          dragRef.current = { startX: e.clientX, startY: e.clientY, startPanX: panX, startPanY: panY, moved: false }
-          const onMove = (me) => {
-            const dx = me.clientX - dragRef.current.startX
-            const dy = me.clientY - dragRef.current.startY
-            if (!dragRef.current.moved && Math.hypot(dx, dy) > 4) {
-              dragRef.current.moved = true
-              setIsDragging(true)
-            }
-            if (dragRef.current.moved) {
-              const newPanX = dragRef.current.startPanX + dx
-              const newPanY = dragRef.current.startPanY + dy
-              panRef.current = { x: newPanX, y: newPanY }
-              setPanX(newPanX)
-              setPanY(newPanY)
-            }
+      {/* ── File list / Treemap ── */}
+      {listView ? (
+        <div className="sv2-list-container">
+          {items.length === 0
+            ? <div className="sv2-empty">No files match the current filter</div>
+            : (
+              <table className="sv2-list-table">
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>Name</th>
+                    <th>Game</th>
+                    <th>Type</th>
+                    <th>Date</th>
+                    <th>Size</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map(item => {
+                    const isSelected = selectedItems.has(item.path)
+                    const isLocked = lockedRecordings.has(item.path.replace(/\//g, '\\'))
+                    const color = gameColors[item.game_name] || '#888'
+                    return (
+                      <tr
+                        key={item.path}
+                        className={`sv2-list-row${isSelected ? ' sel' : ''}${isLocked ? ' locked' : ''}`}
+                        onClick={() => toggleSelection(item.path)}
+                        onDoubleClick={() => handleItemClick(item)}
+                        title={isLocked ? '🔒 Locked' : undefined}
+                      >
+                        <td className="sv2-list-color-cell">
+                          <span className="sv2-list-color-dot" style={{ background: color }} />
+                        </td>
+                        <td className="sv2-list-name">{item.filename}</td>
+                        <td className="sv2-list-game" style={{ color }}>{item.game_name}</td>
+                        <td className="sv2-list-type">
+                          {item.type === 'clip' ? <><Scissors size={11} /> Clip</> : <><Film size={11} /> Recording</>}
+                        </td>
+                        <td className="sv2-list-date">{item.date}</td>
+                        <td className="sv2-list-size">{item.size_formatted}</td>
+                        <td className="sv2-list-actions">
+                          <button
+                            className="sv2-list-lockbtn"
+                            onClick={(e) => toggleLock(e, item.path)}
+                            title={isLocked ? 'Unlock' : 'Lock'}
+                          >
+                            {isLocked ? <Lock size={11} /> : <Unlock size={11} />}
+                          </button>
+                          {isSelected && <Check size={12} className="sv2-list-check" />}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )
           }
-          const onUp = () => {
-            const wasDrag = dragRef.current?.moved
-            dragRef.current = null
-            setIsDragging(false)
-            window.removeEventListener('mousemove', onMove)
-            window.removeEventListener('mouseup', onUp)
-            // Swallow the synthetic click that fires after mouseup so blocks don't get selected
-            if (wasDrag) window.addEventListener('click', e => e.stopPropagation(), { capture: true, once: true })
-          }
-          window.addEventListener('mousemove', onMove)
-          window.addEventListener('mouseup', onUp)
-        }}
-      >
-        {items.length === 0
-          ? <div className="sv2-empty">No files match the current filter</div>
-          : (
-            <div
-              className="sv2-treemap"
-              style={{
-                width: baseSize.w * zoom,
-                height: baseSize.h * zoom,
-                transform: `translate(${panX}px, ${panY}px)`,
-              }}
-            >
-              {treemapLayout.map(item => {
-                // Cull blocks that are entirely outside the visible viewport
-                if (item.rx + item.rw <= visMinX || item.rx >= visMaxX ||
-                    item.ry + item.rh <= visMinY || item.ry >= visMaxY) return null
-                const x = item.rx * zoom
-                const y = item.ry * zoom
-                const w = Math.max(0, item.rw * zoom - CELL_GAP)
-                const h = Math.max(0, item.rh * zoom - CELL_GAP)
-                const isSelected = selectedItems.has(item.path)
-                const isLocked = lockedRecordings.has(item.path.replace(/\//g, '\\'))
-                const color = gameColors[item.game_name] || '#888'
-                const minDim = Math.min(w, h)  // screen pixels
-                const showText = minDim >= 52
-                const showFilename = minDim >= 80
+        </div>
+      ) : (
+        /* ── Treemap (grid) ── */
+        <div
+          className={`sv2-treemap-container${isDragging ? ' dragging' : ''}`}
+          ref={treemapRef}
+          onMouseDown={e => {
+            if (e.button !== 0) return
+            dragRef.current = { startX: e.clientX, startY: e.clientY, startPanX: panX, startPanY: panY, moved: false }
+            const onMove = (me) => {
+              const dx = me.clientX - dragRef.current.startX
+              const dy = me.clientY - dragRef.current.startY
+              if (!dragRef.current.moved && Math.hypot(dx, dy) > 4) {
+                dragRef.current.moved = true
+                setIsDragging(true)
+              }
+              if (dragRef.current.moved) {
+                const newPanX = dragRef.current.startPanX + dx
+                const newPanY = dragRef.current.startPanY + dy
+                panRef.current = { x: newPanX, y: newPanY }
+                setPanX(newPanX)
+                setPanY(newPanY)
+              }
+            }
+            const onUp = () => {
+              const wasDrag = dragRef.current?.moved
+              dragRef.current = null
+              setIsDragging(false)
+              window.removeEventListener('mousemove', onMove)
+              window.removeEventListener('mouseup', onUp)
+              // Swallow the synthetic click that fires after mouseup so blocks don't get selected
+              if (wasDrag) window.addEventListener('click', e => e.stopPropagation(), { capture: true, once: true })
+            }
+            window.addEventListener('mousemove', onMove)
+            window.addEventListener('mouseup', onUp)
+          }}
+        >
+          {items.length === 0
+            ? <div className="sv2-empty">No files match the current filter</div>
+            : (
+              <div
+                className="sv2-treemap"
+                style={{
+                  width: baseSize.w * zoom,
+                  height: baseSize.h * zoom,
+                  transform: `translate(${panX}px, ${panY}px)`,
+                }}
+              >
+                {treemapLayout.map(item => {
+                  // Cull blocks that are entirely outside the visible viewport
+                  if (item.rx + item.rw <= visMinX || item.rx >= visMaxX ||
+                      item.ry + item.rh <= visMinY || item.ry >= visMaxY) return null
+                  const x = item.rx * zoom
+                  const y = item.ry * zoom
+                  const w = Math.max(0, item.rw * zoom - CELL_GAP)
+                  const h = Math.max(0, item.rh * zoom - CELL_GAP)
+                  const isSelected = selectedItems.has(item.path)
+                  const isLocked = lockedRecordings.has(item.path.replace(/\//g, '\\'))
+                  const color = gameColors[item.game_name] || '#888'
+                  const minDim = Math.min(w, h)  // screen pixels
+                  const showText = minDim >= 52
+                  const showFilename = minDim >= 80
 
-                return (
-                  <div
-                    key={item.path}
-                    className={`sv2-block${isSelected ? ' sel' : ''}${isLocked ? ' locked' : ''}`}
-                    style={{
-                      position: 'absolute',
-                      left: x + CELL_GAP / 2,
-                      top: y + CELL_GAP / 2,
-                      width: w,
-                      height: h,
-                      '--gc': color,
-                    }}
-                    title={`${item.game_name}\n${item.filename}\n${item.size_formatted} · ${item.date}${isLocked ? '\n🔒 Locked' : ''}`}
-                    onClick={() => toggleSelection(item.path)}
-                    onDoubleClick={() => handleItemClick(item)}
-                  >
-                    <div className="sv2-block-bar" style={{ background: color }} />
-                    {showText && (
-                      <div className="sv2-block-body">
-                        <div className="sv2-block-game" style={{ color }}>{item.game_name}</div>
-                        {showFilename && <div className="sv2-block-fname">{item.filename}</div>}
-                        <div className="sv2-block-size">{item.size_formatted}</div>
-                      </div>
-                    )}
-                    <div className="sv2-block-type">
-                      {item.type === 'clip' ? <Scissors size={8} /> : <Film size={8} />}
-                    </div>
-                    <button
-                      className="sv2-block-lockbtn"
-                      onClick={(e) => toggleLock(e, item.path)}
-                      title={isLocked ? 'Unlock' : 'Lock'}
+                  return (
+                    <div
+                      key={item.path}
+                      className={`sv2-block${isSelected ? ' sel' : ''}${isLocked ? ' locked' : ''}`}
+                      style={{
+                        position: 'absolute',
+                        left: x + CELL_GAP / 2,
+                        top: y + CELL_GAP / 2,
+                        width: w,
+                        height: h,
+                        '--gc': color,
+                      }}
+                      title={`${item.game_name}\n${item.filename}\n${item.size_formatted} · ${item.date}${isLocked ? '\n🔒 Locked' : ''}`}
+                      onClick={() => toggleSelection(item.path)}
+                      onDoubleClick={() => handleItemClick(item)}
                     >
-                      {isLocked ? <Lock size={9} /> : <Unlock size={9} />}
-                    </button>
-                    {isSelected && <div className="sv2-block-checkmark"><Check size={10} /></div>}
-                  </div>
-                )
-              })}
-            </div>
-          )
-        }
-      </div>
+                      <div className="sv2-block-bar" style={{ background: color }} />
+                      {showText && (
+                        <div className="sv2-block-body">
+                          <div className="sv2-block-game" style={{ color }}>{item.game_name}</div>
+                          {showFilename && <div className="sv2-block-fname">{item.filename}</div>}
+                          <div className="sv2-block-size">{item.size_formatted}</div>
+                        </div>
+                      )}
+                      <div className="sv2-block-type">
+                        {item.type === 'clip' ? <Scissors size={8} /> : <Film size={8} />}
+                      </div>
+                      <button
+                        className="sv2-block-lockbtn"
+                        onClick={(e) => toggleLock(e, item.path)}
+                        title={isLocked ? 'Unlock' : 'Lock'}
+                      >
+                        {isLocked ? <Lock size={9} /> : <Unlock size={9} />}
+                      </button>
+                      {isSelected && <div className="sv2-block-checkmark"><Check size={10} /></div>}
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          }
+        </div>
+      )}
 
       {/* ── Settings / Options Modal ── */}
       {settingsOpen && (
