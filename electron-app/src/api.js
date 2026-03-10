@@ -32,6 +32,8 @@ const mockApi = {
   getOBSWSScenes: asyncArr,
   createOBSScene: async () => ({ success: false, message: 'Not in Electron' }),
   createOBSSceneFromScratch: async () => ({ success: false, message: 'Not in Electron' }),
+  addAudioSourceToScenes: async () => ({ success: false, message: 'Not in Electron', results: [] }),
+  removeAudioSourceFromScenes: async () => ({ success: false, message: 'Not in Electron', results: [] }),
   readOBSWSQR: async () => ({ success: false, message: 'Not in Electron' }),
   readOBSWSQRFromClipboard: async () => ({ success: false, message: 'Not in Electron' }),
   clipboardHasImage: async () => false,

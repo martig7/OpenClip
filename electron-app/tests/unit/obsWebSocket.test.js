@@ -180,3 +180,103 @@ describe('createSceneFromScratch', () => {
   })
 })
 
+// ─── addAudioSourceToScenes ──────────────────────────────────────────────────
+
+describe('addAudioSourceToScenes', () => {
+  it('returns error when sceneNames is empty', async () => {
+    const { addAudioSourceToScenes } = await getModule()
+    const result = await addAudioSourceToScenes({}, [], 'wasapi_output_capture', 'Desktop Audio')
+    expect(result.success).toBe(false)
+    expect(result.message).toMatch(/no scene names/i)
+  })
+
+  it('returns error when inputKind is missing', async () => {
+    const { addAudioSourceToScenes } = await getModule()
+    const result = await addAudioSourceToScenes({}, ['Scene1'], '', 'Desktop Audio')
+    expect(result.success).toBe(false)
+    expect(result.message).toMatch(/required/i)
+  })
+
+  it('creates input in each scene and reports added count', async () => {
+    mockObsCall.mockResolvedValue(undefined) // CreateInput succeeds
+    const { addAudioSourceToScenes } = await getModule()
+    const result = await addAudioSourceToScenes({}, ['Scene1', 'Scene2'], 'wasapi_output_capture', 'Desktop Audio')
+    expect(result.success).toBe(true)
+    expect(result.message).toMatch(/2 scene/)
+    const calls = mockObsCall.mock.calls.filter(c => c[0] === 'CreateInput')
+    expect(calls).toHaveLength(2)
+    expect(calls[0][1].sceneName).toBe('Scene1')
+    expect(calls[1][1].sceneName).toBe('Scene2')
+  })
+
+  it('falls back to CreateSceneItem when CreateInput fails (input already exists)', async () => {
+    mockObsCall
+      .mockRejectedValueOnce(new Error('input already exists'))  // CreateInput Scene1 fails
+      .mockResolvedValueOnce({ inputUuid: 'abc' })               // GetInputSettings
+      .mockResolvedValueOnce(undefined)                          // CreateSceneItem
+      .mockResolvedValueOnce(undefined)                          // CreateInput Scene2 succeeds
+    const { addAudioSourceToScenes } = await getModule()
+    const result = await addAudioSourceToScenes({}, ['Scene1', 'Scene2'], 'wasapi_output_capture', 'Desktop Audio')
+    expect(result.success).toBe(true)
+    expect(result.results[0].status).toBe('added (existing source)')
+    expect(result.results[1].status).toBe('added')
+  })
+
+  it('returns failure when OBS connection fails', async () => {
+    mockObsConnect.mockRejectedValue(Object.assign(new Error('Connection refused'), { code: 1006 }))
+    const { addAudioSourceToScenes } = await getModule()
+    const result = await addAudioSourceToScenes({}, ['Scene1'], 'wasapi_output_capture', 'Desktop Audio')
+    expect(result.success).toBe(false)
+    expect(result.message).toBeTruthy()
+  })
+})
+
+// ─── removeAudioSourceFromScenes ─────────────────────────────────────────────
+
+describe('removeAudioSourceFromScenes', () => {
+  it('returns error when sceneNames is empty', async () => {
+    const { removeAudioSourceFromScenes } = await getModule()
+    const result = await removeAudioSourceFromScenes({}, [], 'Desktop Audio')
+    expect(result.success).toBe(false)
+    expect(result.message).toMatch(/no scene names/i)
+  })
+
+  it('returns error when inputName is missing', async () => {
+    const { removeAudioSourceFromScenes } = await getModule()
+    const result = await removeAudioSourceFromScenes({}, ['Scene1'], '')
+    expect(result.success).toBe(false)
+    expect(result.message).toMatch(/required/i)
+  })
+
+  it('removes matching scene items from each scene', async () => {
+    mockObsCall
+      .mockResolvedValueOnce({ sceneItems: [{ sourceName: 'Desktop Audio', sceneItemId: 10 }] }) // GetSceneItemList Scene1
+      .mockResolvedValueOnce(undefined)                                                           // RemoveSceneItem
+      .mockResolvedValueOnce({ sceneItems: [{ sourceName: 'Desktop Audio', sceneItemId: 20 }] }) // GetSceneItemList Scene2
+      .mockResolvedValueOnce(undefined)                                                           // RemoveSceneItem
+    const { removeAudioSourceFromScenes } = await getModule()
+    const result = await removeAudioSourceFromScenes({}, ['Scene1', 'Scene2'], 'Desktop Audio')
+    expect(result.success).toBe(true)
+    expect(result.message).toMatch(/removed from 2/)
+    const removeCalls = mockObsCall.mock.calls.filter(c => c[0] === 'RemoveSceneItem')
+    expect(removeCalls).toHaveLength(2)
+  })
+
+  it('reports not found when source is not in a scene', async () => {
+    mockObsCall.mockResolvedValue({ sceneItems: [] }) // no items in any scene
+    const { removeAudioSourceFromScenes } = await getModule()
+    const result = await removeAudioSourceFromScenes({}, ['Scene1'], 'Desktop Audio')
+    expect(result.success).toBe(true)
+    expect(result.results[0].status).toBe('not found')
+    expect(result.message).toMatch(/not found in 1/)
+  })
+
+  it('returns failure when OBS connection fails', async () => {
+    mockObsConnect.mockRejectedValue(Object.assign(new Error('Connection refused'), { code: 1006 }))
+    const { removeAudioSourceFromScenes } = await getModule()
+    const result = await removeAudioSourceFromScenes({}, ['Scene1'], 'Desktop Audio')
+    expect(result.success).toBe(false)
+    expect(result.message).toBeTruthy()
+  })
+})
+

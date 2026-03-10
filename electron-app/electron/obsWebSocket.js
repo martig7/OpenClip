@@ -335,6 +335,122 @@ async function createSceneFromScratch(wsSettings, sceneName, options = {}) {
 }
 
 /**
+ * Add an audio source (input) to a list of OBS scenes.
+ * If the global input already exists it will be reused (scene item added); otherwise a new
+ * input is created and placed into each scene.
+ *
+ * @param {object}   wsSettings  - { host, port, password }
+ * @param {string[]} sceneNames  - Scene names to add the source to
+ * @param {string}   inputKind   - OBS input kind (e.g. 'wasapi_output_capture')
+ * @param {string}   inputName   - Display name for the source
+ * @returns {Promise<{ success: boolean, message: string, results: object[] }>}
+ */
+async function addAudioSourceToScenes(wsSettings, sceneNames, inputKind, inputName) {
+  if (!sceneNames || sceneNames.length === 0) {
+    return { success: false, message: 'No scene names provided', results: [] };
+  }
+  if (!inputKind || !inputName) {
+    return { success: false, message: 'Input kind and name are required', results: [] };
+  }
+
+  try {
+    return await withOBSConnection(wsSettings, async (obs) => {
+      const results = [];
+
+      for (const sceneName of sceneNames) {
+        try {
+          // Try to create a brand-new input and place it in this scene
+          await obs.call('CreateInput', {
+            sceneName,
+            inputName,
+            inputKind,
+            inputSettings: {},
+          });
+          results.push({ scene: sceneName, status: 'added' });
+        } catch (createErr) {
+          // The input may already exist globally — try adding it as a scene item
+          try {
+            const { inputUuid } = await obs.call('GetInputSettings', { inputName });
+            await obs.call('CreateSceneItem', { sceneName, sourceName: inputName });
+            results.push({ scene: sceneName, status: 'added (existing source)' });
+          } catch (itemErr) {
+            // Scene item may already exist in this scene — treat that as success
+            if (itemErr.message && itemErr.message.toLowerCase().includes('already')) {
+              results.push({ scene: sceneName, status: 'already present' });
+            } else {
+              results.push({ scene: sceneName, status: 'error', error: itemErr.message });
+            }
+          }
+        }
+      }
+
+      const added = results.filter(r => r.status !== 'error').length;
+      const errors = results.filter(r => r.status === 'error').length;
+      let message = `"${inputName}" added to ${added} scene(s)`;
+      if (errors > 0) message += `, ${errors} failed`;
+      return { success: added > 0, message, results };
+    });
+  } catch (err) {
+    console.error('[obsWebSocket] Failed to add audio source to scenes:', err.message);
+    return { success: false, message: err.message, results: [] };
+  }
+}
+
+/**
+ * Remove an audio source from a list of OBS scenes by its input name.
+ * Removes the scene item from each scene. The global input is not deleted.
+ *
+ * @param {object}   wsSettings  - { host, port, password }
+ * @param {string[]} sceneNames  - Scene names to remove the source from
+ * @param {string}   inputName   - Name of the source/input to remove
+ * @returns {Promise<{ success: boolean, message: string, results: object[] }>}
+ */
+async function removeAudioSourceFromScenes(wsSettings, sceneNames, inputName) {
+  if (!sceneNames || sceneNames.length === 0) {
+    return { success: false, message: 'No scene names provided', results: [] };
+  }
+  if (!inputName) {
+    return { success: false, message: 'Input name is required', results: [] };
+  }
+
+  try {
+    return await withOBSConnection(wsSettings, async (obs) => {
+      const results = [];
+
+      for (const sceneName of sceneNames) {
+        try {
+          const { sceneItems } = await obs.call('GetSceneItemList', { sceneName });
+          const matching = sceneItems.filter(item => item.sourceName === inputName);
+
+          if (matching.length === 0) {
+            results.push({ scene: sceneName, status: 'not found' });
+            continue;
+          }
+
+          for (const item of matching) {
+            await obs.call('RemoveSceneItem', { sceneName, sceneItemId: item.sceneItemId });
+          }
+          results.push({ scene: sceneName, status: 'removed' });
+        } catch (err) {
+          results.push({ scene: sceneName, status: 'error', error: err.message });
+        }
+      }
+
+      const removed = results.filter(r => r.status === 'removed').length;
+      const notFound = results.filter(r => r.status === 'not found').length;
+      const errors = results.filter(r => r.status === 'error').length;
+      let message = `"${inputName}" removed from ${removed} scene(s)`;
+      if (notFound > 0) message += `, not found in ${notFound}`;
+      if (errors > 0) message += `, ${errors} failed`;
+      return { success: true, message, results };
+    });
+  } catch (err) {
+    console.error('[obsWebSocket] Failed to remove audio source from scenes:', err.message);
+    return { success: false, message: err.message, results: [] };
+  }
+}
+
+/**
  * Test the connection to OBS WebSocket.
  * @param {object} wsSettings - { host, port, password }
  * @returns {Promise<{ success: boolean, version?: string, message?: string }>}
@@ -350,4 +466,4 @@ async function testOBSConnection(wsSettings) {
   }
 }
 
-module.exports = { getOBSScenes, createSceneFromTemplate, createSceneFromScratch, testOBSConnection };
+module.exports = { getOBSScenes, createSceneFromTemplate, createSceneFromScratch, addAudioSourceToScenes, removeAudioSourceFromScenes, testOBSConnection };

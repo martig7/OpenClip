@@ -45,6 +45,8 @@ contextBridge.exposeInMainWorld('api', {
   getOBSWSScenes: () => ipcRenderer.invoke('obs:ws:scenes'),
   createOBSScene: (newSceneName, templateSceneName) => ipcRenderer.invoke('obs:ws:create-scene', newSceneName, templateSceneName),
   createOBSSceneFromScratch: (sceneName, options) => ipcRenderer.invoke('obs:ws:create-scene-scratch', sceneName, options),
+  addAudioSourceToScenes: (sceneNames, inputKind, inputName) => ipcRenderer.invoke('obs:ws:add-audio-source', sceneNames, inputKind, inputName),
+  removeAudioSourceFromScenes: (sceneNames, inputName) => ipcRenderer.invoke('obs:ws:remove-audio-source', sceneNames, inputName),
   readOBSWSQR: (imagePath) => ipcRenderer.invoke('obs:ws:read-qr', imagePath),
   readOBSWSQRFromClipboard: () => ipcRenderer.invoke('obs:ws:read-qr-clipboard'),
   clipboardHasImage: () => ipcRenderer.invoke('clipboard:hasImage'),

@@ -1,7 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, Play, Square, Circle, Edit2, Check, X, Gamepad2, RefreshCw, ChevronDown, Image, Wand2, Settings, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, Play, Square, Circle, Edit2, Check, X, Gamepad2, RefreshCw, ChevronDown, Image, Wand2, Settings, AlertTriangle, Music, Mic } from 'lucide-react';
 import api from '../api';
+
+const AUDIO_SOURCE_DEFS = [
+  { kind: 'wasapi_output_capture', label: 'Desktop Audio', icon: 'music', description: 'Captures all system/game sound output' },
+  { kind: 'wasapi_input_capture', label: 'Microphone', icon: 'mic', description: 'Captures microphone input (separate audio track)' },
+];
 
 export default function GamesPage() {
   const navigate = useNavigate();
@@ -16,15 +21,15 @@ export default function GamesPage() {
   const [showWindowPicker, setShowWindowPicker] = useState(false);
   const [autoCreateScene, setAutoCreateScene] = useState(false);
   const [createMode, setCreateMode] = useState('scratch'); // 'scratch' | 'template'
-  const [addWindowCapture, setAddWindowCapture] = useState(true);
-  const [addDesktopAudio, setAddDesktopAudio] = useState(true);
-  const [addMicAudio, setAddMicAudio] = useState(false);
   const [obsScenes, setObsScenes] = useState([]);
   const [loadingScenes, setLoadingScenes] = useState(false);
   const [scenesError, setScenesError] = useState(null);
   const [templateScene, setTemplateScene] = useState('');
   const [sceneCreateStatus, setSceneCreateStatus] = useState(null); // { type: 'success'|'error', message }
   const [toast, setToast] = useState(null);
+
+  // Audio sources card state — per-source operation status
+  const [audioSourceStatus, setAudioSourceStatus] = useState({}); // { [kind]: { loading: bool, result: {type,msg} } }
 
   useEffect(() => {
     loadGames();
@@ -61,9 +66,7 @@ export default function GamesPage() {
         if (createMode === 'scratch') {
           result = await api.createOBSSceneFromScratch(newGame.scene, {
             windowTitle: newGame.selector,
-            addWindowCapture,
-            addDesktopAudio,
-            addMicAudio,
+            addWindowCapture: true,
           });
         } else {
           result = await api.createOBSScene(newGame.scene, templateScene || null);
@@ -152,13 +155,45 @@ export default function GamesPage() {
     setNewGame({ name: '', selector: '', scene: '', icon_path: '' });
     setAutoCreateScene(false);
     setCreateMode('scratch');
-    setAddWindowCapture(true);
-    setAddDesktopAudio(true);
-    setAddMicAudio(false);
     setTemplateScene('');
     setObsScenes([]);
     setScenesError(null);
     setSceneCreateStatus(null);
+  }
+
+  /** Collect all scene names from games that have a scene set. */
+  function getGameSceneNames() {
+    return games.map(g => g.scene).filter(Boolean);
+  }
+
+  async function addAudioSource(kind, label) {
+    const sceneNames = getGameSceneNames();
+    if (sceneNames.length === 0) {
+      setAudioSourceStatus(s => ({ ...s, [kind]: { loading: false, result: { type: 'error', msg: 'No game scenes configured yet. Add games with scene names first.' } } }));
+      return;
+    }
+    setAudioSourceStatus(s => ({ ...s, [kind]: { loading: true, result: null } }));
+    try {
+      const result = await api.addAudioSourceToScenes(sceneNames, kind, label);
+      setAudioSourceStatus(s => ({ ...s, [kind]: { loading: false, result: { type: result.success ? 'success' : 'error', msg: result.message } } }));
+    } catch (err) {
+      setAudioSourceStatus(s => ({ ...s, [kind]: { loading: false, result: { type: 'error', msg: err.message || 'Failed' } } }));
+    }
+  }
+
+  async function removeAudioSource(kind, label) {
+    const sceneNames = getGameSceneNames();
+    if (sceneNames.length === 0) {
+      setAudioSourceStatus(s => ({ ...s, [kind]: { loading: false, result: { type: 'error', msg: 'No game scenes configured yet.' } } }));
+      return;
+    }
+    setAudioSourceStatus(s => ({ ...s, [kind]: { loading: true, result: null } }));
+    try {
+      const result = await api.removeAudioSourceFromScenes(sceneNames, label);
+      setAudioSourceStatus(s => ({ ...s, [kind]: { loading: false, result: { type: result.success ? 'success' : 'error', msg: result.message } } }));
+    } catch (err) {
+      setAudioSourceStatus(s => ({ ...s, [kind]: { loading: false, result: { type: 'error', msg: err.message || 'Failed' } } }));
+    }
   }
 
   function openAddModal() {
@@ -274,6 +309,61 @@ export default function GamesPage() {
               ))}
             </div>
           )}
+        </div>
+
+        {/* Scene Audio Sources card */}
+        <div className="card" style={{ marginTop: 16 }}>
+          <div className="card-header">
+            <span className="card-title">Scene Audio Sources</span>
+          </div>
+          <div style={{ padding: '4px 0 8px', fontSize: 12, color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', marginBottom: 12, paddingLeft: 16, paddingRight: 16 }}>
+            Add or remove audio sources from all game scenes in OBS at once. Audio sources can be routed to separate tracks in OBS output settings.
+          </div>
+          {AUDIO_SOURCE_DEFS.map(({ kind, label, icon, description }) => {
+            const status = audioSourceStatus[kind];
+            return (
+              <div key={kind} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 'var(--radius-sm)', background: 'var(--bg-tertiary)', flexShrink: 0 }}>
+                  {icon === 'music' ? <Music size={16} /> : <Mic size={16} />}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500 }}>{label}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{description}</div>
+                  {status?.result && (
+                    <div style={{
+                      marginTop: 4,
+                      fontSize: 11,
+                      color: status.result.type === 'success' ? 'var(--success)' : 'var(--danger)',
+                    }}>
+                      {status.result.msg}
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => addAudioSource(kind, label)}
+                    disabled={status?.loading}
+                    title={`Add ${label} to all game scenes`}
+                  >
+                    {status?.loading ? <RefreshCw size={12} className="spinning" /> : <Plus size={12} />} Add to all
+                  </button>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => removeAudioSource(kind, label)}
+                    disabled={status?.loading}
+                    title={`Remove ${label} from all game scenes`}
+                    style={{ color: 'var(--danger)' }}
+                  >
+                    {status?.loading ? <RefreshCw size={12} className="spinning" /> : <Trash2 size={12} />} Remove from all
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          <div style={{ padding: '8px 16px', fontSize: 11, color: 'var(--text-muted)' }}>
+            Changes apply to all game scenes that have a scene name set. OBS must be running with WebSocket enabled.
+          </div>
         </div>
       </div>
 
@@ -409,12 +499,8 @@ export default function GamesPage() {
 
                     {createMode === 'scratch' && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                          <input
-                            type="checkbox"
-                            checked={addWindowCapture}
-                            onChange={e => setAddWindowCapture(e.target.checked)}
-                          />
+                        <div style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <Check size={14} style={{ color: 'var(--success)', flexShrink: 0 }} />
                           <span>
                             <span style={{ fontWeight: 500 }}>Window / game capture</span>
                             {newGame.selector && (
@@ -423,27 +509,9 @@ export default function GamesPage() {
                               </span>
                             )}
                           </span>
-                        </label>
-                        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                          <input
-                            type="checkbox"
-                            checked={addDesktopAudio}
-                            onChange={e => setAddDesktopAudio(e.target.checked)}
-                          />
-                          <span style={{ fontWeight: 500 }}>Desktop audio</span>
-                          <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>(output capture, audio track 1)</span>
-                        </label>
-                        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                          <input
-                            type="checkbox"
-                            checked={addMicAudio}
-                            onChange={e => setAddMicAudio(e.target.checked)}
-                          />
-                          <span style={{ fontWeight: 500 }}>Microphone</span>
-                          <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>(input capture, separate audio track)</span>
-                        </label>
+                        </div>
                         <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                          Sources will be added to the new scene. Audio sources can be routed to separate tracks in OBS output settings.
+                          Audio sources are managed in the <strong>Scene Audio Sources</strong> card on the main Games page.
                         </span>
                       </div>
                     )}
