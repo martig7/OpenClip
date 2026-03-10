@@ -3,7 +3,8 @@ import { Film, SkipBack, SkipForward, Play, Pause, Volume2, VolumeX, Folder, Cal
 import Timeline from './Timeline'
 import ClipControls from './ClipControls'
 import ZoomTimeline from './ZoomTimeline'
-import { apiFetch, getBase } from '../apiBase'
+import { apiFetch, apiPost, getBase } from '../apiBase'
+import { formatTime } from '../utils'
 
 function VideoPlayer({ recording, onClipCreated }) {
   const videoRef = useRef(null)
@@ -198,17 +199,13 @@ function VideoPlayer({ recording, onClipCreated }) {
 
     setIsCreatingClip(true)
     try {
-      const response = await apiFetch('/api/clips/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          source_path: recording.path,
-          start_time: clipStart,
-          end_time: clipEnd,
-          game_name: recording.game_name,
-          audio_tracks: audioTracks.length > 1 && selectedTracks.length > 0 && selectedTracks.length < audioTracks.length
-            ? selectedTracks : null
-        })
+      const response = await apiPost('/api/clips/create', {
+        source_path: recording.path,
+        start_time: clipStart,
+        end_time: clipEnd,
+        game_name: recording.game_name,
+        audio_tracks: audioTracks.length > 1 && selectedTracks.length > 0 && selectedTracks.length < audioTracks.length
+          ? selectedTracks : null
       })
 
       const data = await response.json()
@@ -228,13 +225,6 @@ function VideoPlayer({ recording, onClipCreated }) {
       setIsCreatingClip(false)
     }
   }, [recording, clipStart, clipEnd, isCreatingClip, onClipCreated, audioTracks, selectedTracks])
-
-  const formatTime = (seconds) => {
-    if (!isFinite(seconds)) return '0:00'
-    const mins = Math.floor(seconds / 60)
-    const secs = Math.floor(seconds % 60)
-    return `${mins}:${secs.toString().padStart(2, '0')}`
-  }
 
   if (!recording) {
     return (
@@ -356,21 +346,13 @@ function VideoPlayer({ recording, onClipCreated }) {
           )}
           <button
             className="btn btn-secondary"
-            onClick={() => apiFetch('/api/open-external', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ path: recording.path })
-            })}
+            onClick={() => apiPost('/api/open-external', { path: recording.path })}
           >
             <Play size={13} /> Open in Player
           </button>
           <button
             className="btn btn-secondary"
-            onClick={() => apiFetch('/api/show-in-explorer', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ path: recording.path })
-            })}
+            onClick={() => apiPost('/api/show-in-explorer', { path: recording.path })}
           >
             <FolderOpen size={13} /> Show in Explorer
           </button>
