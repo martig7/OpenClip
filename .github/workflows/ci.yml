@@ -28,3 +28,43 @@ jobs:
       - name: Run tests
         working-directory: electron-app
         run: npm test
+
+  obs-integration:
+    name: OBS Integration Tests
+    runs-on: windows-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: electron-app/package-lock.json
+
+      - name: Restore OBS Studio from cache
+        id: cache-obs
+        uses: actions/cache@v4
+        with:
+          path: obs-studio
+          key: obs-studio-32.0.4-windows-x64
+
+      - name: Install OBS Studio
+        if: steps.cache-obs.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $version = "32.0.4"
+          $installer = "OBS-Studio-$version-Windows-x64-Installer.exe"
+          Invoke-WebRequest -Uri "https://github.com/obsproject/obs-studio/releases/download/$version/$installer" -OutFile $installer -UseBasicParsing
+          Start-Process -FilePath ".\$installer" -ArgumentList "/S", "/D=$env:GITHUB_WORKSPACE\obs-studio" -Wait
+          Remove-Item ".\$installer"
+
+      - name: Install dependencies
+        working-directory: electron-app
+        run: npm ci
+
+      - name: Run OBS integration tests
+        working-directory: electron-app
+        run: npm run test:integration -- --reporter=verbose
