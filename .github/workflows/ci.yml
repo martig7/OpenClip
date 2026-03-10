@@ -28,3 +28,32 @@ jobs:
       - name: Run tests
         working-directory: electron-app
         run: npm test
+
+  obs-integration:
+    name: OBS Integration Tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: electron-app/package-lock.json
+
+      - name: Install dependencies
+        working-directory: electron-app
+        run: npm ci
+
+      - name: Install OBS Studio
+        run: |
+          sudo add-apt-repository ppa:obsproject/obs-studio -y
+          sudo apt-get update
+          sudo apt-get install -y obs-studio
+
+      - name: Run OBS integration tests
+        working-directory: electron-app
+        run: npm run test:integration
