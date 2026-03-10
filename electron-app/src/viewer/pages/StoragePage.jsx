@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { HardDrive, Film, Scissors, BarChart2, Trash2, Settings, Save, Info, Lock, Unlock, Loader, Package, Check, X } from 'lucide-react'
 import Modal from '../components/Modal'
-import { apiFetch } from '../apiBase'
+import { apiFetch, apiPost } from '../apiBase'
 
 function StoragePage() {
   const navigate = useNavigate()
@@ -81,11 +81,7 @@ function StoragePage() {
     const isLocked = lockedRecordings.has(normalizedPath)
 
     try {
-      const response = await apiFetch('/api/storage/lock', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path, locked: !isLocked })
-      })
+      const response = await apiPost('/api/storage/lock', { path, locked: !isLocked })
 
       if (response.ok) {
         setLockedRecordings(prev => {
@@ -108,11 +104,7 @@ function StoragePage() {
     if (selectedItems.size === 0) return
 
     try {
-      const response = await apiFetch('/api/storage/delete-batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paths: Array.from(selectedItems) })
-      })
+      const response = await apiPost('/api/storage/delete-batch', { paths: Array.from(selectedItems) })
 
       const data = await response.json()
 
@@ -137,11 +129,7 @@ function StoragePage() {
 
   const updateSettings = useCallback(async (newSettings) => {
     try {
-      const response = await apiFetch('/api/storage/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storage_settings: newSettings })
-      })
+      const response = await apiPost('/api/storage/settings', { storage_settings: newSettings })
 
       if (response.ok) {
         setSettings(newSettings)
@@ -204,6 +192,36 @@ function StoragePage() {
     })
   }, [])
 
+  const items = useMemo(() => {
+    if (!stats) return []
+
+    let result = []
+
+    if (filterType === 'all' || filterType === 'recordings') {
+      result = [...result, ...stats.recordings.map(r => ({ ...r, type: 'recording' }))]
+    }
+
+    if (filterType === 'all' || filterType === 'clips') {
+      result = [...result, ...stats.clips.map(c => ({ ...c, type: 'clip' }))]
+    }
+
+    if (filterGame !== 'all') {
+      result = result.filter(item => item.game_name === filterGame)
+    }
+
+    result.sort((a, b) => {
+      if (sortBy === 'date') return b.mtime - a.mtime
+      if (sortBy === 'size') return b.size_bytes - a.size_bytes
+      if (sortBy === 'game') {
+        const gameCompare = a.game_name.localeCompare(b.game_name)
+        return gameCompare !== 0 ? gameCompare : b.mtime - a.mtime
+      }
+      return a.filename.localeCompare(b.filename)
+    })
+
+    return result
+  }, [stats, filterType, filterGame, sortBy])
+
   const handleReencode = useCallback(async () => {
     if (selectedItems.size === 0) return
 
@@ -221,24 +239,20 @@ function StoragePage() {
 
     for (let i = 0; i < paths.length; i++) {
       const path = paths[i]
-      const item = getAllItems().find(item => item.path === path)
+      const item = items.find(item => item.path === path)
       const filename = item?.filename || path.split(/[\\/]/).pop()
 
       setReencodeProgress({ current: i + 1, total: totalFiles, currentFile: filename })
 
       try {
-        const response = await apiFetch('/api/reencode', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            source_path: path,
-            codec: reencodeSettings.codec,
-            crf: reencodeSettings.crf,
-            preset: reencodeSettings.preset,
-            replace_original: reencodeSettings.replaceOriginal,
-            original_size: item?.size_bytes || 0,
-            audio_tracks: audioTracksParam
-          })
+        const response = await apiPost('/api/reencode', {
+          source_path: path,
+          codec: reencodeSettings.codec,
+          crf: reencodeSettings.crf,
+          preset: reencodeSettings.preset,
+          replace_original: reencodeSettings.replaceOriginal,
+          original_size: item?.size_bytes || 0,
+          audio_tracks: audioTracksParam
         })
 
         const data = await response.json()
@@ -263,7 +277,7 @@ function StoragePage() {
     const label = reencodeSettings.codec === 'copy' ? 'Re-exported' : 'Reencoded'
     const savingsFormatted = totalSavings > 0 ? ` (saved ${formatBytes(totalSavings)})` : ''
     showToast('success', `${label} ${successCount} file(s)${savingsFormatted}${failCount > 0 ? `, ${failCount} failed` : ''}`)
-  }, [selectedItems, reencodeSettings, reencodeAudioTracks, reencodeSelectedTracks, fetchStats, showToast])
+  }, [items, selectedItems, reencodeSettings, reencodeAudioTracks, reencodeSelectedTracks, fetchStats, showToast])
 
   const formatBytes = (bytes) => {
     if (bytes === 0) return '0 B'
@@ -288,43 +302,6 @@ function StoragePage() {
     stats.clips.forEach(c => games.add(c.game_name))
     return Array.from(games).sort()
   }, [stats])
-
-  const getAllItems = useCallback(() => {
-    if (!stats) return []
-
-    let items = []
-
-    if (filterType === 'all' || filterType === 'recordings') {
-      items = [...items, ...stats.recordings.map(r => ({ ...r, type: 'recording' }))]
-    }
-
-    if (filterType === 'all' || filterType === 'clips') {
-      items = [...items, ...stats.clips.map(c => ({ ...c, type: 'clip' }))]
-    }
-
-    // Filter by game
-    if (filterGame !== 'all') {
-      items = items.filter(item => item.game_name === filterGame)
-    }
-
-    // Sort items
-    items.sort((a, b) => {
-      if (sortBy === 'date') {
-        return b.mtime - a.mtime
-      } else if (sortBy === 'size') {
-        return b.size_bytes - a.size_bytes
-      } else if (sortBy === 'game') {
-        // Sort by game name, then by date within each game
-        const gameCompare = a.game_name.localeCompare(b.game_name)
-        if (gameCompare !== 0) return gameCompare
-        return b.mtime - a.mtime
-      } else {
-        return a.filename.localeCompare(b.filename)
-      }
-    })
-
-    return items
-  }, [stats, filterType, filterGame, sortBy])
 
   const getSizeClass = useCallback((sizeBytes) => {
     const gb = sizeBytes / (1024 ** 3)
@@ -351,7 +328,6 @@ function StoragePage() {
     )
   }
 
-  const items = getAllItems()
   const selectedCount = selectedItems.size
   const lockedCount = items.filter(item => {
     const normalized = item.path.replace(/\//g, '\\')
