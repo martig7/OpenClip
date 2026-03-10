@@ -393,7 +393,7 @@ async function addAudioSourceToScenes(wsSettings, sceneNames, inputKind, inputNa
         }
       }
 
-      const added = results.filter(r => r.status === 'added').length;
+      const added = results.filter(r => r.status === 'added' || r.status === 'added (existing source)').length;
       const skipped = results.filter(r => r.status === 'already present').length;
       const errors = results.filter(r => r.status === 'error').length;
       let message = added > 0 ? `"${inputName}" added to ${added} scene(s)` : `"${inputName}" was already in all scenes`;

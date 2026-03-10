@@ -451,19 +451,20 @@ export default function GamesPage() {
       setApplyingSource(entry.name);
       try {
         if (entry.kind === 'magic_game_audio') {
-          for (const game of games) {
-            if (game.scene) {
+          const addPromises = games
+            .filter(game => game.scene)
+            .map(game => {
               const exeGuess = game.exe || (game.selector.toLowerCase().endsWith('.exe') ? game.selector : `${game.selector}.exe`);
               const windowClassGuess = game.windowClass || game.selector;
               const titleGuess = game.selector;
-              await api.addAudioSourceToScenes(
-                [game.scene], 
-                'wasapi_process_output_capture', 
-                `Game Audio (${game.name})`, 
-                { window: `${titleGuess}:${windowClassGuess}:${exeGuess}`, window_match_priority: game.windowMatchPriority !== undefined ? game.windowMatchPriority : 0 }
+              return api.addAudioSourceToScenes(
+                [game.scene],
+                'wasapi_process_output_capture',
+                `Game Audio (${game.name})`,
+                { window: `[${exeGuess}]:${windowClassGuess}:${titleGuess}`, window_match_priority: game.windowMatchPriority !== undefined ? game.windowMatchPriority : 0 }
               ).catch(() => {});
-            }
-          }
+            });
+          await Promise.all(addPromises);
           showToast(`"Game Audio" applied to scenes`);
         } else {
           const result = await api.addAudioSourceToScenes(sceneNames, entry.kind, entry.name, entry.inputSettings || {});
@@ -1694,7 +1695,7 @@ function EditGameModal({
                                           const exeGuess = game.exe || (game.selector.toLowerCase().endsWith('.exe') ? game.selector : `${game.selector}.exe`);
                                           const windowClassGuess = game.windowClass || game.selector;
                                           const titleGuess = game.selector;
-                                          onAddSourceToScene(game.scene, { name: `Game Audio (${game.name})`, kind: 'wasapi_process_output_capture', inputSettings: { window: `${titleGuess}:${windowClassGuess}:${exeGuess}`, window_match_priority: game.windowMatchPriority !== undefined ? game.windowMatchPriority : 0 } });
+                                          onAddSourceToScene(game.scene, { name: `Game Audio (${game.name})`, kind: 'wasapi_process_output_capture', inputSettings: { window: `[${exeGuess}]:${windowClassGuess}:${titleGuess}`, window_match_priority: game.windowMatchPriority !== undefined ? game.windowMatchPriority : 0 } });
                                         } else {
                                           onAddSourceToScene(game.scene, { name: entry.name, kind: entry.kind, inputSettings: entry.inputSettings || {} });
                                         }

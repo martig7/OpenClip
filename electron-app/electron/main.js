@@ -457,7 +457,7 @@ ipcMain.handle('windows:list', async () => {
     const cmd = `powershell -NoProfile -Command `
       + `"Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; using System.Text; public class Win32 { [DllImport(\\"user32.dll\\")] public static extern int GetWindowThreadProcessId(IntPtr hWnd, out int lpdwProcessId); [DllImport(\\"user32.dll\\", SetLastError = true, CharSet=CharSet.Auto)] public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount); }'; `
       + `Get-Process | Where-Object { $_.MainWindowTitle -ne '' -and $_.MainWindowHandle -ne 0 } | Select-Object ProcessName, MainWindowTitle, `
-      + `@{Name='Executable';Expression={ $_.MainModule.FileName }}, `
+      + `@{Name='Executable';Expression={ try { $_.MainModule.FileName } catch { $_.Path } }}, `
       + `@{Name='Class';Expression={ $sb = New-Object System.Text.StringBuilder(256); [Win32]::GetClassName($_.MainWindowHandle, $sb, $sb.Capacity) | Out-Null; $sb.ToString() }} | ConvertTo-Json"`;
 
     exec(cmd, { encoding: 'utf-8', timeout: 5000 }, (error, stdout) => {
