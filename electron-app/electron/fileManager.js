@@ -1,8 +1,11 @@
 const fs = require('fs');
 const path = require('path');
-const { execSync, execFileSync, exec } = require('child_process');
+const { execSync, execFile, exec } = require('child_process');
+const { promisify } = require('util');
 const { isVideoFile, CODEC_MAP, FFMPEG_PATH, FFPROBE_PATH } = require('./constants');
 const service = require('./recordingService');
+
+const execFileAsync = promisify(execFile);
 
 function getWeekFolder(date) {
   const d = new Date(date);
@@ -13,7 +16,7 @@ function getWeekFolder(date) {
   return `Week of ${months[monday.getMonth()]} ${monday.getDate()} ${monday.getFullYear()}`;
 }
 
-function organizeRecordings(store, gameName) {
+async function organizeRecordings(store, gameName) {
   const obsPath = store.get('settings.obsRecordingPath');
   const destPath = store.get('settings.destinationPath');
   if (!obsPath || !destPath || !fs.existsSync(obsPath)) return;
@@ -40,12 +43,13 @@ function organizeRecordings(store, gameName) {
     const dest = path.join(targetDir, newName);
 
     if (ext.toLowerCase() !== '.mp4') {
-      // Remux to MP4, preserving all audio tracks
+      // Mark both paths as in-progress so scans skip them during remux
+      service.markRemuxing(src, dest);
       try {
         // Probe source for audio stream titles before remux (MKV titles don't survive MP4 remux)
         let trackNames = null;
         try {
-          const probeOut = execFileSync(FFPROBE_PATH, [
+          const { stdout: probeOut } = await execFileAsync(FFPROBE_PATH, [
             '-v', 'error', '-show_streams', '-select_streams', 'a', '-of', 'json', src,
           ], { encoding: 'utf-8', timeout: 10000 });
           const streams = JSON.parse(probeOut).streams || [];
@@ -53,7 +57,7 @@ function organizeRecordings(store, gameName) {
           if (names.some(Boolean)) trackNames = names;
         } catch {}
 
-        execFileSync(FFMPEG_PATH, [
+        await execFileAsync(FFMPEG_PATH, [
           '-i', src, '-map', '0', '-c', 'copy', '-movflags', '+faststart', '-y', dest,
         ], { timeout: 120000 });
 
@@ -64,11 +68,19 @@ function organizeRecordings(store, gameName) {
 
         fs.unlinkSync(src);
       } catch {
+        // Remux failed — remove any partial output so no duplicate is left behind
+        try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch {}
         // Fallback: just move the file
-        fs.renameSync(src, path.join(targetDir, `${gameName} Session ${dateStr} #${sessionNum}${ext}`));
+        try {
+          fs.renameSync(src, path.join(targetDir, `${gameName} Session ${dateStr} #${sessionNum}${ext}`));
+        } catch {}
+      } finally {
+        service.unmarkRemuxing(src, dest);
+        service.invalidateCache();
       }
     } else {
       fs.renameSync(src, dest);
+      service.invalidateCache();
     }
   }
 
