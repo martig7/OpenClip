@@ -269,9 +269,15 @@ function seedFirstRun() {
     }
   }
 
+  // Always overwrite the Lua script on startup — it's app-bundled, not user-edited,
+  // so each launch should deploy the latest version.
   const luaDest = path.join(USER_DATA, 'obs_game_recorder.lua');
-  if (!fs.existsSync(luaDest) && fs.existsSync(luaSrc)) {
-    try { fs.copyFileSync(luaSrc, luaDest); } catch {}
+  if (fs.existsSync(luaSrc)) {
+    try {
+      fs.copyFileSync(luaSrc, luaDest);
+    } catch (err) {
+      console.error('[main] Failed to copy Lua script:', err.message);
+    }
   }
 }
 
