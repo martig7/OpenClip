@@ -2288,14 +2288,23 @@ body {
 .sv2-list-container {
   flex: 1;
   overflow-y: auto;
-  overflow-x: hidden;
+  overflow-x: auto;
 }
 
 .sv2-list-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: 0.83rem;
 }
+
+/* Fixed column widths so text-overflow: ellipsis works on the name column */
+.sv2-list-table thead th:nth-child(1) { width: 28px; }
+.sv2-list-table thead th:nth-child(3) { width: 120px; }
+.sv2-list-table thead th:nth-child(4) { width: 100px; }
+.sv2-list-table thead th:nth-child(5) { width: 130px; }
+.sv2-list-table thead th:nth-child(6) { width: 80px; }
+.sv2-list-table thead th:nth-child(7) { width: 60px; }
 
 .sv2-list-table thead th {
   padding: 7px 12px;
@@ -2404,6 +2413,12 @@ body {
 .sv2-list-lockbtn:hover {
   color: var(--text-primary);
   background: var(--bg-hover);
+}
+
+.sv2-list-lockbtn:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .sv2-list-check {

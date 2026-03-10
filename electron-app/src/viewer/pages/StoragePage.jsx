@@ -109,7 +109,7 @@ function StoragePage() {
   const [settings, setSettings] = useState(null)
   const [editedSettings, setEditedSettings] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [listView, setListView] = useState(true)
+  const [listView, setListView] = useState(null)
   const [selectedItems, setSelectedItems] = useState(new Set())
   const [deleteModal, setDeleteModal] = useState(false)
   const [reencodeModal, setReencodeModal] = useState(false)
@@ -452,7 +452,7 @@ function StoragePage() {
   const visMaxX = visMinX + (baseSize.w ? baseSize.w / zoom : 0)
   const visMaxY = visMinY + (baseSize.h ? baseSize.h / zoom : 0)
 
-  if (loading) {
+  if (loading || listView === null) {
     return (
       <div className="page-content">
         <div className="loading"><div className="spinner" /></div>
