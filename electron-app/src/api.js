@@ -31,6 +31,7 @@ const mockApi = {
   getOBSScriptPath: async () => '',
   getOBSWSScenes: asyncArr,
   createOBSScene: async () => ({ success: false, message: 'Not in Electron' }),
+  createOBSSceneFromScratch: async () => ({ success: false, message: 'Not in Electron' }),
   readOBSWSQR: async () => ({ success: false, message: 'Not in Electron' }),
   readOBSWSQRFromClipboard: async () => ({ success: false, message: 'Not in Electron' }),
   clipboardHasImage: async () => false,

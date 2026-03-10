@@ -246,7 +246,7 @@ const { setupGameWatcher } = require('./gameWatcher');
 const { setupFileManager } = require('./fileManager');
 const { readOBSRecordingPath } = require('./obsIntegration');
 const { getProfiles, readEncodingSettings, writeEncodingSettings, isOBSRunning } = require('./obsEncoding');
-const { getOBSScenes, createSceneFromTemplate, testOBSConnection } = require('./obsWebSocket');
+const { getOBSScenes, createSceneFromTemplate, createSceneFromScratch, testOBSConnection } = require('./obsWebSocket');
 const { readOBSWebSocketQR } = require('./qrCodeReader');
 const { startApiServer } = require('./apiServer');
 const { RUNTIME_DIR, STATE_FILE, SCRIPT_MARKER_FILE } = require('./constants');
@@ -516,6 +516,9 @@ ipcMain.handle('obs:ws:scenes', async () => {
 });
 ipcMain.handle('obs:ws:create-scene',  (_e, newSceneName, templateSceneName) =>
   createSceneFromTemplate(store.get('settings').obsWebSocket, newSceneName, templateSceneName)
+);
+ipcMain.handle('obs:ws:create-scene-scratch', (_e, sceneName, options) =>
+  createSceneFromScratch(store.get('settings').obsWebSocket, sceneName, options)
 );
 ipcMain.handle('obs:ws:read-qr', async (_event, imagePath) => {
   return await readOBSWebSocketQR(imagePath);

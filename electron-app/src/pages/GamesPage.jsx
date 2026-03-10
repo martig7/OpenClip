@@ -15,6 +15,10 @@ export default function GamesPage() {
   const [loadingWindows, setLoadingWindows] = useState(false);
   const [showWindowPicker, setShowWindowPicker] = useState(false);
   const [autoCreateScene, setAutoCreateScene] = useState(false);
+  const [createMode, setCreateMode] = useState('scratch'); // 'scratch' | 'template'
+  const [addWindowCapture, setAddWindowCapture] = useState(true);
+  const [addDesktopAudio, setAddDesktopAudio] = useState(true);
+  const [addMicAudio, setAddMicAudio] = useState(false);
   const [obsScenes, setObsScenes] = useState([]);
   const [loadingScenes, setLoadingScenes] = useState(false);
   const [scenesError, setScenesError] = useState(null);
@@ -53,7 +57,17 @@ export default function GamesPage() {
     if (autoCreateScene && newGame.scene) {
       setSceneCreateStatus(null);
       try {
-        const result = await api.createOBSScene(newGame.scene, templateScene || null);
+        let result;
+        if (createMode === 'scratch') {
+          result = await api.createOBSSceneFromScratch(newGame.scene, {
+            windowTitle: newGame.selector,
+            addWindowCapture,
+            addDesktopAudio,
+            addMicAudio,
+          });
+        } else {
+          result = await api.createOBSScene(newGame.scene, templateScene || null);
+        }
         if (!result.success) {
           setSceneCreateStatus({ type: 'error', message: result.message });
           return;
@@ -137,6 +151,10 @@ export default function GamesPage() {
   function resetAddModal() {
     setNewGame({ name: '', selector: '', scene: '', icon_path: '' });
     setAutoCreateScene(false);
+    setCreateMode('scratch');
+    setAddWindowCapture(true);
+    setAddDesktopAudio(true);
+    setAddMicAudio(false);
     setTemplateScene('');
     setObsScenes([]);
     setScenesError(null);
@@ -355,7 +373,7 @@ export default function GamesPage() {
                       <Wand2 size={13} /> Auto-create scene in OBS
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                      Create this scene in OBS, copying sources from a template
+                      Create this scene in OBS with sources and audio inputs
                     </div>
                   </div>
                   <button
@@ -364,89 +382,152 @@ export default function GamesPage() {
                       const next = !autoCreateScene;
                       setAutoCreateScene(next);
                       setSceneCreateStatus(null);
-                      if (next && obsScenes.length === 0) loadOBSScenes();
+                      if (next && createMode === 'template' && obsScenes.length === 0) loadOBSScenes();
                     }}
                   />
                 </div>
 
                 {autoCreateScene && (
                   <div style={{ marginTop: 10 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                      <label className="form-label" style={{ margin: 0, flex: 1 }}>Template scene (optional)</label>
+                    {/* Mode selector */}
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
                       <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={loadOBSScenes}
-                        disabled={loadingScenes}
-                        title="Refresh scene list from OBS"
+                        className={`btn btn-sm ${createMode === 'scratch' ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => setCreateMode('scratch')}
+                        style={{ flex: 1 }}
                       >
-                        <RefreshCw size={12} className={loadingScenes ? 'spinning' : ''} />
+                        Build from scratch
+                      </button>
+                      <button
+                        className={`btn btn-sm ${createMode === 'template' ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => { setCreateMode('template'); if (obsScenes.length === 0) loadOBSScenes(); }}
+                        style={{ flex: 1 }}
+                      >
+                        Copy from template
                       </button>
                     </div>
-                    {loadingScenes ? (
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading scenes from OBS...</div>
-                    ) : scenesError ? (
-                      <div style={{ 
-                        fontSize: 12, 
-                        color: 'var(--danger)', 
-                        padding: '6px 8px', 
-                        background: 'rgba(239,68,68,0.1)', 
-                        borderRadius: 'var(--radius-sm)',
-                        border: '1px solid rgba(239,68,68,0.3)'
-                      }}>
-                        {scenesError}{' '}
-                        <button
-                          onClick={goToSettings}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            color: 'var(--primary)',
-                            textDecoration: 'underline',
-                            cursor: 'pointer',
-                            padding: 0,
-                            font: 'inherit',
-                            display: 'inline',
-                          }}
-                        >
-                          <Settings size={12} style={{ verticalAlign: 'middle', marginRight: 2 }} />
-                          Configure WebSocket
-                        </button>
+
+                    {createMode === 'scratch' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={addWindowCapture}
+                            onChange={e => setAddWindowCapture(e.target.checked)}
+                          />
+                          <span>
+                            <span style={{ fontWeight: 500 }}>Window / game capture</span>
+                            {newGame.selector && (
+                              <span style={{ color: 'var(--text-muted)', marginLeft: 4 }}>
+                                — <em>{newGame.selector}</em>
+                              </span>
+                            )}
+                          </span>
+                        </label>
+                        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={addDesktopAudio}
+                            onChange={e => setAddDesktopAudio(e.target.checked)}
+                          />
+                          <span style={{ fontWeight: 500 }}>Desktop audio</span>
+                          <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>(output capture, audio track 1)</span>
+                        </label>
+                        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={addMicAudio}
+                            onChange={e => setAddMicAudio(e.target.checked)}
+                          />
+                          <span style={{ fontWeight: 500 }}>Microphone</span>
+                          <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>(input capture, separate audio track)</span>
+                        </label>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          Sources will be added to the new scene. Audio sources can be routed to separate tracks in OBS output settings.
+                        </span>
                       </div>
-                    ) : obsScenes.length === 0 ? (
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                        No scenes found. Make sure OBS is running and{' '}
-                        <button
-                          onClick={goToSettings}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            color: 'var(--primary)',
-                            textDecoration: 'underline',
-                            cursor: 'pointer',
-                            padding: 0,
-                            font: 'inherit',
-                            display: 'inline',
-                          }}
-                        >
-                          <Settings size={12} style={{ verticalAlign: 'middle', marginRight: 2 }} />
-                          WebSocket is configured
-                        </button>
-                        .
-                      </div>
-                    ) : (
-                      <select
-                        className="form-input"
-                        value={templateScene}
-                        onChange={e => setTemplateScene(e.target.value)}
-                      >
-                        <option value="">— Create empty scene —</option>
-                        {obsScenes.map(s => (
-                          <option key={s} value={s}>{s}</option>
-                        ))}
-                      </select>
                     )}
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
-                      All sources from the selected template will be copied into the new scene
-                    </span>
+
+                    {createMode === 'template' && (
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                          <label className="form-label" style={{ margin: 0, flex: 1 }}>Template scene (optional)</label>
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={loadOBSScenes}
+                            disabled={loadingScenes}
+                            title="Refresh scene list from OBS"
+                          >
+                            <RefreshCw size={12} className={loadingScenes ? 'spinning' : ''} />
+                          </button>
+                        </div>
+                        {loadingScenes ? (
+                          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading scenes from OBS...</div>
+                        ) : scenesError ? (
+                          <div style={{ 
+                            fontSize: 12, 
+                            color: 'var(--danger)', 
+                            padding: '6px 8px', 
+                            background: 'rgba(239,68,68,0.1)', 
+                            borderRadius: 'var(--radius-sm)',
+                            border: '1px solid rgba(239,68,68,0.3)'
+                          }}>
+                            {scenesError}{' '}
+                            <button
+                              onClick={goToSettings}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: 'var(--primary)',
+                                textDecoration: 'underline',
+                                cursor: 'pointer',
+                                padding: 0,
+                                font: 'inherit',
+                                display: 'inline',
+                              }}
+                            >
+                              <Settings size={12} style={{ verticalAlign: 'middle', marginRight: 2 }} />
+                              Configure WebSocket
+                            </button>
+                          </div>
+                        ) : obsScenes.length === 0 ? (
+                          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                            No scenes found. Make sure OBS is running and{' '}
+                            <button
+                              onClick={goToSettings}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: 'var(--primary)',
+                                textDecoration: 'underline',
+                                cursor: 'pointer',
+                                padding: 0,
+                                font: 'inherit',
+                                display: 'inline',
+                              }}
+                            >
+                              <Settings size={12} style={{ verticalAlign: 'middle', marginRight: 2 }} />
+                              WebSocket is configured
+                            </button>
+                            .
+                          </div>
+                        ) : (
+                          <select
+                            className="form-input"
+                            value={templateScene}
+                            onChange={e => setTemplateScene(e.target.value)}
+                          >
+                            <option value="">— Create empty scene —</option>
+                            {obsScenes.map(s => (
+                              <option key={s} value={s}>{s}</option>
+                            ))}
+                          </select>
+                        )}
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
+                          All sources from the selected template will be copied into the new scene
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
 

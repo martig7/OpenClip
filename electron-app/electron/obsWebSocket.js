@@ -214,6 +214,127 @@ async function createSceneFromTemplate(wsSettings, newSceneName, templateSceneNa
 }
 
 /**
+ * Create a new OBS scene from scratch with optional window capture and audio sources.
+ *
+ * Steps:
+ *  1. Create the new scene
+ *  2. Optionally add a game_capture (or window_capture fallback) source
+ *  3. Optionally add desktop audio (wasapi_output_capture) source
+ *  4. Optionally add microphone (wasapi_input_capture) source
+ *
+ * @param {object} wsSettings - { host, port, password }
+ * @param {string} sceneName - Name for the new scene
+ * @param {object} [options]
+ * @param {string}  [options.windowTitle]     - Window title to use for game/window capture
+ * @param {boolean} [options.addWindowCapture] - Whether to add a window/game capture source
+ * @param {boolean} [options.addDesktopAudio]  - Whether to add a desktop audio source
+ * @param {boolean} [options.addMicAudio]      - Whether to add a microphone audio source
+ * @returns {Promise<{ success: boolean, message: string }>}
+ */
+async function createSceneFromScratch(wsSettings, sceneName, options = {}) {
+  if (!sceneName || !sceneName.trim()) {
+    return { success: false, message: 'Scene name is required' };
+  }
+  const trimmedName = sceneName.trim();
+  const { windowTitle, addWindowCapture, addDesktopAudio, addMicAudio } = options;
+
+  try {
+    return await withOBSConnection(wsSettings, async (obs) => {
+      // Check that the scene doesn't already exist
+      const { scenes } = await obs.call('GetSceneList');
+      const existingNames = scenes.map(s => s.sceneName);
+      if (existingNames.includes(trimmedName)) {
+        return { success: false, message: `Scene "${trimmedName}" already exists in OBS` };
+      }
+
+      // Create the new (empty) scene
+      await obs.call('CreateScene', { sceneName: trimmedName });
+
+      const addedSources = [];
+      const sourceErrors = [];
+
+      // Add game/window capture source
+      if (addWindowCapture && windowTitle && windowTitle.trim()) {
+        const trimmedWindow = windowTitle.trim();
+        // Try game_capture first (Windows-only, best for games); fall back to window_capture
+        let captureAdded = false;
+        try {
+          await obs.call('CreateInput', {
+            sceneName: trimmedName,
+            inputName: `${trimmedName} - Game Capture`,
+            inputKind: 'game_capture',
+            inputSettings: {
+              capture_mode: 'window',
+              window: trimmedWindow,
+            },
+          });
+          addedSources.push('game capture');
+          captureAdded = true;
+        } catch {
+          // game_capture unavailable (Linux/macOS); try window_capture
+        }
+
+        if (!captureAdded) {
+          try {
+            await obs.call('CreateInput', {
+              sceneName: trimmedName,
+              inputName: `${trimmedName} - Window Capture`,
+              inputKind: 'window_capture',
+              inputSettings: { window: trimmedWindow },
+            });
+            addedSources.push('window capture');
+          } catch (err) {
+            sourceErrors.push(`window capture: ${err.message}`);
+          }
+        }
+      }
+
+      // Add desktop audio (output/loopback capture)
+      if (addDesktopAudio) {
+        try {
+          await obs.call('CreateInput', {
+            sceneName: trimmedName,
+            inputName: `${trimmedName} - Desktop Audio`,
+            inputKind: 'wasapi_output_capture',
+            inputSettings: {},
+          });
+          addedSources.push('desktop audio');
+        } catch (err) {
+          sourceErrors.push(`desktop audio: ${err.message}`);
+        }
+      }
+
+      // Add microphone (input capture)
+      if (addMicAudio) {
+        try {
+          await obs.call('CreateInput', {
+            sceneName: trimmedName,
+            inputName: `${trimmedName} - Microphone`,
+            inputKind: 'wasapi_input_capture',
+            inputSettings: {},
+          });
+          addedSources.push('microphone');
+        } catch (err) {
+          sourceErrors.push(`microphone: ${err.message}`);
+        }
+      }
+
+      let message = `Scene "${trimmedName}" created`;
+      if (addedSources.length > 0) {
+        message += ` with ${addedSources.join(', ')}`;
+      }
+      if (sourceErrors.length > 0) {
+        message += `. Some sources could not be added: ${sourceErrors.join('; ')}`;
+      }
+      return { success: true, message };
+    });
+  } catch (err) {
+    console.error('[obsWebSocket] Failed to create scene from scratch:', err.message);
+    return { success: false, message: err.message };
+  }
+}
+
+/**
  * Test the connection to OBS WebSocket.
  * @param {object} wsSettings - { host, port, password }
  * @returns {Promise<{ success: boolean, version?: string, message?: string }>}
@@ -229,4 +350,4 @@ async function testOBSConnection(wsSettings) {
   }
 }
 
-module.exports = { getOBSScenes, createSceneFromTemplate, testOBSConnection };
+module.exports = { getOBSScenes, createSceneFromTemplate, createSceneFromScratch, testOBSConnection };
