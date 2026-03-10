@@ -52,8 +52,8 @@ jobs:
         run: |
           sudo add-apt-repository ppa:obsproject/obs-studio -y
           sudo apt-get update
-          sudo apt-get install -y obs-studio
+          sudo apt-get install -y obs-studio xvfb
 
       - name: Run OBS integration tests
         working-directory: electron-app
-        run: npm run test:integration
+        run: xvfb-run -a npm run test:integration

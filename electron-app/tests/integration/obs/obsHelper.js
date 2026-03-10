@@ -70,9 +70,18 @@ export async function startOBS({
   let stopping = false;
   let exited = false;
 
+  // When no X display is available (e.g. CI without Xvfb), tell Qt to use the
+  // offscreen platform so OBS does not abort on startup trying to connect to a
+  // display server.  When DISPLAY is already set (e.g. by xvfb-run), we leave
+  // QT_QPA_PLATFORM alone so Qt can use the real virtual display.
+  const extraEnv = process.env.DISPLAY
+    ? {}
+    : { QT_QPA_PLATFORM: 'offscreen' };
+
   const obsProcess = spawn(OBS_BINARY, ['--headless'], {
     env: {
       ...process.env,
+      ...extraEnv,
       // Override the XDG config home so OBS uses our isolated temp directory.
       XDG_CONFIG_HOME: tmpBase,
     },
