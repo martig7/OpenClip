@@ -1,4 +1,5 @@
 const { app, BrowserWindow, ipcMain, dialog, shell, globalShortcut, protocol, net, clipboard } = require('electron');
+const { autoUpdater } = require('electron-updater');
 
 // Register custom scheme before app is ready (required by Electron)
 // localfile:///C:/path/to/file.png → main process serves the file safely
@@ -467,6 +468,7 @@ ipcMain.handle('watcher:start', () => {
   watcher = setupGameWatcher(store, (state) => {
     currentGame = state.currentGame;
     pushWatcherStatus();
+    registerHotkey();
   });
   pushWatcherStatus();
   return { running: true };
@@ -588,6 +590,49 @@ ipcMain.handle('api:port', async () => {
 // OBS script setup — returns the path to the Lua script seeded into userData
 ipcMain.handle('obs:script:path', () => path.join(USER_DATA, 'obs_game_recorder.lua'));
 
+// Auto-updater
+function setupAutoUpdater() {
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('update-available', (info) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update:available', { version: info.version });
+    }
+  });
+
+  autoUpdater.on('download-progress', (progress) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update:progress', { percent: Math.round(progress.percent) });
+    }
+  });
+
+  autoUpdater.on('update-downloaded', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update:downloaded');
+    }
+  });
+
+  autoUpdater.on('error', (err) => {
+    console.error('[updater] error:', err.message);
+  });
+
+  // Delay check so the UI has time to load
+  setTimeout(() => {
+    try { autoUpdater.checkForUpdates(); } catch (err) {
+      console.error('[updater] check failed:', err.message);
+    }
+  }, 5000);
+}
+
+ipcMain.handle('update:check', () => {
+  try { autoUpdater.checkForUpdates(); } catch {}
+});
+
+ipcMain.handle('update:install', () => {
+  autoUpdater.quitAndInstall();
+});
+
 app.whenReady().then(() => {
   // Serve local filesystem files (e.g. game icons) via localfile:// protocol.
   // file:// is blocked by Electron's security model when loaded from a different origin.
@@ -621,6 +666,9 @@ app.whenReady().then(() => {
   createWindow();
   registerHotkey();
 
+  // Auto-updater only runs in packaged builds
+  if (app.isPackaged) setupAutoUpdater();
+
   // Auto-start watcher on startup if configured
   if (store.get('settings.startWatcherOnStartup')) {
     ensureGameState();
@@ -630,6 +678,7 @@ app.whenReady().then(() => {
     watcher = setupGameWatcher(store, (state) => {
       currentGame = state.currentGame;
       pushWatcherStatus();
+      registerHotkey();
     });
   }
 

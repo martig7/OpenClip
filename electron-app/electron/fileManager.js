@@ -133,7 +133,7 @@ function processAutoClips(store, gameName, recordingDir) {
   const recordingStartUnix = recording.mtime.getTime() / 1000 - duration;
 
   const dateStr = new Date().toISOString().slice(0, 10);
-  let clipNum = 1;
+  let clipNum = service.countClipsForDate(clipsDir, gameName, dateStr) + 1;
 
   for (const marker of markers) {
     // Convert absolute Unix timestamp to position within the video

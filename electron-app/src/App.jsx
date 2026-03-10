@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, NavLink } from 'react-router-dom';
-import { Gamepad2, Video, Film, HardDrive, Settings, Sliders } from 'lucide-react';
+import { Gamepad2, Video, Film, HardDrive, Settings, Sliders, Download } from 'lucide-react';
 import appIcon from '../assets/icon.png';
 import api from './api';
 import GamesPage from './pages/GamesPage';
@@ -22,6 +22,21 @@ const navItems = [
 ];
 
 export default function App() {
+  const [updateState, setUpdateState] = useState(null); // null | { status: 'available'|'downloading'|'ready', version?, percent? }
+
+  useEffect(() => {
+    const offAvailable = api.onUpdateAvailable(({ version }) =>
+      setUpdateState({ status: 'available', version })
+    );
+    const offProgress = api.onUpdateProgress(({ percent }) =>
+      setUpdateState(s => ({ ...s, status: 'downloading', percent }))
+    );
+    const offDownloaded = api.onUpdateDownloaded(() =>
+      setUpdateState(s => ({ ...s, status: 'ready' }))
+    );
+    return () => { offAvailable(); offProgress(); offDownloaded(); };
+  }, []);
+
   useEffect(() => {
     let audioCtx = null;
 
@@ -72,6 +87,25 @@ export default function App() {
               <span>{label}</span>
             </NavLink>
           ))}
+          {updateState && (
+            <div className="update-banner">
+              <Download size={14} />
+              {updateState.status === 'available' && (
+                <span>v{updateState.version} available</span>
+              )}
+              {updateState.status === 'downloading' && (
+                <span>Downloading… {updateState.percent}%</span>
+              )}
+              {updateState.status === 'ready' && (
+                <>
+                  <span>Update ready</span>
+                  <button className="btn btn-primary btn-sm" onClick={() => api.installUpdate()}>
+                    Restart
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </nav>
         <main className="main-content">
           <Routes>
