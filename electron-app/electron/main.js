@@ -265,13 +265,11 @@ const { readOBSRecordingPath } = require('./obsIntegration');
 const { getProfiles, readEncodingSettings, writeEncodingSettings, isOBSRunning } = require('./obsEncoding');
 const {
   getOBSScenes,
-  checkSceneExists,
   createSceneFromTemplate,
   createSceneFromScratch,
   addAudioSourceToScenes,
   removeAudioSourceFromScenes,
   getOBSAudioInputs,
-  removeAudioSourceGlobally,
   getSceneAudioSources,
   testOBSConnection,
   getInputAudioTracks,
@@ -561,7 +559,6 @@ ipcMain.handle('obs:ws:create-scene-scratch', (_e, sceneName, options) =>
   createSceneFromScratch(store.get('settings').obsWebSocket, sceneName, options)
 );
 ipcMain.handle('obs:ws:add-audio-source', (_e, sceneNames, inputKind, inputName, inputSettings) => {
-  console.log('[debug] add-audio-source IPC received:', JSON.stringify({ sceneNames, inputKind, inputName, inputSettings }));
   return addAudioSourceToScenes(store.get('settings').obsWebSocket, sceneNames, inputKind, inputName, inputSettings || {});
 });
 ipcMain.handle('obs:ws:remove-audio-source', (_e, sceneNames, inputName) =>
@@ -602,7 +599,8 @@ ipcMain.handle('obs:ws:set-track-names', (_e, names) =>
 );
 ipcMain.handle('windows:list-audio-devices', async () => {
   const { exec } = require('child_process');
-  // Try Get-AudioDevice (AudioDeviceCmdlets) first; fall back to WMI
+  // Enumerate audio devices via WMI: output devices via Win32_SoundDevice,
+  // input/microphone devices via Win32_PnPEntity filtered by PNPClass AudioEndpoint
   const cmd = `powershell -NoProfile -Command "
     try {
       $devices = @();

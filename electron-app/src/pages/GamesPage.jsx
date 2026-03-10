@@ -76,6 +76,71 @@ function AudioIcon({ kind, size = 15 }) {
   return <Music size={size} />;
 }
 
+/**
+ * Fetch and combine all available audio inputs into a single list.
+ * Groups: OBS inputs already registered, Windows audio devices not in OBS,
+ * and running application processes (for per-app audio capture).
+ * Window strings for process capture are standardised to: [exe.exe]:ClassName:WindowTitle
+ *
+ * @returns {Promise<Array<{name: string, kind: string, source: string, ...}>>}
+ */
+async function buildAvailableAudioInputs() {
+  const [obsInputs, winDevices, runningApps, windows] = await Promise.all([
+    api.getOBSAudioInputs().catch(() => []),
+    api.listWindowsAudioDevices().catch(() => []),
+    api.listRunningApps().catch(() => []),
+    api.getVisibleWindows().catch(() => []),
+  ]);
+
+  // Build process name → window title map for constructing the OBS window selector
+  const windowTitleMap = new Map();
+  for (const w of (windows || [])) {
+    const proc = (w.process || '').toLowerCase();
+    if (!windowTitleMap.has(proc)) windowTitleMap.set(proc, w.title || '');
+  }
+
+  const combined = [];
+  const obsNames = new Set();
+  for (const inp of (obsInputs || [])) {
+    combined.push({ name: inp.inputName, kind: inp.inputKind, source: 'obs' });
+    obsNames.add(inp.inputName);
+  }
+
+  // Windows audio devices (output/input) not already in OBS
+  for (const dev of (winDevices || [])) {
+    if (!obsNames.has(dev.name)) {
+      const kind = dev.type === 'input' ? 'wasapi_input_capture' : 'wasapi_output_capture';
+      combined.push({ name: dev.name, kind, source: 'windows' });
+    }
+  }
+
+  // "Game Audio" virtual entry at the top of the applications group
+  combined.unshift({ name: 'Game Audio', kind: 'magic_game_audio', source: 'app' });
+
+  // Running applications for per-application audio capture
+  const obsAppNames = new Set(
+    (obsInputs || [])
+      .filter(i => i.inputKind === 'wasapi_process_output_capture')
+      .map(i => i.inputName)
+  );
+  for (const app of (runningApps || [])) {
+    if (!obsAppNames.has(app.name) && !obsNames.has(app.name)) {
+      const windowTitle = windowTitleMap.get(app.name.toLowerCase()) || '';
+      // Standardised OBS window string: [exe.exe]:ClassName:WindowTitle
+      combined.push({
+        name: app.name,
+        kind: 'wasapi_process_output_capture',
+        source: 'app',
+        exe: app.exe,
+        hasWindow: app.hasWindow,
+        inputSettings: { window: `[${app.exe}]::${windowTitle}` },
+      });
+    }
+  }
+
+  return combined;
+}
+
 export default function GamesPage() {
   const navigate = useNavigate();
   const [games, setGames] = useState([]);
@@ -292,12 +357,6 @@ export default function GamesPage() {
     loadGames();
   }
 
-  async function saveScene(id) {
-    await api.updateGame(id, { scene: editScene });
-    setEditingId(null);
-    loadGames();
-  }
-
   async function refreshWindows() {
     setLoadingWindows(true);
     const windows = await api.getVisibleWindows();
@@ -354,62 +413,7 @@ export default function GamesPage() {
     setLoadingAudioInputs(true);
     setAudioDropdownError(null);
     try {
-      // Fetch OBS audio inputs, Windows audio devices, running apps, and visible windows in parallel
-      const [obsInputs, winDevices, runningApps, visibleWindows] = await Promise.all([
-        api.getOBSAudioInputs().catch(() => []),
-        api.listWindowsAudioDevices().catch(() => []),
-        api.listRunningApps().catch(() => []),
-        api.getVisibleWindows().catch(() => []),
-      ]);
-
-      // Build process name → window title map for constructing the OBS window selector
-      // OBS wasapi_process_output_capture expects: "[Executable.exe]: Window Title"
-      const windowTitleMap = new Map();
-      for (const w of (visibleWindows || [])) {
-        const proc = (w.process || '').toLowerCase();
-        if (!windowTitleMap.has(proc)) windowTitleMap.set(proc, w.title || '');
-      }
-
-      // OBS entries first (already registered in OBS)
-      const combined = [];
-      const obsNames = new Set();
-      for (const inp of (obsInputs || [])) {
-        combined.push({ name: inp.inputName, kind: inp.inputKind, source: 'obs' });
-        obsNames.add(inp.inputName);
-      }
-      // Windows audio devices (output/input) not already in OBS
-      for (const dev of (winDevices || [])) {
-        if (!obsNames.has(dev.name)) {
-          const kind = dev.type === 'input' ? 'wasapi_input_capture' : 'wasapi_output_capture';
-          combined.push({ name: dev.name, kind, source: 'windows' });
-        }
-      }
-      // Running applications for application audio capture
-      const obsAppNames = new Set(
-        (obsInputs || [])
-          .filter(i => i.inputKind === 'wasapi_process_output_capture')
-          .map(i => i.inputName)
-      );
-
-      combined.unshift({
-        name: 'Game Audio',
-        kind: 'magic_game_audio',
-        source: 'app',
-      });
-
-      for (const app of (runningApps || [])) {
-        if (!obsAppNames.has(app.name) && !obsNames.has(app.name)) {
-          const windowTitle = windowTitleMap.get(app.name.toLowerCase()) || '';
-          combined.push({
-            name: app.name,
-            kind: 'wasapi_process_output_capture',
-            source: 'app',
-            exe: app.exe,
-            hasWindow: app.hasWindow,
-            inputSettings: { window: `${windowTitle}::${app.exe}` },
-          });
-        }
-      }
+      const combined = await buildAvailableAudioInputs();
       setAvailableAudioInputs(combined);
     } catch (err) {
       setAudioDropdownError(err.message || 'Failed to load audio sources');
@@ -492,7 +496,6 @@ export default function GamesPage() {
 
   async function addSourceToScene(sceneName, source) {
     if (!sceneName) return;
-    console.log('[debug] addSourceToScene:', sceneName, JSON.stringify(source));
     try {
       const result = await api.addAudioSourceToScenes([sceneName], source.kind, source.name, source.inputSettings || {});
       if (result.success) {
@@ -549,7 +552,18 @@ export default function GamesPage() {
   async function saveEditModal() {
     if (!editGameModal) return;
     const { game } = editGameModal;
-    await api.updateGame(game.id, { name: game.name, selector: game.selector, scene: game.scene });
+    const payload = {
+      name: game.name,
+      selector: game.selector,
+      scene: game.scene,
+      exe: game.exe,
+      windowClass: game.windowClass,
+      windowMatchPriority: game.windowMatchPriority,
+    };
+    if (game.icon_path !== undefined) {
+      payload.icon_path = game.icon_path;
+    }
+    await api.updateGame(game.id, payload);
     setEditGameModal(null);
     loadGames();
     showToast('Game saved');
@@ -771,7 +785,7 @@ export default function GamesPage() {
                                 {entry.kind === 'wasapi_input_capture' ? <Mic size={14} /> : <Music size={14} />}
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                   <div style={{ fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.name}</div>
-                                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{entry.type === 'input' ? 'Input device' : 'Output device'}</div>
+                                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{entry.kind === 'wasapi_input_capture' ? 'Input device' : 'Output device'}</div>
                                 </div>
                                 {alreadyAdded && <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>Added</span>}
                               </button>
@@ -1453,47 +1467,7 @@ function EditGameModal({
     setLoadingModalAudio(true);
     setModalAudioError(null);
     try {
-      const [obsInputs, winDevices, runningApps, visibleWindows] = await Promise.all([
-        api.getOBSAudioInputs().catch(() => []),
-        api.listWindowsAudioDevices().catch(() => []),
-        api.listRunningApps().catch(() => []),
-        api.getVisibleWindows().catch(() => []),
-      ]);
-
-      // Build process name → window title map
-      const windowTitleMap = new Map();
-      for (const w of (visibleWindows || [])) {
-        const proc = (w.process || '').toLowerCase();
-        if (!windowTitleMap.has(proc)) windowTitleMap.set(proc, w.title || '');
-      }
-
-      const combined = [];
-      const obsNames = new Set();
-      for (const inp of (obsInputs || [])) {
-        combined.push({ name: inp.inputName, kind: inp.inputKind, source: 'obs' });
-        obsNames.add(inp.inputName);
-      }
-      for (const dev of (winDevices || [])) {
-        if (!obsNames.has(dev.name)) {
-          combined.push({ name: dev.name, kind: dev.type === 'input' ? 'wasapi_input_capture' : 'wasapi_output_capture', source: 'windows' });
-        }
-      }
-      const obsAppNames = new Set(
-        (obsInputs || []).filter(i => i.inputKind === 'wasapi_process_output_capture').map(i => i.inputName)
-      );
-
-      combined.unshift({
-        name: 'Game Audio',
-        kind: 'magic_game_audio',
-        source: 'app',
-      });
-
-      for (const app of (runningApps || [])) {
-        if (!obsAppNames.has(app.name) && !obsNames.has(app.name)) {
-          const windowTitle = windowTitleMap.get(app.name.toLowerCase()) || '';
-          combined.push({ name: app.name, kind: 'wasapi_process_output_capture', source: 'app', exe: app.exe, hasWindow: app.hasWindow, inputSettings: { window: `${windowTitle}::${app.exe}` } });
-        }
-      }
+      const combined = await buildAvailableAudioInputs();
       setModalAudioInputs(combined);
     } catch (err) {
       setModalAudioError(err.message || 'Failed to load audio sources');

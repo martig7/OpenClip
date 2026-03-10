@@ -20,8 +20,20 @@ beforeEach(() => {
   vi.clearAllMocks()
   mockObsConnect.mockResolvedValue(undefined)
   mockObsDisconnect.mockResolvedValue(undefined)
-  // Default: empty scene list (used by GetSceneList calls)
-  mockObsCall.mockResolvedValue({ scenes: [] })
+  // Default behavior: return request-specific empty payloads so tests that don't
+  // explicitly override the mock still get a sensible (non-crashing) default.
+  mockObsCall.mockImplementation((requestType) => {
+    switch (requestType) {
+      case 'GetSceneList':
+        return Promise.resolve({ scenes: [] })
+      case 'GetSceneItemList':
+        return Promise.resolve({ sceneItems: [] })
+      case 'GetInputList':
+        return Promise.resolve({ inputs: [] })
+      default:
+        return Promise.resolve(undefined)
+    }
+  })
 })
 
 async function getModule() {

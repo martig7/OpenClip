@@ -370,18 +370,12 @@ async function addAudioSourceToScenes(wsSettings, sceneNames, inputKind, inputNa
 
           // Try to create a brand-new input and place it in this scene
           try {
-            console.log('[obsWebSocket] CreateInput:', JSON.stringify({ sceneName, inputName, inputKind, inputSettings }));
             await obs.call('CreateInput', {
               sceneName,
               inputName,
               inputKind,
               inputSettings: inputSettings || {},
             });
-            // Read back what OBS actually stored to verify the window format was accepted
-            try {
-              const stored = await obs.call('GetInputSettings', { inputName });
-              console.log('[obsWebSocket] Stored inputSettings after create:', JSON.stringify(stored.inputSettings));
-            } catch {}
             results.push({ scene: sceneName, status: 'added' });
           } catch (createErr) {
 
@@ -436,7 +430,8 @@ async function removeAudioSourceFromScenes(wsSettings, sceneNames, inputName) {
 
       for (const sceneName of sceneNames) {
         try {
-          const { sceneItems } = await obs.call('GetSceneItemList', { sceneName });
+          const response = await obs.call('GetSceneItemList', { sceneName }).catch(() => ({}));
+          const sceneItems = Array.isArray(response && response.sceneItems) ? response.sceneItems : [];
           const matching = sceneItems.filter(item => item.sourceName === inputName);
 
           if (matching.length === 0) {
@@ -513,8 +508,9 @@ async function getSceneAudioSources(wsSettings, sceneName) {
   }
   try {
     return await withOBSConnection(wsSettings, async (obs) => {
-      const { sceneItems } = await obs.call('GetSceneItemList', { sceneName: sceneName.trim() });
-      if (!sceneItems || sceneItems.length === 0) return [];
+      const response = await obs.call('GetSceneItemList', { sceneName: sceneName.trim() }).catch(() => ({}));
+      const sceneItems = Array.isArray(response && response.sceneItems) ? response.sceneItems : [];
+      if (sceneItems.length === 0) return [];
 
       // Filter to items whose source kind is an audio kind.
       // sceneItems contain sourceType and inputKind (OBS 30+); fall back to checking each
@@ -523,22 +519,40 @@ async function getSceneAudioSources(wsSettings, sceneName) {
       for (const item of sceneItems) {
         // OBS WS v5 typically includes inputKind on sceneItems for inputs
         if (item.inputKind && AUDIO_INPUT_KINDS.has(item.inputKind)) {
+          let inputSettings;
+          try {
+            const settingsResp = await obs.call('GetInputSettings', { inputName: item.sourceName });
+            inputSettings = settingsResp && settingsResp.inputSettings;
+          } catch {
+            // If we can't read settings, still return the audio item without them.
+          }
           audioItems.push({
             inputName: item.sourceName,
             inputKind: item.inputKind,
             sceneItemId: item.sceneItemId,
+            inputSettings,
           });
         } else if (!item.inputKind) {
           // Try to resolve kind via GetInputSettings (less efficient but safe)
           try {
-            const { inputKind } = await obs.call('GetInputKind', { inputName: item.sourceName }).catch(() =>
-              obs.call('GetInputSettings', { inputName: item.sourceName })
-            );
+            const resp = await obs.call('GetInputKind', { inputName: item.sourceName })
+              .catch(() => obs.call('GetInputSettings', { inputName: item.sourceName }));
+            const inputKind = resp && resp.inputKind;
+            let inputSettings = resp && resp.inputSettings;
             if (inputKind && AUDIO_INPUT_KINDS.has(inputKind)) {
+              if (!inputSettings) {
+                try {
+                  const settingsResp = await obs.call('GetInputSettings', { inputName: item.sourceName });
+                  inputSettings = settingsResp && settingsResp.inputSettings;
+                } catch {
+                  // proceed without inputSettings
+                }
+              }
               audioItems.push({
                 inputName: item.sourceName,
                 inputKind,
                 sceneItemId: item.sceneItemId,
+                inputSettings,
               });
             }
           } catch {
