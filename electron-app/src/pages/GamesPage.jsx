@@ -1,20 +1,30 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, Play, Square, Circle, Edit2, Check, X, Gamepad2, RefreshCw, ChevronDown, Image, Wand2, Settings, AlertTriangle, Music, Mic } from 'lucide-react';
+import { Plus, Trash2, Play, Square, Circle, Edit2, Check, X, Gamepad2, RefreshCw, ChevronDown, Image, Wand2, Settings, AlertTriangle, Music, Mic, Save } from 'lucide-react';
 import api from '../api';
 
-const AUDIO_SOURCE_DEFS = [
-  { kind: 'wasapi_output_capture', label: 'Desktop Audio', icon: 'music', description: 'Captures all system/game sound output' },
-  { kind: 'wasapi_input_capture', label: 'Microphone', icon: 'mic', description: 'Captures microphone input (separate audio track)' },
-];
+// Human-readable metadata for known OBS audio input kinds
+const AUDIO_KIND_META = {
+  wasapi_output_capture: { label: 'Desktop Audio', icon: 'music', description: 'Captures all system/game audio output' },
+  wasapi_input_capture: { label: 'Microphone / Input', icon: 'mic', description: 'Captures microphone or audio input device' },
+  coreaudio_output_capture: { label: 'Desktop Audio (Mac)', icon: 'music', description: 'Captures macOS system audio output' },
+  coreaudio_input_capture: { label: 'Microphone (Mac)', icon: 'mic', description: 'Captures macOS audio input device' },
+  pulse_output_capture: { label: 'Desktop Audio (Linux)', icon: 'music', description: 'Captures PulseAudio output' },
+  pulse_input_capture: { label: 'Microphone (Linux)', icon: 'mic', description: 'Captures PulseAudio input device' },
+};
+
+function AudioIcon({ kind, size = 15 }) {
+  const meta = AUDIO_KIND_META[kind];
+  if (!meta) return <Music size={size} />;
+  if (meta.icon === 'mic') return <Mic size={size} />;
+  return <Music size={size} />;
+}
 
 export default function GamesPage() {
   const navigate = useNavigate();
   const [games, setGames] = useState([]);
   const [watcherStatus, setWatcherStatus] = useState({ running: false, currentGame: null, startedAt: null, gameState: null });
   const [showAddModal, setShowAddModal] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [editScene, setEditScene] = useState('');
   const [newGame, setNewGame] = useState({ name: '', selector: '', scene: '', icon_path: '' });
   const [visibleWindows, setVisibleWindows] = useState([]);
   const [loadingWindows, setLoadingWindows] = useState(false);
@@ -28,12 +38,22 @@ export default function GamesPage() {
   const [sceneCreateStatus, setSceneCreateStatus] = useState(null); // { type: 'success'|'error', message }
   const [toast, setToast] = useState(null);
 
-  // Audio sources card state — per-source operation status
-  const [audioSourceStatus, setAudioSourceStatus] = useState({}); // { [kind]: { loading: bool, result: {type,msg} } }
+  // Master audio source list — sources the user wants in all game scenes
+  const [masterAudioSources, setMasterAudioSources] = useState([]); // [{ kind, label, name }]
+  const [applyingSource, setApplyingSource] = useState(null); // kind being applied
+
+  // Audio dropdown state
+  const [showAudioDropdown, setShowAudioDropdown] = useState(false);
+  const [availableAudioInputs, setAvailableAudioInputs] = useState([]); // combined OBS + Windows
+  const [loadingAudioInputs, setLoadingAudioInputs] = useState(false);
+  const [audioDropdownError, setAudioDropdownError] = useState(null);
+  const audioDropdownRef = useRef(null);
+
+  // Edit game modal
+  const [editGameModal, setEditGameModal] = useState(null); // { game, sceneAudioSources, loading }
 
   useEffect(() => {
     loadGames();
-    // Fetch watcher status once, then use the result for both state update and OBS script check
     api.getWatcherStatus().then(s => {
       setWatcherStatus(s);
       if (s.running) {
@@ -42,10 +62,21 @@ export default function GamesPage() {
         }).catch(() => {});
       }
     }).catch(() => {});
-    // Replace polling with server-push: main process sends full status on any watcher state change
     const unsub = api.onWatcherStatusPush((status) => setWatcherStatus(status));
     return () => unsub();
   }, []);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!showAudioDropdown) return;
+    const handler = (e) => {
+      if (audioDropdownRef.current && !audioDropdownRef.current.contains(e.target)) {
+        setShowAudioDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showAudioDropdown]);
 
   async function loadGames() {
     setGames(await api.getGames());
@@ -166,34 +197,133 @@ export default function GamesPage() {
     return games.map(g => g.scene).filter(Boolean);
   }
 
-  async function addAudioSource(kind, label) {
-    const sceneNames = getGameSceneNames();
-    if (sceneNames.length === 0) {
-      setAudioSourceStatus(s => ({ ...s, [kind]: { loading: false, result: { type: 'error', msg: 'No game scenes configured yet. Add games with scene names first.' } } }));
-      return;
-    }
-    setAudioSourceStatus(s => ({ ...s, [kind]: { loading: true, result: null } }));
+  async function loadAudioInputsForDropdown() {
+    setLoadingAudioInputs(true);
+    setAudioDropdownError(null);
     try {
-      const result = await api.addAudioSourceToScenes(sceneNames, kind, label);
-      setAudioSourceStatus(s => ({ ...s, [kind]: { loading: false, result: { type: result.success ? 'success' : 'error', msg: result.message } } }));
+      // Fetch OBS audio inputs and Windows audio devices in parallel
+      const [obsInputs, winDevices] = await Promise.all([
+        api.getOBSAudioInputs().catch(() => []),
+        api.listWindowsAudioDevices().catch(() => []),
+      ]);
+
+      // Build a combined list — OBS entries first, then Windows devices not already in OBS
+      const combined = [];
+      const obsNames = new Set();
+      for (const inp of (obsInputs || [])) {
+        combined.push({ name: inp.inputName, kind: inp.inputKind, source: 'obs' });
+        obsNames.add(inp.inputName);
+      }
+      for (const dev of (winDevices || [])) {
+        if (!obsNames.has(dev.name)) {
+          const kind = dev.type === 'input' ? 'wasapi_input_capture' : 'wasapi_output_capture';
+          combined.push({ name: dev.name, kind, source: 'windows' });
+        }
+      }
+      setAvailableAudioInputs(combined);
     } catch (err) {
-      setAudioSourceStatus(s => ({ ...s, [kind]: { loading: false, result: { type: 'error', msg: err.message || 'Failed' } } }));
+      setAudioDropdownError(err.message || 'Failed to load audio sources');
+    } finally {
+      setLoadingAudioInputs(false);
     }
   }
 
-  async function removeAudioSource(kind, label) {
-    const sceneNames = getGameSceneNames();
-    if (sceneNames.length === 0) {
-      setAudioSourceStatus(s => ({ ...s, [kind]: { loading: false, result: { type: 'error', msg: 'No game scenes configured yet.' } } }));
+  async function addMasterSource(entry) {
+    // Don't add duplicates (by name)
+    if (masterAudioSources.some(s => s.name === entry.name)) {
+      setShowAudioDropdown(false);
       return;
     }
-    setAudioSourceStatus(s => ({ ...s, [kind]: { loading: true, result: null } }));
-    try {
-      const result = await api.removeAudioSourceFromScenes(sceneNames, label);
-      setAudioSourceStatus(s => ({ ...s, [kind]: { loading: false, result: { type: result.success ? 'success' : 'error', msg: result.message } } }));
-    } catch (err) {
-      setAudioSourceStatus(s => ({ ...s, [kind]: { loading: false, result: { type: 'error', msg: err.message || 'Failed' } } }));
+    const meta = AUDIO_KIND_META[entry.kind];
+    const newSource = { name: entry.name, kind: entry.kind, label: meta?.label || entry.name };
+    const updated = [...masterAudioSources, newSource];
+    setMasterAudioSources(updated);
+    setShowAudioDropdown(false);
+
+    // Apply to all game scenes immediately
+    const sceneNames = getGameSceneNames();
+    if (sceneNames.length > 0) {
+      setApplyingSource(entry.name);
+      try {
+        const result = await api.addAudioSourceToScenes(sceneNames, entry.kind, entry.name);
+        if (result.success) {
+          showToast(`"${entry.name}" added to ${sceneNames.length} scene(s)`);
+        } else {
+          showToast(`Warning: ${result.message}`);
+        }
+      } catch (err) {
+        showToast(`Failed to add to scenes: ${err.message}`);
+      } finally {
+        setApplyingSource(null);
+      }
     }
+  }
+
+  async function removeMasterSource(sourceName) {
+    setMasterAudioSources(prev => prev.filter(s => s.name !== sourceName));
+    // Optionally remove from all scenes — let user decide by removing individually per-scene
+  }
+
+  async function openEditModal(game) {
+    setEditGameModal({ game: { ...game }, sceneAudioSources: [], loading: !!game.scene });
+    if (game.scene) {
+      try {
+        const sources = await api.getSceneAudioSources(game.scene);
+        setEditGameModal(prev => prev ? { ...prev, sceneAudioSources: sources || [], loading: false } : null);
+      } catch {
+        setEditGameModal(prev => prev ? { ...prev, sceneAudioSources: [], loading: false } : null);
+      }
+    }
+  }
+
+  async function addSourceToScene(sceneName, source) {
+    if (!sceneName) return;
+    try {
+      const result = await api.addAudioSourceToScenes([sceneName], source.kind, source.name);
+      if (result.success) {
+        setEditGameModal(prev => {
+          if (!prev) return null;
+          const already = prev.sceneAudioSources.some(s => s.inputName === source.name);
+          if (already) return prev;
+          return {
+            ...prev,
+            sceneAudioSources: [...prev.sceneAudioSources, { inputName: source.name, inputKind: source.kind }],
+          };
+        });
+        showToast(`"${source.name}" added to scene`);
+      } else {
+        showToast(`Warning: ${result.message}`);
+      }
+    } catch (err) {
+      showToast(`Failed: ${err.message}`);
+    }
+  }
+
+  async function removeSourceFromScene(sceneName, inputName) {
+    if (!sceneName) return;
+    try {
+      const result = await api.removeAudioSourceFromScenes([sceneName], inputName);
+      if (result.success) {
+        setEditGameModal(prev => prev ? {
+          ...prev,
+          sceneAudioSources: prev.sceneAudioSources.filter(s => s.inputName !== inputName),
+        } : null);
+        showToast(`"${inputName}" removed from scene`);
+      } else {
+        showToast(`Warning: ${result.message}`);
+      }
+    } catch (err) {
+      showToast(`Failed: ${err.message}`);
+    }
+  }
+
+  async function saveEditModal() {
+    if (!editGameModal) return;
+    const { game } = editGameModal;
+    await api.updateGame(game.id, { name: game.name, selector: game.selector, scene: game.scene });
+    setEditGameModal(null);
+    loadGames();
+    showToast('Game saved');
   }
 
   function openAddModal() {
@@ -232,7 +362,7 @@ export default function GamesPage() {
       </div>
 
       <div className="page-body">
-        {/* Watcher Status Card - always visible */}
+        {/* Watcher Status Card */}
         <WatcherStatusCard status={watcherStatus} onToggle={toggleWatcher} scriptWarning={scriptWarning} onDismissWarning={() => setScriptWarning(null)} onGoToSettings={() => navigate('/settings')} />
 
         <div className="card" style={{ marginTop: 16 }}>
@@ -268,32 +398,14 @@ export default function GamesPage() {
                   <div className="list-item-info">
                     <div className="list-item-title">{game.name}</div>
                     <div className="list-item-subtitle">
-                      Selector: {game.selector}
-                      {editingId === game.id ? (
-                        <span style={{ marginLeft: 8 }}>
-                          <input
-                            className="form-input"
-                            style={{ width: 120, display: 'inline', padding: '2px 6px', fontSize: 11 }}
-                            value={editScene}
-                            onChange={e => setEditScene(e.target.value)}
-                            placeholder="Scene name"
-                          />
-                          <button className="btn-icon" onClick={() => saveScene(game.id)}>
-                            <Check size={12} />
-                          </button>
-                          <button className="btn-icon" onClick={() => setEditingId(null)}>
-                            <X size={12} />
-                          </button>
-                        </span>
-                      ) : (
-                        game.scene && <span style={{ marginLeft: 8, color: 'var(--text-muted)' }}>| Scene: {game.scene}</span>
-                      )}
+                      {game.selector}
+                      {game.scene && <span style={{ marginLeft: 6, color: 'var(--text-muted)' }}>· Scene: {game.scene}</span>}
                     </div>
                   </div>
                   <button
                     className="btn-icon"
-                    onClick={() => { setEditingId(game.id); setEditScene(game.scene || ''); }}
-                    title="Edit scene"
+                    onClick={() => openEditModal(game)}
+                    title="Edit game"
                   >
                     <Edit2 size={14} />
                   </button>
@@ -315,55 +427,172 @@ export default function GamesPage() {
         <div className="card" style={{ marginTop: 16 }}>
           <div className="card-header">
             <span className="card-title">Scene Audio Sources</span>
-          </div>
-          <div style={{ padding: '4px 0 8px', fontSize: 12, color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', marginBottom: 12, paddingLeft: 16, paddingRight: 16 }}>
-            Add or remove audio sources from all game scenes in OBS at once. Audio sources can be routed to separate tracks in OBS output settings.
-          </div>
-          {AUDIO_SOURCE_DEFS.map(({ kind, label, icon, description }) => {
-            const status = audioSourceStatus[kind];
-            return (
-              <div key={kind} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--border)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 'var(--radius-sm)', background: 'var(--bg-tertiary)', flexShrink: 0 }}>
-                  {icon === 'music' ? <Music size={16} /> : <Mic size={16} />}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500 }}>{label}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{description}</div>
-                  {status?.result && (
-                    <div style={{
-                      marginTop: 4,
-                      fontSize: 11,
-                      color: status.result.type === 'success' ? 'var(--success)' : 'var(--danger)',
-                    }}>
-                      {status.result.msg}
+            <div style={{ position: 'relative' }} ref={audioDropdownRef}>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => {
+                  if (!showAudioDropdown) {
+                    setShowAudioDropdown(true);
+                    loadAudioInputsForDropdown();
+                  } else {
+                    setShowAudioDropdown(false);
+                  }
+                }}
+              >
+                <Plus size={13} /> Add Source
+              </button>
+
+              {showAudioDropdown && (
+                <div style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 6px)',
+                  right: 0,
+                  zIndex: 200,
+                  minWidth: 300,
+                  background: 'var(--bg-secondary)',
+                  border: '1px solid var(--border-light)',
+                  borderRadius: 'var(--radius)',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                  overflow: 'hidden',
+                }}>
+                  <div style={{ padding: '8px 12px', fontSize: 11, color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Select Audio Source
+                  </div>
+                  {loadingAudioInputs ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px', fontSize: 12, color: 'var(--text-muted)' }}>
+                      <RefreshCw size={13} className="spinning" /> Loading audio sources…
+                    </div>
+                  ) : audioDropdownError ? (
+                    <div style={{ padding: '10px 14px' }}>
+                      <div style={{ fontSize: 12, color: 'var(--danger)', marginBottom: 4 }}>{audioDropdownError}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Make sure OBS is running and WebSocket is configured.</div>
+                    </div>
+                  ) : availableAudioInputs.length === 0 ? (
+                    <div style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)' }}>
+                      No audio sources found. Ensure OBS is running.
+                    </div>
+                  ) : (
+                    <div style={{ maxHeight: 240, overflowY: 'auto' }}>
+                      {/* Group: OBS sources */}
+                      {availableAudioInputs.filter(a => a.source === 'obs').length > 0 && (
+                        <>
+                          <div style={{ padding: '6px 12px 2px', fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>OBS Inputs</div>
+                          {availableAudioInputs.filter(a => a.source === 'obs').map((entry, i) => {
+                            const alreadyAdded = masterAudioSources.some(s => s.name === entry.name);
+                            const meta = AUDIO_KIND_META[entry.kind];
+                            return (
+                              <button
+                                key={i}
+                                onClick={() => !alreadyAdded && addMasterSource(entry)}
+                                disabled={alreadyAdded}
+                                style={{
+                                  display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                                  padding: '7px 14px', background: 'none', border: 'none',
+                                  cursor: alreadyAdded ? 'default' : 'pointer', textAlign: 'left',
+                                  opacity: alreadyAdded ? 0.5 : 1,
+                                  transition: 'background 0.1s',
+                                }}
+                                onMouseEnter={e => { if (!alreadyAdded) e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
+                              >
+                                <AudioIcon kind={entry.kind} size={14} />
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.name}</div>
+                                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{meta?.label || entry.kind}</div>
+                                </div>
+                                {alreadyAdded && <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>Added</span>}
+                              </button>
+                            );
+                          })}
+                        </>
+                      )}
+                      {/* Group: Windows devices not in OBS */}
+                      {availableAudioInputs.filter(a => a.source === 'windows').length > 0 && (
+                        <>
+                          <div style={{ padding: '6px 12px 2px', fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', borderTop: '1px solid var(--border)', marginTop: 4 }}>Windows Audio Devices</div>
+                          {availableAudioInputs.filter(a => a.source === 'windows').map((entry, i) => {
+                            const alreadyAdded = masterAudioSources.some(s => s.name === entry.name);
+                            return (
+                              <button
+                                key={i}
+                                onClick={() => !alreadyAdded && addMasterSource(entry)}
+                                disabled={alreadyAdded}
+                                style={{
+                                  display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                                  padding: '7px 14px', background: 'none', border: 'none',
+                                  cursor: alreadyAdded ? 'default' : 'pointer', textAlign: 'left',
+                                  opacity: alreadyAdded ? 0.5 : 1,
+                                  transition: 'background 0.1s',
+                                }}
+                                onMouseEnter={e => { if (!alreadyAdded) e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
+                              >
+                                {entry.kind === 'wasapi_input_capture' ? <Mic size={14} /> : <Music size={14} />}
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.name}</div>
+                                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{entry.type === 'input' ? 'Input device' : 'Output device'}</div>
+                                </div>
+                                {alreadyAdded && <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>Added</span>}
+                              </button>
+                            );
+                          })}
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
-                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+              )}
+            </div>
+          </div>
+
+          {/* Description */}
+          <div style={{ padding: '4px 16px 10px', fontSize: 12, color: 'var(--text-muted)', borderBottom: '1px solid var(--border)' }}>
+            Audio sources added here are applied to all game scenes. Use the Edit button on a game to manage per-scene sources.
+          </div>
+
+          {/* Master source list */}
+          {masterAudioSources.length === 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '28px 16px', gap: 8 }}>
+              <Music size={28} style={{ color: 'var(--text-muted)', opacity: 0.5 }} />
+              <div style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center' }}>No audio sources added yet.</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', opacity: 0.7 }}>Click <strong>Add Source</strong> to pick from OBS inputs or Windows audio devices.</div>
+            </div>
+          ) : (
+            masterAudioSources.map(src => {
+              const meta = AUDIO_KIND_META[src.kind];
+              const isApplying = applyingSource === src.name;
+              return (
+                <div key={src.name} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 16px', borderBottom: '1px solid var(--border)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 'var(--radius-sm)', background: 'var(--bg-tertiary)', flexShrink: 0 }}>
+                    <AudioIcon kind={src.kind} size={15} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{src.name}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{meta?.label || src.kind}</div>
+                  </div>
+                  {isApplying && (
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <RefreshCw size={11} className="spinning" /> Applying…
+                    </span>
+                  )}
                   <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => addAudioSource(kind, label)}
-                    disabled={status?.loading}
-                    title={`Add ${label} to all game scenes`}
+                    className="btn-icon"
+                    onClick={() => removeMasterSource(src.name)}
+                    title="Remove from master list"
+                    style={{ color: 'var(--danger)', flexShrink: 0 }}
                   >
-                    {status?.loading ? <RefreshCw size={12} className="spinning" /> : <Plus size={12} />} Add to all
-                  </button>
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => removeAudioSource(kind, label)}
-                    disabled={status?.loading}
-                    title={`Remove ${label} from all game scenes`}
-                    style={{ color: 'var(--danger)' }}
-                  >
-                    {status?.loading ? <RefreshCw size={12} className="spinning" /> : <Trash2 size={12} />} Remove from all
+                    <Trash2 size={14} />
                   </button>
                 </div>
-              </div>
-            );
-          })}
-          <div style={{ padding: '8px 16px', fontSize: 11, color: 'var(--text-muted)' }}>
-            Changes apply to all game scenes that have a scene name set. OBS must be running with WebSocket enabled.
-          </div>
+              );
+            })
+          )}
+
+          {masterAudioSources.length > 0 && (
+            <div style={{ padding: '8px 16px', fontSize: 11, color: 'var(--text-muted)' }}>
+              OBS must be running with WebSocket enabled. Removing from this list does not remove from existing scenes.
+            </div>
+          )}
         </div>
       </div>
 
@@ -647,6 +876,20 @@ export default function GamesPage() {
           </div>
         </div>
       )}
+
+      {/* Edit Game Modal */}
+      {editGameModal && (
+        <EditGameModal
+          modal={editGameModal}
+          masterAudioSources={masterAudioSources}
+          onChangeGame={updates => setEditGameModal(prev => prev ? { ...prev, game: { ...prev.game, ...updates } } : null)}
+          onSave={saveEditModal}
+          onClose={() => setEditGameModal(null)}
+          onAddSourceToScene={addSourceToScene}
+          onRemoveSourceFromScene={removeSourceFromScene}
+        />
+      )}
+
       {toast && <div className="toast">{toast}</div>}
     </>
   );
@@ -757,6 +1000,181 @@ function WatcherStatusCard({ status, onToggle, scriptWarning, onDismissWarning, 
             )}
             {state.label}
           </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * EditGameModal — allows editing game name, selector, OBS scene, and per-scene audio sources.
+ * Audio sources are shown from the OBS scene; ones not in masterAudioSources get an amber label.
+ */
+function EditGameModal({ modal, masterAudioSources, onChangeGame, onSave, onClose, onAddSourceToScene, onRemoveSourceFromScene }) {
+  const { game, sceneAudioSources, loading } = modal;
+  const masterNames = new Set(masterAudioSources.map(s => s.name));
+
+  // State for 'add from master' dropdown inside the modal
+  const [addFromMaster, setAddFromMaster] = useState('');
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 560 }}>
+        <h2>Edit Game</h2>
+        <p>Edit game details and manage audio sources for this scene.</p>
+
+        {/* Name */}
+        <div className="form-group">
+          <label className="form-label">Game Name</label>
+          <input
+            className="form-input"
+            value={game.name || ''}
+            onChange={e => onChangeGame({ name: e.target.value })}
+            placeholder="e.g. Valorant"
+          />
+        </div>
+
+        {/* Selector */}
+        <div className="form-group">
+          <label className="form-label">Window Selector</label>
+          <input
+            className="form-input"
+            value={game.selector || ''}
+            onChange={e => onChangeGame({ selector: e.target.value })}
+            placeholder="e.g. VALORANT or valorant.exe"
+          />
+          <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
+            Window title or process name to match for auto-recording
+          </span>
+        </div>
+
+        {/* Scene */}
+        <div className="form-group">
+          <label className="form-label">OBS Scene</label>
+          <input
+            className="form-input"
+            value={game.scene || ''}
+            onChange={e => onChangeGame({ scene: e.target.value })}
+            placeholder="e.g. Gaming Scene (optional)"
+          />
+        </div>
+
+        {/* Audio Sources section */}
+        <div style={{ marginTop: 4, marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Music size={13} />
+            Scene Audio Sources
+            {game.scene && (
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>
+                — {game.scene}
+              </span>
+            )}
+          </div>
+
+          {!game.scene ? (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '8px 0' }}>
+              Set an OBS scene name above to manage audio sources.
+            </div>
+          ) : loading ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-muted)', padding: '8px 0' }}>
+              <RefreshCw size={13} className="spinning" /> Loading scene audio sources…
+            </div>
+          ) : (
+            <>
+              {/* List of existing scene audio sources */}
+              {sceneAudioSources.length === 0 ? (
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '8px 10px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-sm)' }}>
+                  No audio sources found in this OBS scene.
+                </div>
+              ) : (
+                <div style={{ background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-sm)', overflow: 'hidden', marginBottom: 10 }}>
+                  {sceneAudioSources.map((src, i) => {
+                    const isInMaster = masterNames.has(src.inputName);
+                    const meta = AUDIO_KIND_META[src.inputKind];
+                    return (
+                      <div
+                        key={i}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 10,
+                          padding: '7px 12px',
+                          borderBottom: i < sceneAudioSources.length - 1 ? '1px solid var(--border)' : 'none',
+                        }}
+                      >
+                        <AudioIcon kind={src.inputKind} size={14} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {src.inputName}
+                          </div>
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{meta?.label || src.inputKind}</div>
+                        </div>
+                        {!isInMaster && (
+                          <span style={{
+                            fontSize: 10, fontWeight: 500,
+                            color: '#f59e0b',
+                            background: 'rgba(245,158,11,0.12)',
+                            border: '1px solid rgba(245,158,11,0.3)',
+                            borderRadius: 4,
+                            padding: '1px 6px',
+                            flexShrink: 0,
+                            whiteSpace: 'nowrap',
+                          }}>
+                            Not in master list
+                          </span>
+                        )}
+                        <button
+                          className="btn-icon"
+                          onClick={() => onRemoveSourceFromScene(game.scene, src.inputName)}
+                          title="Remove from scene"
+                          style={{ color: 'var(--danger)', flexShrink: 0 }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Add from master list */}
+              {masterAudioSources.length > 0 && (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <select
+                    className="form-input"
+                    value={addFromMaster}
+                    onChange={e => setAddFromMaster(e.target.value)}
+                    style={{ flex: 1 }}
+                  >
+                    <option value="">Add from master list…</option>
+                    {masterAudioSources
+                      .filter(s => !sceneAudioSources.some(sc => sc.inputName === s.name))
+                      .map((s, i) => (
+                        <option key={i} value={s.name}>{s.name}</option>
+                      ))}
+                  </select>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    disabled={!addFromMaster}
+                    onClick={() => {
+                      const src = masterAudioSources.find(s => s.name === addFromMaster);
+                      if (src) {
+                        onAddSourceToScene(game.scene, { name: src.name, kind: src.kind });
+                        setAddFromMaster('');
+                      }
+                    }}
+                  >
+                    <Plus size={13} /> Add
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="modal-actions">
+          <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={onSave}>
+            <Save size={13} /> Save
+          </button>
         </div>
       </div>
     </div>

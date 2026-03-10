@@ -246,7 +246,7 @@ const { setupGameWatcher } = require('./gameWatcher');
 const { setupFileManager } = require('./fileManager');
 const { readOBSRecordingPath } = require('./obsIntegration');
 const { getProfiles, readEncodingSettings, writeEncodingSettings, isOBSRunning } = require('./obsEncoding');
-const { getOBSScenes, createSceneFromTemplate, createSceneFromScratch, addAudioSourceToScenes, removeAudioSourceFromScenes, testOBSConnection } = require('./obsWebSocket');
+const { getOBSScenes, createSceneFromTemplate, createSceneFromScratch, addAudioSourceToScenes, removeAudioSourceFromScenes, testOBSConnection, getOBSAudioInputs, getSceneAudioSources } = require('./obsWebSocket');
 const { readOBSWebSocketQR } = require('./qrCodeReader');
 const { startApiServer } = require('./apiServer');
 const { RUNTIME_DIR, STATE_FILE, SCRIPT_MARKER_FILE } = require('./constants');
@@ -526,6 +526,55 @@ ipcMain.handle('obs:ws:add-audio-source', (_e, sceneNames, inputKind, inputName)
 ipcMain.handle('obs:ws:remove-audio-source', (_e, sceneNames, inputName) =>
   removeAudioSourceFromScenes(store.get('settings').obsWebSocket, sceneNames, inputName)
 );
+ipcMain.handle('obs:ws:get-audio-inputs', async () => {
+  try {
+    return await getOBSAudioInputs(store.get('settings').obsWebSocket);
+  } catch (err) {
+    console.error('[main] obs:ws:get-audio-inputs error:', err.message);
+    throw err;
+  }
+});
+ipcMain.handle('obs:ws:get-scene-audio-sources', async (_e, sceneName) => {
+  try {
+    return await getSceneAudioSources(store.get('settings').obsWebSocket, sceneName);
+  } catch (err) {
+    console.error('[main] obs:ws:get-scene-audio-sources error:', err.message);
+    throw err;
+  }
+});
+ipcMain.handle('windows:list-audio-devices', async () => {
+  const { exec } = require('child_process');
+  // Try Get-AudioDevice (AudioDeviceCmdlets) first; fall back to WMI
+  const cmd = `powershell -NoProfile -Command "
+    try {
+      $devices = @();
+      Get-WmiObject Win32_SoundDevice | ForEach-Object {
+        $devices += [PSCustomObject]@{ name=$_.Name; type='output'; id=$_.DeviceID }
+      };
+      Get-WmiObject Win32_PnPEntity | Where-Object { $_.PNPClass -eq 'AudioEndpoint' -and $_.Name -match 'Microphone|mic|input' } | ForEach-Object {
+        $devices += [PSCustomObject]@{ name=$_.Name; type='input'; id=$_.DeviceID }
+      };
+      $devices | ConvertTo-Json -Compress
+    } catch { '[]' }
+  "`;
+  return new Promise((resolve) => {
+    exec(cmd, { encoding: 'utf-8', timeout: 8000 }, (error, stdout) => {
+      if (error) return resolve([]);
+      try {
+        const raw = stdout.trim();
+        if (!raw || raw === '[]') return resolve([]);
+        const parsed = JSON.parse(raw);
+        const items = Array.isArray(parsed) ? parsed : [parsed];
+        resolve(items
+          .filter(d => d && d.name)
+          .map(d => ({ name: d.name, type: d.type || 'output', id: d.id || d.name }))
+        );
+      } catch {
+        resolve([]);
+      }
+    });
+  });
+});
 ipcMain.handle('obs:ws:read-qr', async (_event, imagePath) => {
   return await readOBSWebSocketQR(imagePath);
 });

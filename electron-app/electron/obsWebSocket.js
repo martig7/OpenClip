@@ -450,6 +450,92 @@ async function removeAudioSourceFromScenes(wsSettings, sceneNames, inputName) {
   }
 }
 
+// The set of OBS input kinds that represent audio sources
+const AUDIO_INPUT_KINDS = new Set([
+  'wasapi_output_capture',
+  'wasapi_input_capture',
+  'coreaudio_input_capture',
+  'coreaudio_output_capture',
+  'pulse_input_capture',
+  'pulse_output_capture',
+]);
+
+/**
+ * Fetch all audio inputs currently registered in OBS.
+ * Uses GetInputList filtered to known audio input kinds.
+ *
+ * @param {object} wsSettings - { host, port, password }
+ * @returns {Promise<Array<{ inputName: string, inputKind: string }>>}
+ */
+async function getOBSAudioInputs(wsSettings) {
+  try {
+    return await withOBSConnection(wsSettings, async (obs) => {
+      const { inputs } = await obs.call('GetInputList');
+      return (inputs || [])
+        .filter(inp => AUDIO_INPUT_KINDS.has(inp.inputKind))
+        .map(inp => ({ inputName: inp.inputName, inputKind: inp.inputKind }));
+    });
+  } catch (err) {
+    console.error('[obsWebSocket] Failed to get OBS audio inputs:', err.message);
+    throw err;
+  }
+}
+
+/**
+ * Get all audio sources currently in a specific OBS scene.
+ * Returns items whose source kind is an audio input kind.
+ *
+ * @param {object} wsSettings - { host, port, password }
+ * @param {string} sceneName - The OBS scene name to query
+ * @returns {Promise<Array<{ inputName: string, inputKind: string, sceneItemId: number }>>}
+ */
+async function getSceneAudioSources(wsSettings, sceneName) {
+  if (!sceneName || !sceneName.trim()) {
+    return [];
+  }
+  try {
+    return await withOBSConnection(wsSettings, async (obs) => {
+      const { sceneItems } = await obs.call('GetSceneItemList', { sceneName: sceneName.trim() });
+      if (!sceneItems || sceneItems.length === 0) return [];
+
+      // Filter to items whose source kind is an audio kind.
+      // sceneItems contain sourceType and inputKind (OBS 30+); fall back to checking each
+      // source's settings via GetInputSettings if inputKind is not directly present.
+      const audioItems = [];
+      for (const item of sceneItems) {
+        // OBS WS v5 typically includes inputKind on sceneItems for inputs
+        if (item.inputKind && AUDIO_INPUT_KINDS.has(item.inputKind)) {
+          audioItems.push({
+            inputName: item.sourceName,
+            inputKind: item.inputKind,
+            sceneItemId: item.sceneItemId,
+          });
+        } else if (!item.inputKind) {
+          // Try to resolve kind via GetInputSettings (less efficient but safe)
+          try {
+            const { inputKind } = await obs.call('GetInputKind', { inputName: item.sourceName }).catch(() =>
+              obs.call('GetInputSettings', { inputName: item.sourceName })
+            );
+            if (inputKind && AUDIO_INPUT_KINDS.has(inputKind)) {
+              audioItems.push({
+                inputName: item.sourceName,
+                inputKind,
+                sceneItemId: item.sceneItemId,
+              });
+            }
+          } catch {
+            // Not an input we can read — skip
+          }
+        }
+      }
+      return audioItems;
+    });
+  } catch (err) {
+    console.error('[obsWebSocket] Failed to get scene audio sources:', err.message);
+    throw err;
+  }
+}
+
 /**
  * Test the connection to OBS WebSocket.
  * @param {object} wsSettings - { host, port, password }
@@ -466,4 +552,4 @@ async function testOBSConnection(wsSettings) {
   }
 }
 
-module.exports = { getOBSScenes, createSceneFromTemplate, createSceneFromScratch, addAudioSourceToScenes, removeAudioSourceFromScenes, testOBSConnection };
+module.exports = { getOBSScenes, createSceneFromTemplate, createSceneFromScratch, addAudioSourceToScenes, removeAudioSourceFromScenes, testOBSConnection, getOBSAudioInputs, getSceneAudioSources };
