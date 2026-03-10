@@ -286,7 +286,7 @@ function StoragePage() {
       const factor = e.deltaY > 0 ? 0.88 : 1.14
       const curZoom = zoomRef.current
       const curPan = panRef.current
-      const newZoom = Math.max(0.5, Math.min(5, curZoom * factor))
+      const newZoom = Math.max(0.5, Math.min(1000, curZoom * factor))
       const mouseX = e.clientX - rect.left
       const mouseY = e.clientY - rect.top
       const cx = (mouseX - curPan.x) / curZoom
@@ -492,7 +492,7 @@ function StoragePage() {
     const anchorY = rect.height / 2
     const curZoom = zoomRef.current
     const curPan = panRef.current
-    const newZoom = Math.max(0.5, Math.min(5, curZoom * factor))
+    const newZoom = Math.max(0.5, Math.min(1000, curZoom * factor))
     const cx = (anchorX - curPan.x) / curZoom
     const cy = (anchorY - curPan.y) / curZoom
     const newPanX = anchorX - cx * newZoom
@@ -535,6 +535,26 @@ function StoragePage() {
   zoomRef.current = zoom
 
   // ── Canvas drawing (imperative, does not touch React DOM) ────────────────────
+  // Draws text truncated to maxWidth with a trailing ellipsis — avoids the Canvas
+  // native maxWidth behaviour which horizontally compresses/stretches glyphs.
+  function fillTextTruncated(ctx, text, x, y, maxWidth) {
+    if (maxWidth <= 0) return
+    if (ctx.measureText(text).width <= maxWidth) {
+      ctx.fillText(text, x, y)
+      return
+    }
+    // Binary-search for the longest prefix that fits (including '…')
+    const ellipsis = '\u2026'
+    let lo = 0, hi = text.length
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2)
+      if (ctx.measureText(text.slice(0, mid) + ellipsis).width <= maxWidth) lo = mid
+      else hi = mid - 1
+    }
+    if (lo === 0) return // not even one character fits — skip entirely
+    ctx.fillText(text.slice(0, lo) + ellipsis, x, y)
+  }
+
   // drawCanvasRef.current is updated every render so hot-path handlers always call the latest closure
   drawCanvasRef.current = () => {
     const canvas = canvasRef.current
@@ -604,13 +624,13 @@ function StoragePage() {
       if (minDim >= 52) {
         ctx.fillStyle = color
         ctx.font = 'bold 10px system-ui, sans-serif'
-        ctx.fillText(item.game_name, x + 5, y + 17, w - 28)
+        fillTextTruncated(ctx, item.game_name, x + 5, y + 17, w - 28)
       }
       if (minDim >= 80) {
         ctx.fillStyle = '#999'
         ctx.font = '9px system-ui, sans-serif'
-        ctx.fillText(item.filename, x + 5, y + 29, w - 10)
-        ctx.fillText(item.size_formatted, x + 5, y + 41, w - 10)
+        fillTextTruncated(ctx, item.filename, x + 5, y + 29, w - 10)
+        fillTextTruncated(ctx, item.size_formatted, x + 5, y + 41, w - 10)
       }
 
       // Lock indicator — drawn as a small padlock shape (top-right corner)
