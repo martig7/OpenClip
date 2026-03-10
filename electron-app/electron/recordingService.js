@@ -243,8 +243,9 @@ function createClip(sourcePath, startTime, endTime, gameName = 'Unknown', audioT
     const proc = execFile(FFMPEG_PATH, args, { timeout: 120000 },
       (error, _stdout, stderr) => {
         activeFFmpeg.delete(proc);
-        if (error) return reject(new Error(`FFmpeg error: ${stderr}`));
-        invalidateCache();
+        if (error) return reject(new Error(`FFmpeg error: ${stderr || error.message}`));
+        cache.clips.data = null;
+        cache.clips.time = 0;
         const info = parseRecordingInfo(outputPath, gameName);
         resolve(info || { filename: outputFilename, path: outputPath });
       }
