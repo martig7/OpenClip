@@ -15,7 +15,7 @@
  *   afterAll   — kill the OBS process and delete the temp config directory
  */
 
-import { describe, it, expect, beforeAll, beforeEach, afterAll, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import { isOBSAvailable, startOBS, findFreePort } from './obsHelper.js';
 import {
   getOBSScenes,
@@ -231,7 +231,11 @@ async function _cleanupScenes(wsSettings, keepScene) {
   const { default: OBSWebSocket } = await import('obs-websocket-js');
   const obs = new OBSWebSocket();
   try {
-    await obs.connect(`ws://${wsSettings.host}:${wsSettings.port}`);
+    const connectArgs = [`ws://${wsSettings.host}:${wsSettings.port}`];
+    if (wsSettings.password) {
+      connectArgs.push(wsSettings.password);
+    }
+    await obs.connect(...connectArgs);
     const { scenes } = await obs.call('GetSceneList');
     for (const { sceneName } of scenes) {
       if (sceneName !== keepScene) {
