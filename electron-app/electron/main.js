@@ -166,6 +166,7 @@ const store = {
       return games;
     }
     if (key === 'windowBounds') return this._electron().windowBounds || electronConfigDefaults.windowBounds;
+    if (key === 'masterAudioSources') return this._electron().masterAudioSources || [];
     if (key === 'clipMarkers') return loadElectronMarkers();
     if (key === 'lockedRecordings') return this._ms().locked_recordings || [];
     if (key === 'storageSettings') return this._ms().storage_settings || {};
@@ -192,6 +193,11 @@ const store = {
     }
     if (key === 'windowBounds') {
       this._electron().windowBounds = value;
+      this._saveElectron();
+      return;
+    }
+    if (key === 'masterAudioSources') {
+      this._electron().masterAudioSources = value;
       this._saveElectron();
       return;
     }

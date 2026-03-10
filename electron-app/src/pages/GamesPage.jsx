@@ -96,6 +96,7 @@ export default function GamesPage() {
 
   // Master audio source list — sources the user wants in all game scenes
   const [masterAudioSources, setMasterAudioSources] = useState([]); // [{ kind, label, name }]
+  const masterAudioLoadedRef = useRef(false); // guard against persisting before the initial load
   const [applyingSource, setApplyingSource] = useState(null); // kind being applied
 
   // Audio dropdown state
@@ -185,6 +186,11 @@ export default function GamesPage() {
   useEffect(() => {
     loadGames();
     loadTrackLabels();
+    // Restore persisted master audio sources
+    api.getStore('masterAudioSources').then(saved => {
+      masterAudioLoadedRef.current = true;
+      if (Array.isArray(saved) && saved.length > 0) setMasterAudioSources(saved);
+    }).catch(() => { masterAudioLoadedRef.current = true; });
     api.getWatcherStatus().then(s => {
       setWatcherStatus(s);
       if (s.running) {
@@ -196,6 +202,12 @@ export default function GamesPage() {
     const unsub = api.onWatcherStatusPush((status) => setWatcherStatus(status));
     return () => unsub();
   }, []);
+
+  // Persist master audio sources whenever the list changes
+  useEffect(() => {
+    if (!masterAudioLoadedRef.current) return; // skip until initial load has resolved
+    api.setStore('masterAudioSources', masterAudioSources).catch(() => {});
+  }, [masterAudioSources]);
 
   // Close dropdown on outside click
   useEffect(() => {
