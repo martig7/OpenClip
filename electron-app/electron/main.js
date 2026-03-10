@@ -246,7 +246,7 @@ const { setupGameWatcher } = require('./gameWatcher');
 const { setupFileManager } = require('./fileManager');
 const { readOBSRecordingPath } = require('./obsIntegration');
 const { getProfiles, readEncodingSettings, writeEncodingSettings, isOBSRunning } = require('./obsEncoding');
-const { getOBSScenes, createSceneFromTemplate, createSceneFromScratch, addAudioSourceToScenes, removeAudioSourceFromScenes, testOBSConnection, getOBSAudioInputs, getSceneAudioSources } = require('./obsWebSocket');
+const { getOBSScenes, createSceneFromTemplate, createSceneFromScratch, addAudioSourceToScenes, removeAudioSourceFromScenes, testOBSConnection, getOBSAudioInputs, getSceneAudioSources, getInputAudioTracks, setInputAudioTracks } = require('./obsWebSocket');
 const { readOBSWebSocketQR } = require('./qrCodeReader');
 const { startApiServer } = require('./apiServer');
 const { RUNTIME_DIR, STATE_FILE, SCRIPT_MARKER_FILE } = require('./constants');
@@ -520,9 +520,10 @@ ipcMain.handle('obs:ws:create-scene',  (_e, newSceneName, templateSceneName) =>
 ipcMain.handle('obs:ws:create-scene-scratch', (_e, sceneName, options) =>
   createSceneFromScratch(store.get('settings').obsWebSocket, sceneName, options)
 );
-ipcMain.handle('obs:ws:add-audio-source', (_e, sceneNames, inputKind, inputName) =>
-  addAudioSourceToScenes(store.get('settings').obsWebSocket, sceneNames, inputKind, inputName)
-);
+ipcMain.handle('obs:ws:add-audio-source', (_e, sceneNames, inputKind, inputName, inputSettings) => {
+  console.log('[debug] add-audio-source IPC received:', JSON.stringify({ sceneNames, inputKind, inputName, inputSettings }));
+  return addAudioSourceToScenes(store.get('settings').obsWebSocket, sceneNames, inputKind, inputName, inputSettings || {});
+});
 ipcMain.handle('obs:ws:remove-audio-source', (_e, sceneNames, inputName) =>
   removeAudioSourceFromScenes(store.get('settings').obsWebSocket, sceneNames, inputName)
 );
@@ -541,6 +542,17 @@ ipcMain.handle('obs:ws:get-scene-audio-sources', async (_e, sceneName) => {
     console.error('[main] obs:ws:get-scene-audio-sources error:', err.message);
     throw err;
   }
+});
+ipcMain.handle('obs:ws:get-input-audio-tracks', async (_e, inputName) => {
+  try {
+    return await getInputAudioTracks(store.get('settings').obsWebSocket, inputName);
+  } catch (err) {
+    console.error('[main] obs:ws:get-input-audio-tracks error:', err.message);
+    return {};
+  }
+});
+ipcMain.handle('obs:ws:set-input-audio-tracks', async (_e, inputName, tracks) => {
+  return setInputAudioTracks(store.get('settings').obsWebSocket, inputName, tracks);
 });
 ipcMain.handle('windows:list-audio-devices', async () => {
   const { exec } = require('child_process');
@@ -569,6 +581,33 @@ ipcMain.handle('windows:list-audio-devices', async () => {
           .filter(d => d && d.name)
           .map(d => ({ name: d.name, type: d.type || 'output', id: d.id || d.name }))
         );
+      } catch {
+        resolve([]);
+      }
+    });
+  });
+});
+ipcMain.handle('windows:list-running-apps', async () => {
+  const { exec } = require('child_process');
+  const skipList = ['svchost','conhost','csrss','dwm','smss','lsass','wininit','services','Registry','Idle','System','audiodg','RuntimeBroker','SearchHost','TextInputHost','ShellExperienceHost','ApplicationFrameHost','StartMenuExperienceHost','SystemSettings','taskhostw','sihost','fontdrvhost','NisSrv','MsMpEng'];
+  const skipStr = skipList.map(s => `'${s}'`).join(',');
+  const cmd = `powershell -NoProfile -Command "$skip = @(${skipStr}); Get-Process | Where-Object { $skip -notcontains $_.Name -and $_.Id -ne $PID } | Select-Object -Unique Name, @{N='HasWindow';E={$_.MainWindowTitle -ne ''}} | ConvertTo-Json -Compress"`;
+  return new Promise((resolve) => {
+    exec(cmd, { encoding: 'utf-8', timeout: 8000 }, (error, stdout) => {
+      if (error) return resolve([]);
+      try {
+        const raw = stdout.trim();
+        if (!raw || raw === '[]' || raw === 'null') return resolve([]);
+        const parsed = JSON.parse(raw);
+        const items = Array.isArray(parsed) ? parsed : [parsed];
+        const seen = new Map();
+        for (const p of items) {
+          if (!p || !p.Name) continue;
+          if (!seen.has(p.Name) || p.HasWindow) {
+            seen.set(p.Name, { name: p.Name, exe: `${p.Name}.exe`, hasWindow: !!p.HasWindow });
+          }
+        }
+        resolve([...seen.values()].sort((a, b) => a.name.localeCompare(b.name)));
       } catch {
         resolve([]);
       }

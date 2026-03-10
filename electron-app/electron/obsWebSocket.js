@@ -345,7 +345,7 @@ async function createSceneFromScratch(wsSettings, sceneName, options = {}) {
  * @param {string}   inputName   - Display name for the source
  * @returns {Promise<{ success: boolean, message: string, results: object[] }>}
  */
-async function addAudioSourceToScenes(wsSettings, sceneNames, inputKind, inputName) {
+async function addAudioSourceToScenes(wsSettings, sceneNames, inputKind, inputName, inputSettings = {}) {
   if (!sceneNames || sceneNames.length === 0) {
     return { success: false, message: 'No scene names provided', results: [] };
   }
@@ -359,36 +359,52 @@ async function addAudioSourceToScenes(wsSettings, sceneNames, inputKind, inputNa
 
       for (const sceneName of sceneNames) {
         try {
+          // First, check if the source is already in this scene — if so, skip entirely
+          const { sceneItems } = await obs.call('GetSceneItemList', { sceneName }).catch(() => ({ sceneItems: [] }));
+          const alreadyInScene = sceneItems.some(item => item.sourceName === inputName);
+          if (alreadyInScene) {
+            results.push({ scene: sceneName, status: 'already present' });
+            continue;
+          }
+
           // Try to create a brand-new input and place it in this scene
-          await obs.call('CreateInput', {
-            sceneName,
-            inputName,
-            inputKind,
-            inputSettings: {},
-          });
-          results.push({ scene: sceneName, status: 'added' });
-        } catch (createErr) {
-          // The input may already exist globally — try adding it as a scene item
           try {
-            const { inputUuid } = await obs.call('GetInputSettings', { inputName });
-            await obs.call('CreateSceneItem', { sceneName, sourceName: inputName });
-            results.push({ scene: sceneName, status: 'added (existing source)' });
-          } catch (itemErr) {
-            // Scene item may already exist in this scene — treat that as success
-            if (itemErr.message && itemErr.message.toLowerCase().includes('already')) {
-              results.push({ scene: sceneName, status: 'already present' });
-            } else {
+            console.log('[obsWebSocket] CreateInput:', JSON.stringify({ sceneName, inputName, inputKind, inputSettings }));
+            await obs.call('CreateInput', {
+              sceneName,
+              inputName,
+              inputKind,
+              inputSettings: inputSettings || {},
+            });
+            // Read back what OBS actually stored to verify the window format was accepted
+            try {
+              const stored = await obs.call('GetInputSettings', { inputName });
+              console.log('[obsWebSocket] Stored inputSettings after create:', JSON.stringify(stored.inputSettings));
+            } catch {}
+            results.push({ scene: sceneName, status: 'added' });
+          } catch (createErr) {
+
+            // The input already exists globally — add it as a scene item
+            try {
+              await obs.call('GetInputSettings', { inputName });
+              await obs.call('CreateSceneItem', { sceneName, sourceName: inputName });
+              results.push({ scene: sceneName, status: 'added' });
+            } catch (itemErr) {
               results.push({ scene: sceneName, status: 'error', error: itemErr.message });
             }
           }
+        } catch (err) {
+          results.push({ scene: sceneName, status: 'error', error: err.message });
         }
       }
 
-      const added = results.filter(r => r.status !== 'error').length;
+      const added = results.filter(r => r.status === 'added').length;
+      const skipped = results.filter(r => r.status === 'already present').length;
       const errors = results.filter(r => r.status === 'error').length;
-      let message = `"${inputName}" added to ${added} scene(s)`;
+      let message = added > 0 ? `"${inputName}" added to ${added} scene(s)` : `"${inputName}" was already in all scenes`;
+      if (skipped > 0) message += ` (skipped ${skipped} that already had it)`;
       if (errors > 0) message += `, ${errors} failed`;
-      return { success: added > 0, message, results };
+      return { success: added > 0 || skipped > 0, message, results, added, skipped };
     });
   } catch (err) {
     console.error('[obsWebSocket] Failed to add audio source to scenes:', err.message);
@@ -454,6 +470,7 @@ async function removeAudioSourceFromScenes(wsSettings, sceneNames, inputName) {
 const AUDIO_INPUT_KINDS = new Set([
   'wasapi_output_capture',
   'wasapi_input_capture',
+  'wasapi_process_output_capture',   // Application Audio Capture (Windows)
   'coreaudio_input_capture',
   'coreaudio_output_capture',
   'pulse_input_capture',
@@ -552,4 +569,46 @@ async function testOBSConnection(wsSettings) {
   }
 }
 
-module.exports = { getOBSScenes, createSceneFromTemplate, createSceneFromScratch, addAudioSourceToScenes, removeAudioSourceFromScenes, testOBSConnection, getOBSAudioInputs, getSceneAudioSources };
+/**
+ * Get the audio track routing for a specific OBS input.
+ * Returns which of the 6 mix tracks this input is active on.
+ *
+ * @param {object} wsSettings - { host, port, password }
+ * @param {string} inputName - The input source name
+ * @returns {Promise<{ '1': boolean, '2': boolean, ..., '6': boolean }>}
+ */
+async function getInputAudioTracks(wsSettings, inputName) {
+  if (!inputName) throw new Error('Input name is required');
+  try {
+    return await withOBSConnection(wsSettings, async (obs) => {
+      const { inputAudioTracks } = await obs.call('GetInputAudioTracks', { inputName });
+      return inputAudioTracks || {};
+    });
+  } catch (err) {
+    console.error('[obsWebSocket] Failed to get input audio tracks:', err.message);
+    throw err;
+  }
+}
+
+/**
+ * Set the audio track routing for a specific OBS input.
+ *
+ * @param {object} wsSettings - { host, port, password }
+ * @param {string} inputName - The input source name
+ * @param {object} tracks - e.g. { '1': true, '2': false, '3': true, '4': false, '5': false, '6': false }
+ * @returns {Promise<{ success: boolean, message: string }>}
+ */
+async function setInputAudioTracks(wsSettings, inputName, tracks) {
+  if (!inputName) return { success: false, message: 'Input name is required' };
+  try {
+    return await withOBSConnection(wsSettings, async (obs) => {
+      await obs.call('SetInputAudioTracks', { inputName, inputAudioTracks: tracks });
+      return { success: true, message: `Track routing updated for "${inputName}"` };
+    });
+  } catch (err) {
+    console.error('[obsWebSocket] Failed to set input audio tracks:', err.message);
+    return { success: false, message: err.message };
+  }
+}
+
+module.exports = { getOBSScenes, createSceneFromTemplate, createSceneFromScratch, addAudioSourceToScenes, removeAudioSourceFromScenes, testOBSConnection, getOBSAudioInputs, getSceneAudioSources, getInputAudioTracks, setInputAudioTracks };

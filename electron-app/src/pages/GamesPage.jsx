@@ -7,6 +7,7 @@ import api from '../api';
 const AUDIO_KIND_META = {
   wasapi_output_capture: { label: 'Desktop Audio', icon: 'music', description: 'Captures all system/game audio output' },
   wasapi_input_capture: { label: 'Microphone / Input', icon: 'mic', description: 'Captures microphone or audio input device' },
+  wasapi_process_output_capture: { label: 'Application Audio', icon: 'app', description: 'Captures audio from a specific application' },
   coreaudio_output_capture: { label: 'Desktop Audio (Mac)', icon: 'music', description: 'Captures macOS system audio output' },
   coreaudio_input_capture: { label: 'Microphone (Mac)', icon: 'mic', description: 'Captures macOS audio input device' },
   pulse_output_capture: { label: 'Desktop Audio (Linux)', icon: 'music', description: 'Captures PulseAudio output' },
@@ -17,6 +18,7 @@ function AudioIcon({ kind, size = 15 }) {
   const meta = AUDIO_KIND_META[kind];
   if (!meta) return <Music size={size} />;
   if (meta.icon === 'mic') return <Mic size={size} />;
+  if (meta.icon === 'app') return <ChevronDown size={size} style={{ transform: 'rotate(-90deg)' }} />;
   return <Music size={size} />;
 }
 
@@ -201,23 +203,53 @@ export default function GamesPage() {
     setLoadingAudioInputs(true);
     setAudioDropdownError(null);
     try {
-      // Fetch OBS audio inputs and Windows audio devices in parallel
-      const [obsInputs, winDevices] = await Promise.all([
+      // Fetch OBS audio inputs, Windows audio devices, running apps, and visible windows in parallel
+      const [obsInputs, winDevices, runningApps, visibleWindows] = await Promise.all([
         api.getOBSAudioInputs().catch(() => []),
         api.listWindowsAudioDevices().catch(() => []),
+        api.listRunningApps().catch(() => []),
+        api.getVisibleWindows().catch(() => []),
       ]);
 
-      // Build a combined list — OBS entries first, then Windows devices not already in OBS
+      // Build process name → window title map for constructing the OBS window selector
+      // OBS wasapi_process_output_capture expects: "[Executable.exe]: Window Title"
+      const windowTitleMap = new Map();
+      for (const w of (visibleWindows || [])) {
+        const proc = (w.process || '').toLowerCase();
+        if (!windowTitleMap.has(proc)) windowTitleMap.set(proc, w.title || '');
+      }
+
+      // OBS entries first (already registered in OBS)
       const combined = [];
       const obsNames = new Set();
       for (const inp of (obsInputs || [])) {
         combined.push({ name: inp.inputName, kind: inp.inputKind, source: 'obs' });
         obsNames.add(inp.inputName);
       }
+      // Windows audio devices (output/input) not already in OBS
       for (const dev of (winDevices || [])) {
         if (!obsNames.has(dev.name)) {
           const kind = dev.type === 'input' ? 'wasapi_input_capture' : 'wasapi_output_capture';
           combined.push({ name: dev.name, kind, source: 'windows' });
+        }
+      }
+      // Running applications for application audio capture
+      const obsAppNames = new Set(
+        (obsInputs || [])
+          .filter(i => i.inputKind === 'wasapi_process_output_capture')
+          .map(i => i.inputName)
+      );
+      for (const app of (runningApps || [])) {
+        if (!obsAppNames.has(app.name) && !obsNames.has(app.name)) {
+          const windowTitle = windowTitleMap.get(app.name.toLowerCase()) || '';
+          combined.push({
+            name: app.name,
+            kind: 'wasapi_process_output_capture',
+            source: 'app',
+            exe: app.exe,
+            hasWindow: app.hasWindow,
+            inputSettings: { window: `${windowTitle}::${app.exe}` },
+          });
         }
       }
       setAvailableAudioInputs(combined);
@@ -235,22 +267,17 @@ export default function GamesPage() {
       return;
     }
     const meta = AUDIO_KIND_META[entry.kind];
-    const newSource = { name: entry.name, kind: entry.kind, label: meta?.label || entry.name };
-    const updated = [...masterAudioSources, newSource];
-    setMasterAudioSources(updated);
+    const newSource = { name: entry.name, kind: entry.kind, label: meta?.label || entry.name, inputSettings: entry.inputSettings || {} };
+    setMasterAudioSources(prev => [...prev, newSource]);
     setShowAudioDropdown(false);
 
-    // Apply to all game scenes immediately
+    // Apply to all game scenes immediately, skipping any that already have this source
     const sceneNames = getGameSceneNames();
     if (sceneNames.length > 0) {
       setApplyingSource(entry.name);
       try {
-        const result = await api.addAudioSourceToScenes(sceneNames, entry.kind, entry.name);
-        if (result.success) {
-          showToast(`"${entry.name}" added to ${sceneNames.length} scene(s)`);
-        } else {
-          showToast(`Warning: ${result.message}`);
-        }
+        const result = await api.addAudioSourceToScenes(sceneNames, entry.kind, entry.name, entry.inputSettings || {});
+        showToast(result.message || `"${entry.name}" applied to scenes`);
       } catch (err) {
         showToast(`Failed to add to scenes: ${err.message}`);
       } finally {
@@ -278,8 +305,9 @@ export default function GamesPage() {
 
   async function addSourceToScene(sceneName, source) {
     if (!sceneName) return;
+    console.log('[debug] addSourceToScene:', sceneName, JSON.stringify(source));
     try {
-      const result = await api.addAudioSourceToScenes([sceneName], source.kind, source.name);
+      const result = await api.addAudioSourceToScenes([sceneName], source.kind, source.name, source.inputSettings || {});
       if (result.success) {
         setEditGameModal(prev => {
           if (!prev) return null;
@@ -531,6 +559,38 @@ export default function GamesPage() {
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                   <div style={{ fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.name}</div>
                                   <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{entry.type === 'input' ? 'Input device' : 'Output device'}</div>
+                                </div>
+                                {alreadyAdded && <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>Added</span>}
+                              </button>
+                            );
+                          })}
+                        </>
+                      )}
+                      {/* Group: Running Applications (Application Audio Capture) */}
+                      {availableAudioInputs.filter(a => a.source === 'app').length > 0 && (
+                        <>
+                          <div style={{ padding: '6px 12px 2px', fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', borderTop: '1px solid var(--border)', marginTop: 4 }}>Applications</div>
+                          {availableAudioInputs.filter(a => a.source === 'app').map((entry, i) => {
+                            const alreadyAdded = masterAudioSources.some(s => s.name === entry.name);
+                            return (
+                              <button
+                                key={i}
+                                onClick={() => !alreadyAdded && addMasterSource(entry)}
+                                disabled={alreadyAdded}
+                                style={{
+                                  display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                                  padding: '7px 14px', background: 'none', border: 'none',
+                                  cursor: alreadyAdded ? 'default' : 'pointer', textAlign: 'left',
+                                  opacity: alreadyAdded ? 0.5 : 1,
+                                  transition: 'background 0.1s',
+                                }}
+                                onMouseEnter={e => { if (!alreadyAdded) e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
+                              >
+                                <ChevronDown size={14} style={{ transform: 'rotate(-90deg)', flexShrink: 0 }} />
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.name}</div>
+                                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Application Audio Capture</div>
                                 </div>
                                 {alreadyAdded && <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>Added</span>}
                               </button>
@@ -882,6 +942,7 @@ export default function GamesPage() {
         <EditGameModal
           modal={editGameModal}
           masterAudioSources={masterAudioSources}
+          otherGameScenes={new Set(games.filter(g => g.id !== editGameModal.game.id).map(g => g.scene).filter(Boolean))}
           onChangeGame={updates => setEditGameModal(prev => prev ? { ...prev, game: { ...prev.game, ...updates } } : null)}
           onSave={saveEditModal}
           onClose={() => setEditGameModal(null)}
@@ -1008,11 +1069,126 @@ function WatcherStatusCard({ status, onToggle, scriptWarning, onDismissWarning, 
 
 /**
  * EditGameModal — allows editing game name, selector, OBS scene, and per-scene audio sources.
- * Audio sources are shown from the OBS scene; ones not in masterAudioSources get an amber label.
+ * Features:
+ *  1. Duplicate-scene warning if the scene is already used by another game.
+ *  2. Full audio-source add dropdown (same as master list) to add any source directly to this scene.
+ *  3. Per-source track-routing toggles (tracks 1–6) via OBS WebSocket.
  */
-function EditGameModal({ modal, masterAudioSources, onChangeGame, onSave, onClose, onAddSourceToScene, onRemoveSourceFromScene }) {
+function EditGameModal({ modal, masterAudioSources, otherGameScenes, onChangeGame, onSave, onClose, onAddSourceToScene, onRemoveSourceFromScene }) {
   const { game, sceneAudioSources, loading } = modal;
   const masterNames = new Set(masterAudioSources.map(s => s.name));
+
+  // ── Feature 1: duplicate scene detection ─────────────────────────────────
+  const isDuplicateScene = game.scene && otherGameScenes && otherGameScenes.has(game.scene);
+
+  // ── Feature 2: add-source dropdown (local to modal) ──────────────────────
+  const [showModalAudioDropdown, setShowModalAudioDropdown] = useState(false);
+  const [modalAudioInputs, setModalAudioInputs] = useState([]);
+  const [loadingModalAudio, setLoadingModalAudio] = useState(false);
+  const [modalAudioError, setModalAudioError] = useState(null);
+  const modalAudioDropdownRef = useRef(null);
+
+  // Close modal audio dropdown on outside click
+  useEffect(() => {
+    if (!showModalAudioDropdown) return;
+    const handler = (e) => {
+      if (modalAudioDropdownRef.current && !modalAudioDropdownRef.current.contains(e.target)) {
+        setShowModalAudioDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showModalAudioDropdown]);
+
+  async function loadModalAudioInputs() {
+    setLoadingModalAudio(true);
+    setModalAudioError(null);
+    try {
+      const [obsInputs, winDevices, runningApps, visibleWindows] = await Promise.all([
+        api.getOBSAudioInputs().catch(() => []),
+        api.listWindowsAudioDevices().catch(() => []),
+        api.listRunningApps().catch(() => []),
+        api.getVisibleWindows().catch(() => []),
+      ]);
+
+      // Build process name → window title map
+      const windowTitleMap = new Map();
+      for (const w of (visibleWindows || [])) {
+        const proc = (w.process || '').toLowerCase();
+        if (!windowTitleMap.has(proc)) windowTitleMap.set(proc, w.title || '');
+      }
+
+      const combined = [];
+      const obsNames = new Set();
+      for (const inp of (obsInputs || [])) {
+        combined.push({ name: inp.inputName, kind: inp.inputKind, source: 'obs' });
+        obsNames.add(inp.inputName);
+      }
+      for (const dev of (winDevices || [])) {
+        if (!obsNames.has(dev.name)) {
+          combined.push({ name: dev.name, kind: dev.type === 'input' ? 'wasapi_input_capture' : 'wasapi_output_capture', source: 'windows' });
+        }
+      }
+      const obsAppNames = new Set(
+        (obsInputs || []).filter(i => i.inputKind === 'wasapi_process_output_capture').map(i => i.inputName)
+      );
+      for (const app of (runningApps || [])) {
+        if (!obsAppNames.has(app.name) && !obsNames.has(app.name)) {
+          const windowTitle = windowTitleMap.get(app.name.toLowerCase()) || '';
+          combined.push({ name: app.name, kind: 'wasapi_process_output_capture', source: 'app', exe: app.exe, hasWindow: app.hasWindow, inputSettings: { window: `${windowTitle}::${app.exe}` } });
+        }
+      }
+      setModalAudioInputs(combined);
+    } catch (err) {
+      setModalAudioError(err.message || 'Failed to load audio sources');
+    } finally {
+      setLoadingModalAudio(false);
+    }
+  }
+
+  // ── Feature 3: audio track routing ───────────────────────────────────────
+  // trackData: { [inputName]: { '1': bool, ..., '6': bool } }
+  const [trackData, setTrackData] = useState({});
+  const [trackLoading, setTrackLoading] = useState({}); // { [inputName]: bool }
+
+  // Load track info whenever scene audio sources change
+  useEffect(() => {
+    if (!sceneAudioSources || sceneAudioSources.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const results = await Promise.all(
+        sceneAudioSources.map(s =>
+          api.getInputAudioTracks(s.inputName)
+            .then(tracks => ({ name: s.inputName, tracks }))
+            .catch(() => ({ name: s.inputName, tracks: {} }))
+        )
+      );
+      if (cancelled) return;
+      setTrackData(prev => {
+        const next = { ...prev };
+        for (const { name, tracks } of results) next[name] = tracks;
+        return next;
+      });
+    })();
+    return () => { cancelled = true; };
+  }, [sceneAudioSources]);
+
+  async function toggleTrack(inputName, trackNum) {
+    const current = trackData[inputName] || {};
+    const newVal = !current[String(trackNum)];
+    const updated = { ...current, [String(trackNum)]: newVal };
+    // Optimistic update
+    setTrackData(prev => ({ ...prev, [inputName]: updated }));
+    setTrackLoading(prev => ({ ...prev, [inputName]: true }));
+    try {
+      await api.setInputAudioTracks(inputName, updated);
+    } catch {
+      // Revert on failure
+      setTrackData(prev => ({ ...prev, [inputName]: current }));
+    } finally {
+      setTrackLoading(prev => ({ ...prev, [inputName]: false }));
+    }
+  }
 
   // State for 'add from master' dropdown inside the modal
   const [addFromMaster, setAddFromMaster] = useState('');
@@ -1056,7 +1232,21 @@ function EditGameModal({ modal, masterAudioSources, onChangeGame, onSave, onClos
             value={game.scene || ''}
             onChange={e => onChangeGame({ scene: e.target.value })}
             placeholder="e.g. Gaming Scene (optional)"
+            style={isDuplicateScene ? { borderColor: '#f59e0b' } : {}}
           />
+          {isDuplicateScene && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              marginTop: 5, padding: '5px 9px',
+              background: 'rgba(245,158,11,0.1)',
+              border: '1px solid rgba(245,158,11,0.3)',
+              borderRadius: 'var(--radius-sm)',
+              fontSize: 11, color: '#f59e0b',
+            }}>
+              <AlertTriangle size={12} style={{ flexShrink: 0 }} />
+              This scene is already assigned to another game. Both games will share it.
+            </div>
+          )}
         </div>
 
         {/* Audio Sources section */}
@@ -1068,6 +1258,99 @@ function EditGameModal({ modal, masterAudioSources, onChangeGame, onSave, onClos
               <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>
                 — {game.scene}
               </span>
+            )}
+            {/* Feature 2: Add Source button in modal */}
+            {game.scene && !loading && (
+              <div style={{ marginLeft: 'auto', position: 'relative' }} ref={modalAudioDropdownRef}>
+                <button
+                  className="btn btn-primary btn-sm"
+                  style={{ fontSize: 11, padding: '3px 9px' }}
+                  onClick={() => {
+                    if (!showModalAudioDropdown) {
+                      setShowModalAudioDropdown(true);
+                      loadModalAudioInputs();
+                    } else {
+                      setShowModalAudioDropdown(false);
+                    }
+                  }}
+                >
+                  <Plus size={12} /> Add Source
+                </button>
+
+                {showModalAudioDropdown && (
+                  <div style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 6px)',
+                    right: 0,
+                    zIndex: 300,
+                    minWidth: 280,
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-light)',
+                    borderRadius: 'var(--radius)',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                    overflow: 'hidden',
+                  }}>
+                    <div style={{ padding: '7px 12px', fontSize: 10, color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Add to Scene
+                    </div>
+                    {loadingModalAudio ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 14px', fontSize: 12, color: 'var(--text-muted)' }}>
+                        <RefreshCw size={12} className="spinning" /> Loading…
+                      </div>
+                    ) : modalAudioError ? (
+                      <div style={{ padding: '10px 14px', fontSize: 12, color: 'var(--danger)' }}>{modalAudioError}</div>
+                    ) : modalAudioInputs.length === 0 ? (
+                      <div style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)' }}>No audio sources found.</div>
+                    ) : (
+                      <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+                        {['obs', 'windows', 'app'].map(group => {
+                          const items = modalAudioInputs.filter(a => a.source === group);
+                          if (items.length === 0) return null;
+                          const groupLabel = { obs: 'OBS Inputs', windows: 'Windows Devices', app: 'Applications' }[group];
+                          return (
+                            <div key={group}>
+                              <div style={{ padding: '5px 12px 2px', fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', borderTop: group !== 'obs' ? '1px solid var(--border)' : 'none', marginTop: group !== 'obs' ? 3 : 0 }}>
+                                {groupLabel}
+                              </div>
+                              {items.map((entry, i) => {
+                                const alreadyInScene = sceneAudioSources.some(s => s.inputName === entry.name);
+                                const meta = AUDIO_KIND_META[entry.kind];
+                                return (
+                                  <button
+                                    key={i}
+                                    disabled={alreadyInScene}
+                                    onClick={() => {
+                                      if (!alreadyInScene) {
+                                        onAddSourceToScene(game.scene, { name: entry.name, kind: entry.kind, inputSettings: entry.inputSettings || {} });
+                                        setShowModalAudioDropdown(false);
+                                      }
+                                    }}
+                                    style={{
+                                      display: 'flex', alignItems: 'center', gap: 9, width: '100%',
+                                      padding: '6px 14px', background: 'none', border: 'none',
+                                      cursor: alreadyInScene ? 'default' : 'pointer', textAlign: 'left',
+                                      opacity: alreadyInScene ? 0.45 : 1,
+                                    }}
+                                    onMouseEnter={e => { if (!alreadyInScene) e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
+                                  >
+                                    <AudioIcon kind={entry.kind} size={13} />
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <div style={{ fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.name}</div>
+                                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{meta?.label || entry.kind}</div>
+                                    </div>
+                                    {alreadyInScene && <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>In scene</span>}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
           </div>
 
@@ -1091,44 +1374,79 @@ function EditGameModal({ modal, masterAudioSources, onChangeGame, onSave, onClos
                   {sceneAudioSources.map((src, i) => {
                     const isInMaster = masterNames.has(src.inputName);
                     const meta = AUDIO_KIND_META[src.inputKind];
+                    const tracks = trackData[src.inputName] || {};
+                    const isTrackLoading = trackLoading[src.inputName];
                     return (
                       <div
                         key={i}
                         style={{
-                          display: 'flex', alignItems: 'center', gap: 10,
-                          padding: '7px 12px',
                           borderBottom: i < sceneAudioSources.length - 1 ? '1px solid var(--border)' : 'none',
+                          padding: '8px 12px',
                         }}
                       >
-                        <AudioIcon kind={src.inputKind} size={14} />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {src.inputName}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <AudioIcon kind={src.inputKind} size={14} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {src.inputName}
+                            </div>
+                            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{meta?.label || src.inputKind}</div>
                           </div>
-                          <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{meta?.label || src.inputKind}</div>
+                          {!isInMaster && (
+                            <span style={{
+                              fontSize: 10, fontWeight: 500,
+                              color: '#f59e0b',
+                              background: 'rgba(245,158,11,0.12)',
+                              border: '1px solid rgba(245,158,11,0.3)',
+                              borderRadius: 4,
+                              padding: '1px 6px',
+                              flexShrink: 0,
+                              whiteSpace: 'nowrap',
+                            }}>
+                              Not in master list
+                            </span>
+                          )}
+                          <button
+                            className="btn-icon"
+                            onClick={() => onRemoveSourceFromScene(game.scene, src.inputName)}
+                            title="Remove from scene"
+                            style={{ color: 'var(--danger)', flexShrink: 0 }}
+                          >
+                            <Trash2 size={13} />
+                          </button>
                         </div>
-                        {!isInMaster && (
-                          <span style={{
-                            fontSize: 10, fontWeight: 500,
-                            color: '#f59e0b',
-                            background: 'rgba(245,158,11,0.12)',
-                            border: '1px solid rgba(245,158,11,0.3)',
-                            borderRadius: 4,
-                            padding: '1px 6px',
-                            flexShrink: 0,
-                            whiteSpace: 'nowrap',
-                          }}>
-                            Not in master list
-                          </span>
-                        )}
-                        <button
-                          className="btn-icon"
-                          onClick={() => onRemoveSourceFromScene(game.scene, src.inputName)}
-                          title="Remove from scene"
-                          style={{ color: 'var(--danger)', flexShrink: 0 }}
-                        >
-                          <Trash2 size={13} />
-                        </button>
+
+                        {/* Feature 3: Track routing chips */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 6, paddingLeft: 24 }}>
+                          <span style={{ fontSize: 10, color: 'var(--text-muted)', marginRight: 2 }}>Tracks:</span>
+                          {[1, 2, 3, 4, 5, 6].map(num => {
+                            const active = tracks[String(num)] === true;
+                            return (
+                              <button
+                                key={num}
+                                title={`Track ${num}: ${active ? 'active' : 'inactive'}`}
+                                disabled={isTrackLoading}
+                                onClick={() => toggleTrack(src.inputName, num)}
+                                style={{
+                                  width: 22, height: 22,
+                                  borderRadius: 4,
+                                  border: active ? '1.5px solid var(--primary)' : '1.5px solid var(--border-light)',
+                                  background: active ? 'var(--primary)' : 'var(--bg-secondary)',
+                                  color: active ? '#fff' : 'var(--text-muted)',
+                                  fontSize: 10, fontWeight: 600,
+                                  cursor: isTrackLoading ? 'default' : 'pointer',
+                                  opacity: isTrackLoading ? 0.6 : 1,
+                                  transition: 'background 0.12s, border-color 0.12s, color 0.12s',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  lineHeight: 1,
+                                }}
+                              >
+                                {num}
+                              </button>
+                            );
+                          })}
+                          {isTrackLoading && <RefreshCw size={11} className="spinning" style={{ color: 'var(--text-muted)', marginLeft: 2 }} />}
+                        </div>
                       </div>
                     );
                   })}
