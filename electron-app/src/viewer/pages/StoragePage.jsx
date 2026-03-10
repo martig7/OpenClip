@@ -771,6 +771,7 @@ function StoragePage() {
     }
   }, [tooltip])
 
+
   if (loading || listView === null) {
     return (
       <div className="page-content">
