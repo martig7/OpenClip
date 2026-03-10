@@ -72,9 +72,9 @@ function organizeRecordings(store, gameName) {
     }
   }
 
-  // Auto-clip from markers
-  const autoClip = store.get('settings.autoClip');
-  if (autoClip?.enabled) {
+  // Auto-clip from markers when auto-clip is enabled
+  const autoClipSettings = store.get('settings.autoClip');
+  if (autoClipSettings && autoClipSettings.enabled) {
     processAutoClips(store, gameName, targetDir);
   }
 }
@@ -99,7 +99,7 @@ function processAutoClips(store, gameName, recordingDir) {
   const clipsDir = path.join(destPath, 'Clips');
   fs.mkdirSync(clipsDir, { recursive: true });
 
-  const autoClip = store.get('settings.autoClip');
+  const autoClip = store.get('settings.autoClip') || {};
   const bufferBefore = autoClip.bufferBefore || 15;
   const bufferAfter = autoClip.bufferAfter || 15;
 
