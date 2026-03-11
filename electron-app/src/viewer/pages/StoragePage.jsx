@@ -27,6 +27,17 @@ const GAME_PALETTE = [
 const CELL_GAP = 2  // px gap between cells
 const MIN_DIM = 36  // px — minimum width or height for any cell; prevents hair-thin slivers
 
+// ── List-view virtual-scroll constants ───────────────────────────────────────
+// LIST_ROW_HEIGHT must match the rendered row height from viewer.css:
+//   .sv2-list-row td { padding: 7px 12px }  → 14px vertical padding
+//   font-size 0.83rem on a single line       → ~16px line height
+//   border-bottom: 1px solid var(--border)   →  1px border
+//   ─────────────────────────────────────────   ≈ 31px + rounding → 36px
+const LIST_ROW_HEIGHT = 36  // px — estimated height of each list-view row
+const LIST_OVERSCAN = 5     // rows to render beyond the visible viewport edge (buffer)
+// Number of <th> columns; must stay in sync with the table header in the JSX below.
+const LIST_COL_COUNT = 7
+
 // ── Squarified treemap (Bruls, Huizing & van Wijk) ───────────────────────────
 // Worst aspect ratio for a candidate row given the short side of the current rect.
 // Uses the closed-form from the paper: worst = max(w²·max/s², s²/(w²·min))
@@ -202,6 +213,10 @@ function StoragePage() {
   const [baseSize, setBaseSize] = useState({ w: 0, h: 0 })
   const [tooltip, setTooltip] = useState(null)
   const containerRef = useRef(null)
+  const listContainerRef = useRef(null)   // scrollable container for the list view
+  const [listScrollTop, setListScrollTop] = useState(0)
+  // Default to a typical viewport height so the first render shows rows before ResizeObserver fires.
+  const [listContainerH, setListContainerH] = useState(600)
   const canvasRef = useRef(null)
   const rafRef = useRef(null)
   const layoutRef = useRef([])
@@ -282,6 +297,18 @@ function StoragePage() {
     return () => ro.disconnect()
   }, [loading, listView])
 
+  // ResizeObserver for the list-view scrollable container — keeps listContainerH in sync.
+  useEffect(() => {
+    if (!listView) return
+    const el = listContainerRef.current
+    if (!el) return
+    const update = () => setListContainerH(el.clientHeight)
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [listView])
+
   // Non-passive wheel: zoom toward cursor (map-style); reads refs for fresh values (grid mode only)
   useEffect(() => {
     if (listView) return
@@ -313,6 +340,10 @@ function StoragePage() {
   const showToast = useCallback((type, message) => {
     setToast({ type, message })
     setTimeout(() => setToast(null), 3000)
+  }, [])
+
+  const handleListScroll = useCallback((e) => {
+    setListScrollTop(e.currentTarget.scrollTop)
   }, [])
 
   const toggleSelection = useCallback((path) => {
@@ -442,6 +473,21 @@ function StoragePage() {
     })
     return result
   }, [stats, filterType, filterGame, sortBy])
+
+  // Virtual-scroll window for the list view.
+  // Only the rows whose index falls within [visibleStart, visibleEnd) are rendered as DOM nodes;
+  // spacer <tr> elements above and below maintain the correct total scroll height.
+  const { visibleStart, visibleEnd, paddingTop, paddingBottom } = useMemo(() => {
+    if (!listView) return { visibleStart: 0, visibleEnd: 0, paddingTop: 0, paddingBottom: 0 }
+    const start = Math.max(0, Math.floor(listScrollTop / LIST_ROW_HEIGHT) - LIST_OVERSCAN)
+    const end = Math.min(items.length, Math.ceil((listScrollTop + listContainerH) / LIST_ROW_HEIGHT) + LIST_OVERSCAN)
+    return {
+      visibleStart: start,
+      visibleEnd: end,
+      paddingTop: start * LIST_ROW_HEIGHT,
+      paddingBottom: Math.max(0, items.length - end) * LIST_ROW_HEIGHT,
+    }
+  }, [listView, listScrollTop, listContainerH, items.length])
 
   const formatBytes = (bytes) => {
     if (!bytes) return '0 B'
@@ -868,7 +914,7 @@ function StoragePage() {
 
       {/* ── File list / Treemap ── */}
       {listView ? (
-        <div className="sv2-list-container">
+        <div className="sv2-list-container" ref={listContainerRef} onScroll={handleListScroll}>
           {items.length === 0
             ? <div className="sv2-empty">No files match the current filter</div>
             : (
@@ -885,7 +931,10 @@ function StoragePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map(item => {
+                  {paddingTop > 0 && (
+                    <tr aria-hidden="true"><td colSpan={LIST_COL_COUNT} style={{ height: paddingTop, padding: 0 }} /></tr>
+                  )}
+                  {items.slice(visibleStart, visibleEnd).map(item => {
                     const isSelected = selectedItems.has(item.path)
                     const isLocked = lockedRecordings.has(item.path.replace(/\//g, '\\'))
                     const color = gameColors[item.game_name] || '#888'
@@ -920,6 +969,9 @@ function StoragePage() {
                       </tr>
                     )
                   })}
+                  {paddingBottom > 0 && (
+                    <tr aria-hidden="true"><td colSpan={LIST_COL_COUNT} style={{ height: paddingBottom, padding: 0 }} /></tr>
+                  )}
                 </tbody>
               </table>
             )
