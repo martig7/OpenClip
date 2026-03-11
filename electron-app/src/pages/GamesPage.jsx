@@ -294,18 +294,28 @@ export default function GamesPage() {
   }, [showAudioDropdown]);
 
   async function loadGames() {
-    setGames(await api.getGames());
+    try {
+      setGames(await api.getGames());
+    } catch (err) {
+      showToast(err?.message || 'Failed to load games');
+    }
   }
 
   async function loadTrackLabels() {
     try {
       const labels = await api.getTrackNames();
       if (labels && labels.length === 6) setTrackLabels(labels);
-    } catch {}
+    } catch (err) {
+      showToast(err?.message || 'Failed to load track labels');
+    }
   }
 
   async function loadWatcherStatus() {
-    setWatcherStatus(await api.getWatcherStatus());
+    try {
+      setWatcherStatus(await api.getWatcherStatus());
+    } catch (err) {
+      showToast(err?.message || 'Failed to load watcher status');
+    }
   }
 
   async function addGame() {
@@ -479,9 +489,14 @@ export default function GamesPage() {
 
   async function refreshWindows() {
     setLoadingWindows(true);
-    const windows = await api.getVisibleWindows();
-    setVisibleWindows(windows);
-    setLoadingWindows(false);
+    try {
+      const windows = await api.getVisibleWindows();
+      setVisibleWindows(windows);
+    } catch (err) {
+      showToast(err?.message || 'Failed to load windows');
+    } finally {
+      setLoadingWindows(false);
+    }
   }
 
   function selectWindow(win) {
@@ -716,15 +731,19 @@ export default function GamesPage() {
   const [scriptWarning, setScriptWarning] = useState(null);
 
   async function toggleWatcher() {
-    if (watcherStatus.running) {
-      await api.stopWatcher();
-      setScriptWarning(null);
-    } else {
-      await api.startWatcher();
-      // Check if the OBS script is loaded (non-blocking)
-      api.isOBSScriptLoaded().then(loaded => {
-        if (!loaded) setScriptWarning(true);
-      });
+    try {
+      if (watcherStatus.running) {
+        await api.stopWatcher();
+        setScriptWarning(null);
+      } else {
+        await api.startWatcher();
+        // Check if the OBS script is loaded (non-blocking)
+        api.isOBSScriptLoaded().then(loaded => {
+          if (!loaded) setScriptWarning(true);
+        });
+      }
+    } catch (err) {
+      showToast(err?.message || 'Failed to toggle watcher');
     }
     loadWatcherStatus();
   }
