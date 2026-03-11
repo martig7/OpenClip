@@ -5,7 +5,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { exec, execFile, execSync, spawn } = require('child_process');
+const { exec, execFile, spawn } = require('child_process');
 const { shell } = require('electron');
 const url = require('url');
 
@@ -464,8 +464,10 @@ function startApiServer(appStore) {
 
       // GET /api/ffmpeg-check
       if (pathname === '/api/ffmpeg-check' && req.method === 'GET') {
-        try { execSync('ffmpeg -version', { timeout: 5000 }); return json(res, { available: true }); }
-        catch { return json(res, { available: false }); }
+        execFile('ffmpeg', ['-version'], { timeout: 5000 }, (err) => {
+          json(res, { available: !err });
+        });
+        return;
       }
 
       // 404

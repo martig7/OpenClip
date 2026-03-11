@@ -36,18 +36,18 @@ beforeEach(() => {
 })
 
 describe('GET /api/ffmpeg-check', () => {
-  it('returns { available: true } when execSync succeeds', async () => {
+  it('returns { available: true } when execFile succeeds', async () => {
     const cp = await import('child_process')
-    cp.execSync.mockReturnValue(Buffer.from('ffmpeg version 6.0'))
+    cp.execFile.mockImplementation((_cmd, _args, _opts, cb) => cb(null))
 
     const res = await request(server).get('/api/ffmpeg-check')
     expect(res.status).toBe(200)
     expect(res.body.available).toBe(true)
   })
 
-  it('returns { available: false } when execSync throws', async () => {
+  it('returns { available: false } when execFile errors', async () => {
     const cp = await import('child_process')
-    cp.execSync.mockImplementation(() => { throw new Error('not found') })
+    cp.execFile.mockImplementation((_cmd, _args, _opts, cb) => cb(new Error('not found')))
 
     const res = await request(server).get('/api/ffmpeg-check')
     expect(res.status).toBe(200)

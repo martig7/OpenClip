@@ -6,7 +6,7 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const { exec } = require('child_process');
 const ini = require('./iniParser');
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -47,12 +47,11 @@ function iniReplaceValue(lines, section, key, value) {
 }
 
 function isOBSRunning() {
-  try {
-    const out = execSync('tasklist /FO CSV /NH', { encoding: 'utf-8', timeout: 5000 });
-    return out.toLowerCase().includes('obs64.exe');
-  } catch {
-    return false;
-  }
+  return new Promise((resolve) => {
+    exec('tasklist /FO CSV /NH', { encoding: 'utf-8', timeout: 5000 }, (err, out) => {
+      resolve(!err && !!out && out.toLowerCase().includes('obs64.exe'));
+    });
+  });
 }
 
 // ── public API ────────────────────────────────────────────────────────────────
