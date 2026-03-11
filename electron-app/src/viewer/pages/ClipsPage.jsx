@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Folder, Calendar, HardDrive, Play, FolderOpen, Trash2, Film, Check, X } from 'lucide-react'
 import Sidebar from '../components/Sidebar'
@@ -12,6 +12,11 @@ function ClipsPage() {
   const [deleteModal, setDeleteModal] = useState(false)
   const [toast, setToast] = useState(null)
   const [searchParams, setSearchParams] = useSearchParams()
+  const pendingTimers = useRef([])
+
+  useEffect(() => {
+    return () => pendingTimers.current.forEach(clearTimeout)
+  }, [])
 
   const fetchClips = useCallback(async () => {
     try {
@@ -51,15 +56,15 @@ function ClipsPage() {
         setSelectedClip(null)
         fetchClips()
         setToast({ type: 'success', message: 'Clip deleted' })
-        setTimeout(() => setToast(null), 3000)
+        pendingTimers.current.push(setTimeout(() => setToast(null), 3000))
       } else {
         const data = await response.json()
         setToast({ type: 'error', message: `Failed to delete: ${data.error}` })
-        setTimeout(() => setToast(null), 3000)
+        pendingTimers.current.push(setTimeout(() => setToast(null), 3000))
       }
     } catch (error) {
       setToast({ type: 'error', message: `Error: ${error.message}` })
-      setTimeout(() => setToast(null), 3000)
+      pendingTimers.current.push(setTimeout(() => setToast(null), 3000))
     }
 
     setDeleteModal(false)
