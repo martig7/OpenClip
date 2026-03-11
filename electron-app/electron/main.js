@@ -167,6 +167,7 @@ const store = {
       return games;
     }
     if (key === 'windowBounds') return this._electron().windowBounds || electronConfigDefaults.windowBounds;
+    if (key === 'masterAudioSources') return this._electron().masterAudioSources || [];
     if (key === 'clipMarkers') return loadElectronMarkers();
     if (key === 'lockedRecordings') return this._ms().locked_recordings || [];
     if (key === 'storageSettings') return this._ms().storage_settings || {};
@@ -193,6 +194,11 @@ const store = {
     }
     if (key === 'windowBounds') {
       this._electron().windowBounds = value;
+      this._saveElectron();
+      return;
+    }
+    if (key === 'masterAudioSources') {
+      this._electron().masterAudioSources = value;
       this._saveElectron();
       return;
     }
@@ -257,7 +263,21 @@ const { setupGameWatcher } = require('./gameWatcher');
 const { setupFileManager } = require('./fileManager');
 const { readOBSRecordingPath } = require('./obsIntegration');
 const { getProfiles, readEncodingSettings, writeEncodingSettings, isOBSRunning } = require('./obsEncoding');
-const { getOBSScenes, createSceneFromTemplate, testOBSConnection } = require('./obsWebSocket');
+const {
+  getOBSScenes,
+  createSceneFromTemplate,
+  createSceneFromScratch,
+  addAudioSourceToScenes,
+  removeAudioSourceFromScenes,
+  deleteOBSScene,
+  getOBSAudioInputs,
+  getSceneAudioSources,
+  testOBSConnection,
+  getInputAudioTracks,
+  setInputAudioTracks,
+  getTrackNames,
+  setTrackNames
+} = require('./obsWebSocket');
 const { readOBSWebSocketQR } = require('./qrCodeReader');
 const { startApiServer } = require('./apiServer');
 const { RUNTIME_DIR, STATE_FILE, SCRIPT_MARKER_FILE } = require('./constants');
@@ -434,7 +454,13 @@ ipcMain.handle('windows:extractIcon', async (_event, processName) => {
 ipcMain.handle('windows:list', async () => {
   const { exec } = require('child_process');
   return new Promise((resolve) => {
-    const cmd = `powershell -Command "Get-Process | Where-Object {$_.MainWindowTitle -ne ''} | Select-Object ProcessName, MainWindowTitle | ConvertTo-Json"`;
+    // Collect the exact EXE path and Window Class using embedded C# so OBS window capture inputs can be perfectly matched
+    const cmd = `powershell -NoProfile -Command `
+      + `"Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; using System.Text; public class Win32 { [DllImport(\\"user32.dll\\")] public static extern int GetWindowThreadProcessId(IntPtr hWnd, out int lpdwProcessId); [DllImport(\\"user32.dll\\", SetLastError = true, CharSet=CharSet.Auto)] public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount); }'; `
+      + `Get-Process | Where-Object { $_.MainWindowTitle -ne '' -and $_.MainWindowHandle -ne 0 } | Select-Object ProcessName, MainWindowTitle, `
+      + `@{Name='Executable';Expression={ try { $_.MainModule.FileName } catch { $_.Path } }}, `
+      + `@{Name='Class';Expression={ $sb = New-Object System.Text.StringBuilder(256); [Win32]::GetClassName($_.MainWindowHandle, $sb, $sb.Capacity) | Out-Null; $sb.ToString() }} | ConvertTo-Json"`;
+
     exec(cmd, { encoding: 'utf-8', timeout: 5000 }, (error, stdout) => {
       if (error) return resolve([]);
       try {
@@ -446,6 +472,8 @@ ipcMain.handle('windows:list', async () => {
           .map(p => ({
             title: p.MainWindowTitle,
             process: p.ProcessName,
+            exe: p.Executable ? require('path').basename(p.Executable) : `${p.ProcessName}.exe`,
+            windowClass: p.Class || p.ProcessName,
           }))
         );
       } catch {
@@ -528,6 +556,112 @@ ipcMain.handle('obs:ws:scenes', async () => {
 ipcMain.handle('obs:ws:create-scene',  (_e, newSceneName, templateSceneName) =>
   createSceneFromTemplate(store.get('settings').obsWebSocket, newSceneName, templateSceneName)
 );
+ipcMain.handle('obs:ws:create-scene-scratch', (_e, sceneName, options) =>
+  createSceneFromScratch(store.get('settings').obsWebSocket, sceneName, options)
+);
+ipcMain.handle('obs:ws:delete-scene', (_e, sceneName) =>
+  deleteOBSScene(store.get('settings').obsWebSocket, sceneName)
+);
+ipcMain.handle('obs:ws:add-audio-source', (_e, sceneNames, inputKind, inputName, inputSettings, options) => {
+  return addAudioSourceToScenes(store.get('settings').obsWebSocket, sceneNames, inputKind, inputName, inputSettings || {}, options || {});
+});
+ipcMain.handle('obs:ws:remove-audio-source', (_e, sceneNames, inputName) =>
+  removeAudioSourceFromScenes(store.get('settings').obsWebSocket, sceneNames, inputName)
+);
+ipcMain.handle('obs:ws:get-audio-inputs', async () => {
+  try {
+    return await getOBSAudioInputs(store.get('settings').obsWebSocket);
+  } catch (err) {
+    console.error('[main] obs:ws:get-audio-inputs error:', err.message);
+    throw err;
+  }
+});
+ipcMain.handle('obs:ws:get-scene-audio-sources', async (_e, sceneName) => {
+  try {
+    return await getSceneAudioSources(store.get('settings').obsWebSocket, sceneName);
+  } catch (err) {
+    console.error('[main] obs:ws:get-scene-audio-sources error:', err.message);
+    throw err;
+  }
+});
+ipcMain.handle('obs:ws:get-input-audio-tracks', async (_e, inputName) => {
+  try {
+    return await getInputAudioTracks(store.get('settings').obsWebSocket, inputName);
+  } catch (err) {
+    console.error('[main] obs:ws:get-input-audio-tracks error:', err.message);
+    return {};
+  }
+});
+ipcMain.handle('obs:ws:set-input-audio-tracks', async (_e, inputName, tracks) => {
+  return setInputAudioTracks(store.get('settings').obsWebSocket, inputName, tracks);
+});
+ipcMain.handle('obs:ws:get-track-names', () =>
+  getTrackNames(store.get('settings').obsWebSocket)
+);
+ipcMain.handle('obs:ws:set-track-names', (_e, names) =>
+  setTrackNames(store.get('settings').obsWebSocket, names)
+);
+ipcMain.handle('windows:list-audio-devices', async () => {
+  const { exec } = require('child_process');
+  // Enumerate audio devices via WMI: output devices via Win32_SoundDevice,
+  // input/microphone devices via Win32_PnPEntity filtered by PNPClass AudioEndpoint
+  const cmd = `powershell -NoProfile -Command "
+    try {
+      $devices = @();
+      Get-WmiObject Win32_SoundDevice | ForEach-Object {
+        $devices += [PSCustomObject]@{ name=$_.Name; type='output'; id=$_.DeviceID }
+      };
+      Get-WmiObject Win32_PnPEntity | Where-Object { $_.PNPClass -eq 'AudioEndpoint' -and $_.Name -match 'Microphone|mic|input' } | ForEach-Object {
+        $devices += [PSCustomObject]@{ name=$_.Name; type='input'; id=$_.DeviceID }
+      };
+      $devices | ConvertTo-Json -Compress
+    } catch { '[]' }
+  "`;
+  return new Promise((resolve) => {
+    exec(cmd, { encoding: 'utf-8', timeout: 8000 }, (error, stdout) => {
+      if (error) return resolve([]);
+      try {
+        const raw = stdout.trim();
+        if (!raw || raw === '[]') return resolve([]);
+        const parsed = JSON.parse(raw);
+        const items = Array.isArray(parsed) ? parsed : [parsed];
+        resolve(items
+          .filter(d => d && d.name)
+          .map(d => ({ name: d.name, type: d.type || 'output', id: d.id || d.name }))
+        );
+      } catch {
+        resolve([]);
+      }
+    });
+  });
+});
+ipcMain.handle('windows:list-running-apps', async () => {
+  const { exec } = require('child_process');
+  const skipList = ['svchost','conhost','csrss','dwm','smss','lsass','wininit','services','Registry','Idle','System','audiodg','RuntimeBroker','SearchHost','TextInputHost','ShellExperienceHost','ApplicationFrameHost','StartMenuExperienceHost','SystemSettings','taskhostw','sihost','fontdrvhost','NisSrv','MsMpEng'];
+  const skipStr = skipList.map(s => `'${s}'`).join(',');
+  const cmd = `powershell -NoProfile -Command "$skip = @(${skipStr}); Get-Process | Where-Object { $skip -notcontains $_.Name -and $_.Id -ne $PID } | Select-Object -Unique Name, @{N='HasWindow';E={$_.MainWindowTitle -ne ''}} | ConvertTo-Json -Compress"`;
+  return new Promise((resolve) => {
+    exec(cmd, { encoding: 'utf-8', timeout: 8000 }, (error, stdout) => {
+      if (error) return resolve([]);
+      try {
+        const raw = stdout.trim();
+        if (!raw || raw === '[]' || raw === 'null') return resolve([]);
+        const parsed = JSON.parse(raw);
+        const items = Array.isArray(parsed) ? parsed : [parsed];
+        const seen = new Map();
+        for (const p of items) {
+          if (!p || !p.Name) continue;
+          if (!seen.has(p.Name) || p.HasWindow) {
+            seen.set(p.Name, { name: p.Name, exe: `${p.Name}.exe`, hasWindow: !!p.HasWindow });
+          }
+        }
+        resolve([...seen.values()].sort((a, b) => a.name.localeCompare(b.name)));
+      } catch {
+        resolve([]);
+      }
+    });
+  });
+});
 ipcMain.handle('obs:ws:read-qr', async (_event, imagePath) => {
   return await readOBSWebSocketQR(imagePath);
 });
