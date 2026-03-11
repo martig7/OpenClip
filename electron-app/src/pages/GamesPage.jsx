@@ -168,6 +168,7 @@ export default function GamesPage() {
   // Master audio source list — sources the user wants in all game scenes
   const [masterAudioSources, setMasterAudioSources] = useState([]); // [{ kind, label, name }]
   const masterAudioLoadedRef = useRef(false); // guard against persisting before the initial load
+  const toastTimerRef = useRef(null);
   const [applyingSource, setApplyingSource] = useState(null); // kind being applied
 
   // Audio dropdown state
@@ -432,9 +433,16 @@ export default function GamesPage() {
   }
 
   function showToast(msg) {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast(msg);
-    setTimeout(() => setToast(null), 4000);
+    toastTimerRef.current = setTimeout(() => setToast(null), 4000);
   }
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   async function pickIcon() {
     const filePath = await api.openFileDialog({
