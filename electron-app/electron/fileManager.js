@@ -172,7 +172,7 @@ async function processAutoClips(store, gameName, recordingDir) {
         '-avoid_negative_ts', 'make_zero',
         clipPath,
         '-y',
-      ], { timeout: 60000 });
+      ], { timeout: 5 * 60 * 1000, killSignal: 'SIGKILL' });
       clipNum++;
       service.invalidateClipsCache();
     } catch {

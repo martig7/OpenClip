@@ -464,3 +464,81 @@ describe('runAutoDelete', () => {
     expect(fs.existsSync(fp)).toBe(false)
   })
 })
+
+// ─── killAllProcesses ─────────────────────────────────────────────
+describe('killAllProcesses', () => {
+  it('sends SIGTERM and schedules SIGKILL fallback, clears timer on close', async () => {
+    vi.useFakeTimers()
+
+    let closeListener
+    const mockProc = {
+      kill: vi.fn(),
+      once: vi.fn((event, cb) => { if (event === 'close') closeListener = cb }),
+    }
+
+    // Register the mock process directly via createClip infrastructure isn't needed —
+    // expose it through the activeFFmpeg map by calling a method that adds to it.
+    // Instead, use the fact that killAllProcesses iterates activeFFmpeg by directly
+    // exercising the function through a manual execFile mock that captures the proc.
+    const cp = await import('child_process')
+    cp.execFile.mockImplementationOnce((bin, args, opts, cb) => {
+      // Never call cb — process appears to hang so it stays in activeFFmpeg
+      return mockProc
+    })
+
+    const src = path.join(obsDir, 'rec.mp4')
+    makeFile(src)
+
+    // Start clip creation (won't resolve because mockProc cb is never called)
+    service.createClip(src, 0, 10, 'Halo', null)
+    // Give the sync part of createClip time to register the proc
+    await Promise.resolve()
+
+    service.killAllProcesses()
+
+    // SIGTERM sent first
+    expect(mockProc.kill).toHaveBeenCalledWith(/* default — no arg or 'SIGTERM' */)
+
+    // SIGKILL should be scheduled but not yet called
+    const killCallsBefore = mockProc.kill.mock.calls.length
+
+    // Simulate process closing before the timer fires — timer must be cleared
+    closeListener?.()
+    vi.advanceTimersByTime(3100)
+
+    // kill should NOT have been called with SIGKILL since close cleared the timer
+    const sigkillCalls = mockProc.kill.mock.calls.filter(c => c[0] === 'SIGKILL')
+    expect(sigkillCalls).toHaveLength(0)
+
+    vi.useRealTimers()
+  })
+
+  it('sends SIGKILL after 3s if process does not close', async () => {
+    vi.useFakeTimers()
+
+    let closeListener
+    const mockProc = {
+      kill: vi.fn(),
+      once: vi.fn((event, cb) => { if (event === 'close') closeListener = cb }),
+    }
+
+    const cp = await import('child_process')
+    cp.execFile.mockImplementationOnce(() => mockProc)
+
+    const src = path.join(obsDir, 'rec.mp4')
+    makeFile(src)
+
+    service.createClip(src, 0, 10, 'Halo', null)
+    await Promise.resolve()
+
+    service.killAllProcesses()
+
+    // Advance past 3s without firing the close listener
+    vi.advanceTimersByTime(3100)
+
+    const sigkillCalls = mockProc.kill.mock.calls.filter(c => c[0] === 'SIGKILL')
+    expect(sigkillCalls).toHaveLength(1)
+
+    vi.useRealTimers()
+  })
+})

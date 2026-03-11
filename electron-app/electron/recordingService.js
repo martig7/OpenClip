@@ -20,7 +20,10 @@ const activeFFmpeg = new Map();
 
 function killAllProcesses() {
   for (const [proc, outPath] of activeFFmpeg) {
-    try { proc.kill(); } catch {}
+    try { proc.kill(); } catch (e) { console.warn('[clip] SIGTERM failed:', e); }
+    const sigkillTimer = setTimeout(() => { try { proc.kill('SIGKILL'); } catch {} }, 3000);
+    if (typeof sigkillTimer.unref === 'function') sigkillTimer.unref();
+    proc.once('close', () => clearTimeout(sigkillTimer));
     if (outPath) try { if (fs.existsSync(outPath)) fs.unlinkSync(outPath); } catch {}
   }
   activeFFmpeg.clear();
