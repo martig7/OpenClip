@@ -18,27 +18,30 @@ function detectRunningGame(games) {
     const titleStr = (game.selector || '').toLowerCase();
     const exeName  = (game.exe || '').toLowerCase();
 
+    // Skip games with neither a usable selector nor an exe binding.
+    if (!exeName && !titleStr) continue;
+
     // Mirror OBS window_match_priority values:
     //   0 — Match title, otherwise find window of same type  → title match only
     //   1 — Match title, otherwise find window of same exe   → title match, then exe fallback
     //   2 — Match executable                                 → exe only
     if (priority === 2) {
       // Exe-only: exact process name match (same logic OBS uses for "match executable").
-      // Requires game.exe to be set; if it isn't, fall through to title check.
+      // Requires game.exe to be set; if it isn't, fall through to title/process substring check.
       if (exeName && processes.some(p => p === exeName)) return game;
-      if (!exeName) {
+      if (!exeName && titleStr) {
         // No exe binding — fall back to treating selector as a process/title substring.
         if (processes.some(p => p.includes(titleStr)) || titles.some(t => t.includes(titleStr))) return game;
       }
     } else if (priority === 1) {
       // Title first, exe fallback (OBS priority 1).
-      if (titles.some(t => t.includes(titleStr))) return game;
+      if (titleStr && titles.some(t => t.includes(titleStr))) return game;
       if (exeName && processes.some(p => p === exeName)) return game;
     } else {
       // Default (priority 0): title match only.
       // If no exe binding exists also check process names as a convenience (manual selectors).
-      if (titles.some(t => t.includes(titleStr))) return game;
-      if (!exeName && processes.some(p => p.includes(titleStr))) return game;
+      if (titleStr && titles.some(t => t.includes(titleStr))) return game;
+      if (!exeName && titleStr && processes.some(p => p.includes(titleStr))) return game;
     }
   }
 
