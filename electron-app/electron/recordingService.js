@@ -298,11 +298,31 @@ function reencodeVideo(sourcePath, { codec = 'h265', crf = 23, preset = 'medium'
 
         let finalPath = outPath;
         if (replaceOriginal) {
+          const bakPath = `${sourcePath}.bak`;
           try {
-            fs.unlinkSync(sourcePath);
+            fs.renameSync(sourcePath, bakPath);
+          } catch (err) {
+            // Clean up the temp encode; original is still intact at sourcePath
+            try { fs.unlinkSync(outPath); } catch {}
+            return reject(new Error(`Failed to back up original: ${err.message}`));
+          }
+          try {
             fs.renameSync(outPath, sourcePath);
             finalPath = sourcePath;
-          } catch {}
+            // Backup is no longer needed; ignore failure — it can be cleaned up later
+            try { fs.unlinkSync(bakPath); } catch {}
+          } catch (err) {
+            // Restore the backup so the user does not lose their original file
+            try {
+              fs.renameSync(bakPath, sourcePath);
+            } catch (restoreErr) {
+              return reject(new Error(
+                `Failed to replace original: ${err.message}. ` +
+                `Original is backed up at ${bakPath} — please restore it manually.`
+              ));
+            }
+            return reject(new Error(`Failed to replace original: ${err.message}`));
+          }
         }
 
         invalidateCache();
