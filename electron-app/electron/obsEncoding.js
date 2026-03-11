@@ -61,10 +61,9 @@ function getProfiles() {
   const dir = getProfilesDir();
   if (!dir || !fs.existsSync(dir)) return [];
   try {
-    return fs.readdirSync(dir)
-      .filter(name => fs.statSync(path.join(dir, name)).isDirectory() &&
-                      fs.existsSync(path.join(dir, name, 'basic.ini')))
-      .map(name => ({ name, dir: path.join(dir, name) }));
+    return fs.readdirSync(dir, { withFileTypes: true })
+      .filter(d => d.isDirectory() && fs.existsSync(path.join(dir, d.name, 'basic.ini')))
+      .map(d => ({ name: d.name, dir: path.join(dir, d.name) }));
   } catch {
     return [];
   }
