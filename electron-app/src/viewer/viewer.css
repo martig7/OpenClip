@@ -2342,7 +2342,6 @@ body {
 }
 
 .sv2-list-row {
-  height: 36px;  /* matches LIST_ROW_HEIGHT constant in StoragePage.jsx */
   border-bottom: 1px solid var(--border);
   cursor: pointer;
   transition: background 0.1s;
