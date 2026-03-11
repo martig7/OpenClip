@@ -63,6 +63,11 @@ const mockApi = {
   getStorageStats: async () => ({ totalSize: 0, recordingCount: 0, clipCount: 0, byGame: {} }),
   registerHotkey: asyncNoop,
   reencodeVideo: asyncNoop,
+  checkForUpdate: asyncNoop,
+  installUpdate: asyncNoop,
+  onUpdateAvailable: () => noop,
+  onUpdateProgress: () => noop,
+  onUpdateDownloaded: () => noop,
 };
 
 const api = window.api || mockApi;

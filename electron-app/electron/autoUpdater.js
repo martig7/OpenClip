@@ -38,7 +38,9 @@ function setupAutoUpdater(getMainWindow) {
   // Delay the first check so the UI has time to load.
   setTimeout(() => {
     try {
-      autoUpdater.checkForUpdates();
+      autoUpdater.checkForUpdates()?.catch((err) => {
+        console.error('[updater] check failed:', err.message);
+      });
     } catch (err) {
       console.error('[updater] check failed:', err.message);
     }
@@ -52,7 +54,13 @@ function setupAutoUpdater(getMainWindow) {
  */
 function registerUpdateHandlers(ipcMain) {
   ipcMain.handle('update:check', () => {
-    try { autoUpdater.checkForUpdates(); } catch { /* ignore */ }
+    try {
+      return autoUpdater.checkForUpdates()?.catch((err) => {
+        console.error('[updater] check failed:', err.message);
+      });
+    } catch (err) {
+      console.error('[updater] check failed:', err.message);
+    }
   });
 
   ipcMain.handle('update:install', () => {
