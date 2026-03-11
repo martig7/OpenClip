@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  X, ChevronRight, ChevronLeft, FolderOpen, RefreshCw, Wifi,
-  Download, CheckCircle, AlertCircle, Loader, Keyboard, Copy, QrCode, Clipboard,
+  X, ChevronRight, ChevronLeft, FolderOpen, RefreshCw,
+  Download, CheckCircle, AlertCircle, Loader, Keyboard,
   HardDrive, Scissors, Play, ExternalLink, Package, Monitor,
 } from 'lucide-react';
 import api from '../api';
@@ -219,166 +219,57 @@ function StepOBSInstall({ obsInstallPath, onChangeInstallPath }) {
   );
 }
 
-/** Step 3 – OBS Script (guided manual add + verify via marker file) */
-function StepOBSPlugin({ pluginStatus, pluginInstallMsg, onVerify, scriptPath }) {
-  const [copied, setCopied] = useState(false);
-
-  function copyPath() {
-    if (scriptPath) {
-      navigator.clipboard.writeText(scriptPath).catch(() => {});
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  }
-
+/** Step 3 – OBS Plugin (auto-install DLL into OBS user plugins directory) */
+function StepOBSPlugin({ pluginStatus, pluginInstallMsg, onInstall, onVerify }) {
   return (
     <div className="onboarding-step">
       <div className="onboarding-step-icon"><Download size={24} /></div>
-      <h3>Add the OBS Script</h3>
+      <h3>Install OBS Plugin</h3>
       <p className="onboarding-step-desc">
-        OpenClip controls OBS recordings via a Lua script.
-        Add it once through OBS — <strong>OBS must be open</strong>.
+        OpenClip uses a native OBS plugin to control recording and scene management.
+        Click the button below to install it automatically — no manual steps required.
       </p>
 
-      <ol className="onboarding-instruction-list" style={{ marginBottom: 12 }}>
-        <li>
-          <span className="onboarding-step-num">1</span>
-          <span>In OBS, go to <strong>Tools → Scripts</strong></span>
-        </li>
-        <li>
-          <span className="onboarding-step-num">2</span>
-          <span>Click <strong>"+"</strong> and browse to this file:</span>
-        </li>
-      </ol>
-
-      <div className="form-input-row" style={{ marginBottom: 14 }}>
-        <input
-          className="form-input"
-          value={scriptPath || 'Loading…'}
-          readOnly
-          style={{ fontFamily: 'monospace', fontSize: 11 }}
-        />
+      <div className="onboarding-install-row" style={{ marginBottom: 12 }}>
         <button
-          className="btn btn-secondary btn-sm"
-          onClick={copyPath}
-          title="Copy path to clipboard"
-          style={{ whiteSpace: 'nowrap', minWidth: 76 }}
-        >
-          {copied ? <CheckCircle size={13} /> : <Copy size={13} />}
-          {copied ? 'Copied!' : 'Copy'}
-        </button>
-      </div>
-
-      <ol className="onboarding-instruction-list" style={{ marginBottom: 14 }}>
-        <li>
-          <span className="onboarding-step-num">3</span>
-          <span>Click <strong>Close</strong> in the Scripts dialog — the script loads instantly</span>
-        </li>
-      </ol>
-
-      <div className="onboarding-install-row">
-        <button
-          className="btn btn-secondary btn-sm"
-          onClick={onVerify}
+          className="btn btn-primary btn-sm"
+          onClick={onInstall}
           disabled={pluginStatus === 'checking' || pluginStatus === 'success'}
         >
-          <CheckCircle size={13} /> Verify Script
+          <Download size={13} /> Install Plugin
         </button>
         <Status
           state={pluginStatus || null}
           message={
-            pluginStatus === 'checking' ? 'Checking…' :
-            pluginStatus === 'success'  ? 'Script is running in OBS ✓' :
-            pluginStatus === 'error'    ? (pluginInstallMsg || 'Script not detected — open OBS and add it first') : null
+            pluginStatus === 'checking' ? 'Installing…' :
+            pluginStatus === 'success'  ? 'Plugin installed ✓' :
+            pluginStatus === 'error'    ? (pluginInstallMsg || 'Installation failed') : null
           }
         />
       </div>
-    </div>
-  );
-}
 
-
-/** Step 4 – OBS WebSocket */
-function StepWebSocket({ settings, onChange, wsStatus, onTest, onPasteQR, onBrowseQR, qrMsg }) {
-  return (
-    <div className="onboarding-step">
-      <div className="onboarding-step-icon"><Wifi size={24} /></div>
-      <h3>OBS WebSocket</h3>
-      <p className="onboarding-step-desc">
-        OpenClip connects to OBS via WebSocket to auto-create scenes and control
-        recording. Enable it in OBS under{' '}
-        <strong>Tools → WebSocket Server Settings</strong>, then test below.
-      </p>
-
-      {/* QR import row */}
-      <div className="onboarding-install-row" style={{ marginBottom: 12 }}>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)', flex: 1 }}>
-          Screenshot the QR in OBS and paste here, or browse for the image:
-        </span>
-        <button className="btn btn-secondary btn-sm" onClick={onPasteQR} title="Paste QR code image from clipboard (Ctrl+V)">
-          <Clipboard size={13} /> Paste QR
-        </button>
-        <button className="btn btn-secondary btn-sm" onClick={onBrowseQR}>
-          <QrCode size={13} /> Browse QR
-        </button>
-      </div>
-      {qrMsg && (
-        <div className={`onboarding-status ${qrMsg.ok ? 'success' : 'error'}`} style={{ marginBottom: 10 }}>
-          {qrMsg.ok ? <CheckCircle size={12} /> : <AlertCircle size={12} />} {qrMsg.text}
-        </div>
+      {pluginStatus === 'success' && (
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
+          If OBS is already running, restart it to load the plugin.
+        </p>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, marginBottom: 8 }}>
-        <div className="form-group" style={{ margin: 0 }}>
-          <label className="form-label">Host</label>
-          <input
-            className="form-input"
-            value={settings.obsWebSocket?.host || 'localhost'}
-            onChange={e => onChange('obsWebSocket.host', e.target.value)}
-            placeholder="localhost"
-          />
+      {pluginStatus === 'error' && (
+        <div className="onboarding-install-row">
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={onVerify}
+          >
+            <CheckCircle size={13} /> Check Again
+          </button>
         </div>
-        <div className="form-group" style={{ margin: 0 }}>
-          <label className="form-label">Port</label>
-          <input
-            type="number"
-            className="form-input"
-            value={settings.obsWebSocket?.port ?? 4455}
-            onChange={e => onChange('obsWebSocket.port', parseInt(e.target.value) || 4455)}
-            style={{ width: 90 }}
-          />
-        </div>
-      </div>
-
-      <div className="form-group" style={{ marginBottom: 12 }}>
-        <label className="form-label">Password (optional)</label>
-        <input
-          type="password"
-          className="form-input"
-          value={settings.obsWebSocket?.password || ''}
-          onChange={e => onChange('obsWebSocket.password', e.target.value)}
-          placeholder="Leave blank if no password set"
-        />
-      </div>
-
-      <div className="onboarding-install-row">
-        <button className="btn btn-secondary btn-sm" onClick={onTest}>
-          <Wifi size={13} /> Test Connection
-        </button>
-        <Status
-          state={wsStatus?.state || null}
-          message={
-            wsStatus?.state === 'checking' ? 'Connecting…' :
-            wsStatus?.state === 'success'  ? `Connected — ${wsStatus.version}` :
-            wsStatus?.state === 'error'    ? wsStatus.message : null
-          }
-        />
-      </div>
+      )}
     </div>
   );
 }
 
-/** Step 5 – Clip Hotkey */
+
+/** Step 4 – Clip Hotkey (was Step 5) */
 function StepHotkey({ settings, onChange }) {
   return (
     <div className="onboarding-step">
@@ -399,7 +290,7 @@ function StepHotkey({ settings, onChange }) {
   );
 }
 
-/** Step 6 – Organize Recordings Destination */
+/** Step 5 – Organize Recordings Destination */
 function StepOrganizeDestination({ settings, onChange }) {
   async function browse() {
     const dir = await api.openDirectoryDialog();
@@ -436,7 +327,7 @@ function StepOrganizeDestination({ settings, onChange }) {
   );
 }
 
-/** Step 7 – Storage Management */
+/** Step 6 – Storage Management */
 function StepStorage({ settings, onChange }) {
   const enabled = settings.autoDelete?.enabled;
   return (
@@ -497,7 +388,7 @@ function StepStorage({ settings, onChange }) {
   );
 }
 
-/** Step 8 – Auto-Clip */
+/** Step 7 – Auto-Clip */
 function StepAutoClip({ settings, onChange }) {
   const enabled = settings.autoClip?.enabled;
   return (
@@ -565,7 +456,7 @@ function StepAutoClip({ settings, onChange }) {
   );
 }
 
-/** Step 9 – Watcher Autostart */
+/** Step 8 – Watcher Autostart */
 function StepWatcherAutostart({ settings, onChange }) {
   return (
     <div className="onboarding-step">
@@ -596,19 +487,18 @@ function StepWatcherAutostart({ settings, onChange }) {
 }
 
 /* ══════════════════════════════════════════════════════════
-   STEP REGISTRY  (10 steps total)
+   STEP REGISTRY  (9 steps total — WebSocket removed)
 ══════════════════════════════════════════════════════════ */
 const STEP_TITLES = [
   'Welcome',           // 0
   'OBS Recordings',    // 1  — gated: path non-empty
   'OBS Install',       // 2  — gated: path non-empty
   'OBS Plugin',        // 3  — gated: plugin installed
-  'WebSocket',         // 4  — gated: connection test passes
-  'Clip Hotkey',       // 5
-  'Recordings Dest.',  // 6  — gated: path non-empty
-  'Storage',           // 7
-  'Auto-Clip',         // 8
-  'Watcher',           // 9
+  'Clip Hotkey',       // 4
+  'Recordings Dest.',  // 5  — gated: path non-empty
+  'Storage',           // 6
+  'Auto-Clip',         // 7
+  'Watcher',           // 8
 ];
 const TOTAL_STEPS = STEP_TITLES.length;
 
@@ -623,9 +513,6 @@ export default function OnboardingModal({ open, onClose }) {
   // Gated step state
   const [pluginStatus, setPluginStatus] = useState(null); // null | 'checking' | 'success' | 'error'
   const [pluginInstallMsg, setPluginInstallMsg] = useState('');
-  const [scriptPath, setScriptPath] = useState('');
-  const [wsStatus, setWsStatus] = useState(null);         // null | { state, version?, message? }
-  const [qrMsg, setQrMsg] = useState(null);               // null | { ok: bool, text: string }
 
   // Load settings on open
   useEffect(() => {
@@ -633,19 +520,15 @@ export default function OnboardingModal({ open, onClose }) {
     setStep(0);
     setPluginStatus(null);
     setPluginInstallMsg('');
-    setWsStatus(null);
-    setQrMsg(null);
-    api.getStore('settings').then(s => setSettings(s));
+    api.getStore('settings').then(s => setSettings(s)).catch(() => setSettings({}));
     api.getOBSInstallPath?.().then(p => setObsInstallPath(p || '')).catch(() => {});
-    // Load the lua script path so the user can copy-paste it
-    api.getOBSScriptPath?.().then(p => setScriptPath(p || '')).catch(() => {});
   }, [open]);
 
-  // When landing on step 3 (plugin), check if script is already running (marker file)
+  // When landing on step 3 (plugin), auto-check if plugin is already installed
   useEffect(() => {
     if (step !== 3 || pluginStatus) return;
-    api.isOBSScriptLoaded?.().then(loaded => {
-      if (loaded) setPluginStatus('success');
+    api.isOBSPluginRegistered?.().then(installed => {
+      if (installed) setPluginStatus('success');
     }).catch(() => {});
   }, [step, pluginStatus]);
 
@@ -673,58 +556,32 @@ export default function OnboardingModal({ open, onClose }) {
     if (step === 1) return !!(settings?.obsRecordingPath?.trim());
     if (step === 2) return !!(obsInstallPath?.trim());
     if (step === 3) return pluginStatus === 'success';
-    if (step === 4) return wsStatus?.state === 'success';
-    if (step === 6) return !!(settings?.destinationPath?.trim());
+    if (step === 5) return !!(settings?.destinationPath?.trim());
     return true;
+  }
+
+  async function handleInstallPlugin() {
+    setPluginStatus('checking');
+    setPluginInstallMsg('');
+    const result = await api.installOBSPlugin?.(obsInstallPath).catch(err => ({ success: false, message: err.message }));
+    if (result?.success) {
+      setPluginStatus('success');
+    } else {
+      setPluginStatus('error');
+      setPluginInstallMsg(result?.message || 'Installation failed');
+    }
   }
 
   async function handleVerifyPlugin() {
     setPluginStatus('checking');
-    const loaded = await api.isOBSScriptLoaded?.().catch(() => false);
-    if (loaded) {
+    const installed = await api.isOBSPluginRegistered?.().catch(() => false);
+    if (installed) {
       setPluginStatus('success');
       setPluginInstallMsg('');
     } else {
       setPluginStatus('error');
-      setPluginInstallMsg('Script not detected — make sure OBS is open and the script is added via Tools → Scripts');
+      setPluginInstallMsg('Plugin not found — click Install Plugin to try again');
     }
-  }
-
-  function applyQRSettings(qrSettings) {
-    const { host, port, password } = qrSettings;
-    if (host !== undefined) updateSetting('obsWebSocket.host', host);
-    if (port !== undefined) updateSetting('obsWebSocket.port', port);
-    if (password !== undefined) updateSetting('obsWebSocket.password', password);
-    const parts = [`${host || 'localhost'}:${port || 4455}`];
-    if (password) parts.push('password imported');
-    setQrMsg({ ok: true, text: `Imported from QR: ${parts.join(', ')}` });
-  }
-
-  async function handlePasteQR() {
-    setQrMsg(null);
-    const result = await api.readOBSWSQRFromClipboard().catch(() => ({ success: false, message: 'Clipboard error' }));
-    if (!result.success) { setQrMsg({ ok: false, text: result.message }); return; }
-    applyQRSettings(result.settings);
-  }
-
-  async function handleBrowseQR() {
-    setQrMsg(null);
-    const imagePath = await api.openFileDialog({
-      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'bmp', 'gif', 'webp'] }],
-    });
-    if (!imagePath) return;
-    const result = await api.readOBSWSQR(imagePath).catch(() => ({ success: false, message: 'Read error' }));
-    if (!result.success) { setQrMsg({ ok: false, text: result.message }); return; }
-    applyQRSettings(result.settings);
-  }
-
-  async function handleTestWS() {
-    setWsStatus({ state: 'checking' });
-    const result = await api.testOBSWSConnection(settings?.obsWebSocket).catch(() => ({ success: false, message: 'Connection error' }));
-    setWsStatus(result.success
-      ? { state: 'success', version: result.version }
-      : { state: 'error', message: result.message }
-    );
   }
 
   async function finishOrSkip(saveSettings = true) {
@@ -750,9 +607,8 @@ export default function OnboardingModal({ open, onClose }) {
   const gateHint = nextDisabled ? (
     step === 1 ? 'Enter or detect your OBS recording folder to continue' :
     step === 2 ? 'Enter or detect your OBS install location to continue' :
-    step === 3 ? 'Add the script in OBS (Tools → Scripts), then click Verify Script' :
-    step === 4 ? 'Click "Test Connection" and ensure it succeeds to continue' :
-    step === 6 ? 'Choose a destination folder to continue' : undefined
+    step === 3 ? 'Click Install Plugin to install the OBS plugin' :
+    step === 5 ? 'Choose a destination folder to continue' : undefined
   ) : undefined;
 
   return (
@@ -793,30 +649,15 @@ export default function OnboardingModal({ open, onClose }) {
             <StepOBSPlugin
               pluginStatus={pluginStatus}
               pluginInstallMsg={pluginInstallMsg}
-              scriptPath={scriptPath}
+              onInstall={handleInstallPlugin}
               onVerify={handleVerifyPlugin}
             />
           )}
-          {step === 4 && (
-            <StepWebSocket
-              settings={settings}
-              onChange={updateSetting}
-              wsStatus={wsStatus}
-              onTest={handleTestWS}
-              onPasteQR={handlePasteQR}
-              onBrowseQR={handleBrowseQR}
-              qrMsg={qrMsg}
-            />
-          )}
-          {step === 5 && <StepHotkey settings={settings} onChange={updateSetting} />}
-          {step === 6 && <StepOrganizeDestination settings={settings} onChange={updateSetting} />}
-          {step === 7 && <StepStorage settings={settings} onChange={updateSetting} />}
-          {step === 8 && <StepAutoClip settings={settings} onChange={updateSetting} />}
-          {step === 9 && <StepWatcherAutostart settings={settings} onChange={updateSetting} />}
-        </div>
-
-        {/* Footer */}
-        <div className="onboarding-footer">
+          {step === 4 && <StepHotkey settings={settings} onChange={updateSetting} />}
+          {step === 5 && <StepOrganizeDestination settings={settings} onChange={updateSetting} />}
+          {step === 6 && <StepStorage settings={settings} onChange={updateSetting} />}
+          {step === 7 && <StepAutoClip settings={settings} onChange={updateSetting} />}
+          {step === 8 && <StepWatcherAutostart settings={settings} onChange={updateSetting} />}
           <button
             className="btn btn-ghost btn-sm"
             onClick={() => finishOrSkip(false)}

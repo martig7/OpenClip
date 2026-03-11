@@ -28,7 +28,7 @@ export default function App() {
 
   // First-run: show onboarding if not yet completed
   useEffect(() => {
-    api.isOnboardingComplete?.().then(done => {
+    Promise.resolve(api.isOnboardingComplete?.()).then(done => {
       if (!done) setShowOnboarding(true);
     }).catch(() => {});
   }, []);

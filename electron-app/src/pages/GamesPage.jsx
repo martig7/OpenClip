@@ -1660,7 +1660,7 @@ const WatcherStatusCard = memo(function WatcherStatusCard({ status, onToggle, sc
         }}>
           <AlertTriangle size={14} style={{ flexShrink: 0 }} />
           <span style={{ flex: 1 }}>
-            OBS script not detected. Add it in OBS under Tools → Scripts for automatic recording.{' '}
+            OBS plugin not detected. Make sure OBS is running with the OpenClip plugin installed.{' '}
             <button
               onClick={onGoToSettings}
               style={{
