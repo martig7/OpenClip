@@ -1,6 +1,7 @@
 const fs = require('fs');
 const { RUNTIME_DIR, STATE_FILE, PID_FILE, LOG_FILE } = require('./constants');
 const { getRunningProcessNames, getWindowTitles } = require('./processDetector');
+const { startRecording, stopRecording } = require('./obsPlugin');
 
 function log(message) {
   const line = `[${new Date().toISOString()}] ${message}\n`;
@@ -95,26 +96,43 @@ function setupGameWatcher(store, onStateChange) {
       writeGameState(`RECORDING|${detected.name}|${detected.scene || ''}`);
       log(`Game detected: ${detected.name}`);
       onStateChange({ currentGame: detected.name, status: 'recording' });
+      // Tell the OBS plugin to start recording (best-effort, OBS may not be running)
+      startRecording(detected.scene || undefined).catch(err =>
+        log(`Plugin startRecording failed: ${err.message}`)
+      );
     } else if (!detected && lastGame) {
       const stoppedGame = lastGame.name;
       lastGame = null;
       writeGameState('IDLE');
       log(`Game stopped: ${stoppedGame}`);
       onStateChange({ currentGame: null, status: 'idle' });
+      // Tell the OBS plugin to stop recording
+      stopRecording().catch(err =>
+        log(`Plugin stopRecording failed: ${err.message}`)
+      );
       scheduleOrganize(stoppedGame);
     } else if (detected && lastGame && detected.name !== lastGame.name) {
       const stoppedGame = lastGame.name;
       lastGame = detected;
-      // Force a brief non-RECORDING state so OBS detects a clean stop/start between games.
+      // Force a brief non-RECORDING state so we get a clean stop/start between games.
       writeGameState('IDLE');
       log(`Game switched: ${stoppedGame} → ${detected.name}`);
       onStateChange({ currentGame: null, status: 'idle' });
 
-      // After a short delay, signal recording for the newly detected game.
-      setTimeout(() => {
-        writeGameState(`RECORDING|${detected.name}|${detected.scene || ''}`);
-        onStateChange({ currentGame: detected.name, status: 'recording' });
-      }, 500);
+      // Stop recording for the old game, then start for the new one
+      stopRecording()
+        .catch(err => log(`Plugin stopRecording failed: ${err.message}`))
+        .finally(() => {
+          // After a short delay, signal recording for the newly detected game.
+          setTimeout(() => {
+            if (stopped) return; // watcher was stopped during the delay
+            writeGameState(`RECORDING|${detected.name}|${detected.scene || ''}`);
+            onStateChange({ currentGame: detected.name, status: 'recording' });
+            startRecording(detected.scene || undefined).catch(err =>
+              log(`Plugin startRecording failed: ${err.message}`)
+            );
+          }, 500);
+        });
 
       scheduleOrganize(stoppedGame);
     }
@@ -131,6 +149,7 @@ function setupGameWatcher(store, onStateChange) {
       stopped = true;
       writeGameState('STOPPED');
       log('Watcher stopped');
+      stopRecording().catch(() => {}); // best-effort stop
       try { fs.unlinkSync(PID_FILE); } catch {}
     },
   };
@@ -140,7 +159,7 @@ let lastWrittenState = null;
 function writeGameState(state) {
   fs.mkdirSync(RUNTIME_DIR, { recursive: true });
   if (state !== lastWrittenState) {
-    fs.writeFile(STATE_FILE, state, 'utf-8', (err) => { if (err) log(`Failed to write game state: ${err.message}`); });
+    try { fs.writeFileSync(STATE_FILE, state, 'utf-8'); } catch (err) { log(`Failed to write game state: ${err.message}`); }
     lastWrittenState = state;
   }
 }

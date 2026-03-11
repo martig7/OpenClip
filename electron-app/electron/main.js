@@ -15,7 +15,7 @@ app.setPath('userData', path.join(app.getPath('appData'), 'open-clip'));
 
 // Electron-only config (window bounds, OBS recording path which Python reads from OBS profile directly)
 const electronConfigPath = path.join(app.getPath('userData'), 'electron.json');
-const electronConfigDefaults = { windowBounds: { width: 1200, height: 800 }, obsRecordingPath: '', listView: true };
+const electronConfigDefaults = { windowBounds: { width: 1200, height: 800 }, obsRecordingPath: '', listView: true, onboardingComplete: false, obsInstallPath: '' };
 
 // All mutable paths come from constants.js (AppData-based)
 const { USER_DATA, GAMES_CONFIG_FILE, MANAGER_SETTINGS_FILE, MARKERS_FILE, ICONS_DIR } = require('./constants');
@@ -272,24 +272,20 @@ const {
   deleteOBSScene,
   getOBSAudioInputs,
   getSceneAudioSources,
-  testOBSConnection,
   getInputAudioTracks,
   setInputAudioTracks,
   getTrackNames,
-  setTrackNames
-} = require('./obsWebSocket');
-const { readOBSWebSocketQR } = require('./qrCodeReader');
+  setTrackNames,
+  isPluginReachable,
+} = require('./obsPlugin');
 const { startApiServer } = require('./apiServer');
-const { RUNTIME_DIR, STATE_FILE, SCRIPT_MARKER_FILE } = require('./constants');
+const { RUNTIME_DIR, STATE_FILE, PLUGIN_PORT_FILE, PLUGIN_MARKER_FILE, PLUGIN_DLL_NAME } = require('./constants');
 
-// Seed default config files and OBS Lua script into userData on first run
+// Seed default config files and OBS plugin DLL into userData on first run
 function seedFirstRun() {
   const defaultsDir = app.isPackaged
     ? path.join(process.resourcesPath, 'defaults')
     : path.join(__dirname, '..', 'resources', 'defaults');
-  const luaSrc = app.isPackaged
-    ? path.join(process.resourcesPath, 'obs_game_recorder.lua')
-    : path.join(__dirname, '..', 'resources', 'obs_game_recorder.lua');
 
   fs.mkdirSync(USER_DATA, { recursive: true });
 
@@ -301,14 +297,17 @@ function seedFirstRun() {
     }
   }
 
-  // Always overwrite the Lua script on startup — it's app-bundled, not user-edited,
-  // so each launch should deploy the latest version.
-  const luaDest = path.join(USER_DATA, 'obs_game_recorder.lua');
-  if (fs.existsSync(luaSrc)) {
+  // Always deploy the latest plugin DLL to userData so the install handler can
+  // copy it into the OBS plugins directory.
+  const pluginSrc = app.isPackaged
+    ? path.join(process.resourcesPath, 'obs-plugin', PLUGIN_DLL_NAME)
+    : path.join(__dirname, '..', '..', 'obs-plugin', 'build', 'Release', PLUGIN_DLL_NAME);
+  const pluginDest = path.join(USER_DATA, PLUGIN_DLL_NAME);
+  if (fs.existsSync(pluginSrc)) {
     try {
-      fs.copyFileSync(luaSrc, luaDest);
+      fs.copyFileSync(pluginSrc, pluginDest);
     } catch (err) {
-      console.error('[main] Failed to copy Lua script:', err.message);
+      console.error('[main] Failed to copy OBS plugin DLL:', err.message);
     }
   }
 }
@@ -586,35 +585,37 @@ ipcMain.handle('obs:launch', async () => {
   return { success: true };
 });
 
-// OBS WebSocket
-ipcMain.handle('obs:ws:test',          () => testOBSConnection(store.get('settings').obsWebSocket));
-ipcMain.handle('obs:ws:script-loaded', () => fs.existsSync(SCRIPT_MARKER_FILE));
+// OBS Plugin
+ipcMain.handle('obs:ws:script-loaded', async () => {
+  // Check if the native plugin is reachable (replaces the old script marker check)
+  try { return await isPluginReachable(); } catch { return false; }
+});
 ipcMain.handle('obs:ws:scenes', async () => {
   try {
-    return await getOBSScenes(store.get('settings').obsWebSocket);
+    return await getOBSScenes();
   } catch (err) {
     console.error('[main] obs:ws:scenes error:', err.message);
     throw err; // Re-throw so frontend receives the error
   }
 });
 ipcMain.handle('obs:ws:create-scene',  (_e, newSceneName, templateSceneName) =>
-  createSceneFromTemplate(store.get('settings').obsWebSocket, newSceneName, templateSceneName)
+  createSceneFromTemplate(undefined, newSceneName, templateSceneName)
 );
 ipcMain.handle('obs:ws:create-scene-scratch', (_e, sceneName, options) =>
-  createSceneFromScratch(store.get('settings').obsWebSocket, sceneName, options)
+  createSceneFromScratch(undefined, sceneName, options)
 );
 ipcMain.handle('obs:ws:delete-scene', (_e, sceneName) =>
-  deleteOBSScene(store.get('settings').obsWebSocket, sceneName)
+  deleteOBSScene(undefined, sceneName)
 );
 ipcMain.handle('obs:ws:add-audio-source', (_e, sceneNames, inputKind, inputName, inputSettings, options) => {
-  return addAudioSourceToScenes(store.get('settings').obsWebSocket, sceneNames, inputKind, inputName, inputSettings || {}, options || {});
+  return addAudioSourceToScenes(undefined, sceneNames, inputKind, inputName, inputSettings || {}, options || {});
 });
 ipcMain.handle('obs:ws:remove-audio-source', (_e, sceneNames, inputName) =>
-  removeAudioSourceFromScenes(store.get('settings').obsWebSocket, sceneNames, inputName)
+  removeAudioSourceFromScenes(undefined, sceneNames, inputName)
 );
 ipcMain.handle('obs:ws:get-audio-inputs', async () => {
   try {
-    return await getOBSAudioInputs(store.get('settings').obsWebSocket);
+    return await getOBSAudioInputs();
   } catch (err) {
     console.error('[main] obs:ws:get-audio-inputs error:', err.message);
     throw err;
@@ -622,7 +623,7 @@ ipcMain.handle('obs:ws:get-audio-inputs', async () => {
 });
 ipcMain.handle('obs:ws:get-scene-audio-sources', async (_e, sceneName) => {
   try {
-    return await getSceneAudioSources(store.get('settings').obsWebSocket, sceneName);
+    return await getSceneAudioSources(undefined, sceneName);
   } catch (err) {
     console.error('[main] obs:ws:get-scene-audio-sources error:', err.message);
     throw err;
@@ -630,20 +631,20 @@ ipcMain.handle('obs:ws:get-scene-audio-sources', async (_e, sceneName) => {
 });
 ipcMain.handle('obs:ws:get-input-audio-tracks', async (_e, inputName) => {
   try {
-    return await getInputAudioTracks(store.get('settings').obsWebSocket, inputName);
+    return await getInputAudioTracks(undefined, inputName);
   } catch (err) {
     console.error('[main] obs:ws:get-input-audio-tracks error:', err.message);
     return {};
   }
 });
 ipcMain.handle('obs:ws:set-input-audio-tracks', async (_e, inputName, tracks) => {
-  return setInputAudioTracks(store.get('settings').obsWebSocket, inputName, tracks);
+  return setInputAudioTracks(undefined, inputName, tracks);
 });
 ipcMain.handle('obs:ws:get-track-names', () =>
-  getTrackNames(store.get('settings').obsWebSocket)
+  getTrackNames()
 );
 ipcMain.handle('obs:ws:set-track-names', (_e, names) =>
-  setTrackNames(store.get('settings').obsWebSocket, names)
+  setTrackNames(undefined, names)
 );
 ipcMain.handle('windows:list-audio-devices', async () => {
   const now = Date.now();
@@ -732,24 +733,6 @@ ipcMain.handle('windows:list-running-apps', async () => {
 
   return _runningAppsCache.inflight;
 });
-ipcMain.handle('obs:ws:read-qr', async (_event, imagePath) => {
-  return await readOBSWebSocketQR(imagePath);
-});
-ipcMain.handle('obs:ws:read-qr-clipboard', async () => {
-  const image = clipboard.readImage();
-  if (image.isEmpty()) {
-    return { success: false, message: 'No image in clipboard' };
-  }
-  
-  // Convert native image to PNG buffer
-  const buffer = image.toPNG();
-  return await readOBSWebSocketQR(buffer);
-});
-ipcMain.handle('clipboard:hasImage', () => {
-  const image = clipboard.readImage();
-  return !image.isEmpty();
-});
-
 // Dialogs
 ipcMain.handle('dialog:openDirectory', async () => {
   const result = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory'] });
@@ -764,8 +747,16 @@ ipcMain.handle('dialog:openFile', async (_event, opts = {}) => {
 ipcMain.handle('shell:showInExplorer', (_event, filePath) => {
   shell.showItemInFolder(filePath);
 });
-ipcMain.handle('shell:openExternal', (_event, filePath) => {
-  shell.openPath(filePath);
+ipcMain.handle('shell:openExternal', (_event, url) => {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  const allowed = ['http:', 'https:', 'mailto:'];
+  if (!allowed.includes(parsed.protocol)) return false;
+  return shell.openExternal(url);
 });
 
 // Recordings & Clips (delegated to fileManager)
@@ -802,8 +793,195 @@ ipcMain.handle('api:port', async () => {
   return apiPort;
 });
 
-// OBS script setup — returns the path to the Lua script seeded into userData
-ipcMain.handle('obs:script:path', () => path.join(USER_DATA, 'obs_game_recorder.lua'));
+// OBS plugin path — returns the install location of the native OBS plugin DLL
+// Onboarding
+ipcMain.handle('onboarding:isComplete', () => {
+  return store._electron().onboardingComplete === true;
+});
+ipcMain.handle('onboarding:setComplete', (_event, value) => {
+  store._electron().onboardingComplete = !!value;
+  store._saveElectron();
+});
+
+// Detect OBS installation directory (where obs64.exe lives)
+ipcMain.handle('obs:detect-install', async () => {
+  const { exec } = require('child_process');
+  const { promisify } = require('util');
+  const execAsync = promisify(exec);
+  // Common install locations to probe
+  const candidates = [
+    path.join(process.env.ProgramFiles  || 'C:\\Program Files',       'obs-studio'),
+    path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'obs-studio'),
+    path.join(process.env.LOCALAPPDATA || '', 'Programs', 'obs-studio'),
+  ];
+  for (const dir of candidates) {
+    if (fs.existsSync(path.join(dir, 'bin', '64bit', 'obs64.exe'))) return dir;
+  }
+  // Try reading from Windows registry (Steam / custom installs)
+  try {
+    const { stdout: regOut } = await execAsync(
+      'reg query "HKLM\\SOFTWARE\\OBS Studio" /v "" 2>nul || reg query "HKLM\\SOFTWARE\\WOW6432Node\\OBS Studio" /v "" 2>nul',
+      { encoding: 'utf-8', timeout: 3000 }
+    );
+    const match = regOut.match(/\(Default\)\s+REG_SZ\s+(.+)/);
+    if (match) {
+      const dir = match[1].trim();
+      if (fs.existsSync(path.join(dir, 'bin', '64bit', 'obs64.exe'))) return dir;
+    }
+  } catch {}
+  return null;
+});
+
+// Store obs install path
+ipcMain.handle('obs:set-install-path', (_event, installPath) => {
+  store._electron().obsInstallPath = installPath || '';
+  store._saveElectron();
+});
+ipcMain.handle('obs:get-install-path', () => {
+  return store._electron().obsInstallPath || '';
+});
+
+// Auto-install: copy our native OBS plugin DLL into the OBS user plugins directory
+// and register it in OBS's plugin_manager/modules.json so OBS discovers it.
+ipcMain.handle('obs:install-plugin', (_event, obsInstallPath) => {
+  try {
+    // Locate the plugin DLL bundled with the app
+    let dllSrc;
+    if (app.isPackaged) {
+      dllSrc = path.join(process.resourcesPath, 'obs-plugin', PLUGIN_DLL_NAME);
+    } else {
+      // Dev mode: look for built DLL or fall back to resources
+      const devBuild = path.join(__dirname, '..', '..', 'obs-plugin', 'build', 'Release', PLUGIN_DLL_NAME);
+      const resBuild = path.join(__dirname, '..', 'resources', 'obs-plugin', PLUGIN_DLL_NAME);
+      if (fs.existsSync(devBuild)) dllSrc = devBuild;
+      else if (fs.existsSync(resBuild)) dllSrc = resBuild;
+      else return { success: false, message: 'Plugin DLL not found (build it first or place in resources/obs-plugin/)' };
+    }
+
+    if (!fs.existsSync(dllSrc)) {
+      return { success: false, message: `Plugin DLL not found at ${dllSrc}` };
+    }
+
+    // Determine the install base: use the caller-supplied path when provided and absolute,
+    // otherwise default to ProgramData (system-wide third-party plugin directory).
+    let obsProgramData;
+    if (obsInstallPath && path.isAbsolute(obsInstallPath)) {
+      obsProgramData = obsInstallPath;
+    } else {
+      obsProgramData = path.join(process.env.ProgramData || 'C:\\ProgramData', 'obs-studio');
+    }
+
+    // 1. Copy the DLL to the plugins directory:
+    //    <base>/plugins/openclip-obs/bin/64bit/
+    const pluginDir = path.join(obsProgramData, 'plugins', 'openclip-obs', 'bin', '64bit');
+    let dest;
+    try {
+      fs.mkdirSync(pluginDir, { recursive: true });
+      dest = path.join(pluginDir, PLUGIN_DLL_NAME);
+      fs.copyFileSync(dllSrc, dest);
+      console.log(`[main] Plugin DLL installed to ${dest}`);
+    } catch (fsErr) {
+      if (fsErr.code === 'EPERM' || fsErr.code === 'EACCES') {
+        // Elevation required for ProgramData — fall back to per-user AppData path
+        const userPluginDir = path.join(
+          app.getPath('appData'), 'obs-studio', 'plugins', 'openclip-obs', 'bin', '64bit'
+        );
+        try {
+          fs.mkdirSync(userPluginDir, { recursive: true });
+          dest = path.join(userPluginDir, PLUGIN_DLL_NAME);
+          fs.copyFileSync(dllSrc, dest);
+          console.log(`[main] Plugin DLL installed to per-user path ${dest}`);
+        } catch (fallbackErr) {
+          return {
+            success: false,
+            message: `Permission denied writing to ${pluginDir}. Try running as administrator, or install OBS as the current user.\n(${fsErr.message})`,
+          };
+        }
+      } else {
+        throw fsErr;
+      }
+    }
+
+    // 2. Create an empty data directory (OBS expects data/<plugin-name>/ to exist)
+    const dataDir = path.join(path.dirname(path.dirname(path.dirname(dest))), 'data');
+    fs.mkdirSync(dataDir, { recursive: true });
+
+    // 3. Register the plugin in plugin_manager/modules.json so OBS discovers it
+    const obsAppData = path.join(app.getPath('appData'), 'obs-studio');
+    const modulesPath = path.join(obsAppData, 'plugin_manager', 'modules.json');
+    let modules = [];
+    let parseSucceeded = true;
+    if (fs.existsSync(modulesPath)) {
+      try {
+        modules = JSON.parse(fs.readFileSync(modulesPath, 'utf-8'));
+      } catch (parseErr) {
+        parseSucceeded = false;
+        console.error(`[main] Failed to parse ${modulesPath}:`, parseErr.message);
+        // Rename the corrupted file to preserve it instead of overwriting
+        const backupPath = `${modulesPath}.corrupt.${Date.now()}`;
+        try {
+          fs.renameSync(modulesPath, backupPath);
+          console.error(`[main] Corrupted modules.json moved to ${backupPath}`);
+          modules = []; // start fresh after backup
+          parseSucceeded = true;
+        } catch (renameErr) {
+          console.error(`[main] Could not back up corrupted modules.json:`, renameErr.message);
+          // Cannot safely write — skip the modules.json update
+        }
+      }
+    } else {
+      fs.mkdirSync(path.join(obsAppData, 'plugin_manager'), { recursive: true });
+    }
+    if (parseSucceeded) {
+      // Remove any existing entry for our plugin
+      modules = modules.filter(m => m.module_name !== 'openclip-obs');
+      // Add our plugin entry
+      modules.push({
+        display_name: 'OpenClip',
+        enabled: true,
+        encoders: [],
+        id: '',
+        module_name: 'openclip-obs',
+        outputs: [],
+        services: [],
+        sources: [],
+        version: ''
+      });
+      fs.writeFileSync(modulesPath, JSON.stringify(modules, null, 4), 'utf-8');
+      console.log(`[main] Plugin registered in ${modulesPath}`);
+    }
+
+    // 4. Create a plugin_config entry directory
+    const configDir = path.join(obsAppData, 'plugin_config', 'openclip-obs');
+    fs.mkdirSync(configDir, { recursive: true });
+
+    return { success: true, path: dest };
+  } catch (err) {
+    return { success: false, message: err.message };
+  }
+});
+
+// Check whether the native OBS plugin DLL is installed in the ProgramData plugins directory
+// or the per-user AppData plugins directory (fallback when ProgramData is not writable).
+ipcMain.handle('obs:is-plugin-registered', () => {
+  try {
+    // System-wide OBS installation under ProgramData (default for OBS)
+    const obsProgramData = path.join(process.env.ProgramData || 'C:\\ProgramData', 'obs-studio');
+    const programDataDest = path.join(
+      obsProgramData, 'plugins', 'openclip-obs', 'bin', '64bit', PLUGIN_DLL_NAME
+    );
+
+    // Per-user OBS installation under AppData (fallback when installer lacked ProgramData access)
+    const obsUserData = path.join(app.getPath('appData'), 'obs-studio');
+    const userDataDest = path.join(
+      obsUserData, 'plugins', 'openclip-obs', 'bin', '64bit', PLUGIN_DLL_NAME
+    );
+
+    return fs.existsSync(programDataDest) || fs.existsSync(userDataDest);
+  } catch {
+    return false;
+  }
+});
 
 // Manual organize a specific recording
 ipcMain.handle('recordings:organize', async (_event, { filePath, gameName }) => {
