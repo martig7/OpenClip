@@ -88,6 +88,14 @@ describe('setupAutoUpdater', () => {
     expect(() => vi.advanceTimersByTime(5000)).not.toThrow();
   });
 
+  it('swallows async checkForUpdates rejections gracefully', async () => {
+    mockAutoUpdater.checkForUpdates.mockRejectedValue(new Error('network error'));
+    setupAutoUpdater(() => win);
+    expect(() => vi.advanceTimersByTime(5000)).not.toThrow();
+    // Allow the rejected promise to settle; if it were unhandled, the test would fail.
+    await Promise.resolve();
+  });
+
   // ── update-available ──────────────────────────────────────────────────────
   describe('update-available event', () => {
     beforeEach(() => setupAutoUpdater(() => win));
@@ -194,6 +202,16 @@ describe('registerUpdateHandlers', () => {
       throw new Error('offline');
     });
     expect(() => handlers['update:check']()).not.toThrow();
+  });
+
+  it('update:check swallows rejected checkForUpdates promise', async () => {
+    mockAutoUpdater.checkForUpdates.mockImplementation(() => {
+      return Promise.reject(new Error('offline'));
+    });
+
+    await expect(async () => {
+      await handlers['update:check']();
+    }).not.toThrow();
   });
 
   it('update:install calls quitAndInstall', () => {
