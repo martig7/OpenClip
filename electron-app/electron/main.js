@@ -458,7 +458,7 @@ function runWithPsLimit(fn) {
   return new Promise((resolve, reject) => {
     const run = () => {
       _psActive++;
-      fn().then(resolve, reject).finally(() => {
+      Promise.resolve().then(fn).then(resolve, reject).finally(() => {
         _psActive--;
         if (_psQueue.length) _psQueue.shift()();
       });
