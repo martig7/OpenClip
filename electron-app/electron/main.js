@@ -15,7 +15,7 @@ app.setPath('userData', path.join(app.getPath('appData'), 'open-clip'));
 
 // Electron-only config (window bounds, OBS recording path which Python reads from OBS profile directly)
 const electronConfigPath = path.join(app.getPath('userData'), 'electron.json');
-const electronConfigDefaults = { windowBounds: { width: 1200, height: 800 }, obsRecordingPath: '', listView: true };
+const electronConfigDefaults = { windowBounds: { width: 1200, height: 800 }, obsRecordingPath: '', listView: true, onboardingComplete: false, obsInstallPath: '' };
 
 // All mutable paths come from constants.js (AppData-based)
 const { USER_DATA, GAMES_CONFIG_FILE, MANAGER_SETTINGS_FILE, MARKERS_FILE, ICONS_DIR } = require('./constants');
@@ -580,7 +580,7 @@ ipcMain.handle('obs:encoding:set',  (_e, profileDir, settings) => { writeEncodin
 ipcMain.handle('obs:running',       () => isOBSRunning());
 
 // OBS WebSocket
-ipcMain.handle('obs:ws:test',          () => testOBSConnection(store.get('settings').obsWebSocket));
+ipcMain.handle('obs:ws:test',          (_event, custom) => testOBSConnection(custom || store.get('settings').obsWebSocket));
 ipcMain.handle('obs:ws:script-loaded', () => fs.existsSync(SCRIPT_MARKER_FILE));
 ipcMain.handle('obs:ws:scenes', async () => {
   try {
@@ -797,6 +797,122 @@ ipcMain.handle('api:port', async () => {
 
 // OBS script setup — returns the path to the Lua script seeded into userData
 ipcMain.handle('obs:script:path', () => path.join(USER_DATA, 'obs_game_recorder.lua'));
+
+// Onboarding
+ipcMain.handle('onboarding:isComplete', () => {
+  return store._electron().onboardingComplete === true;
+});
+ipcMain.handle('onboarding:setComplete', (_event, value) => {
+  store._electron().onboardingComplete = !!value;
+  store._saveElectron();
+});
+
+// Detect OBS installation directory (where obs64.exe lives)
+ipcMain.handle('obs:detect-install', () => {
+  const { execSync } = require('child_process');
+  // Common install locations to probe
+  const candidates = [
+    path.join(process.env.ProgramFiles  || 'C:\\Program Files',       'obs-studio'),
+    path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'obs-studio'),
+    path.join(process.env.LOCALAPPDATA || '', 'Programs', 'obs-studio'),
+  ];
+  for (const dir of candidates) {
+    if (fs.existsSync(path.join(dir, 'bin', '64bit', 'obs64.exe'))) return dir;
+  }
+  // Try reading from Windows registry (Steam / custom installs)
+  try {
+    const regOut = execSync(
+      'reg query "HKLM\\SOFTWARE\\OBS Studio" /v "" 2>nul || reg query "HKLM\\SOFTWARE\\WOW6432Node\\OBS Studio" /v "" 2>nul',
+      { encoding: 'utf-8', timeout: 3000 }
+    );
+    const match = regOut.match(/\(Default\)\s+REG_SZ\s+(.+)/);
+    if (match) {
+      const dir = match[1].trim();
+      if (fs.existsSync(path.join(dir, 'bin', '64bit', 'obs64.exe'))) return dir;
+    }
+  } catch {}
+  return null;
+});
+
+// Store obs install path
+ipcMain.handle('obs:set-install-path', (_event, installPath) => {
+  store._electron().obsInstallPath = installPath || '';
+  store._saveElectron();
+});
+ipcMain.handle('obs:get-install-path', () => {
+  return store._electron().obsInstallPath || '';
+});
+
+// Auto-install: inject our Lua script path into every OBS scene collection JSON.
+// OBS stores scripts-tool entries as { path, settings } inside the scene collection JSON.
+// On next OBS launch the script will be loaded automatically.
+ipcMain.handle('obs:install-plugin', (_event, _obsInstallPath) => {
+  try {
+    const luaSrc = path.join(USER_DATA, 'obs_game_recorder.lua');
+    if (!fs.existsSync(luaSrc)) return { success: false, message: 'Lua script not found in app data' };
+
+    const obsAppData = path.join(app.getPath('appData'), 'obs-studio');
+    const scenesDir  = path.join(obsAppData, 'basic', 'scenes');
+
+    if (!fs.existsSync(scenesDir)) {
+      return { success: false, message: 'OBS scenes folder not found — is OBS installed?' };
+    }
+
+    const sceneFiles = fs.readdirSync(scenesDir).filter(f => f.endsWith('.json') && !f.endsWith('.bak'));
+    if (sceneFiles.length === 0) {
+      return { success: false, message: 'No OBS scene collections found. Open OBS first to create one.' };
+    }
+
+    let injectedCount = 0;
+    for (const sceneFile of sceneFiles) {
+      const sceneFilePath = path.join(scenesDir, sceneFile);
+      let sceneData;
+      try {
+        sceneData = JSON.parse(fs.readFileSync(sceneFilePath, 'utf-8'));
+      } catch {
+        continue; // skip malformed files
+      }
+
+      // Normalise the scripts-tool array
+      const scripts = Array.isArray(sceneData['scripts-tool']) ? sceneData['scripts-tool'] : [];
+
+      // Check if our script is already registered (forward + back slash tolerant)
+      const normalLuaSrc = path.normalize(luaSrc);
+      const alreadyIn = scripts.some(s => s && path.normalize(s.path || '') === normalLuaSrc);
+      if (!alreadyIn) {
+        scripts.push({ path: normalLuaSrc, settings: {} });
+        sceneData['scripts-tool'] = scripts;
+        // Write back with same formatting as OBS uses (tab-indented)
+        fs.writeFileSync(sceneFilePath, JSON.stringify(sceneData, null, '\t'), 'utf-8');
+      }
+      injectedCount++;
+    }
+
+    return { success: true, path: luaSrc, collections: injectedCount };
+  } catch (err) {
+    return { success: false, message: err.message };
+  }
+});
+
+// Check whether our Lua script path is already registered in any OBS scene collection
+ipcMain.handle('obs:is-plugin-registered', () => {
+  try {
+    const luaSrc = path.normalize(path.join(USER_DATA, 'obs_game_recorder.lua'));
+    const scenesDir = path.join(app.getPath('appData'), 'obs-studio', 'basic', 'scenes');
+    if (!fs.existsSync(scenesDir)) return false;
+    for (const f of fs.readdirSync(scenesDir)) {
+      if (!f.endsWith('.json') || f.endsWith('.bak')) continue;
+      try {
+        const data = JSON.parse(fs.readFileSync(path.join(scenesDir, f), 'utf-8'));
+        const scripts = Array.isArray(data['scripts-tool']) ? data['scripts-tool'] : [];
+        if (scripts.some(s => s && path.normalize(s.path || '') === luaSrc)) return true;
+      } catch {}
+    }
+    return false;
+  } catch {
+    return false;
+  }
+});
 
 // Manual organize a specific recording
 ipcMain.handle('recordings:organize', async (_event, { filePath, gameName }) => {

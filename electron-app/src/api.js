@@ -26,7 +26,7 @@ const mockApi = {
   getEncodingSettings: asyncNoop,
   setEncodingSettings: asyncNoop,
   isOBSRunning: async () => false,
-  testOBSWSConnection: async () => ({ success: false, message: 'Not in Electron' }),
+  testOBSWSConnection: async (settings) => ({ success: false, message: 'Not in Electron' }),
   isOBSScriptLoaded: async () => false,
   getOBSScriptPath: async () => '',
   getOBSWSScenes: asyncArr,

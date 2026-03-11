@@ -1,6 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
-import { FolderOpen, RefreshCw, Wifi, QrCode, Clipboard, Copy, Save } from 'lucide-react';
+import { FolderOpen, RefreshCw, Wifi, QrCode, Clipboard, Copy, Save, Wand2 } from 'lucide-react';
 import api from '../api';
+import OnboardingModal from '../components/OnboardingModal';
 
 const MODIFIER_KEYS = new Set(['Control', 'Shift', 'Alt', 'Meta', 'OS']);
 
@@ -109,6 +110,7 @@ export default function SettingsPage() {
   const [isDirty, setIsDirty] = useState(false);
   const [toast, setToast] = useState(null);
   const [obsScriptPath, setObsScriptPath] = useState('');
+  const [showWizard, setShowWizard] = useState(false);
 
   // Keep a ref to pasteQRSettings so the document paste listener always calls
   // the latest version (which closes over the current settings value).
@@ -187,7 +189,7 @@ export default function SettingsPage() {
   }
 
   async function testWSConnection() {
-    const result = await api.testOBSWSConnection();
+    const result = await api.testOBSWSConnection(settings?.obsWebSocket);
     showToast(result.success ? `Connected: ${result.version}` : `Failed: ${result.message}`);
   }
 
@@ -263,6 +265,12 @@ export default function SettingsPage() {
           <p>Configure recording paths, hotkeys, and automation</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 2 }}>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => setShowWizard(true)}
+          >
+            <Wand2 size={13} /> Setup Wizard
+          </button>
           {isDirty && (
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Unsaved changes</span>
           )}
@@ -574,6 +582,7 @@ export default function SettingsPage() {
       </div>
 
       {toast && <div className="toast">{toast}</div>}
+      <OnboardingModal open={showWizard} onClose={() => { setShowWizard(false); loadSettings(); }} />
     </>
   );
 }

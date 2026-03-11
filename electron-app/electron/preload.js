@@ -40,7 +40,7 @@ contextBridge.exposeInMainWorld('api', {
   getOBSScriptPath: () => ipcRenderer.invoke('obs:script:path'),
 
   // OBS WebSocket
-  testOBSWSConnection: () => ipcRenderer.invoke('obs:ws:test'),
+  testOBSWSConnection: (settings) => ipcRenderer.invoke('obs:ws:test', settings),
   isOBSScriptLoaded: () => ipcRenderer.invoke('obs:ws:script-loaded'),
   getOBSWSScenes: () => ipcRenderer.invoke('obs:ws:scenes'),
   createOBSScene: (newSceneName, templateSceneName) => ipcRenderer.invoke('obs:ws:create-scene', newSceneName, templateSceneName),
@@ -96,6 +96,16 @@ contextBridge.exposeInMainWorld('api', {
 
   // Re-encode
   reencodeVideo: (opts) => ipcRenderer.invoke('video:reencode', opts),
+
+  // Onboarding
+  isOnboardingComplete: () => ipcRenderer.invoke('onboarding:isComplete'),
+  setOnboardingComplete: (v) => ipcRenderer.invoke('onboarding:setComplete', v),
+  installOBSPlugin: (obsInstallPath) => ipcRenderer.invoke('obs:install-plugin', obsInstallPath),
+  detectOBSInstallPath: () => ipcRenderer.invoke('obs:detect-install'),
+  setOBSInstallPath: (p) => ipcRenderer.invoke('obs:set-install-path', p),
+  getOBSInstallPath: () => ipcRenderer.invoke('obs:get-install-path'),
+  isOBSPluginRegistered: () => ipcRenderer.invoke('obs:is-plugin-registered'),
+  getOBSScriptPath: () => ipcRenderer.invoke('obs:script:path'),
 
   // API server port
   getApiPort: () => ipcRenderer.invoke('api:port'),

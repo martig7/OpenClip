@@ -9,6 +9,7 @@ import EncodingPage from './pages/EncodingPage';
 import ViewerRecordingsPage from './viewer/pages/RecordingsPage';
 import ViewerClipsPage from './viewer/pages/ClipsPage';
 import ViewerStoragePage from './viewer/pages/StoragePage';
+import OnboardingModal from './components/OnboardingModal';
 import './App.css';
 import './viewer/viewer.css';
 
@@ -23,6 +24,14 @@ const navItems = [
 
 export default function App() {
   const [updateState, setUpdateState] = useState(null); // null | { status: 'available'|'downloading'|'ready', version?, percent? }
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  // First-run: show onboarding if not yet completed
+  useEffect(() => {
+    api.isOnboardingComplete?.().then(done => {
+      if (!done) setShowOnboarding(true);
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const offAvailable = api.onUpdateAvailable(({ version }) =>
@@ -69,6 +78,7 @@ export default function App() {
 
   return (
     <HashRouter>
+      <OnboardingModal open={showOnboarding} onClose={() => setShowOnboarding(false)} />
       <div className="app-layout">
         <div className="titlebar-drag" />
         <nav className="sidebar-nav">
