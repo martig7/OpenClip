@@ -9,9 +9,19 @@ function readOBSRecordingPath() {
   const profilesDir = path.join(appdata, 'obs-studio', 'basic', 'profiles');
   if (!fs.existsSync(profilesDir)) return null;
 
-  const profiles = fs.readdirSync(profilesDir).filter(f =>
-    fs.statSync(path.join(profilesDir, f)).isDirectory()
-  );
+  const profiles = fs.readdirSync(profilesDir, { withFileTypes: true })
+    .filter(f => {
+      if (f.isDirectory()) return true;
+      if (f.isSymbolicLink()) {
+        try {
+          return fs.statSync(path.join(profilesDir, f.name)).isDirectory();
+        } catch {
+          return false;
+        }
+      }
+      return false;
+    })
+    .map(f => f.name);
 
   for (const profile of profiles) {
     const configPath = path.join(profilesDir, profile, 'basic.ini');

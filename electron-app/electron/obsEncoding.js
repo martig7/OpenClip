@@ -60,10 +60,23 @@ function getProfiles() {
   const dir = getProfilesDir();
   if (!dir || !fs.existsSync(dir)) return [];
   try {
-    return fs.readdirSync(dir)
-      .filter(name => fs.statSync(path.join(dir, name)).isDirectory() &&
-                      fs.existsSync(path.join(dir, name, 'basic.ini')))
-      .map(name => ({ name, dir: path.join(dir, name) }));
+    return fs.readdirSync(dir, { withFileTypes: true })
+      .filter(d => {
+        const profilePath = path.join(dir, d.name);
+        const iniPath = path.join(profilePath, 'basic.ini');
+        if (d.isDirectory()) {
+          return fs.existsSync(iniPath);
+        }
+        if (d.isSymbolicLink()) {
+          try {
+            return fs.statSync(profilePath).isDirectory() && fs.existsSync(iniPath);
+          } catch {
+            return false;
+          }
+        }
+        return false;
+      })
+      .map(d => ({ name: d.name, dir: path.join(dir, d.name) }));
   } catch {
     return [];
   }
