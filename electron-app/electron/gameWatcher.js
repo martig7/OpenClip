@@ -24,6 +24,32 @@ function detectRunningGame(games) {
 function setupGameWatcher(store, onStateChange) {
   let lastGame = null;
   let stopped = false;
+  const organizeQueue = [];
+  let organizing = false;
+
+  function drainOrganizeQueue() {
+    if (organizing || organizeQueue.length === 0) return;
+    organizing = true;
+    const gameName = organizeQueue.shift();
+    const { organizeRecordings } = require('./fileManager');
+    // .finally runs as a new microtask, so calling drainOrganizeQueue here is safe (no call-stack buildup).
+    organizeRecordings(store, gameName)
+      .catch(err => log(`Organize failed: ${err.stack || err.message}`))
+      .finally(() => {
+        organizing = false;
+        drainOrganizeQueue();
+      });
+  }
+
+  function scheduleOrganize(gameName) {
+    setTimeout(() => {
+      // Skip if an identical game is already waiting in the queue.
+      if (!organizeQueue.includes(gameName)) {
+        organizeQueue.push(gameName);
+      }
+      drainOrganizeQueue();
+    }, 8000);
+  }
 
   fs.mkdirSync(RUNTIME_DIR, { recursive: true });
   try { fs.writeFileSync(LOG_FILE, '', 'utf-8'); } catch {}
@@ -48,11 +74,7 @@ function setupGameWatcher(store, onStateChange) {
       writeGameState('IDLE');
       log(`Game stopped: ${stoppedGame}`);
       onStateChange({ currentGame: null, status: 'idle' });
-
-      setTimeout(() => {
-        const { organizeRecordings } = require('./fileManager');
-        organizeRecordings(store, stoppedGame).catch(err => log(`Organize failed: ${err.stack || err.message}`));
-      }, 8000);
+      scheduleOrganize(stoppedGame);
     } else if (detected && lastGame && detected.name !== lastGame.name) {
       const stoppedGame = lastGame.name;
       lastGame = detected;
@@ -67,10 +89,7 @@ function setupGameWatcher(store, onStateChange) {
         onStateChange({ currentGame: detected.name, status: 'recording' });
       }, 500);
 
-      setTimeout(() => {
-        const { organizeRecordings } = require('./fileManager');
-        organizeRecordings(store, stoppedGame).catch(err => log(`Organize failed: ${err.stack || err.message}`));
-      }, 8000);
+      scheduleOrganize(stoppedGame);
     }
 
     if (!stopped) {
