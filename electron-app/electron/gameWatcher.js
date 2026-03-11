@@ -56,9 +56,16 @@ function setupGameWatcher(store, onStateChange) {
     } else if (detected && lastGame && detected.name !== lastGame.name) {
       const stoppedGame = lastGame.name;
       lastGame = detected;
-      writeGameState(`RECORDING|${detected.name}|${detected.scene || ''}`);
+      // Force a brief non-RECORDING state so OBS detects a clean stop/start between games.
+      writeGameState('IDLE');
       log(`Game switched: ${stoppedGame} → ${detected.name}`);
-      onStateChange({ currentGame: detected.name, status: 'recording' });
+      onStateChange({ currentGame: null, status: 'idle' });
+
+      // After a short delay, signal recording for the newly detected game.
+      setTimeout(() => {
+        writeGameState(`RECORDING|${detected.name}|${detected.scene || ''}`);
+        onStateChange({ currentGame: detected.name, status: 'recording' });
+      }, 500);
 
       setTimeout(() => {
         const { organizeRecordings } = require('./fileManager');
