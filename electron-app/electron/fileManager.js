@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { execSync, execFile, exec } = require('child_process');
+const { execFile } = require('child_process');
 const { promisify } = require('util');
 const { isVideoFile, CODEC_MAP, FFMPEG_PATH, FFPROBE_PATH } = require('./constants');
 const service = require('./recordingService');
@@ -96,23 +96,25 @@ async function organizeRecordings(store, gameName) {
   // Auto-clip from markers when auto-clip is enabled
   const autoClipSettings = store.get('settings.autoClip');
   if (autoClipSettings && autoClipSettings.enabled) {
-    processAutoClips(store, gameName, targetDir);
+    await processAutoClips(store, gameName, targetDir);
   }
 }
 
-function getVideoDurationSync(filePath) {
+async function getVideoDuration(filePath) {
   try {
-    const out = execSync(
-      `"${FFPROBE_PATH}" -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filePath}"`,
-      { encoding: 'utf-8', timeout: 10000 }
-    );
-    return parseFloat(out.trim()) || null;
+    const { stdout } = await execFileAsync(FFPROBE_PATH, [
+      '-v', 'error',
+      '-show_entries', 'format=duration',
+      '-of', 'default=noprint_wrappers=1:nokey=1',
+      filePath,
+    ], { encoding: 'utf-8', timeout: 10000 });
+    return parseFloat(stdout.trim()) || null;
   } catch {
     return null;
   }
 }
 
-function processAutoClips(store, gameName, recordingDir) {
+async function processAutoClips(store, gameName, recordingDir) {
   const markers = (store.get('clipMarkers') || []).filter(m => m.game === gameName);
   if (markers.length === 0) return;
 
@@ -137,7 +139,7 @@ function processAutoClips(store, gameName, recordingDir) {
   const recording = recordings[0];
 
   // Determine recording time window to convert absolute marker timestamps → video positions
-  const duration = getVideoDurationSync(recording.path);
+  const duration = await getVideoDuration(recording.path);
   if (!duration) return;
   const recordingStartUnix = recording.mtime.getTime() / 1000 - duration;
 
@@ -154,10 +156,15 @@ function processAutoClips(store, gameName, recordingDir) {
     const clipPath = path.join(clipsDir, `${gameName} Clip ${dateStr} #${clipNum}.mp4`);
 
     try {
-      execSync(
-        `"${FFMPEG_PATH}" -ss ${start} -i "${recording.path}" -t ${clipDuration} -c copy -avoid_negative_ts make_zero "${clipPath}" -y`,
-        { timeout: 60000 }
-      );
+      await execFileAsync(FFMPEG_PATH, [
+        '-ss', String(start),
+        '-i', recording.path,
+        '-t', String(clipDuration),
+        '-c', 'copy',
+        '-avoid_negative_ts', 'make_zero',
+        clipPath,
+        '-y',
+      ], { timeout: 60000 });
       clipNum++;
     } catch {
       // Skip failed clips

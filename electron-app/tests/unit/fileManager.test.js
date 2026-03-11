@@ -197,4 +197,62 @@ describe('organizeRecordings', () => {
     // Should not throw even with empty markers
     await organizeRecordings(store, 'MyGame')
   })
+
+  it('processAutoClips uses execFileAsync (not execSync) to extract clips', async () => {
+    const autoClip = {
+      enabled: true,
+      bufferBefore: 5,
+      bufferAfter: 5,
+      removeMarkers: false,
+      deleteFullRecording: false,
+    }
+    store._data.settings.autoClip = autoClip
+
+    // Simulate a marker 30 seconds into the recording for 'MyGame'
+    const recordingMtime = Date.now() / 1000
+    const duration = 60
+    const recordingStartUnix = recordingMtime - duration
+    store._data.clipMarkers = [
+      { game: 'MyGame', timestamp: recordingStartUnix + 30 },
+    ]
+
+    const { organizeRecordings } = await import('../../electron/fileManager.js')
+    const src = path.join(obsDir, 'video.mp4')
+    const srcBuf = Buffer.alloc(1024)
+    fs.writeFileSync(src, srcBuf)
+
+    // Mock execFile: handle ffprobe duration probe and ffmpeg clip extraction
+    cp.execFile.mockImplementation((bin, args, opts, callback) => {
+      if (args.includes('-show_entries')) {
+        // ffprobe duration query — return 60 seconds
+        callback(null, { stdout: `${duration}\n`, stderr: '' })
+      } else {
+        // ffmpeg clip extraction — create the output file
+        const outPath = args[args.length - 2] // second-to-last arg is clipPath ('-y' is last)
+        fs.writeFileSync(outPath, Buffer.alloc(256))
+        callback(null, { stdout: '', stderr: '' })
+      }
+    })
+
+    await organizeRecordings(store, 'MyGame')
+
+    // Verify execFile was called with ffmpeg clip-extraction args (not execSync)
+    const ffmpegCalls = cp.execFile.mock.calls.filter(([bin, args]) =>
+      !args.includes('-show_entries') && args.includes('-avoid_negative_ts')
+    )
+    expect(ffmpegCalls).toHaveLength(1)
+    const [, clipArgs] = ffmpegCalls[0]
+    expect(clipArgs).toContain('-ss')
+    expect(clipArgs).toContain('-t')
+    expect(clipArgs).toContain('-c')
+    expect(clipArgs).toContain('copy')
+    expect(clipArgs).toContain('-y')
+
+    // Verify a clip was created in destDir/Clips
+    const clipsDir = path.join(destDir, 'Clips')
+    expect(fs.existsSync(clipsDir)).toBe(true)
+    const clips = fs.readdirSync(clipsDir).filter(f => f.endsWith('.mp4'))
+    expect(clips).toHaveLength(1)
+    expect(clips[0]).toMatch(/^MyGame Clip \d{4}-\d{2}-\d{2} #1\.mp4$/)
+  })
 })
