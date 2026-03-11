@@ -161,8 +161,9 @@ export default function GamesPage() {
   const [loadingScenes, setLoadingScenes] = useState(false);
   const [scenesError, setScenesError] = useState(null);
   const [templateScene, setTemplateScene] = useState('');
-  const [sceneCreateStatus, setSceneCreateStatus] = useState(null); // { type: 'success'|'error', message }
+  const [sceneCreateStatus, setSceneCreateStatus] = useState(null); // { type: 'success'|'error'|'conflict'|'loading', message }
   const [toast, setToast] = useState(null);
+  const [confirmDeleteGame, setConfirmDeleteGame] = useState(null); // { game }
 
   // Master audio source list — sources the user wants in all game scenes
   const [masterAudioSources, setMasterAudioSources] = useState([]); // [{ kind, label, name }]
@@ -326,62 +327,108 @@ export default function GamesPage() {
           result = await api.createOBSScene(newGame.scene, templateScene || null);
         }
         if (!result.success) {
+          if (result.message?.includes('already exists')) {
+            setSceneCreateStatus({ type: 'conflict', message: result.message });
+            return; // wait for user to resolve
+          }
           setSceneCreateStatus({ type: 'error', message: result.message });
           return;
         }
-
-        // Add all master audio sources to the newly created scene
-        const masterToAdd = masterAudioSources;
-        if (masterToAdd.length > 0) {
-          await Promise.all(masterToAdd.map(source => {
-            if (source.kind === 'magic_game_audio') {
-              const exeGuess = newGame.exe || (newGame.selector.toLowerCase().endsWith('.exe') ? newGame.selector : `${newGame.selector}.exe`);
-              const windowClassGuess = newGame.windowClass || newGame.selector;
-              const titleGuess = newGame.selector;
-              return api.addAudioSourceToScenes(
-                [newGame.scene],
-                'wasapi_process_output_capture',
-                `Game Audio (${newGame.name})`,
-                { window: `${titleGuess}:${windowClassGuess}:${exeGuess}`, window_match_priority: newGame.windowMatchPriority ?? 0 }
-              ).catch(() => {});
-            }
-            return api.addAudioSourceToScenes(
-              [newGame.scene],
-              source.kind,
-              source.name,
-              source.inputSettings || {}
-            ).catch(() => {});
-          }));
-
-          // Apply master-list track routing to each newly added source.
-          // Game Audio (GameName) is always a fresh input — it must be explicitly routed;
-          // other sources are global OBS inputs whose routing is also applied for consistency.
-          await Promise.all(masterToAdd.map(source => {
-            const masterKey = source.kind === 'magic_game_audio' ? 'Game Audio' : source.name;
-            const tracks = trackData[masterKey];
-            if (!tracks || Object.keys(tracks).length === 0) return Promise.resolve();
-            const obsInputName = source.kind === 'magic_game_audio'
-              ? `Game Audio (${newGame.name})`
-              : source.name;
-            return api.setInputAudioTracks(obsInputName, tracks).catch(() => {});
-          }));
-        }
-
-        // Show success as a toast after the modal closes so the user sees it
-        const sourceNote = masterToAdd.length > 0
-          ? ` + ${masterToAdd.length} master source${masterToAdd.length > 1 ? 's' : ''}`
-          : '';
-        showToast((result.message || `Scene "${newGame.scene}" created in OBS`) + sourceNote);
+        await finalizeGameSave(result.message || `Scene "${newGame.scene}" created in OBS`);
       } catch (err) {
         setSceneCreateStatus({ type: 'error', message: err.message || 'Failed to create OBS scene' });
         return;
       }
+    } else {
+      await finalizeGameSave(null);
+    }
+  }
+
+  /**
+   * Apply master audio sources + track routing to the new game's scene, show a toast,
+   * persist the game, and close the modal.
+   * @param {string|null} sceneMsg - Base message for the toast (null = no scene created)
+   */
+  async function finalizeGameSave(sceneMsg) {
+    const masterToAdd = masterAudioSources;
+    if (newGame.scene && masterToAdd.length > 0) {
+      await Promise.all(masterToAdd.map(source => {
+        if (source.kind === 'magic_game_audio') {
+          const exeGuess = newGame.exe || (newGame.selector.toLowerCase().endsWith('.exe') ? newGame.selector : `${newGame.selector}.exe`);
+          const windowClassGuess = newGame.windowClass || newGame.selector;
+          const titleGuess = newGame.selector;
+          return api.addAudioSourceToScenes(
+            [newGame.scene],
+            'wasapi_process_output_capture',
+            `Game Audio (${newGame.name})`,
+            { window: `${titleGuess}:${windowClassGuess}:${exeGuess}`, window_match_priority: newGame.windowMatchPriority ?? 0 }
+          ).catch(() => {});
+        }
+        return api.addAudioSourceToScenes(
+          [newGame.scene],
+          source.kind,
+          source.name,
+          source.inputSettings || {}
+        ).catch(() => {});
+      }));
+
+      // Apply master-list track routing. Game Audio (GameName) is always fresh — must be set explicitly.
+      await Promise.all(masterToAdd.map(source => {
+        const masterKey = source.kind === 'magic_game_audio' ? 'Game Audio' : source.name;
+        const tracks = trackData[masterKey];
+        if (!tracks || Object.keys(tracks).length === 0) return Promise.resolve();
+        const obsInputName = source.kind === 'magic_game_audio'
+          ? `Game Audio (${newGame.name})`
+          : source.name;
+        return api.setInputAudioTracks(obsInputName, tracks).catch(() => {});
+      }));
     }
 
+    if (sceneMsg) {
+      const sourceNote = newGame.scene && masterToAdd.length > 0
+        ? ` + ${masterToAdd.length} master source${masterToAdd.length > 1 ? 's' : ''}`
+        : '';
+      showToast(sceneMsg + sourceNote);
+    }
     await api.addGame(newGame);
     resetAddModal();
     setShowAddModal(false);
     loadGames();
+  }
+
+  async function handleSceneConflictUseExisting() {
+    setSceneCreateStatus(null);
+    try {
+      await finalizeGameSave(`Using existing OBS scene "${newGame.scene}"`);
+    } catch (err) {
+      setSceneCreateStatus({ type: 'error', message: err.message || 'Failed to save game' });
+    }
+  }
+
+  async function handleSceneConflictOverwrite() {
+    setSceneCreateStatus({ type: 'loading', message: `Deleting "${newGame.scene}" from OBS…` });
+    try {
+      await api.deleteOBSScene(newGame.scene);
+      let result;
+      if (createMode === 'scratch') {
+        result = await api.createOBSSceneFromScratch(newGame.scene, {
+          windowTitle: newGame.selector,
+          exe: newGame.exe,
+          windowClass: newGame.windowClass,
+          addWindowCapture: true,
+          captureKind: capturePref,
+        });
+      } else {
+        result = await api.createOBSScene(newGame.scene, templateScene || null);
+      }
+      if (!result.success) {
+        setSceneCreateStatus({ type: 'error', message: result.message });
+        return;
+      }
+      await finalizeGameSave(result.message || `Scene "${newGame.scene}" overwritten in OBS`);
+    } catch (err) {
+      setSceneCreateStatus({ type: 'error', message: err.message || 'Failed to overwrite scene' });
+    }
   }
 
   function showToast(msg) {
@@ -397,7 +444,23 @@ export default function GamesPage() {
   }
 
   async function removeGame(id) {
-    await api.removeGame(id);
+    const game = games.find(g => g.id === id);
+    if (!game) return;
+    if (game.scene) {
+      setConfirmDeleteGame({ game });
+    } else {
+      await api.removeGame(id);
+      loadGames();
+    }
+  }
+
+  async function doRemoveGame(includeScene) {
+    const { game } = confirmDeleteGame;
+    setConfirmDeleteGame(null);
+    if (includeScene && game.scene) {
+      await api.deleteOBSScene(game.scene).catch(() => {});
+    }
+    await api.removeGame(game.id);
     loadGames();
   }
 
@@ -548,31 +611,37 @@ export default function GamesPage() {
   async function addSourceToScene(sceneName, source) {
     if (!sceneName) return;
     try {
-      const result = await api.addAudioSourceToScenes([sceneName], source.kind, source.name, source.inputSettings || {});
+      const isVideoCapture = source.kind === 'game_capture' || source.kind === 'window_capture';
+      const result = await api.addAudioSourceToScenes([sceneName], source.kind, source.name, source.inputSettings || {}, isVideoCapture ? { fitToCanvas: true } : {});
       if (result.success) {
-        let conflictWarning = null;
-        setEditGameModal(prev => {
-          if (!prev) return null;
-          const already = prev.sceneAudioSources.some(s => s.inputName === source.name);
-          if (already) return prev;
-          // Warn if this new app audio source duplicates an existing one for the same window in this scene
-          if (isAppAudioKind(source.kind)) {
-            const newKey = getAppAudioWindowKey(source.name, source.inputSettings?.window);
-            const duplicate = prev.sceneAudioSources.find(s =>
-              isAppAudioKind(s.inputKind) &&
-              getAppAudioWindowKey(s.inputName, s.inputSettings?.window) === newKey
-            );
-            if (duplicate) conflictWarning = duplicate.inputName;
-          }
-          return {
-            ...prev,
-            sceneAudioSources: [...prev.sceneAudioSources, { inputName: source.name, inputKind: source.kind, inputSettings: source.inputSettings || {} }],
-          };
-        });
-        if (conflictWarning) {
-          showToast(`⚠ OBS doesn't support two Application Audio sources for the same window — OBS will default to "${conflictWarning}" (the first source added).`);
-        } else {
+        if (isVideoCapture) {
+          // Video sources are not audio — don't add them to the audio tracks list
           showToast(`"${source.name}" added to scene`);
+        } else {
+          let conflictWarning = null;
+          setEditGameModal(prev => {
+            if (!prev) return null;
+            const already = prev.sceneAudioSources.some(s => s.inputName === source.name);
+            if (already) return prev;
+            // Warn if this new app audio source duplicates an existing one for the same window in this scene
+            if (isAppAudioKind(source.kind)) {
+              const newKey = getAppAudioWindowKey(source.name, source.inputSettings?.window);
+              const duplicate = prev.sceneAudioSources.find(s =>
+                isAppAudioKind(s.inputKind) &&
+                getAppAudioWindowKey(s.inputName, s.inputSettings?.window) === newKey
+              );
+              if (duplicate) conflictWarning = duplicate.inputName;
+            }
+            return {
+              ...prev,
+              sceneAudioSources: [...prev.sceneAudioSources, { inputName: source.name, inputKind: source.kind, inputSettings: source.inputSettings || {} }],
+            };
+          });
+          if (conflictWarning) {
+            showToast(`⚠ OBS doesn't support two Application Audio sources for the same window — OBS will default to "${conflictWarning}" (the first source added).`);
+          } else {
+            showToast(`"${source.name}" added to scene`);
+          }
         }
       } else {
         showToast(`Warning: ${result.message}`);
@@ -1263,14 +1332,64 @@ export default function GamesPage() {
                 {sceneCreateStatus && (
                   <div style={{
                     marginTop: 8,
-                    padding: '6px 10px',
+                    padding: '8px 10px',
                     borderRadius: 'var(--radius-sm)',
                     fontSize: 12,
-                    background: sceneCreateStatus.type === 'success' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
-                    color: sceneCreateStatus.type === 'success' ? 'var(--success)' : 'var(--danger)',
-                    border: `1px solid ${sceneCreateStatus.type === 'success' ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                    background: sceneCreateStatus.type === 'conflict'
+                      ? 'rgba(245,158,11,0.1)'
+                      : sceneCreateStatus.type === 'success'
+                        ? 'rgba(34,197,94,0.1)'
+                        : sceneCreateStatus.type === 'loading'
+                          ? 'rgba(99,102,241,0.1)'
+                          : 'rgba(239,68,68,0.1)',
+                    color: sceneCreateStatus.type === 'conflict'
+                      ? '#f59e0b'
+                      : sceneCreateStatus.type === 'success'
+                        ? 'var(--success)'
+                        : sceneCreateStatus.type === 'loading'
+                          ? 'var(--primary)'
+                          : 'var(--danger)',
+                    border: `1px solid ${
+                      sceneCreateStatus.type === 'conflict'
+                        ? 'rgba(245,158,11,0.3)'
+                        : sceneCreateStatus.type === 'success'
+                          ? 'rgba(34,197,94,0.3)'
+                          : sceneCreateStatus.type === 'loading'
+                            ? 'rgba(99,102,241,0.3)'
+                            : 'rgba(239,68,68,0.3)'
+                    }`,
                   }}>
-                    {sceneCreateStatus.message}
+                    {sceneCreateStatus.type === 'conflict' ? (
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                          <AlertTriangle size={12} style={{ flexShrink: 0 }} />
+                          A scene named <strong style={{ margin: '0 3px' }}>{newGame.scene}</strong> already exists in OBS.
+                        </div>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            style={{ fontSize: 11 }}
+                            onClick={handleSceneConflictUseExisting}
+                          >
+                            Use Existing
+                          </button>
+                          <button
+                            className="btn btn-sm"
+                            style={{ fontSize: 11, background: 'var(--danger)', color: '#fff', border: 'none' }}
+                            onClick={handleSceneConflictOverwrite}
+                          >
+                            Overwrite
+                          </button>
+                        </div>
+                      </div>
+                    ) : sceneCreateStatus.type === 'loading' ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <RefreshCw size={12} className="spinning" />
+                        {sceneCreateStatus.message}
+                      </div>
+                    ) : (
+                      sceneCreateStatus.message
+                    )}
                   </div>
                 )}
               </div>
@@ -1383,6 +1502,52 @@ export default function GamesPage() {
       )}
 
       {toast && <div className="toast">{toast}</div>}
+
+      {confirmDeleteGame && (
+        <div className="modal-overlay" onClick={() => setConfirmDeleteGame(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 400 }}>
+            <h2>Remove Game</h2>
+            <p>
+              Remove <strong>{confirmDeleteGame.game.name}</strong> from the list?
+            </p>
+            {confirmDeleteGame.game.scene && (
+              <div style={{
+                display: 'flex', alignItems: 'flex-start', gap: 8,
+                marginTop: 4, marginBottom: 4,
+                padding: '8px 10px',
+                background: 'rgba(239,68,68,0.08)',
+                border: '1px solid rgba(239,68,68,0.25)',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: 12, color: 'var(--text-secondary)',
+              }}>
+                <AlertTriangle size={13} style={{ color: 'var(--danger)', flexShrink: 0, marginTop: 1 }} />
+                <span>
+                  This game has an OBS scene: <strong>{confirmDeleteGame.game.scene}</strong>.
+                  {' '}Do you also want to delete it from OBS?
+                </span>
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button className="btn btn-secondary" onClick={() => setConfirmDeleteGame(null)}>Cancel</button>
+              {confirmDeleteGame.game.scene && (
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => doRemoveGame(false)}
+                >
+                  Game only
+                </button>
+              )}
+              <button
+                className="btn"
+                style={{ background: 'var(--danger)', color: '#fff', border: 'none' }}
+                onClick={() => doRemoveGame(!!confirmDeleteGame.game.scene)}
+              >
+                {confirmDeleteGame.game.scene ? 'Game + OBS Scene' : 'Remove'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

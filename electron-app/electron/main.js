@@ -269,6 +269,7 @@ const {
   createSceneFromScratch,
   addAudioSourceToScenes,
   removeAudioSourceFromScenes,
+  deleteOBSScene,
   getOBSAudioInputs,
   getSceneAudioSources,
   testOBSConnection,
@@ -558,8 +559,11 @@ ipcMain.handle('obs:ws:create-scene',  (_e, newSceneName, templateSceneName) =>
 ipcMain.handle('obs:ws:create-scene-scratch', (_e, sceneName, options) =>
   createSceneFromScratch(store.get('settings').obsWebSocket, sceneName, options)
 );
-ipcMain.handle('obs:ws:add-audio-source', (_e, sceneNames, inputKind, inputName, inputSettings) => {
-  return addAudioSourceToScenes(store.get('settings').obsWebSocket, sceneNames, inputKind, inputName, inputSettings || {});
+ipcMain.handle('obs:ws:delete-scene', (_e, sceneName) =>
+  deleteOBSScene(store.get('settings').obsWebSocket, sceneName)
+);
+ipcMain.handle('obs:ws:add-audio-source', (_e, sceneNames, inputKind, inputName, inputSettings, options) => {
+  return addAudioSourceToScenes(store.get('settings').obsWebSocket, sceneNames, inputKind, inputName, inputSettings || {}, options || {});
 });
 ipcMain.handle('obs:ws:remove-audio-source', (_e, sceneNames, inputName) =>
   removeAudioSourceFromScenes(store.get('settings').obsWebSocket, sceneNames, inputName)

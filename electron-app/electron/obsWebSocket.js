@@ -221,10 +221,10 @@ async function createSceneFromTemplate(wsSettings, newSceneName, templateSceneNa
  * @param {string} sceneName - Scene that contains the item
  * @param {number|undefined} sceneItemId - ID returned by CreateInput
  */
-async function fitSourceToCanvas(obs, sceneName, sceneItemId) {
+async function fitSourceToCanvas(obs, sceneName, sceneItemId, videoSettings) {
   if (sceneItemId == null) return;
   try {
-    const { baseWidth, baseHeight } = await obs.call('GetVideoSettings');
+    const { baseWidth, baseHeight } = videoSettings ?? await obs.call('GetVideoSettings');
     await obs.call('SetSceneItemTransform', {
       sceneName,
       sceneItemId,
@@ -391,7 +391,7 @@ async function createSceneFromScratch(wsSettings, sceneName, options = {}) {
  * @param {string}   inputName   - Display name for the source
  * @returns {Promise<{ success: boolean, message: string, results: object[] }>}
  */
-async function addAudioSourceToScenes(wsSettings, sceneNames, inputKind, inputName, inputSettings = {}) {
+async function addAudioSourceToScenes(wsSettings, sceneNames, inputKind, inputName, inputSettings = {}, options = {}) {
   if (!sceneNames || sceneNames.length === 0) {
     return { success: false, message: 'No scene names provided', results: [] };
   }
@@ -402,6 +402,12 @@ async function addAudioSourceToScenes(wsSettings, sceneNames, inputKind, inputNa
   try {
     return await withOBSConnection(wsSettings, async (obs) => {
       const results = [];
+
+      // Fetch canvas dimensions once upfront if any source will need fitting
+      let videoSettings = null;
+      if (options.fitToCanvas) {
+        videoSettings = await obs.call('GetVideoSettings').catch(() => null);
+      }
 
       for (const sceneName of sceneNames) {
         try {
@@ -416,12 +422,15 @@ async function addAudioSourceToScenes(wsSettings, sceneNames, inputKind, inputNa
 
           // Try to create a brand-new input and place it in this scene
           try {
-            await obs.call('CreateInput', {
+            const createResult = await obs.call('CreateInput', {
               sceneName,
               inputName,
               inputKind,
               inputSettings: inputSettings || {},
             });
+            if (options.fitToCanvas && createResult?.sceneItemId != null) {
+              await fitSourceToCanvas(obs, sceneName, createResult.sceneItemId, videoSettings);
+            }
             results.push({ scene: sceneName, status: 'added' });
           } catch (createErr) {
 
@@ -472,27 +481,24 @@ async function removeAudioSourceFromScenes(wsSettings, sceneNames, inputName) {
 
   try {
     return await withOBSConnection(wsSettings, async (obs) => {
-      const results = [];
-
-      for (const sceneName of sceneNames) {
-        try {
-          const response = await obs.call('GetSceneItemList', { sceneName }).catch(() => ({}));
-          const sceneItems = Array.isArray(response && response.sceneItems) ? response.sceneItems : [];
+      const settled = await Promise.allSettled(
+        sceneNames.map(async (sceneName) => {
+          const listResult = await obs.call('GetSceneItemList', { sceneName }).catch(() => null);
+          const sceneItems = listResult?.sceneItems ?? [];
           const matching = sceneItems.filter(item => item.sourceName === inputName);
+          if (matching.length === 0) return { scene: sceneName, status: 'not found' };
+          await Promise.all(
+            matching.map(item => obs.call('RemoveSceneItem', { sceneName, sceneItemId: item.sceneItemId }))
+          );
+          return { scene: sceneName, status: 'removed' };
+        })
+      );
 
-          if (matching.length === 0) {
-            results.push({ scene: sceneName, status: 'not found' });
-            continue;
-          }
-
-          for (const item of matching) {
-            await obs.call('RemoveSceneItem', { sceneName, sceneItemId: item.sceneItemId });
-          }
-          results.push({ scene: sceneName, status: 'removed' });
-        } catch (err) {
-          results.push({ scene: sceneName, status: 'error', error: err.message });
-        }
-      }
+      const results = settled.map((r, i) =>
+        r.status === 'fulfilled'
+          ? r.value
+          : { scene: sceneNames[i], status: 'error', error: r.reason?.message }
+      );
 
       const removed = results.filter(r => r.status === 'removed').length;
       const notFound = results.filter(r => r.status === 'not found').length;
@@ -554,59 +560,44 @@ async function getSceneAudioSources(wsSettings, sceneName) {
   }
   try {
     return await withOBSConnection(wsSettings, async (obs) => {
-      const response = await obs.call('GetSceneItemList', { sceneName: sceneName.trim() }).catch(() => ({}));
-      const sceneItems = Array.isArray(response && response.sceneItems) ? response.sceneItems : [];
+      const listResult = await obs.call('GetSceneItemList', { sceneName: sceneName.trim() }).catch(() => null);
+      const sceneItems = listResult?.sceneItems ?? [];
       if (sceneItems.length === 0) return [];
 
       // Filter to items whose source kind is an audio kind.
       // sceneItems contain sourceType and inputKind (OBS 30+); fall back to checking each
       // source's settings via GetInputSettings if inputKind is not directly present.
-      const audioItems = [];
-      for (const item of sceneItems) {
-        // OBS WS v5 typically includes inputKind on sceneItems for inputs
-        if (item.inputKind && AUDIO_INPUT_KINDS.has(item.inputKind)) {
-          let inputSettings;
-          try {
-            const settingsResp = await obs.call('GetInputSettings', { inputName: item.sourceName });
-            inputSettings = settingsResp && settingsResp.inputSettings;
-          } catch {
-            // If we can't read settings, still return the audio item without them.
+      const resolved = await Promise.all(
+        sceneItems.map(async (item) => {
+          // OBS WS v5 typically includes inputKind on sceneItems for inputs
+          if (item.inputKind && AUDIO_INPUT_KINDS.has(item.inputKind)) {
+            const settingsResp = await obs.call('GetInputSettings', { inputName: item.sourceName }).catch(() => null);
+            return {
+              inputName: item.sourceName,
+              inputKind: item.inputKind,
+              sceneItemId: item.sceneItemId,
+              inputSettings: settingsResp?.inputSettings,
+            };
           }
-          audioItems.push({
-            inputName: item.sourceName,
-            inputKind: item.inputKind,
-            sceneItemId: item.sceneItemId,
-            inputSettings,
-          });
-        } else if (!item.inputKind) {
-          // Try to resolve kind via GetInputSettings (less efficient but safe)
-          try {
-            const resp = await obs.call('GetInputKind', { inputName: item.sourceName })
-              .catch(() => obs.call('GetInputSettings', { inputName: item.sourceName }));
-            const inputKind = resp && resp.inputKind;
-            let inputSettings = resp && resp.inputSettings;
-            if (inputKind && AUDIO_INPUT_KINDS.has(inputKind)) {
-              if (!inputSettings) {
-                try {
-                  const settingsResp = await obs.call('GetInputSettings', { inputName: item.sourceName });
-                  inputSettings = settingsResp && settingsResp.inputSettings;
-                } catch {
-                  // proceed without inputSettings
-                }
+          if (!item.inputKind) {
+            // Try to resolve kind via GetInputKind, falling back to GetInputSettings
+            try {
+              const kindResp = await obs.call('GetInputKind', { inputName: item.sourceName })
+                .catch(() => obs.call('GetInputSettings', { inputName: item.sourceName }));
+              const inputKind = kindResp?.inputKind;
+              if (inputKind && AUDIO_INPUT_KINDS.has(inputKind)) {
+                const inputSettings = kindResp?.inputSettings
+                  ?? (await obs.call('GetInputSettings', { inputName: item.sourceName }).catch(() => null))?.inputSettings;
+                return { inputName: item.sourceName, inputKind, sceneItemId: item.sceneItemId, inputSettings };
               }
-              audioItems.push({
-                inputName: item.sourceName,
-                inputKind,
-                sceneItemId: item.sceneItemId,
-                inputSettings,
-              });
+            } catch {
+              // Not an input we can read — skip
             }
-          } catch {
-            // Not an input we can read — skip
           }
-        }
-      }
-      return audioItems;
+          return null;
+        })
+      );
+      return resolved.filter(Boolean);
     });
   } catch (err) {
     console.error('[obsWebSocket] Failed to get scene audio sources:', err.message);
@@ -722,4 +713,31 @@ async function setTrackNames(wsSettings, names) {
   }
 }
 
-module.exports = { getOBSScenes, createSceneFromTemplate, createSceneFromScratch, addAudioSourceToScenes, removeAudioSourceFromScenes, testOBSConnection, getOBSAudioInputs, getSceneAudioSources, getInputAudioTracks, setInputAudioTracks, getTrackNames, setTrackNames };
+/**
+ * Delete an OBS scene by name.
+ *
+ * @param {object} wsSettings - { host, port, password }
+ * @param {string} sceneName  - Name of the scene to delete
+ * @returns {Promise<{ success: boolean, message: string }>}
+ */
+async function deleteOBSScene(wsSettings, sceneName) {
+  if (!sceneName || !sceneName.trim()) {
+    return { success: false, message: 'Scene name is required' };
+  }
+  const trimmedName = sceneName.trim();
+  try {
+    return await withOBSConnection(wsSettings, async (obs) => {
+      const { scenes } = await obs.call('GetSceneList');
+      if (!scenes.some(s => s.sceneName === trimmedName)) {
+        return { success: false, message: `Scene "${trimmedName}" does not exist in OBS` };
+      }
+      await obs.call('RemoveScene', { sceneName: trimmedName });
+      return { success: true, message: `Scene "${trimmedName}" deleted from OBS` };
+    });
+  } catch (err) {
+    console.error('[obsWebSocket] Failed to delete scene:', err.message);
+    return { success: false, message: err.message };
+  }
+}
+
+module.exports = { getOBSScenes, createSceneFromTemplate, createSceneFromScratch, deleteOBSScene, addAudioSourceToScenes, removeAudioSourceFromScenes, testOBSConnection, getOBSAudioInputs, getSceneAudioSources, getInputAudioTracks, setInputAudioTracks, getTrackNames, setTrackNames };

@@ -32,6 +32,7 @@ const mockApi = {
   getOBSWSScenes: asyncArr,
   createOBSScene: async () => ({ success: false, message: 'Not in Electron' }),
   createOBSSceneFromScratch: async () => ({ success: false, message: 'Not in Electron' }),
+  deleteOBSScene: async () => ({ success: false, message: 'Not in Electron' }),
   addAudioSourceToScenes: async () => ({ success: false, message: 'Not in Electron', results: [] }),
   removeAudioSourceFromScenes: async () => ({ success: false, message: 'Not in Electron', results: [] }),
   getOBSAudioInputs: async () => [{ inputName: 'Desktop Audio', inputKind: 'wasapi_output_capture' }],

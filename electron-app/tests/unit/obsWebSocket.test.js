@@ -440,6 +440,30 @@ describe('addAudioSourceToScenes', () => {
     expect(result.success).toBe(false)
     expect(result.message).toBeTruthy()
   })
+
+  it('calls SetSceneItemTransform when fitToCanvas option is true', async () => {
+    mockObsCall
+      .mockResolvedValueOnce({ baseWidth: 1920, baseHeight: 1080 })       // GetVideoSettings (hoisted before loop)
+      .mockResolvedValueOnce({ sceneItems: [] })                          // GetSceneItemList Scene1
+      .mockResolvedValueOnce({ sceneItemId: 99 })                         // CreateInput → returns sceneItemId
+      // SetSceneItemTransform uses default undefined
+    const { addAudioSourceToScenes } = await getModule()
+    const result = await addAudioSourceToScenes({}, ['Scene1'], 'game_capture', 'My Game Capture', {}, { fitToCanvas: true })
+    expect(result.success).toBe(true)
+    const transformCall = mockObsCall.mock.calls.find(c => c[0] === 'SetSceneItemTransform')
+    expect(transformCall).toBeTruthy()
+    expect(transformCall[1]).toMatchObject({ sceneName: 'Scene1', sceneItemId: 99 })
+    expect(transformCall[1].sceneItemTransform.boundsType).toBe('OBS_BOUNDS_SCALE_INNER')
+  })
+
+  it('does not call SetSceneItemTransform when fitToCanvas is omitted', async () => {
+    // default mock returns undefined for CreateInput → sceneItemId is undefined
+    const { addAudioSourceToScenes } = await getModule()
+    const result = await addAudioSourceToScenes({}, ['Scene1'], 'wasapi_output_capture', 'Desktop Audio', {})
+    expect(result.success).toBe(true)
+    const transformCall = mockObsCall.mock.calls.find(c => c[0] === 'SetSceneItemTransform')
+    expect(transformCall).toBeFalsy()
+  })
 })
 
 // ─── getOBSScenes ────────────────────────────────────────────────────────────
@@ -839,9 +863,8 @@ describe('removeAudioSourceFromScenes', () => {
   it('removes matching scene items from each scene', async () => {
     mockObsCall
       .mockResolvedValueOnce({ sceneItems: [{ sourceName: 'Desktop Audio', sceneItemId: 10 }] }) // GetSceneItemList Scene1
-      .mockResolvedValueOnce(undefined)                                                           // RemoveSceneItem
       .mockResolvedValueOnce({ sceneItems: [{ sourceName: 'Desktop Audio', sceneItemId: 20 }] }) // GetSceneItemList Scene2
-      .mockResolvedValueOnce(undefined)                                                           // RemoveSceneItem
+      // RemoveSceneItem calls use default (undefined)
     const { removeAudioSourceFromScenes } = await getModule()
     const result = await removeAudioSourceFromScenes({}, ['Scene1', 'Scene2'], 'Desktop Audio')
     expect(result.success).toBe(true)
@@ -863,6 +886,41 @@ describe('removeAudioSourceFromScenes', () => {
     mockObsConnect.mockRejectedValue(Object.assign(new Error('Connection refused'), { code: 1006 }))
     const { removeAudioSourceFromScenes } = await getModule()
     const result = await removeAudioSourceFromScenes({}, ['Scene1'], 'Desktop Audio')
+    expect(result.success).toBe(false)
+    expect(result.message).toBeTruthy()
+  })
+})
+
+// ─── deleteOBSScene ───────────────────────────────────────────────────────────
+
+describe('deleteOBSScene', () => {
+  it('removes the scene when it exists', async () => {
+    mockObsCall
+      .mockResolvedValueOnce({ scenes: [{ sceneName: 'MyScene' }, { sceneName: 'Other' }] }) // GetSceneList
+      .mockResolvedValueOnce(undefined) // RemoveScene
+    const { deleteOBSScene } = await getModule()
+    const result = await deleteOBSScene({}, 'MyScene')
+    expect(result.success).toBe(true)
+    expect(result.message).toMatch(/MyScene/)
+    const removeCall = mockObsCall.mock.calls.find(c => c[0] === 'RemoveScene')
+    expect(removeCall).toBeTruthy()
+    expect(removeCall[1]).toEqual({ sceneName: 'MyScene' })
+  })
+
+  it('returns failure when scene does not exist', async () => {
+    mockObsCall.mockResolvedValueOnce({ scenes: [{ sceneName: 'Other' }] }) // GetSceneList — no MyScene
+    const { deleteOBSScene } = await getModule()
+    const result = await deleteOBSScene({}, 'MyScene')
+    expect(result.success).toBe(false)
+    expect(result.message).toMatch(/not found|does not exist/i)
+    const removeCall = mockObsCall.mock.calls.find(c => c[0] === 'RemoveScene')
+    expect(removeCall).toBeFalsy()
+  })
+
+  it('returns failure when OBS connection fails', async () => {
+    mockObsConnect.mockRejectedValue(Object.assign(new Error('Connection refused'), { code: 1006 }))
+    const { deleteOBSScene } = await getModule()
+    const result = await deleteOBSScene({}, 'MyScene')
     expect(result.success).toBe(false)
     expect(result.message).toBeTruthy()
   })
