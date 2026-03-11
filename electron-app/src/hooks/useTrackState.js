@@ -3,8 +3,7 @@ import { useState } from 'react';
 /**
  * Manages OBS audio track labels, the track-label editor modal, per-input
  * track-routing data, and per-input loading flags.
- * Isolated so that toggling a track chip or saving label names does not
- * re-render the game list or the "Add Source" dropdown.
+ * Groups these related concerns in one place for easier maintenance.
  */
 export function useTrackState() {
   const [trackLabels, setTrackLabels] = useState(['Track 1', 'Track 2', 'Track 3', 'Track 4', 'Track 5', 'Track 6']);

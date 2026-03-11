@@ -1,9 +1,9 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 
 /**
- * Manages transient toast notification state.
- * Isolated so that showing/hiding toasts does not cause re-renders
- * in the game library, audio sources, or modal sub-trees.
+ * Manages transient toast notification state and timing in a single place.
+ * Encapsulates toast logic so it can be managed independently of the
+ * game library, audio sources, or modal sub-trees.
  */
 export function useToastState() {
   const [toast, setToast] = useState(null);
@@ -16,11 +16,11 @@ export function useToastState() {
     };
   }, []);
 
-  function showToast(msg) {
+  const showToast = useCallback((msg) => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast(msg);
     toastTimerRef.current = setTimeout(() => setToast(null), 4000);
-  }
+  }, []); // toastTimerRef is a stable ref; setToast is a stable setter
 
   return { toast, showToast };
 }

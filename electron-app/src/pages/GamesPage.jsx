@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Trash2, Play, Square, Circle, Edit2, Check, X, Gamepad2, RefreshCw, ChevronDown, Image, Wand2, Settings, AlertTriangle, Music, Mic, Save } from 'lucide-react';
 import api from '../api';
@@ -23,7 +23,9 @@ const AUDIO_KIND_META = {
 /**
  * Module-level cache so repeated calls with the same window string
  * (e.g. during re-renders of the audio source table) skip the regex work.
- * Capped at 256 entries to avoid unbounded growth in long-running sessions.
+ * Capped at 256 entries with true LRU eviction: each cache hit moves the
+ * entry to the end of insertion order so the evicted entry is the least
+ * recently used.
  */
 const _extractExeCache = new Map();
 const _EXTRACT_EXE_CACHE_MAX = 256;
@@ -40,7 +42,13 @@ const _EXTRACT_EXE_CACHE_MAX = 256;
  */
 function extractExeFromWindowStr(windowStr) {
   if (!windowStr) return null;
-  if (_extractExeCache.has(windowStr)) return _extractExeCache.get(windowStr);
+  if (_extractExeCache.has(windowStr)) {
+    // Refresh recency: move the entry to end of insertion order (true LRU)
+    const cached = _extractExeCache.get(windowStr);
+    _extractExeCache.delete(windowStr);
+    _extractExeCache.set(windowStr, cached);
+    return cached;
+  }
   let result = null;
   // Format: [exe.exe]:class:title
   const bracketMatch = windowStr.match(/^\[([^\]]+\.exe)\]/i);
@@ -57,7 +65,7 @@ function extractExeFromWindowStr(windowStr) {
     }
   }
   _extractExeCache.set(windowStr, result);
-  // Evict the oldest entry when the cache exceeds the size cap
+  // Evict the least-recently-used entry when the cache exceeds the size cap
   if (_extractExeCache.size > _EXTRACT_EXE_CACHE_MAX) {
     _extractExeCache.delete(_extractExeCache.keys().next().value);
   }
@@ -731,7 +739,7 @@ export default function GamesPage() {
   }
 
 
-  async function toggleWatcher() {
+  const toggleWatcher = useCallback(async () => {
     try {
       if (watcherStatus.running) {
         await api.stopWatcher();
@@ -747,7 +755,10 @@ export default function GamesPage() {
       showToast(err?.message || 'Failed to toggle watcher');
     }
     loadWatcherStatus();
-  }
+  }, [watcherStatus.running, showToast]);
+
+  const handleDismissWarning = useCallback(() => setScriptWarning(null), [setScriptWarning]);
+  const handleGoToSettings = useCallback(() => navigate('/settings'), [navigate]);
 
   return (
     <>
@@ -758,7 +769,7 @@ export default function GamesPage() {
 
       <div className="page-body">
         {/* Watcher Status Card */}
-        <WatcherStatusCard status={watcherStatus} onToggle={toggleWatcher} scriptWarning={scriptWarning} onDismissWarning={() => setScriptWarning(null)} onGoToSettings={() => navigate('/settings')} />
+        <WatcherStatusCard status={watcherStatus} onToggle={toggleWatcher} scriptWarning={scriptWarning} onDismissWarning={handleDismissWarning} onGoToSettings={handleGoToSettings} />
 
         <div className="card" style={{ marginTop: 16 }}>
           <div className="card-header">
@@ -1612,7 +1623,7 @@ function parseGameState(gameState) {
   return { label: gameState, color: 'var(--text-muted)' };
 }
 
-function WatcherStatusCard({ status, onToggle, scriptWarning, onDismissWarning, onGoToSettings }) {
+const WatcherStatusCard = memo(function WatcherStatusCard({ status, onToggle, scriptWarning, onDismissWarning, onGoToSettings }) {
   const state = parseGameState(status.gameState);
 
   return (
@@ -1693,7 +1704,7 @@ function WatcherStatusCard({ status, onToggle, scriptWarning, onDismissWarning, 
       </div>
     </div>
   );
-}
+});
 
 /**
  * EditGameModal — allows editing game name, selector, OBS scene, and per-scene audio sources.

@@ -2,8 +2,9 @@ import { useState, useRef, useEffect } from 'react';
 
 /**
  * Manages master audio source list state and the "Add Source" dropdown.
- * Isolated so that audio-source changes (e.g. dropdown open/close, loading
- * indicators) don't trigger re-renders in the game-library or watcher trees.
+ * Groups related audio-source concerns (source list, applying flag, dropdown
+ * visibility, available inputs, outside-click effect) in one place for
+ * easier maintenance.
  */
 export function useAudioSourcesState() {
   // Master audio source list — sources applied to all game scenes

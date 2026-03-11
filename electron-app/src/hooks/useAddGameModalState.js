@@ -3,8 +3,8 @@ import { useState } from 'react';
 /**
  * Manages all state for the "Add Game" modal flow, including the window picker,
  * OBS scene creation, capture preferences, and scene conflict resolution.
- * Isolated so that typing in the modal or toggling scene-creation options
- * does not re-render the main game list or audio source cards.
+ * Groups the 13 modal-related state variables and the resetAddModal helper
+ * in one place for easier maintenance.
  */
 export function useAddGameModalState() {
   const [showAddModal, setShowAddModal] = useState(false);

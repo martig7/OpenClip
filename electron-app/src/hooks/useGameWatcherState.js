@@ -2,8 +2,8 @@ import { useState } from 'react';
 
 /**
  * Manages the game library list and watcher process status.
- * Isolated so that game-list or watcher updates don't bleed into
- * unrelated domains (audio sources, modals, toasts, etc.).
+ * Groups related state (games, watcher, script warning, confirm-delete,
+ * edit-game modal) in one place for easier maintenance.
  */
 export function useGameWatcherState() {
   const [games, setGames] = useState([]);
