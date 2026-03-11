@@ -1164,7 +1164,17 @@ export default function GamesPage() {
                 </span>
               )}
               <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
-                Pick a running window or type a window title / process name to match
+                {newGame.exe ? (
+                  newGame.windowMatchPriority === 2 ? (
+                    <>Watcher detects by exact process name (<strong>{newGame.exe}</strong>), not window title.</>
+                  ) : newGame.windowMatchPriority === 1 ? (
+                    <>Watcher primarily matches window title; if not found, it may fall back to the process executable (<strong>{newGame.exe}</strong>).</>
+                  ) : (
+                    <>Watcher matches window title. The exe binding (<strong>{newGame.exe}</strong>) is mainly used for OBS Application Audio Capture window selection.</>
+                  )
+                ) : (
+                  'Pick a running window (recommended) or type a process name / window title to match'
+                )}
               </span>
             </div>
             {/* Window Match Priority */}
@@ -1179,6 +1189,9 @@ export default function GamesPage() {
                 <option value={1}>Match title, otherwise find window of same executable</option>
                 <option value={2}>Match executable</option>
               </select>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
+                Controls how the watcher detects this game and how OBS Application Audio Capture picks its window.
+              </span>
             </div>
             <div className="form-group">
               <label className="form-label">OBS Scene (optional)</label>
@@ -1852,7 +1865,19 @@ function EditGameModal({
             </span>
           )}
           <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
-            Window title or process name to match for auto-recording
+            {(() => {
+              if (!game.exe) {
+                return 'Window title or process name substring matched for auto-recording';
+              }
+              const priority = game.windowMatchPriority !== undefined ? game.windowMatchPriority : 0;
+              if (priority === 2) {
+                return <>Watcher detects by exact process name (<strong>{game.exe}</strong>), not window title.</>;
+              }
+              if (priority === 1) {
+                return <>Watcher matches window title first; if not found, it falls back to process name (<strong>{game.exe}</strong>).</>;
+              }
+              return <>Watcher matches window title. The exe binding (<strong>{game.exe}</strong>) is mainly used for OBS Application Audio Capture window selection.</>;
+            })()}
           </span>
         </div>
 
@@ -1868,6 +1893,9 @@ function EditGameModal({
             <option value={1}>Match title, otherwise find window of same executable</option>
             <option value={2}>Match executable</option>
           </select>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
+            Controls how the watcher detects this game and how OBS Application Audio Capture picks its window.
+          </span>
         </div>
 
         {/* Scene */}
