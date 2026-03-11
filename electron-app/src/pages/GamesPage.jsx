@@ -168,6 +168,7 @@ export default function GamesPage() {
   // Master audio source list — sources the user wants in all game scenes
   const [masterAudioSources, setMasterAudioSources] = useState([]); // [{ kind, label, name }]
   const masterAudioLoadedRef = useRef(false); // guard against persisting before the initial load
+  const toastTimerRef = useRef(null);
   const [applyingSource, setApplyingSource] = useState(null); // kind being applied
 
   // Audio dropdown state
@@ -293,18 +294,28 @@ export default function GamesPage() {
   }, [showAudioDropdown]);
 
   async function loadGames() {
-    setGames(await api.getGames());
+    try {
+      setGames(await api.getGames());
+    } catch (err) {
+      showToast(err?.message || 'Failed to load games');
+    }
   }
 
   async function loadTrackLabels() {
     try {
       const labels = await api.getTrackNames();
       if (labels && labels.length === 6) setTrackLabels(labels);
-    } catch {}
+    } catch (err) {
+      showToast(err?.message || 'Failed to load track labels');
+    }
   }
 
   async function loadWatcherStatus() {
-    setWatcherStatus(await api.getWatcherStatus());
+    try {
+      setWatcherStatus(await api.getWatcherStatus());
+    } catch (err) {
+      showToast(err?.message || 'Failed to load watcher status');
+    }
   }
 
   async function addGame() {
@@ -432,9 +443,16 @@ export default function GamesPage() {
   }
 
   function showToast(msg) {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast(msg);
-    setTimeout(() => setToast(null), 4000);
+    toastTimerRef.current = setTimeout(() => setToast(null), 4000);
   }
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   async function pickIcon() {
     const filePath = await api.openFileDialog({
@@ -471,9 +489,14 @@ export default function GamesPage() {
 
   async function refreshWindows() {
     setLoadingWindows(true);
-    const windows = await api.getVisibleWindows();
-    setVisibleWindows(windows);
-    setLoadingWindows(false);
+    try {
+      const windows = await api.getVisibleWindows();
+      setVisibleWindows(windows);
+    } catch (err) {
+      showToast(err?.message || 'Failed to load windows');
+    } finally {
+      setLoadingWindows(false);
+    }
   }
 
   function selectWindow(win) {
@@ -672,6 +695,10 @@ export default function GamesPage() {
   async function saveEditModal() {
     if (!editGameModal) return;
     const { game } = editGameModal;
+    if (!game.name || !game.selector) {
+      showToast('Game name and window selector are required.');
+      return;
+    }
     const payload = {
       name: game.name,
       selector: game.selector,
@@ -704,15 +731,19 @@ export default function GamesPage() {
   const [scriptWarning, setScriptWarning] = useState(null);
 
   async function toggleWatcher() {
-    if (watcherStatus.running) {
-      await api.stopWatcher();
-      setScriptWarning(null);
-    } else {
-      await api.startWatcher();
-      // Check if the OBS script is loaded (non-blocking)
-      api.isOBSScriptLoaded().then(loaded => {
-        if (!loaded) setScriptWarning(true);
-      });
+    try {
+      if (watcherStatus.running) {
+        await api.stopWatcher();
+        setScriptWarning(null);
+      } else {
+        await api.startWatcher();
+        // Check if the OBS script is loaded (non-blocking)
+        api.isOBSScriptLoaded().then(loaded => {
+          if (!loaded) setScriptWarning(true);
+        });
+      }
+    } catch (err) {
+      showToast(err?.message || 'Failed to toggle watcher');
     }
     loadWatcherStatus();
   }

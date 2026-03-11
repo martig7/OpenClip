@@ -110,8 +110,8 @@ describe('GET /api/video/tracks', () => {
     const fp = path.join(destDir, 'video.mp4')
     fs.writeFileSync(fp, Buffer.alloc(1024))
 
-    cp.exec.mockImplementation((cmd, opts, cb) => {
-      if (cmd.includes('show_streams')) {
+    cp.execFile.mockImplementation((bin, args, opts, cb) => {
+      if (args.some(a => a.includes('show_streams'))) {
         cb(null, JSON.stringify({
           streams: [
             { index: 0, codec_name: 'aac', channels: 2, channel_layout: 'stereo',
@@ -135,7 +135,7 @@ describe('GET /api/video/tracks', () => {
     fs.writeFileSync(fp, Buffer.alloc(1024))
     fs.writeFileSync(fp + '.tracks.json', JSON.stringify(['My Custom Title', null]))
 
-    cp.exec.mockImplementation((cmd, opts, cb) => {
+    cp.execFile.mockImplementation((bin, args, opts, cb) => {
       cb(null, JSON.stringify({
         streams: [
           { index: 0, codec_name: 'aac', channels: 2, channel_layout: 'stereo',
@@ -187,7 +187,7 @@ describe('GET /api/video/waveform', () => {
     const fp = path.join(destDir, 'nodur.mp4')
     fs.writeFileSync(fp, Buffer.alloc(1024))
 
-    cp.exec.mockImplementation((cmd, opts, cb) => cb(null, '', ''))
+    cp.execFile.mockImplementation((bin, args, opts, cb) => cb(null, '', ''))
 
     const res = await request(server).get(
       `/api/video/waveform?path=${encodeURIComponent(fp)}&track=0`
@@ -201,8 +201,8 @@ describe('GET /api/video/waveform', () => {
     const fp = path.join(destDir, 'audio.mp4')
     fs.writeFileSync(fp, Buffer.alloc(1024))
 
-    // Return duration from exec (ffprobe)
-    cp.exec.mockImplementation((cmd, opts, cb) => cb(null, '10', ''))
+    // Return duration from execFile (ffprobe)
+    cp.execFile.mockImplementation((bin, args, opts, cb) => cb(null, '10', ''))
 
     // Build mock spawn that emits float32 data then closes
     cp.spawn.mockImplementation(() => {
