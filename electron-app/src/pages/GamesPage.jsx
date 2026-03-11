@@ -1164,7 +1164,9 @@ export default function GamesPage() {
                 </span>
               )}
               <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
-                Pick a running window or type a window title / process name to match
+                {newGame.exe
+                  ? <>Watcher detects by exact process name (<strong>{newGame.exe}</strong>), not window title.</>  
+                  : 'Pick a running window (recommended) or type a process name / window title to match'}
               </span>
             </div>
             {/* Window Match Priority */}
@@ -1179,6 +1181,9 @@ export default function GamesPage() {
                 <option value={1}>Match title, otherwise find window of same executable</option>
                 <option value={2}>Match executable</option>
               </select>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
+                Controls how the watcher detects this game and how OBS Application Audio Capture picks its window.
+              </span>
             </div>
             <div className="form-group">
               <label className="form-label">OBS Scene (optional)</label>
@@ -1852,7 +1857,9 @@ function EditGameModal({
             </span>
           )}
           <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
-            Window title or process name to match for auto-recording
+            {game.exe
+              ? <>Watcher detects by exact process name (<strong>{game.exe}</strong>), not window title.</>
+              : 'Window title or process name substring matched for auto-recording'}
           </span>
         </div>
 
@@ -1868,6 +1875,9 @@ function EditGameModal({
             <option value={1}>Match title, otherwise find window of same executable</option>
             <option value={2}>Match executable</option>
           </select>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
+            Controls how the watcher detects this game and how OBS Application Audio Capture picks its window.
+          </span>
         </div>
 
         {/* Scene */}
