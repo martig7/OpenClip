@@ -190,8 +190,10 @@ function setupFileManager(ipcMain, store) {
 
   ipcMain.handle('recordings:delete', (_event, filePath) => {
     const destPath = store.get('settings.destinationPath');
-    if (!filePath.startsWith(destPath)) throw new Error('Invalid path');
-    return service.deleteFile(filePath);
+    const resolvedFile = path.resolve(filePath);
+    const resolvedDest = path.resolve(destPath);
+    if (!resolvedFile.startsWith(resolvedDest + path.sep)) throw new Error('Invalid path');
+    return service.deleteFile(resolvedFile);
   });
 
   ipcMain.handle('video:getURL', (_event, filePath) => {
@@ -208,8 +210,10 @@ function setupFileManager(ipcMain, store) {
 
   ipcMain.handle('clips:delete', (_event, filePath) => {
     const destPath = store.get('settings.destinationPath');
-    if (!filePath.startsWith(destPath)) throw new Error('Invalid path');
-    return service.deleteFile(filePath);
+    const resolvedFile = path.resolve(filePath);
+    const resolvedDest = path.resolve(destPath);
+    if (!resolvedFile.startsWith(resolvedDest + path.sep)) throw new Error('Invalid path');
+    return service.deleteFile(resolvedFile);
   });
 
   ipcMain.handle('markers:list', () => {
