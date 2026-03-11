@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { RefreshCw } from 'lucide-react';
 import api from '../api';
 
@@ -28,6 +28,11 @@ export default function EncodingPage() {
   const [settings, setSettings]       = useState(DEFAULT_SETTINGS);
   const [obsRunning, setObsRunning]   = useState(false);
   const [status, setStatus]           = useState({ msg: '', type: '' }); // type: 'ok'|'err'|'warn'
+  const statusTimerRef = useRef(null);
+
+  useEffect(() => {
+    return () => clearTimeout(statusTimerRef.current);
+  }, []);
 
   useEffect(() => { load(); }, []);
 
@@ -72,7 +77,8 @@ export default function EncodingPage() {
     try {
       await api.setEncodingSettings(profileDir, settings);
       setStatus({ msg: 'Settings saved successfully.', type: 'ok' });
-      setTimeout(() => setStatus({ msg: '', type: '' }), 3000);
+      clearTimeout(statusTimerRef.current);
+      statusTimerRef.current = setTimeout(() => setStatus({ msg: '', type: '' }), 3000);
     } catch (e) {
       setStatus({ msg: `Save failed: ${e.message}`, type: 'err' });
     }
