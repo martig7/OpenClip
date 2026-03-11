@@ -245,17 +245,10 @@ export default function GamesPage() {
     (async () => {
       const results = await Promise.all(
         namesArray.map(async name => {
-          if (name === 'Game Audio') {
-            for (const game of games) {
-              if (game.scene) {
-                try {
-                  const tracks = await api.getInputAudioTracks(`Game Audio (${game.name})`);
-                  return { name, tracks };
-                } catch { continue; }
-              }
-            }
-            return { name, tracks: {} };
-          }
+          // 'Game Audio' track routing is stored locally — intentionally not fetched from
+          // OBS, because the source may not exist in every scene (user may have removed it
+          // from some games on purpose). The persisted value is loaded on mount.
+          if (name === 'Game Audio') return null;
           return api.getInputAudioTracks(name)
             .then(tracks => ({ name, tracks }))
             .catch(() => ({ name, tracks: {} }));
@@ -264,12 +257,14 @@ export default function GamesPage() {
       if (cancelled) return;
       setTrackData(prev => {
         const next = { ...prev };
-        for (const { name, tracks } of results) next[name] = tracks;
+        for (const entry of results) {
+          if (entry) next[entry.name] = entry.tracks;
+        }
         return next;
       });
     })();
     return () => { cancelled = true; };
-  }, [editGameModal?.sceneAudioSources, masterAudioSources, games]);
+  }, [editGameModal?.sceneAudioSources, masterAudioSources]);
 
   async function toggleTrack(inputName, trackNum) {
     const current = trackData[inputName] || {};
@@ -280,6 +275,8 @@ export default function GamesPage() {
     setTrackLoading(prev => ({ ...prev, [inputName]: true }));
     try {
       if (inputName === 'Game Audio') {
+        // Persist locally so the setting survives scenes that don't have this source
+        api.setStore('gameAudioTracks', updated).catch(() => {});
         const promises = [];
         for (const game of games) {
           if (game.scene) {
@@ -306,6 +303,10 @@ export default function GamesPage() {
       masterAudioLoadedRef.current = true;
       if (Array.isArray(saved) && saved.length > 0) setMasterAudioSources(saved);
     }).catch(() => { masterAudioLoadedRef.current = true; });
+    // Restore persisted Game Audio track routing (stored locally, not fetched from OBS)
+    api.getStore('gameAudioTracks').then(saved => {
+      if (saved && typeof saved === 'object') setTrackData(prev => ({ ...prev, 'Game Audio': saved }));
+    }).catch(() => {});
     api.getWatcherStatus().then(s => {
       setWatcherStatus(s);
       if (s.running) {

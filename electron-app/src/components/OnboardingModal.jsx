@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  X, ChevronRight, ChevronLeft, FolderOpen, RefreshCw,
+  ChevronRight, ChevronLeft, FolderOpen, RefreshCw,
   Download, CheckCircle, AlertCircle, Loader, Keyboard,
   HardDrive, Scissors, Play, ExternalLink, Package, Monitor,
 } from 'lucide-react';
@@ -220,7 +220,7 @@ function StepOBSInstall({ obsInstallPath, onChangeInstallPath }) {
 }
 
 /** Step 3 – OBS Plugin (auto-install DLL into OBS user plugins directory) */
-function StepOBSPlugin({ pluginStatus, pluginInstallMsg, onInstall, onVerify }) {
+function StepOBSPlugin({ pluginStatus, pluginInstallMsg, onInstall, onReinstall, onVerify }) {
   return (
     <div className="onboarding-step">
       <div className="onboarding-step-icon"><Download size={24} /></div>
@@ -249,7 +249,7 @@ function StepOBSPlugin({ pluginStatus, pluginInstallMsg, onInstall, onVerify }) 
         {pluginStatus === 'success' && (
           <button
             type="button"
-            onClick={onInstall}
+            onClick={onReinstall}
             style={{ background: 'none', border: 'none', padding: 0, margin: 0, cursor: 'pointer', fontSize: 12, color: 'var(--text-muted)', textDecoration: 'underline' }}
           >
             Reinstall
@@ -577,7 +577,6 @@ export default function OnboardingModal({ open, onClose }) {
   }
 
   async function handleInstallPlugin() {
-    reinstallingRef.current = false;
     setPluginStatus('checking');
     setPluginInstallMsg('');
     const result = await api.installOBSPlugin?.(obsInstallPath).catch(err => ({ success: false, message: err.message }));
@@ -587,6 +586,7 @@ export default function OnboardingModal({ open, onClose }) {
       setPluginStatus('error');
       setPluginInstallMsg(result?.message || 'Installation failed');
     }
+    reinstallingRef.current = false;
   }
 
   async function handleVerifyPlugin() {
@@ -637,9 +637,6 @@ export default function OnboardingModal({ open, onClose }) {
             <h2>Setup Wizard</h2>
             <span>Step {step + 1} of {TOTAL_STEPS} — {STEP_TITLES[step]}</span>
           </div>
-          <button className="onboarding-skip-btn" onClick={() => finishOrSkip(false)} title="Skip setup">
-            <X size={18} />
-          </button>
         </div>
 
         {/* Progress dots */}
@@ -667,6 +664,7 @@ export default function OnboardingModal({ open, onClose }) {
               pluginStatus={pluginStatus}
               pluginInstallMsg={pluginInstallMsg}
               onInstall={handleInstallPlugin}
+              onReinstall={() => { reinstallingRef.current = true; handleInstallPlugin(); }}
               onVerify={handleVerifyPlugin}
             />
           )}
@@ -675,31 +673,33 @@ export default function OnboardingModal({ open, onClose }) {
           {step === 6 && <StepStorage settings={settings} onChange={updateSetting} />}
           {step === 7 && <StepAutoClip settings={settings} onChange={updateSetting} />}
           {step === 8 && <StepWatcherAutostart settings={settings} onChange={updateSetting} />}
-          <button
-            className="btn btn-ghost btn-sm"
-            onClick={() => finishOrSkip(false)}
-            style={{ color: 'var(--text-muted)', fontSize: 12 }}
-          >
-            Skip setup
-          </button>
-
-          <div className="onboarding-footer-right">
+          <div className="onboarding-footer">
+            <div className="onboarding-footer-right">
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => setStep(s => s - 1)}
+                disabled={step === 0}
+                style={{ opacity: step === 0 ? 0.4 : 1 }}
+              >
+                <ChevronLeft size={14} /> Back
+              </button>
+              
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={goNext}
+                disabled={nextDisabled}
+                style={{ opacity: nextDisabled ? 0.4 : 1 }}
+                title={gateHint}
+              >
+                {isLast ? 'Finish' : 'Next'} {!isLast && <ChevronRight size={14} />}
+              </button>
+            </div>
             <button
-              className="btn btn-secondary btn-sm"
-              onClick={() => setStep(s => s - 1)}
-              disabled={step === 0}
-              style={{ opacity: step === 0 ? 0.4 : 1 }}
+              className="btn btn-ghost btn-sm"
+              onClick={() => finishOrSkip(false)}
+              style={{ color: 'var(--text-muted)', fontSize: 12 }}
             >
-              <ChevronLeft size={14} /> Back
-            </button>
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={goNext}
-              disabled={nextDisabled}
-              style={{ opacity: nextDisabled ? 0.4 : 1 }}
-              title={gateHint}
-            >
-              {isLast ? 'Finish' : 'Next'} {!isLast && <ChevronRight size={14} />}
+              Skip setup
             </button>
           </div>
         </div>
