@@ -8,6 +8,15 @@
 #include <stdint.h>
 #include <stddef.h>
 
+/* ── Portability: import/visibility annotation ──────────────────────────── */
+#if defined(_WIN32) || defined(__CYGWIN__)
+#  define OBS_API __declspec(dllimport)
+#elif defined(__GNUC__) || defined(__clang__)
+#  define OBS_API __attribute__((visibility("default")))
+#else
+#  define OBS_API
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -81,65 +90,65 @@ typedef bool (*obs_scene_enum_items_proc_t)(obs_scene_t *scene, obs_sceneitem_t 
 /* ── libobs functions (imported from obs.dll) ───────────────────────────── */
 
 /* Version */
-__declspec(dllimport) const char *obs_get_version_string(void);
+OBS_API const char *obs_get_version_string(void);
 
 /* Task queue */
-__declspec(dllimport) void obs_queue_task(enum obs_task_type type, obs_task_handler_t handler, void *param, bool wait);
+OBS_API void obs_queue_task(enum obs_task_type type, obs_task_handler_t handler, void *param, bool wait);
 
 /* Video */
-__declspec(dllimport) bool obs_get_video_info(struct obs_video_info *ovi);
+OBS_API bool obs_get_video_info(struct obs_video_info *ovi);
 
 /* Source lifecycle */
-__declspec(dllimport) obs_source_t *obs_source_create(const char *id, const char *name, obs_data_t *settings, obs_data_t *hotkey_data);
-__declspec(dllimport) void          obs_source_release(obs_source_t *source);
-__declspec(dllimport) obs_source_t *obs_source_get_ref(obs_source_t *source);
-__declspec(dllimport) void          obs_source_remove(obs_source_t *source);
-__declspec(dllimport) obs_source_t *obs_get_source_by_name(const char *name);
+OBS_API obs_source_t *obs_source_create(const char *id, const char *name, obs_data_t *settings, obs_data_t *hotkey_data);
+OBS_API void          obs_source_release(obs_source_t *source);
+OBS_API obs_source_t *obs_source_get_ref(obs_source_t *source);
+OBS_API void          obs_source_remove(obs_source_t *source);
+OBS_API obs_source_t *obs_get_source_by_name(const char *name);
 
 /* Source properties */
-__declspec(dllimport) const char   *obs_source_get_name(const obs_source_t *source);
-__declspec(dllimport) const char   *obs_source_get_id(const obs_source_t *source);
-__declspec(dllimport) uint32_t      obs_source_get_audio_mixers(const obs_source_t *source);
-__declspec(dllimport) void          obs_source_set_audio_mixers(obs_source_t *source, uint32_t mixers);
+OBS_API const char   *obs_source_get_name(const obs_source_t *source);
+OBS_API const char   *obs_source_get_id(const obs_source_t *source);
+OBS_API uint32_t      obs_source_get_audio_mixers(const obs_source_t *source);
+OBS_API void          obs_source_set_audio_mixers(obs_source_t *source, uint32_t mixers);
 
 /* Source enumeration */
-__declspec(dllimport) void obs_enum_sources(obs_enum_sources_proc_t cb, void *data);
+OBS_API void obs_enum_sources(obs_enum_sources_proc_t cb, void *data);
 
 /* Scene */
-__declspec(dllimport) obs_scene_t      *obs_scene_create(const char *name);
-__declspec(dllimport) void              obs_scene_release(obs_scene_t *scene);
-__declspec(dllimport) obs_scene_t      *obs_scene_from_source(obs_source_t *source);
-__declspec(dllimport) obs_sceneitem_t  *obs_scene_add(obs_scene_t *scene, obs_source_t *source);
-__declspec(dllimport) void              obs_scene_enum_items(obs_scene_t *scene, obs_scene_enum_items_proc_t cb, void *param);
-__declspec(dllimport) obs_sceneitem_t  *obs_scene_find_sceneitem_by_id(obs_scene_t *scene, int64_t id);
+OBS_API obs_scene_t      *obs_scene_create(const char *name);
+OBS_API void              obs_scene_release(obs_scene_t *scene);
+OBS_API obs_scene_t      *obs_scene_from_source(obs_source_t *source);
+OBS_API obs_sceneitem_t  *obs_scene_add(obs_scene_t *scene, obs_source_t *source);
+OBS_API void              obs_scene_enum_items(obs_scene_t *scene, obs_scene_enum_items_proc_t cb, void *param);
+OBS_API obs_sceneitem_t  *obs_scene_find_sceneitem_by_id(obs_scene_t *scene, int64_t id);
 
 /* Scene item */
-__declspec(dllimport) obs_source_t *obs_sceneitem_get_source(const obs_sceneitem_t *item);
-__declspec(dllimport) int64_t       obs_sceneitem_get_id(const obs_sceneitem_t *item);
-__declspec(dllimport) bool          obs_sceneitem_visible(const obs_sceneitem_t *item);
-__declspec(dllimport) void          obs_sceneitem_remove(obs_sceneitem_t *item);
-__declspec(dllimport) void          obs_sceneitem_set_pos(obs_sceneitem_t *item, const struct vec2 *pos);
-__declspec(dllimport) void          obs_sceneitem_set_alignment(obs_sceneitem_t *item, uint32_t alignment);
-__declspec(dllimport) void          obs_sceneitem_set_bounds_type(obs_sceneitem_t *item, enum obs_bounds_type type);
-__declspec(dllimport) void          obs_sceneitem_set_bounds_alignment(obs_sceneitem_t *item, uint32_t alignment);
-__declspec(dllimport) void          obs_sceneitem_set_bounds(obs_sceneitem_t *item, const struct vec2 *bounds);
+OBS_API obs_source_t *obs_sceneitem_get_source(const obs_sceneitem_t *item);
+OBS_API int64_t       obs_sceneitem_get_id(const obs_sceneitem_t *item);
+OBS_API bool          obs_sceneitem_visible(const obs_sceneitem_t *item);
+OBS_API void          obs_sceneitem_remove(obs_sceneitem_t *item);
+OBS_API void          obs_sceneitem_set_pos(obs_sceneitem_t *item, const struct vec2 *pos);
+OBS_API void          obs_sceneitem_set_alignment(obs_sceneitem_t *item, uint32_t alignment);
+OBS_API void          obs_sceneitem_set_bounds_type(obs_sceneitem_t *item, enum obs_bounds_type type);
+OBS_API void          obs_sceneitem_set_bounds_alignment(obs_sceneitem_t *item, uint32_t alignment);
+OBS_API void          obs_sceneitem_set_bounds(obs_sceneitem_t *item, const struct vec2 *bounds);
 
 /* Data (settings) */
-__declspec(dllimport) obs_data_t   *obs_data_create(void);
-__declspec(dllimport) void          obs_data_release(obs_data_t *data);
-__declspec(dllimport) void          obs_data_set_string(obs_data_t *data, const char *name, const char *val);
-__declspec(dllimport) void          obs_data_set_int(obs_data_t *data, const char *name, long long val);
-__declspec(dllimport) void          obs_data_set_bool(obs_data_t *data, const char *name, bool val);
+OBS_API obs_data_t   *obs_data_create(void);
+OBS_API void          obs_data_release(obs_data_t *data);
+OBS_API void          obs_data_set_string(obs_data_t *data, const char *name, const char *val);
+OBS_API void          obs_data_set_int(obs_data_t *data, const char *name, long long val);
+OBS_API void          obs_data_set_bool(obs_data_t *data, const char *name, bool val);
 
 /* Config (profile) */
-__declspec(dllimport) const char   *config_get_string(config_t *config, const char *section, const char *name);
-__declspec(dllimport) void          config_set_string(config_t *config, const char *section, const char *name, const char *value);
-__declspec(dllimport) int           config_save(config_t *config);
+OBS_API const char   *config_get_string(config_t *config, const char *section, const char *name);
+OBS_API void          config_set_string(config_t *config, const char *section, const char *name, const char *value);
+OBS_API int           config_save(config_t *config);
 
 /* Logging: blogva is declared in obs-module.h — do not duplicate here. */
 
 /* Memory */
-__declspec(dllimport) void bfree(void *ptr);
+OBS_API void bfree(void *ptr);
 
 #ifdef __cplusplus
 }

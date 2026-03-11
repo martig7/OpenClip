@@ -60,17 +60,17 @@ Copy the built DLL into the OBS user plugins directory:
 
 **Windows:**
 ```
-%APPDATA%\obs-studio\plugins\openclip\bin\64bit\openclip-obs.dll
+%APPDATA%\obs-studio\plugins\openclip-obs\bin\64bit\openclip-obs.dll
 ```
 
 **Linux:**
 ```
-~/.config/obs-studio/plugins/openclip/bin/64bit/openclip-obs.so
+~/.config/obs-studio/plugins/openclip-obs/bin/64bit/openclip-obs.so
 ```
 
 **macOS:**
 ```
-~/Library/Application Support/obs-studio/plugins/openclip/bin/openclip-obs.so
+~/Library/Application Support/obs-studio/plugins/openclip-obs/bin/openclip-obs.so
 ```
 
 Restart OBS — the plugin loads automatically.

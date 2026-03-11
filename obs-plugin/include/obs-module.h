@@ -8,6 +8,17 @@
 #include <stdint.h>
 #include <stdarg.h>
 
+/* ── Portability: import/visibility annotation ──────────────────────────── */
+#ifndef OBS_API
+#if defined(_WIN32) || defined(__CYGWIN__)
+#  define OBS_API __declspec(dllimport)
+#elif defined(__GNUC__) || defined(__clang__)
+#  define OBS_API __attribute__((visibility("default")))
+#else
+#  define OBS_API
+#endif
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -15,7 +26,7 @@ extern "C" {
 /* ── Logging ────────────────────────────────────────────────────────────── */
 enum { LOG_ERROR = 100, LOG_WARNING = 200, LOG_INFO = 300, LOG_DEBUG = 400 };
 
-__declspec(dllimport) void blogva(int log_level, const char *format, va_list args);
+OBS_API void blogva(int log_level, const char *format, va_list args);
 
 #ifndef blog
 static inline void blog(int level, const char *fmt, ...) {

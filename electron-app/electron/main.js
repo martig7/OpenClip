@@ -740,8 +740,16 @@ ipcMain.handle('dialog:openFile', async (_event, opts = {}) => {
 ipcMain.handle('shell:showInExplorer', (_event, filePath) => {
   shell.showItemInFolder(filePath);
 });
-ipcMain.handle('shell:openExternal', (_event, filePath) => {
-  shell.openPath(filePath);
+ipcMain.handle('shell:openExternal', (_event, url) => {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  const allowed = ['http:', 'https:', 'mailto:'];
+  if (!allowed.includes(parsed.protocol)) return false;
+  return shell.openExternal(url);
 });
 
 // Recordings & Clips (delegated to fileManager)
@@ -947,11 +955,22 @@ ipcMain.handle('obs:install-plugin', (_event, obsInstallPath) => {
 });
 
 // Check whether the native OBS plugin DLL is installed in the ProgramData plugins directory
+// or the per-user AppData plugins directory (fallback when ProgramData is not writable).
 ipcMain.handle('obs:is-plugin-registered', () => {
   try {
+    // System-wide OBS installation under ProgramData (default for OBS)
     const obsProgramData = path.join(process.env.ProgramData || 'C:\\ProgramData', 'obs-studio');
-    const dest = path.join(obsProgramData, 'plugins', 'openclip-obs', 'bin', '64bit', PLUGIN_DLL_NAME);
-    return fs.existsSync(dest);
+    const programDataDest = path.join(
+      obsProgramData, 'plugins', 'openclip-obs', 'bin', '64bit', PLUGIN_DLL_NAME
+    );
+
+    // Per-user OBS installation under AppData (fallback when installer lacked ProgramData access)
+    const obsUserData = path.join(app.getPath('appData'), 'obs-studio');
+    const userDataDest = path.join(
+      obsUserData, 'plugins', 'openclip-obs', 'bin', '64bit', PLUGIN_DLL_NAME
+    );
+
+    return fs.existsSync(programDataDest) || fs.existsSync(userDataDest);
   } catch {
     return false;
   }

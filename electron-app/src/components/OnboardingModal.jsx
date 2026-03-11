@@ -78,7 +78,7 @@ function HotkeyCapture({ value, onChange }) {
           <div className="toggle-label" style={{ fontSize: 12 }}>Include modifier keys</div>
           <div className="toggle-desc">Allow Ctrl, Alt, Shift combined with the hotkey</div>
         </div>
-        <button type="button" className={`toggle ${useMods ? 'on' : ''}`} onClick={() => setUseMods(m => !m)} />
+        <button type="button" aria-label="Include modifier keys" aria-pressed={useMods} className={`toggle ${useMods ? 'on' : ''}`} onClick={() => setUseMods(m => !m)} />
       </div>
     </div>
   );
@@ -246,6 +246,15 @@ function StepOBSPlugin({ pluginStatus, pluginInstallMsg, onInstall, onVerify }) 
             pluginStatus === 'error'    ? (pluginInstallMsg || 'Installation failed') : null
           }
         />
+        {pluginStatus === 'success' && (
+          <button
+            type="button"
+            onClick={onInstall}
+            style={{ background: 'none', border: 'none', padding: 0, margin: 0, cursor: 'pointer', fontSize: 12, color: 'var(--text-muted)', textDecoration: 'underline' }}
+          >
+            Reinstall
+          </button>
+        )}
       </div>
 
       {pluginStatus === 'success' && (
@@ -357,8 +366,9 @@ function StepStorage({ settings, onChange }) {
             <input
               type="number"
               className="form-input"
+              min="0"
               value={settings.autoDelete?.maxStorageGB ?? 50}
-              onChange={e => onChange('autoDelete.maxStorageGB', parseInt(e.target.value) || 0)}
+              onChange={e => onChange('autoDelete.maxStorageGB', Math.max(0, parseInt(e.target.value) || 0))}
               style={{ width: 100 }}
             />
           </div>
@@ -367,8 +377,9 @@ function StepStorage({ settings, onChange }) {
             <input
               type="number"
               className="form-input"
+              min="0"
               value={settings.autoDelete?.maxAgeDays ?? 30}
-              onChange={e => onChange('autoDelete.maxAgeDays', parseInt(e.target.value) || 0)}
+              onChange={e => onChange('autoDelete.maxAgeDays', Math.max(0, parseInt(e.target.value) || 0))}
               style={{ width: 100 }}
             />
           </div>
@@ -419,8 +430,9 @@ function StepAutoClip({ settings, onChange }) {
               <input
                 type="number"
                 className="form-input"
+                min="0"
                 value={settings.autoClip?.bufferBefore ?? 15}
-                onChange={e => onChange('autoClip.bufferBefore', parseInt(e.target.value) || 0)}
+                onChange={e => onChange('autoClip.bufferBefore', Math.max(0, parseInt(e.target.value) || 0))}
               />
             </div>
             <div className="form-group" style={{ margin: 0 }}>
@@ -428,8 +440,9 @@ function StepAutoClip({ settings, onChange }) {
               <input
                 type="number"
                 className="form-input"
+                min="0"
                 value={settings.autoClip?.bufferAfter ?? 15}
-                onChange={e => onChange('autoClip.bufferAfter', parseInt(e.target.value) || 0)}
+                onChange={e => onChange('autoClip.bufferAfter', Math.max(0, parseInt(e.target.value) || 0))}
               />
             </div>
           </div>
@@ -513,6 +526,7 @@ export default function OnboardingModal({ open, onClose }) {
   // Gated step state
   const [pluginStatus, setPluginStatus] = useState(null); // null | 'checking' | 'success' | 'error'
   const [pluginInstallMsg, setPluginInstallMsg] = useState('');
+  const reinstallingRef = useRef(false);
 
   // Load settings on open
   useEffect(() => {
@@ -520,13 +534,15 @@ export default function OnboardingModal({ open, onClose }) {
     setStep(0);
     setPluginStatus(null);
     setPluginInstallMsg('');
-    api.getStore('settings').then(s => setSettings(s)).catch(() => setSettings({}));
+    api.getStore('settings').then(s => setSettings(s ?? {})).catch(() => setSettings({}));
     api.getOBSInstallPath?.().then(p => setObsInstallPath(p || '')).catch(() => {});
   }, [open]);
 
-  // When landing on step 3 (plugin), auto-check if plugin is already installed
+  // When landing on step 3 (plugin), auto-check if plugin is already installed.
+  // Skipped when the user has explicitly clicked Reinstall (reinstallingRef = true).
   useEffect(() => {
     if (step !== 3 || pluginStatus) return;
+    if (reinstallingRef.current) return;
     api.isOBSPluginRegistered?.().then(installed => {
       if (installed) setPluginStatus('success');
     }).catch(() => {});
@@ -561,6 +577,7 @@ export default function OnboardingModal({ open, onClose }) {
   }
 
   async function handleInstallPlugin() {
+    reinstallingRef.current = false;
     setPluginStatus('checking');
     setPluginInstallMsg('');
     const result = await api.installOBSPlugin?.(obsInstallPath).catch(err => ({ success: false, message: err.message }));

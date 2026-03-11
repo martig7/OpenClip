@@ -65,8 +65,8 @@ static void ensure_parent_dir(const char *filepath)
 	dir[len] = '\0';
 
 	/* Walk forward and create each missing component */
-	for (size_t i = 1; i <= len; i++) {
-		if (i == len || dir[i] == '/' || dir[i] == '\\') {
+	for (size_t i = 1; i < len; i++) {
+		if (dir[i] == '/' || dir[i] == '\\') {
 			char sep = dir[i];
 			dir[i] = '\0';
 #ifdef _WIN32

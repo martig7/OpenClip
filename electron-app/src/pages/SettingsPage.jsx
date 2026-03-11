@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { FolderOpen, RefreshCw, Copy, Save, Wand2 } from 'lucide-react';
 import api from '../api';
 import OnboardingModal from '../components/OnboardingModal';

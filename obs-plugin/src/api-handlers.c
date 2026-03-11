@@ -53,6 +53,7 @@
 #include <obs.h>
 #include <cJSON.h>
 
+#include <limits.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -800,7 +801,9 @@ static cJSON *h_add_source(const cJSON *p)
 				obs_data_set_string(settings, item->string,
 						    item->valuestring);
 			else if (cJSON_IsNumber(item)) {
-				if (item->valuedouble == (long long)item->valuedouble)
+				if (item->valuedouble >= (double)LLONG_MIN &&
+				    item->valuedouble <= (double)LLONG_MAX &&
+				    item->valuedouble == (long long)item->valuedouble)
 					obs_data_set_int(settings, item->string,
 							 (long long)item->valuedouble);
 				else

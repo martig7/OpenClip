@@ -23,7 +23,7 @@ struct obs_frontend_source_list {
 /* ── Frontend API (imported from obs-frontend-api.dll) ───────────────────── */
 
 /* Scene enumeration */
-__declspec(dllimport) void obs_frontend_get_scenes(struct obs_frontend_source_list *sources);
+OBS_API void obs_frontend_get_scenes(struct obs_frontend_source_list *sources);
 
 /*
  * obs_frontend_source_list_free is an INLINE function in the real OBS SDK
@@ -44,16 +44,16 @@ static inline void obs_frontend_source_list_free(struct obs_frontend_source_list
 }
 
 /* Current scene */
-__declspec(dllimport) obs_source_t *obs_frontend_get_current_scene(void);
-__declspec(dllimport) void          obs_frontend_set_current_scene(obs_source_t *scene);
+OBS_API obs_source_t *obs_frontend_get_current_scene(void);
+OBS_API void          obs_frontend_set_current_scene(obs_source_t *scene);
 
 /* Recording */
-__declspec(dllimport) bool obs_frontend_recording_active(void);
-__declspec(dllimport) void obs_frontend_recording_start(void);
-__declspec(dllimport) void obs_frontend_recording_stop(void);
+OBS_API bool obs_frontend_recording_active(void);
+OBS_API void obs_frontend_recording_start(void);
+OBS_API void obs_frontend_recording_stop(void);
 
 /* Profile config */
-__declspec(dllimport) config_t *obs_frontend_get_profile_config(void);
+OBS_API config_t *obs_frontend_get_profile_config(void);
 
 #ifdef __cplusplus
 }

@@ -53,6 +53,7 @@ contextBridge.exposeInMainWorld('api', {
   getTrackNames: () => ipcRenderer.invoke('obs:ws:get-track-names'),
   setTrackNames: (names) => ipcRenderer.invoke('obs:ws:set-track-names', names),
   listWindowsAudioDevices: () => ipcRenderer.invoke('windows:list-audio-devices'),
+  listRunningApps: () => ipcRenderer.invoke('windows:list-running-apps'),
 
   // Dialogs
   openDirectoryDialog: () => ipcRenderer.invoke('dialog:openDirectory'),

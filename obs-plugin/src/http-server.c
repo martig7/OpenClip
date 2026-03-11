@@ -22,6 +22,7 @@
 #else
 #include <pthread.h>
 #include <signal.h>
+#include <sys/time.h>  /* struct timeval for SO_RCVTIMEO */
 #endif
 
 /* ── State ────────────────────────────────────────────────────────────────── */
@@ -59,7 +60,6 @@ static void send_json_response(socket_t sock, int status_code,
 		"HTTP/1.1 %d %s\r\n"
 		"Content-Type: application/json\r\n"
 		"Content-Length: %d\r\n"
-		"Access-Control-Allow-Origin: *\r\n"
 		"Connection: close\r\n"
 		"\r\n",
 		status_code, status_text, body_len);
@@ -77,13 +77,13 @@ static void send_json_response(socket_t sock, int status_code,
 
 static void send_cors_preflight(socket_t sock)
 {
+	/* The plugin API is only called by the local Electron app via Node.js
+	 * HTTP (no browser CORS required). Reject cross-origin preflight
+	 * requests entirely to reduce the attack surface. */
 	const char *resp =
-		"HTTP/1.1 204 No Content\r\n"
-		"Access-Control-Allow-Origin: *\r\n"
-		"Access-Control-Allow-Methods: POST, GET, OPTIONS\r\n"
-		"Access-Control-Allow-Headers: Content-Type\r\n"
-		"Access-Control-Max-Age: 86400\r\n"
+		"HTTP/1.1 403 Forbidden\r\n"
 		"Connection: close\r\n"
+		"Content-Length: 0\r\n"
 		"\r\n";
 	send_all(sock, resp, (int)strlen(resp));
 }
@@ -150,7 +150,15 @@ static int recv_request(socket_t sock, char *buf, int buf_size)
 			size_t h = (size_t)header_end;
 			size_t cl = (size_t)content_length;
 			if (cl > (size_t)(buf_size - 1) || h > (size_t)(buf_size - 1) - cl) {
-				/* Would overflow or exceed buffer — stop reading */
+				/* Content-Length would overflow or exceed buffer — treat as oversized request */
+				const char *resp =
+					"HTTP/1.1 413 Payload Too Large\r\n"
+					"Connection: close\r\n"
+					"Content-Length: 0\r\n"
+					"\r\n";
+				send_all(sock, resp, (int)strlen(resp));
+				/* Signal error to caller; do not attempt to parse truncated body */
+				total = -1;
 				break;
 			}
 			int expected = header_end + content_length;
