@@ -262,7 +262,7 @@ const store = {
 const { setupGameWatcher } = require('./gameWatcher');
 const { setupFileManager } = require('./fileManager');
 const { readOBSRecordingPath } = require('./obsIntegration');
-const { getProfiles, readEncodingSettings, writeEncodingSettings, isOBSRunning } = require('./obsEncoding');
+const { getProfiles, readEncodingSettings, writeEncodingSettings, isOBSRunning, findOBSExecutable } = require('./obsEncoding');
 const {
   getOBSScenes,
   createSceneFromTemplate,
@@ -578,6 +578,13 @@ ipcMain.handle('obs:profiles',      () => getProfiles());
 ipcMain.handle('obs:encoding:get',  (_e, profileDir) => readEncodingSettings(profileDir));
 ipcMain.handle('obs:encoding:set',  (_e, profileDir, settings) => { writeEncodingSettings(profileDir, settings); return { success: true }; });
 ipcMain.handle('obs:running',       () => isOBSRunning());
+ipcMain.handle('obs:launch', async () => {
+  const obsPath = findOBSExecutable();
+  if (!obsPath) return { success: false, message: 'OBS executable not found' };
+  const error = await shell.openPath(obsPath);
+  if (error) return { success: false, message: error };
+  return { success: true };
+});
 
 // OBS WebSocket
 ipcMain.handle('obs:ws:test',          () => testOBSConnection(store.get('settings').obsWebSocket));

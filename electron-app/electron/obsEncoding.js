@@ -54,6 +54,24 @@ function isOBSRunning() {
   });
 }
 
+/**
+ * Search common Windows installation paths for the OBS executable.
+ * @returns {string|null} Absolute path to obs64.exe, or null if not found.
+ */
+function findOBSExecutable() {
+  const programDirs = [
+    process.env['ProgramFiles'],
+    process.env['ProgramW6432'],
+    process.env['ProgramFiles(x86)'],
+  ].filter(Boolean);
+
+  for (const dir of programDirs) {
+    const candidate = path.join(dir, 'obs-studio', 'bin', '64bit', 'obs64.exe');
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
 // ── public API ────────────────────────────────────────────────────────────────
 
 function getProfiles() {
@@ -177,4 +195,4 @@ function writeEncodingSettings(profileDir, settings) {
   fs.writeFileSync(encJson, JSON.stringify(enc, null, 2), 'utf-8');
 }
 
-module.exports = { getProfiles, readEncodingSettings, writeEncodingSettings, isOBSRunning };
+module.exports = { getProfiles, readEncodingSettings, writeEncodingSettings, isOBSRunning, findOBSExecutable };

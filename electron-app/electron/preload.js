@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld('api', {
   getEncodingSettings: (profileDir) => ipcRenderer.invoke('obs:encoding:get', profileDir),
   setEncodingSettings: (profileDir, settings) => ipcRenderer.invoke('obs:encoding:set', profileDir, settings),
   isOBSRunning: () => ipcRenderer.invoke('obs:running'),
+  launchOBS: () => ipcRenderer.invoke('obs:launch'),
   getOBSScriptPath: () => ipcRenderer.invoke('obs:script:path'),
 
   // OBS WebSocket

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, Play, Square, Circle, Edit2, Check, X, Gamepad2, RefreshCw, ChevronDown, Image, Wand2, Settings, AlertTriangle, Music, Mic, Save } from 'lucide-react';
+import { Plus, Trash2, Play, Square, Circle, Edit2, Check, X, Gamepad2, RefreshCw, ChevronDown, Image, Wand2, Settings, AlertTriangle, Music, Mic, Save, ExternalLink } from 'lucide-react';
 import api from '../api';
 import { useGameWatcherState } from '../hooks/useGameWatcherState';
 import { useAudioSourcesState } from '../hooks/useAudioSourcesState';
@@ -759,6 +759,7 @@ export default function GamesPage() {
 
   const handleDismissWarning = useCallback(() => setScriptWarning(null), [setScriptWarning]);
   const handleGoToSettings = useCallback(() => navigate('/settings'), [navigate]);
+  const handleOpenOBS = useCallback(() => api.launchOBS(), []);
 
   return (
     <>
@@ -769,7 +770,7 @@ export default function GamesPage() {
 
       <div className="page-body">
         {/* Watcher Status Card */}
-        <WatcherStatusCard status={watcherStatus} onToggle={toggleWatcher} scriptWarning={scriptWarning} onDismissWarning={handleDismissWarning} onGoToSettings={handleGoToSettings} />
+        <WatcherStatusCard status={watcherStatus} onToggle={toggleWatcher} scriptWarning={scriptWarning} onDismissWarning={handleDismissWarning} onGoToSettings={handleGoToSettings} onOpenOBS={handleOpenOBS} />
 
         <div className="card" style={{ marginTop: 16 }}>
           <div className="card-header">
@@ -1636,19 +1637,28 @@ function parseGameState(gameState) {
   return { label: gameState, color: 'var(--text-muted)' };
 }
 
-const WatcherStatusCard = memo(function WatcherStatusCard({ status, onToggle, scriptWarning, onDismissWarning, onGoToSettings }) {
+const WatcherStatusCard = memo(function WatcherStatusCard({ status, onToggle, scriptWarning, onDismissWarning, onGoToSettings, onOpenOBS }) {
   const state = parseGameState(status.gameState);
 
   return (
     <div className="card">
       <div className="card-header">
         <span className="card-title">Watcher Status</span>
-        <button
-          className={`btn btn-sm ${status.running ? 'btn-danger' : 'btn-primary'}`}
-          onClick={onToggle}
-        >
-          {status.running ? <><Square size={13} /> Stop Watcher</> : <><Play size={13} /> Start Watcher</>}
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={onOpenOBS}
+            title="Open OBS"
+          >
+            <ExternalLink size={13} /> Open OBS
+          </button>
+          <button
+            className={`btn btn-sm ${status.running ? 'btn-danger' : 'btn-primary'}`}
+            onClick={onToggle}
+          >
+            {status.running ? <><Square size={13} /> Stop Watcher</> : <><Play size={13} /> Start Watcher</>}
+          </button>
+        </div>
       </div>
 
       {scriptWarning && status.running && (
