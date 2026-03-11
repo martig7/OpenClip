@@ -53,6 +53,17 @@ function setupGameWatcher(store, onStateChange) {
         const { organizeRecordings } = require('./fileManager');
         organizeRecordings(store, stoppedGame).catch(err => log(`Organize failed: ${err.stack || err.message}`));
       }, 8000);
+    } else if (detected && lastGame && detected.name !== lastGame.name) {
+      const stoppedGame = lastGame.name;
+      lastGame = detected;
+      writeGameState(`RECORDING|${detected.name}|${detected.scene || ''}`);
+      log(`Game switched: ${stoppedGame} → ${detected.name}`);
+      onStateChange({ currentGame: detected.name, status: 'recording' });
+
+      setTimeout(() => {
+        const { organizeRecordings } = require('./fileManager');
+        organizeRecordings(store, stoppedGame).catch(err => log(`Organize failed: ${err.stack || err.message}`));
+      }, 8000);
     }
 
     if (!stopped) {
