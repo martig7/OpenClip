@@ -127,15 +127,21 @@ async function processAutoClips(store, gameName, recordingDir) {
   const bufferAfter = autoClip.bufferAfter || 15;
 
   // Find the most recent recording file
-  const names = fs.readdirSync(recordingDir).filter(f => f.endsWith('.mp4'));
-  const recordings = await Promise.all(
+  if (!fs.existsSync(recordingDir)) return;
+  const names = fs.readdirSync(recordingDir, { withFileTypes: true })
+    .filter(f => f.isFile() && f.name.endsWith('.mp4'))
+    .map(f => f.name);
+  const settled = await Promise.allSettled(
     names.map(async f => {
       const fp = path.join(recordingDir, f);
       const { mtime } = await fs.promises.stat(fp);
       return { name: f, path: fp, mtime };
     })
   );
-  recordings.sort((a, b) => b.mtime - a.mtime);
+  const recordings = settled
+    .filter(r => r.status === 'fulfilled')
+    .map(r => r.value)
+    .sort((a, b) => b.mtime - a.mtime);
 
   if (recordings.length === 0) return;
   const recording = recordings[0];
