@@ -318,3 +318,50 @@ describe('setupFileManager IPC path validation', () => {
     })
   }
 })
+
+// ─────────────────────────────────────────────────────────────────
+// setupFileManager — recordings:delete / clips:delete path validation
+// ─────────────────────────────────────────────────────────────────
+describe('setupFileManager IPC path validation', () => {
+  let store
+  let ipc
+
+  beforeEach(async () => {
+    vi.resetModules()
+    store = makeMockStore({
+      settings: { obsRecordingPath: obsDir, destinationPath: destDir },
+    })
+    ipc = makeMockIpcMain()
+    const { setupFileManager } = await import('../../electron/fileManager.js')
+    setupFileManager(ipc, store)
+  })
+
+  for (const channel of ['recordings:delete', 'clips:delete']) {
+    describe(channel, () => {
+      it('deletes a valid file inside destPath', async () => {
+        const fp = path.join(destDir, 'game', 'recording.mp4')
+        fs.mkdirSync(path.dirname(fp), { recursive: true })
+        fs.writeFileSync(fp, Buffer.alloc(8))
+        const result = await ipc.invoke(channel, fp)
+        expect(result.success).toBe(true)
+        expect(fs.existsSync(fp)).toBe(false)
+      })
+
+      it('rejects a path traversal attempt with .. sequences', async () => {
+        // Construct a path that starts with destDir string but escapes via ..
+        const traversal = path.join(destDir, '..', 'secret.txt')
+        await expect(ipc.invoke(channel, traversal)).rejects.toThrow('Invalid path')
+      })
+
+      it('rejects a path outside destPath', async () => {
+        const outside = path.join(tmpDir, 'outside.mp4')
+        fs.writeFileSync(outside, Buffer.alloc(8))
+        await expect(ipc.invoke(channel, outside)).rejects.toThrow('Invalid path')
+      })
+
+      it('rejects destPath itself (not a file inside it)', async () => {
+        await expect(ipc.invoke(channel, destDir)).rejects.toThrow('Invalid path')
+      })
+    })
+  }
+})
