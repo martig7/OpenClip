@@ -5,7 +5,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { exec, execSync, spawn } = require('child_process');
+const { exec, execFile, execSync, spawn } = require('child_process');
 const { shell } = require('electron');
 const url = require('url');
 
@@ -30,8 +30,9 @@ function saveMarkers(data) {
 
 function getVideoDuration(filePath) {
   return new Promise((resolve) => {
-    exec(
-      `"${FFPROBE_PATH}" -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filePath}"`,
+    execFile(
+      FFPROBE_PATH,
+      ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', filePath],
       { encoding: 'utf-8', timeout: 10000 },
       (error, stdout) => {
         if (error) return resolve(null);
@@ -353,8 +354,9 @@ function startApiServer(appStore) {
           sidecarNames = JSON.parse(fs.readFileSync(filePath + '.tracks.json', 'utf-8'));
         } catch {}
         return new Promise((resolve) => {
-          exec(
-            `"${FFPROBE_PATH}" -v error -show_streams -select_streams a -of json "${filePath}"`,
+          execFile(
+            FFPROBE_PATH,
+            ['-v', 'error', '-show_streams', '-select_streams', 'a', '-of', 'json', filePath],
             { encoding: 'utf-8', timeout: 10000 },
             (error, stdout) => {
               if (error) { resolve(json(res, { tracks: [] })); return; }
