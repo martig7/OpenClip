@@ -1,13 +1,13 @@
 {
   "name": "open-clip",
-  "version": "1.0.0-beta.3",
+  "version": "1.0.0-beta.4",
   "description": "Automatic recording manager for OBS Studio — detects games, organizes recordings, and creates clips.",
   "main": "electron/main.js",
   "scripts": {
     "dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron . --dev\"",
     "build": "vite build",
     "dist": "vite build && electron-builder --win",
-    "release": "vite build && electron-builder --win --publish always",
+    "release": "node scripts/release.js",
     "preview": "vite build && electron .",
     "test": "vitest run",
     "test:watch": "vitest",
