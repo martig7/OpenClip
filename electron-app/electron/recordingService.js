@@ -208,9 +208,14 @@ function createClip(sourcePath, startTime, endTime, gameName = 'Unknown', audioT
     fs.mkdirSync(clipsPath, { recursive: true });
 
     const dateStr = new Date().toISOString().slice(0, 10);
-    const clipNum = countClipsForDate(clipsPath, gameName, dateStr) + 1;
-    const outputFilename = `${gameName} Clip ${dateStr} #${clipNum}.mp4`;
-    const outputPath = path.join(clipsPath, outputFilename);
+    let clipNum = countClipsForDate(clipsPath, gameName, dateStr) + 1;
+    let outputFilename = `${gameName} Clip ${dateStr} #${clipNum}.mp4`;
+    let outputPath = path.join(clipsPath, outputFilename);
+    while (fs.existsSync(outputPath)) {
+      clipNum++;
+      outputFilename = `${gameName} Clip ${dateStr} #${clipNum}.mp4`;
+      outputPath = path.join(clipsPath, outputFilename);
+    }
     const duration = endTime - startTime;
 
     // Build audio args: when multiple specific tracks are selected, produce:
