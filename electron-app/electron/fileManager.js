@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { execSync, execFile, exec } = require('child_process');
+const { execSync, execFileSync, execFile, exec } = require('child_process');
 const { promisify } = require('util');
 const { isVideoFile, CODEC_MAP, FFMPEG_PATH, FFPROBE_PATH } = require('./constants');
 const service = require('./recordingService');
@@ -102,8 +102,9 @@ async function organizeRecordings(store, gameName) {
 
 function getVideoDurationSync(filePath) {
   try {
-    const out = execSync(
-      `"${FFPROBE_PATH}" -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filePath}"`,
+    const out = execFileSync(
+      FFPROBE_PATH,
+      ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', filePath],
       { encoding: 'utf-8', timeout: 10000 }
     );
     return parseFloat(out.trim()) || null;

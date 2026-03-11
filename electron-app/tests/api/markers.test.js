@@ -66,7 +66,7 @@ describe('GET /api/markers', () => {
 
   it('returns empty markers when no duration from ffprobe', async () => {
     const cp = await import('child_process')
-    cp.exec.mockImplementation((cmd, opts, cb) => cb(null, '', ''))
+    cp.execFile.mockImplementation((bin, args, opts, cb) => cb(null, '', ''))
 
     const fp = path.join(destDir, 'rec.mp4')
     fs.writeFileSync(fp, Buffer.alloc(1024))
@@ -82,7 +82,7 @@ describe('GET /api/markers', () => {
   it('returns markers within recording window for matching game', async () => {
     const cp = await import('child_process')
     const duration = 300 // 5 minutes
-    cp.exec.mockImplementation((cmd, opts, cb) => cb(null, String(duration), ''))
+    cp.execFile.mockImplementation((bin, args, opts, cb) => cb(null, String(duration), ''))
 
     const fp = path.join(destDir, 'rec.mp4')
     fs.writeFileSync(fp, Buffer.alloc(1024))
@@ -111,7 +111,7 @@ describe('GET /api/markers', () => {
   it('returns markers sorted by position ascending', async () => {
     const cp = await import('child_process')
     const duration = 600
-    cp.exec.mockImplementation((cmd, opts, cb) => cb(null, String(duration), ''))
+    cp.execFile.mockImplementation((bin, args, opts, cb) => cb(null, String(duration), ''))
 
     const fp = path.join(destDir, 'rec2.mp4')
     fs.writeFileSync(fp, Buffer.alloc(1024))
