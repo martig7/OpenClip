@@ -37,3 +37,7 @@ nul
 
 # OBS Studio installer (downloaded in CI, never committed)
 /OBS-Studio-*-Installer.exe
+obs-plugin/tools/cmake
+
+# OBS plugin build directory (CMake/MSBuild artifacts)
+obs-plugin/build/

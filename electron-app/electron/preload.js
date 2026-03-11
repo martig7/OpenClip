@@ -37,10 +37,8 @@ contextBridge.exposeInMainWorld('api', {
   getEncodingSettings: (profileDir) => ipcRenderer.invoke('obs:encoding:get', profileDir),
   setEncodingSettings: (profileDir, settings) => ipcRenderer.invoke('obs:encoding:set', profileDir, settings),
   isOBSRunning: () => ipcRenderer.invoke('obs:running'),
-  getOBSScriptPath: () => ipcRenderer.invoke('obs:script:path'),
 
-  // OBS WebSocket
-  testOBSWSConnection: () => ipcRenderer.invoke('obs:ws:test'),
+  // OBS Plugin (scene/audio control via native plugin HTTP API)
   isOBSScriptLoaded: () => ipcRenderer.invoke('obs:ws:script-loaded'),
   getOBSWSScenes: () => ipcRenderer.invoke('obs:ws:scenes'),
   createOBSScene: (newSceneName, templateSceneName) => ipcRenderer.invoke('obs:ws:create-scene', newSceneName, templateSceneName),
@@ -56,9 +54,6 @@ contextBridge.exposeInMainWorld('api', {
   setTrackNames: (names) => ipcRenderer.invoke('obs:ws:set-track-names', names),
   listWindowsAudioDevices: () => ipcRenderer.invoke('windows:list-audio-devices'),
   listRunningApps: () => ipcRenderer.invoke('windows:list-running-apps'),
-  readOBSWSQR: (imagePath) => ipcRenderer.invoke('obs:ws:read-qr', imagePath),
-  readOBSWSQRFromClipboard: () => ipcRenderer.invoke('obs:ws:read-qr-clipboard'),
-  clipboardHasImage: () => ipcRenderer.invoke('clipboard:hasImage'),
 
   // Dialogs
   openDirectoryDialog: () => ipcRenderer.invoke('dialog:openDirectory'),
@@ -96,6 +91,15 @@ contextBridge.exposeInMainWorld('api', {
 
   // Re-encode
   reencodeVideo: (opts) => ipcRenderer.invoke('video:reencode', opts),
+
+  // Onboarding
+  isOnboardingComplete: () => ipcRenderer.invoke('onboarding:isComplete'),
+  setOnboardingComplete: (v) => ipcRenderer.invoke('onboarding:setComplete', v),
+  installOBSPlugin: (obsInstallPath) => ipcRenderer.invoke('obs:install-plugin', obsInstallPath),
+  detectOBSInstallPath: () => ipcRenderer.invoke('obs:detect-install'),
+  setOBSInstallPath: (p) => ipcRenderer.invoke('obs:set-install-path', p),
+  getOBSInstallPath: () => ipcRenderer.invoke('obs:get-install-path'),
+  isOBSPluginRegistered: () => ipcRenderer.invoke('obs:is-plugin-registered'),
 
   // API server port
   getApiPort: () => ipcRenderer.invoke('api:port'),
