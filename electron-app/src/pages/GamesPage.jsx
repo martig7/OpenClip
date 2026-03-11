@@ -1,7 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Trash2, Play, Square, Circle, Edit2, Check, X, Gamepad2, RefreshCw, ChevronDown, Image, Wand2, Settings, AlertTriangle, Music, Mic, Save } from 'lucide-react';
 import api from '../api';
+import { useGameWatcherState } from '../hooks/useGameWatcherState';
+import { useAudioSourcesState } from '../hooks/useAudioSourcesState';
+import { useToastState } from '../hooks/useToastState';
+import { useAddGameModalState } from '../hooks/useAddGameModalState';
+import { useTrackState } from '../hooks/useTrackState';
 
 // Human-readable metadata for known OBS audio input kinds
 const AUDIO_KIND_META = {
@@ -16,23 +21,55 @@ const AUDIO_KIND_META = {
 };
 
 /**
+ * Module-level cache so repeated calls with the same window string
+ * (e.g. during re-renders of the audio source table) skip the regex work.
+ * Capped at 256 entries with true LRU eviction: each cache hit moves the
+ * entry to the end of insertion order so the evicted entry is the least
+ * recently used.
+ */
+const _extractExeCache = new Map();
+const _EXTRACT_EXE_CACHE_MAX = 256;
+
+/**
  * Extract the exe filename from an OBS wasapi_process_output_capture window string.
  * Handles formats:
  *   "[exe.exe]:WindowClass:Window Title"
  *   "Window Title:WindowClass:exe.exe"
  *   "Window Title::exe.exe"
+ *
+ * Results are memoized in a module-level Map to avoid repeated regex work
+ * across re-renders.
  */
 function extractExeFromWindowStr(windowStr) {
   if (!windowStr) return null;
+  if (_extractExeCache.has(windowStr)) {
+    // Refresh recency: move the entry to end of insertion order (true LRU)
+    const cached = _extractExeCache.get(windowStr);
+    _extractExeCache.delete(windowStr);
+    _extractExeCache.set(windowStr, cached);
+    return cached;
+  }
+  let result = null;
   // Format: [exe.exe]:class:title
   const bracketMatch = windowStr.match(/^\[([^\]]+\.exe)\]/i);
-  if (bracketMatch) return bracketMatch[1].toLowerCase();
-  // Format: title:class:exe.exe  or  title::exe.exe
-  const parts = windowStr.split(':').map(p => p.trim()).filter(Boolean);
-  for (let i = parts.length - 1; i >= 0; i--) {
-    if (parts[i].toLowerCase().endsWith('.exe')) return parts[i].toLowerCase();
+  if (bracketMatch) {
+    result = bracketMatch[1].toLowerCase();
+  } else {
+    // Format: title:class:exe.exe  or  title::exe.exe
+    const parts = windowStr.split(':').map(p => p.trim()).filter(Boolean);
+    for (let i = parts.length - 1; i >= 0; i--) {
+      if (parts[i].toLowerCase().endsWith('.exe')) {
+        result = parts[i].toLowerCase();
+        break;
+      }
+    }
   }
-  return null;
+  _extractExeCache.set(windowStr, result);
+  // Evict the least-recently-used entry when the cache exceeds the size cap
+  if (_extractExeCache.size > _EXTRACT_EXE_CACHE_MAX) {
+    _extractExeCache.delete(_extractExeCache.keys().next().value);
+  }
+  return result;
 }
 
 /**
@@ -147,47 +184,53 @@ async function buildAvailableAudioInputs() {
 
 export default function GamesPage() {
   const navigate = useNavigate();
-  const [games, setGames] = useState([]);
-  const [watcherStatus, setWatcherStatus] = useState({ running: false, currentGame: null, startedAt: null, gameState: null });
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newGame, setNewGame] = useState({ name: '', selector: '', scene: '', icon_path: '' });
-  const [visibleWindows, setVisibleWindows] = useState([]);
-  const [loadingWindows, setLoadingWindows] = useState(false);
-  const [showWindowPicker, setShowWindowPicker] = useState(false);
-  const [autoCreateScene, setAutoCreateScene] = useState(false);
-  const [createMode, setCreateMode] = useState('scratch'); // 'scratch' | 'template'
-  const [capturePref, setCapturePref] = useState('game_capture'); // 'game_capture' | 'window_capture'
-  const [obsScenes, setObsScenes] = useState([]);
-  const [loadingScenes, setLoadingScenes] = useState(false);
-  const [scenesError, setScenesError] = useState(null);
-  const [templateScene, setTemplateScene] = useState('');
-  const [sceneCreateStatus, setSceneCreateStatus] = useState(null); // { type: 'success'|'error'|'conflict'|'loading', message }
-  const [toast, setToast] = useState(null);
-  const [confirmDeleteGame, setConfirmDeleteGame] = useState(null); // { game }
 
-  // Master audio source list — sources the user wants in all game scenes
-  const [masterAudioSources, setMasterAudioSources] = useState([]); // [{ kind, label, name }]
-  const masterAudioLoadedRef = useRef(false); // guard against persisting before the initial load
-  const toastTimerRef = useRef(null);
-  const [applyingSource, setApplyingSource] = useState(null); // kind being applied
+  const {
+    games, setGames,
+    watcherStatus, setWatcherStatus,
+    scriptWarning, setScriptWarning,
+    confirmDeleteGame, setConfirmDeleteGame,
+    editGameModal, setEditGameModal,
+  } = useGameWatcherState();
 
-  // Audio dropdown state
-  const [showAudioDropdown, setShowAudioDropdown] = useState(false);
-  const [availableAudioInputs, setAvailableAudioInputs] = useState([]); // combined OBS + Windows
-  const [loadingAudioInputs, setLoadingAudioInputs] = useState(false);
-  const [audioDropdownError, setAudioDropdownError] = useState(null);
-  const audioDropdownRef = useRef(null);
+  const {
+    masterAudioSources, setMasterAudioSources,
+    masterAudioLoadedRef,
+    applyingSource, setApplyingSource,
+    showAudioDropdown, setShowAudioDropdown,
+    availableAudioInputs, setAvailableAudioInputs,
+    loadingAudioInputs, setLoadingAudioInputs,
+    audioDropdownError, setAudioDropdownError,
+    audioDropdownRef,
+  } = useAudioSourcesState();
 
-  // Edit game modal
-  const [editGameModal, setEditGameModal] = useState(null); // { game, sceneAudioSources, loading }
+  const { toast, showToast } = useToastState();
 
-  // Track parity and labels
-  const [trackLabels, setTrackLabels] = useState(['Track 1', 'Track 2', 'Track 3', 'Track 4', 'Track 5', 'Track 6']);
-  const [showTrackEditor, setShowTrackEditor] = useState(false);
-  const [tempTrackLabels, setTempTrackLabels] = useState([]);
-  const [savingTrackLabels, setSavingTrackLabels] = useState(false);
-  const [trackData, setTrackData] = useState({});
-  const [trackLoading, setTrackLoading] = useState({}); // { [inputName]: bool }
+  const {
+    showAddModal, setShowAddModal,
+    newGame, setNewGame,
+    visibleWindows, setVisibleWindows,
+    loadingWindows, setLoadingWindows,
+    showWindowPicker, setShowWindowPicker,
+    autoCreateScene, setAutoCreateScene,
+    createMode, setCreateMode,
+    capturePref, setCapturePref,
+    obsScenes, setObsScenes,
+    loadingScenes, setLoadingScenes,
+    scenesError, setScenesError,
+    templateScene, setTemplateScene,
+    sceneCreateStatus, setSceneCreateStatus,
+    resetAddModal,
+  } = useAddGameModalState();
+
+  const {
+    trackLabels, setTrackLabels,
+    showTrackEditor, setShowTrackEditor,
+    tempTrackLabels, setTempTrackLabels,
+    savingTrackLabels, setSavingTrackLabels,
+    trackData, setTrackData,
+    trackLoading, setTrackLoading,
+  } = useTrackState();
 
   // Load track info whenever scene audio sources or master audio sources change
   useEffect(() => {
@@ -281,17 +324,6 @@ export default function GamesPage() {
     api.setStore('masterAudioSources', masterAudioSources).catch(() => {});
   }, [masterAudioSources]);
 
-  // Close dropdown on outside click
-  useEffect(() => {
-    if (!showAudioDropdown) return;
-    const handler = (e) => {
-      if (audioDropdownRef.current && !audioDropdownRef.current.contains(e.target)) {
-        setShowAudioDropdown(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [showAudioDropdown]);
 
   async function loadGames() {
     try {
@@ -442,17 +474,6 @@ export default function GamesPage() {
     }
   }
 
-  function showToast(msg) {
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    setToast(msg);
-    toastTimerRef.current = setTimeout(() => setToast(null), 4000);
-  }
-
-  useEffect(() => {
-    return () => {
-      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    };
-  }, []);
 
   async function pickIcon() {
     const filePath = await api.openFileDialog({
@@ -527,17 +548,6 @@ export default function GamesPage() {
     } finally {
       setLoadingScenes(false);
     }
-  }
-
-  function resetAddModal() {
-    setNewGame({ name: '', selector: '', exe: '', windowClass: '', windowMatchPriority: 0, scene: '', icon_path: '' });
-    setAutoCreateScene(false);
-    setCreateMode('scratch');
-    setCapturePref('game_capture');
-    setTemplateScene('');
-    setObsScenes([]);
-    setScenesError(null);
-    setSceneCreateStatus(null);
   }
 
   /** Collect all scene names from games that have a scene set. */
@@ -728,9 +738,8 @@ export default function GamesPage() {
     navigate('/settings');
   }
 
-  const [scriptWarning, setScriptWarning] = useState(null);
 
-  async function toggleWatcher() {
+  const toggleWatcher = useCallback(async () => {
     try {
       if (watcherStatus.running) {
         await api.stopWatcher();
@@ -746,7 +755,10 @@ export default function GamesPage() {
       showToast(err?.message || 'Failed to toggle watcher');
     }
     loadWatcherStatus();
-  }
+  }, [watcherStatus.running, showToast]);
+
+  const handleDismissWarning = useCallback(() => setScriptWarning(null), [setScriptWarning]);
+  const handleGoToSettings = useCallback(() => navigate('/settings'), [navigate]);
 
   return (
     <>
@@ -757,7 +769,7 @@ export default function GamesPage() {
 
       <div className="page-body">
         {/* Watcher Status Card */}
-        <WatcherStatusCard status={watcherStatus} onToggle={toggleWatcher} scriptWarning={scriptWarning} onDismissWarning={() => setScriptWarning(null)} onGoToSettings={() => navigate('/settings')} />
+        <WatcherStatusCard status={watcherStatus} onToggle={toggleWatcher} scriptWarning={scriptWarning} onDismissWarning={handleDismissWarning} onGoToSettings={handleGoToSettings} />
 
         <div className="card" style={{ marginTop: 16 }}>
           <div className="card-header">
@@ -1624,7 +1636,7 @@ function parseGameState(gameState) {
   return { label: gameState, color: 'var(--text-muted)' };
 }
 
-function WatcherStatusCard({ status, onToggle, scriptWarning, onDismissWarning, onGoToSettings }) {
+const WatcherStatusCard = memo(function WatcherStatusCard({ status, onToggle, scriptWarning, onDismissWarning, onGoToSettings }) {
   const state = parseGameState(status.gameState);
 
   return (
@@ -1705,7 +1717,7 @@ function WatcherStatusCard({ status, onToggle, scriptWarning, onDismissWarning, 
       </div>
     </div>
   );
-}
+});
 
 /**
  * EditGameModal — allows editing game name, selector, OBS scene, and per-scene audio sources.
