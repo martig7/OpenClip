@@ -13,10 +13,10 @@ function RecordingsPage() {
   const [toast, setToast] = useState(null)
   const [searchParams, setSearchParams] = useSearchParams()
   const [games, setGames] = useState([])
-  const pendingTimers = useRef([])
+  const toastTimerRef = useRef(null)
 
   useEffect(() => {
-    return () => pendingTimers.current.forEach(clearTimeout)
+    return () => clearTimeout(toastTimerRef.current)
   }, [])
 
   const fetchRecordings = useCallback(async () => {
@@ -50,19 +50,22 @@ function RecordingsPage() {
 
   const handleClipCreated = useCallback((clip) => {
     setToast({ type: 'success', message: `Clip created: ${clip.filename}` })
-    pendingTimers.current.push(setTimeout(() => setToast(null), 3000))
+    clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = setTimeout(() => setToast(null), 3000)
   }, [])
 
   const handleOrganized = useCallback((result) => {
     setToast({ type: 'success', message: `Organized: ${result.filename}` })
-    pendingTimers.current.push(setTimeout(() => setToast(null), 4000))
+    clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = setTimeout(() => setToast(null), 4000)
     setSelectedRecording(null)
     fetchRecordings()
   }, [fetchRecordings])
 
   const handleOrganizeError = useCallback((msg) => {
     setToast({ type: 'error', message: msg })
-    pendingTimers.current.push(setTimeout(() => setToast(null), 5000))
+    clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = setTimeout(() => setToast(null), 5000)
   }, [])
 
   if (loading) {

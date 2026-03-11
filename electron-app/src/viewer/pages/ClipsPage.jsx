@@ -12,10 +12,10 @@ function ClipsPage() {
   const [deleteModal, setDeleteModal] = useState(false)
   const [toast, setToast] = useState(null)
   const [searchParams, setSearchParams] = useSearchParams()
-  const pendingTimers = useRef([])
+  const toastTimerRef = useRef(null)
 
   useEffect(() => {
-    return () => pendingTimers.current.forEach(clearTimeout)
+    return () => clearTimeout(toastTimerRef.current)
   }, [])
 
   const fetchClips = useCallback(async () => {
@@ -56,15 +56,18 @@ function ClipsPage() {
         setSelectedClip(null)
         fetchClips()
         setToast({ type: 'success', message: 'Clip deleted' })
-        pendingTimers.current.push(setTimeout(() => setToast(null), 3000))
+        clearTimeout(toastTimerRef.current)
+        toastTimerRef.current = setTimeout(() => setToast(null), 3000)
       } else {
         const data = await response.json()
         setToast({ type: 'error', message: `Failed to delete: ${data.error}` })
-        pendingTimers.current.push(setTimeout(() => setToast(null), 3000))
+        clearTimeout(toastTimerRef.current)
+        toastTimerRef.current = setTimeout(() => setToast(null), 3000)
       }
     } catch (error) {
       setToast({ type: 'error', message: `Error: ${error.message}` })
-      pendingTimers.current.push(setTimeout(() => setToast(null), 3000))
+      clearTimeout(toastTimerRef.current)
+      toastTimerRef.current = setTimeout(() => setToast(null), 3000)
     }
 
     setDeleteModal(false)

@@ -28,10 +28,10 @@ export default function EncodingPage() {
   const [settings, setSettings]       = useState(DEFAULT_SETTINGS);
   const [obsRunning, setObsRunning]   = useState(false);
   const [status, setStatus]           = useState({ msg: '', type: '' }); // type: 'ok'|'err'|'warn'
-  const pendingTimers = useRef([]);
+  const statusTimerRef = useRef(null);
 
   useEffect(() => {
-    return () => pendingTimers.current.forEach(clearTimeout);
+    return () => clearTimeout(statusTimerRef.current);
   }, []);
 
   useEffect(() => { load(); }, []);
@@ -77,7 +77,8 @@ export default function EncodingPage() {
     try {
       await api.setEncodingSettings(profileDir, settings);
       setStatus({ msg: 'Settings saved successfully.', type: 'ok' });
-      pendingTimers.current.push(setTimeout(() => setStatus({ msg: '', type: '' }), 3000));
+      clearTimeout(statusTimerRef.current);
+      statusTimerRef.current = setTimeout(() => setStatus({ msg: '', type: '' }), 3000);
     } catch (e) {
       setStatus({ msg: `Save failed: ${e.message}`, type: 'err' });
     }

@@ -217,10 +217,10 @@ function StoragePage() {
   const zoomRef = useRef(1)
   const panRef = useRef({ x: 0, y: 0 })
   const dragRef = useRef(null)
-  const pendingTimers = useRef([])
+  const toastTimerRef = useRef(null)
 
   useEffect(() => {
-    return () => pendingTimers.current.forEach(clearTimeout)
+    return () => clearTimeout(toastTimerRef.current)
   }, [])
 
   const fetchStats = useCallback(async () => {
@@ -317,7 +317,8 @@ function StoragePage() {
 
   const showToast = useCallback((type, message) => {
     setToast({ type, message })
-    pendingTimers.current.push(setTimeout(() => setToast(null), 3000))
+    clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = setTimeout(() => setToast(null), 3000)
   }, [])
 
   const toggleSelection = useCallback((path) => {
