@@ -89,7 +89,7 @@ const cache = {
   clips: { data: null, time: 0 },
 };
 
-// Per-date clip count cache: key = `${clipsPath}\x00${gameName}\x00${dateStr}` → maxClipNum.
+// Per-date clip count cache: key = JSON.stringify([clipsPath, gameName, dateStr]) → maxClipNum.
 // Cleared whenever a clip is added or deleted.
 const clipsDateCache = new Map();
 
@@ -113,11 +113,20 @@ function isCacheValid(entry) {
   return entry.data !== null && (Date.now() - entry.time) < CACHE_TTL_MS;
 }
 
+function normalizePathForComparison(p) {
+  if (!p) return '';
+  let normalized = path.normalize(path.resolve(p));
+  if (process.platform === 'win32') normalized = normalized.toLowerCase();
+  return normalized;
+}
+
 // Returns true when filePath lives inside the Clips directory.
 function isClipPath(filePath) {
   const clipsPath = getClipsPath();
-  if (!clipsPath) return false;
-  const rel = path.relative(clipsPath, filePath);
+  if (!clipsPath || !filePath) return false;
+  const normClips = normalizePathForComparison(clipsPath);
+  const normFile  = normalizePathForComparison(filePath);
+  const rel = path.relative(normClips, normFile);
   return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
 }
 
@@ -452,6 +461,7 @@ module.exports = {
   getOrganizedPath,
   getObsPath,
   getClipsPath,
+  isClipPath,
   scanRecordings,
   scanClips,
   countClipsForDate,

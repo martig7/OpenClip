@@ -297,7 +297,39 @@ describe('scoped cache invalidation', () => {
   })
 })
 
-// ─── createClip ───────────────────────────────────────────────────
+// ─── isClipPath ───────────────────────────────────────────────────
+describe('isClipPath', () => {
+  it('returns true for a file inside the clips directory', () => {
+    const fp = path.join(clipsDir, 'Halo Clip 2025-01-15 #1.mp4')
+    expect(service.isClipPath(fp)).toBe(true)
+  })
+
+  it('returns false for a file in the recordings directory', () => {
+    const fp = path.join(destDir, 'Halo', 'Halo Session 2025-01-15 #1.mp4')
+    expect(service.isClipPath(fp)).toBe(false)
+  })
+
+  it('returns false for the clips directory itself', () => {
+    expect(service.isClipPath(clipsDir)).toBe(false)
+  })
+
+  it('returns false when no clips path is configured', () => {
+    store._data.settings.destinationPath = ''
+    store._data.settings.obsRecordingPath = ''
+    const fp = path.join(clipsDir, 'Halo Clip 2025-01-15 #1.mp4')
+    expect(service.isClipPath(fp)).toBe(false)
+  })
+
+  it('returns false for path traversal attempts above clips dir', () => {
+    const fp = path.join(clipsDir, '..', 'Halo', 'Halo Session 2025-01-15 #1.mp4')
+    expect(service.isClipPath(fp)).toBe(false)
+  })
+
+  it('handles non-normalized paths with redundant separators', () => {
+    const fp = clipsDir + path.sep + path.sep + 'Halo Clip 2025-01-15 #1.mp4'
+    expect(service.isClipPath(fp)).toBe(true)
+  })
+})
 describe('createClip', () => {
   beforeEach(async () => {
     const cp = await import('child_process')

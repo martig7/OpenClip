@@ -166,6 +166,7 @@ async function processAutoClips(store, gameName, recordingDir) {
         '-y',
       ], { timeout: 60000 });
       clipNum++;
+      service.invalidateClipsCache();
     } catch {
       // Skip failed clips
     }
