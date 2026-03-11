@@ -43,7 +43,8 @@ function AudioWaveformTrack({ peaks, duration, viewStart, visibleDuration, isSel
   }, [peaks, duration, viewStart, visibleDuration, isSelected])
 
   useEffect(() => {
-    draw()
+    const id = setTimeout(() => draw(), 50)
+    return () => clearTimeout(id)
   }, [draw])
 
   // Redraw on container resize

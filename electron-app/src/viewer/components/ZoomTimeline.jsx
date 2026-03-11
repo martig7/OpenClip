@@ -1,6 +1,11 @@
 import { useRef, useState, useCallback, useEffect, useMemo } from 'react'
 import AudioWaveformTrack from './AudioWaveformTrack'
 
+const MIN_ZOOM = 1
+const MAX_ZOOM = 40
+const TIMELINE_HEIGHT = 64
+const TIMELINE_TRACK_STYLE = { height: TIMELINE_HEIGHT }
+
 function ZoomTimeline({
   currentTime,
   duration,
@@ -25,10 +30,6 @@ function ZoomTimeline({
   const [dragType, setDragType] = useState(null) // 'seek', 'clipStart', 'clipEnd', 'pan'
   const [panStartX, setPanStartX] = useState(0)
   const [panStartCenter, setPanStartCenter] = useState(0)
-
-  const MIN_ZOOM = 1
-  const MAX_ZOOM = 40
-  const TIMELINE_HEIGHT = 64
 
   // Initialize view center to clip region
   useEffect(() => {
@@ -281,7 +282,7 @@ function ZoomTimeline({
       <div
         ref={containerRef}
         className="zoom-timeline-track"
-        style={{ height: TIMELINE_HEIGHT }}
+        style={TIMELINE_TRACK_STYLE}
         onMouseDown={(e) => {
           // Middle mouse or if holding space: pan
           if (e.button === 1) {

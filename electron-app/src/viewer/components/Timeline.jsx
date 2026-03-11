@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState, useEffect } from 'react'
+import { useRef, useCallback, useState, useEffect, useMemo } from 'react'
 
 function Timeline({
   currentTime,
@@ -72,6 +72,15 @@ function Timeline({
   const clipStartPercent = duration ? (clipStart / duration) * 100 : 0
   const clipEndPercent = duration ? (clipEnd / duration) * 100 : 0
 
+  const progressStyle = useMemo(() => ({ width: `${progressPercent}%` }), [progressPercent])
+  const handleStyle = useMemo(() => ({ left: `${progressPercent}%` }), [progressPercent])
+  const clipStartStyle = useMemo(() => ({ left: `${clipStartPercent}%` }), [clipStartPercent])
+  const clipEndStyle = useMemo(() => ({ left: `${clipEndPercent}%` }), [clipEndPercent])
+  const clipRegionStyle = useMemo(
+    () => ({ left: `${clipStartPercent}%`, width: `${clipEndPercent - clipStartPercent}%` }),
+    [clipStartPercent, clipEndPercent]
+  )
+
   return (
     <div
       ref={timelineRef}
@@ -81,7 +90,7 @@ function Timeline({
       {/* Progress bar */}
       <div
         className="timeline-progress"
-        style={{ width: `${progressPercent}%` }}
+        style={progressStyle}
       />
 
       {/* Clip region (when in clip mode) */}
@@ -89,14 +98,11 @@ function Timeline({
         <>
           <div
             className="clip-region"
-            style={{
-              left: `${clipStartPercent}%`,
-              width: `${clipEndPercent - clipStartPercent}%`
-            }}
+            style={clipRegionStyle}
           />
           <div
             className="clip-handle start"
-            style={{ left: `${clipStartPercent}%` }}
+            style={clipStartStyle}
             onMouseDown={(e) => {
               e.stopPropagation()
               handleMouseDown(e, 'clipStart')
@@ -104,7 +110,7 @@ function Timeline({
           />
           <div
             className="clip-handle end"
-            style={{ left: `${clipEndPercent}%` }}
+            style={clipEndStyle}
             onMouseDown={(e) => {
               e.stopPropagation()
               handleMouseDown(e, 'clipEnd')
@@ -133,7 +139,7 @@ function Timeline({
       {/* Current time handle */}
       <div
         className="timeline-handle"
-        style={{ left: `${progressPercent}%` }}
+        style={handleStyle}
       />
     </div>
   )
