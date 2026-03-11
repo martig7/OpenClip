@@ -28,7 +28,16 @@ function saveMarkers(data) {
   } catch { return false; }
 }
 
+// Cache for getVideoDuration keyed by "filePath:mtime"; bounded to prevent unbounded memory growth
+const _videoDurationCache = new Map();
+const VIDEO_DURATION_CACHE_MAX = 500;
+
 function getVideoDuration(filePath) {
+  let mtime = 0;
+  try { mtime = fs.statSync(filePath).mtimeMs; } catch { /* file may not exist */ }
+  const cacheKey = `${filePath}:${mtime}`;
+  if (_videoDurationCache.has(cacheKey)) return Promise.resolve(_videoDurationCache.get(cacheKey));
+
   return new Promise((resolve) => {
     execFile(
       FFPROBE_PATH,
@@ -36,13 +45,30 @@ function getVideoDuration(filePath) {
       { encoding: 'utf-8', timeout: 10000 },
       (error, stdout) => {
         if (error) return resolve(null);
-        resolve(parseFloat(stdout.trim()) || null);
+        const duration = parseFloat(stdout.trim()) || null;
+        if (duration !== null) {
+          if (_videoDurationCache.size >= VIDEO_DURATION_CACHE_MAX) {
+            _videoDurationCache.delete(_videoDurationCache.keys().next().value);
+          }
+          _videoDurationCache.set(cacheKey, duration);
+        }
+        resolve(duration);
       }
     );
   });
 }
 
+// Cache for getDiskUsage: keyed by drive letter (supports multiple drives), 30-second TTL
+const _diskUsageCache = new Map(); // driveKey -> { data, ts }
+const DISK_USAGE_TTL_MS = 30000;
+
 function getDiskUsage(dirPath) {
+  const parsed = path.win32.parse(dirPath);
+  const driveKey = (parsed.root || dirPath).toLowerCase(); // e.g. "c:\", "\\server\share\"
+  const now = Date.now();
+  const cached = _diskUsageCache.get(driveKey);
+  if (cached && now - cached.ts < DISK_USAGE_TTL_MS) return Promise.resolve(cached.data);
+
   return new Promise((resolve) => {
     exec(
       `powershell -Command "(Get-PSDrive -Name (Split-Path '${dirPath.replace(/'/g, "''")}' -Qualifier).TrimEnd(':')) | Select-Object Used, Free | ConvertTo-Json"`,
@@ -52,13 +78,15 @@ function getDiskUsage(dirPath) {
         try {
           const d = JSON.parse(stdout);
           const total = d.Used + d.Free;
-          resolve({
+          const result = {
             total, used: d.Used, free: d.Free,
             total_formatted: formatFileSize(total),
             used_formatted: formatFileSize(d.Used),
             free_formatted: formatFileSize(d.Free),
             percent_used: total > 0 ? (d.Used / total * 100) : 0,
-          });
+          };
+          _diskUsageCache.set(driveKey, { data: result, ts: Date.now() });
+          resolve(result);
         } catch { resolve(null); }
       }
     );
