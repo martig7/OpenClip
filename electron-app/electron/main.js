@@ -1,5 +1,5 @@
 const { app, BrowserWindow, ipcMain, dialog, shell, globalShortcut, protocol, net, clipboard } = require('electron');
-const { autoUpdater } = require('electron-updater');
+const { setupAutoUpdater, registerUpdateHandlers } = require('./autoUpdater');
 
 // Register custom scheme before app is ready (required by Electron)
 // localfile:///C:/path/to/file.png → main process serves the file safely
@@ -804,48 +804,8 @@ ipcMain.handle('recordings:organize', async (_event, { filePath, gameName }) => 
   return organizeSpecificRecording(store, filePath, gameName);
 });
 
-// Auto-updater
-function setupAutoUpdater() {
-  autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true;
-
-  autoUpdater.on('update-available', (info) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('update:available', { version: info.version });
-    }
-  });
-
-  autoUpdater.on('download-progress', (progress) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('update:progress', { percent: Math.round(progress.percent) });
-    }
-  });
-
-  autoUpdater.on('update-downloaded', () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('update:downloaded');
-    }
-  });
-
-  autoUpdater.on('error', (err) => {
-    console.error('[updater] error:', err.message);
-  });
-
-  // Delay check so the UI has time to load
-  setTimeout(() => {
-    try { autoUpdater.checkForUpdates(); } catch (err) {
-      console.error('[updater] check failed:', err.message);
-    }
-  }, 5000);
-}
-
-ipcMain.handle('update:check', () => {
-  try { autoUpdater.checkForUpdates(); } catch {}
-});
-
-ipcMain.handle('update:install', () => {
-  autoUpdater.quitAndInstall();
-});
+// Auto-updater IPC handlers (safe to register before app is ready)
+registerUpdateHandlers(ipcMain);
 
 app.whenReady().then(() => {
   // Serve local filesystem files (e.g. game icons) via localfile:// protocol.
@@ -881,7 +841,7 @@ app.whenReady().then(() => {
   registerHotkey();
 
   // Auto-updater only runs in packaged builds
-  if (app.isPackaged) setupAutoUpdater();
+  if (app.isPackaged) setupAutoUpdater(() => mainWindow);
 
   // Auto-start watcher on startup if configured
   if (store.get('settings.startWatcherOnStartup')) {
