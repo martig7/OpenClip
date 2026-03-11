@@ -93,7 +93,7 @@ function setupGameWatcher(store, onStateChange) {
     }
 
     if (!stopped) {
-      setTimeout(poll, 2000);
+      setTimeout(poll, 5000);
     }
   }
 
@@ -109,9 +109,13 @@ function setupGameWatcher(store, onStateChange) {
   };
 }
 
+let lastWrittenState = null;
 function writeGameState(state) {
   fs.mkdirSync(RUNTIME_DIR, { recursive: true });
-  fs.writeFileSync(STATE_FILE, state, 'utf-8');
+  if (state !== lastWrittenState) {
+    fs.writeFile(STATE_FILE, state, 'utf-8', (err) => { if (err) log(`Failed to write game state: ${err.message}`); });
+    lastWrittenState = state;
+  }
 }
 
 module.exports = { setupGameWatcher, detectRunningGame };
