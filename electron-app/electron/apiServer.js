@@ -63,7 +63,8 @@ const _diskUsageCache = new Map(); // driveKey -> { data, ts }
 const DISK_USAGE_TTL_MS = 30000;
 
 function getDiskUsage(dirPath) {
-  const driveKey = dirPath.slice(0, 3).toLowerCase(); // e.g. "c:\"
+  const parsed = path.win32.parse(dirPath);
+  const driveKey = (parsed.root || dirPath).toLowerCase(); // e.g. "c:\", "\\server\share\"
   const now = Date.now();
   const cached = _diskUsageCache.get(driveKey);
   if (cached && now - cached.ts < DISK_USAGE_TTL_MS) return Promise.resolve(cached.data);
