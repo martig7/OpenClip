@@ -229,6 +229,7 @@ function StoragePage() {
   const hitIndexRef = useRef(null)      // spatial grid index for O(1) hit-testing
   const tooltipItemRef = useRef(null)   // last hovered item path, used to skip redundant setTooltip calls
   const tooltipRafRef = useRef(null)    // RAF handle for mousemove throttling
+  const listScrollRafRef = useRef(null) // RAF handle for list scroll throttling
   const zoomRef = useRef(1)
   const panRef = useRef({ x: 0, y: 0 })
   const dragRef = useRef(null)
@@ -342,8 +343,15 @@ function StoragePage() {
     setTimeout(() => setToast(null), 3000)
   }, [])
 
+  // RAF-throttled scroll handler: coalesces rapid scroll events to at most one
+  // state update per animation frame, consistent with the mousemove throttle pattern used elsewhere.
   const handleListScroll = useCallback((e) => {
-    setListScrollTop(e.currentTarget.scrollTop)
+    const el = e.currentTarget
+    if (listScrollRafRef.current) return
+    listScrollRafRef.current = requestAnimationFrame(() => {
+      listScrollRafRef.current = null
+      setListScrollTop(el.scrollTop)
+    })
   }, [])
 
   const toggleSelection = useCallback((path) => {
@@ -479,15 +487,34 @@ function StoragePage() {
   // spacer <tr> elements above and below maintain the correct total scroll height.
   const { visibleStart, visibleEnd, paddingTop, paddingBottom } = useMemo(() => {
     if (!listView) return { visibleStart: 0, visibleEnd: 0, paddingTop: 0, paddingBottom: 0 }
-    const start = Math.max(0, Math.floor(listScrollTop / LIST_ROW_HEIGHT) - LIST_OVERSCAN)
-    const end = Math.min(items.length, Math.ceil((listScrollTop + listContainerH) / LIST_ROW_HEIGHT) + LIST_OVERSCAN)
+
+    if (items.length === 0) return { visibleStart: 0, visibleEnd: 0, paddingTop: 0, paddingBottom: 0 }
+
+    const rawStart = Math.max(0, Math.floor(listScrollTop / LIST_ROW_HEIGHT) - LIST_OVERSCAN)
+    const rawEnd = Math.ceil((listScrollTop + listContainerH) / LIST_ROW_HEIGHT) + LIST_OVERSCAN
+
+    // Clamp start within [0, items.length - 1] in case listScrollTop is stale after a filter change
+    const clampedStart = Math.min(rawStart, Math.max(0, items.length - 1))
+    // Ensure end is at least start and at most items.length
+    const clampedEnd = Math.min(items.length, Math.max(clampedStart, rawEnd))
+
     return {
-      visibleStart: start,
-      visibleEnd: end,
-      paddingTop: start * LIST_ROW_HEIGHT,
-      paddingBottom: Math.max(0, items.length - end) * LIST_ROW_HEIGHT,
+      visibleStart: clampedStart,
+      visibleEnd: clampedEnd,
+      paddingTop: clampedStart * LIST_ROW_HEIGHT,
+      paddingBottom: Math.max(0, items.length - clampedEnd) * LIST_ROW_HEIGHT,
     }
   }, [listView, listScrollTop, listContainerH, items.length])
+
+  // When items changes (filter/sort) the browser may clamp the container's scrollTop, but
+  // listScrollTop state won't know about it until the next scroll event. Read it directly so
+  // the virtual window is correct immediately after a filter/sort change.
+  useEffect(() => {
+    if (!listView) return
+    const el = listContainerRef.current
+    if (!el) return
+    setListScrollTop(el.scrollTop)
+  }, [listView, items])
 
   const formatBytes = (bytes) => {
     if (!bytes) return '0 B'
