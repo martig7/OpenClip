@@ -405,8 +405,11 @@ function startApiServer(appStore) {
             ]);
 
             req.on('close', () => ffmpegProc.kill());
-            const killTimer = setTimeout(() => ffmpegProc.kill('SIGKILL'), 30_000);
-            ffmpegProc.on('close', () => clearTimeout(killTimer));
+            const killTimer = setTimeout(() => { try { ffmpegProc.kill('SIGKILL'); } catch {} }, 30_000);
+            if (typeof killTimer.unref === 'function') killTimer.unref();
+            const clearKillTimer = () => clearTimeout(killTimer);
+            ffmpegProc.on('close', clearKillTimer);
+            ffmpegProc.on('error', clearKillTimer);
             ffmpegProc.stderr.resume(); // drain stderr so the pipe buffer never fills
 
             const chunks = [];
