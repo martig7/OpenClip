@@ -182,6 +182,22 @@ describe('countClipsForDate', () => {
   it('returns 0 for non-existent directory', () => {
     expect(service.countClipsForDate(path.join(tmpDir, 'nodir'), 'Halo', '2025-01-15')).toBe(0)
   })
+
+  it('returns cached result on repeated calls without disk changes', () => {
+    makeFile(path.join(clipsDir, 'Halo Clip 2025-01-15 #1.mp4'))
+    const first = service.countClipsForDate(clipsDir, 'Halo', '2025-01-15')
+    // Adding a file after the first call should not be visible without cache invalidation
+    makeFile(path.join(clipsDir, 'Halo Clip 2025-01-15 #2.mp4'))
+    expect(service.countClipsForDate(clipsDir, 'Halo', '2025-01-15')).toBe(first)
+  })
+
+  it('re-reads disk after invalidateClipsCache clears the date cache', () => {
+    makeFile(path.join(clipsDir, 'Halo Clip 2025-01-15 #1.mp4'))
+    expect(service.countClipsForDate(clipsDir, 'Halo', '2025-01-15')).toBe(1)
+    makeFile(path.join(clipsDir, 'Halo Clip 2025-01-15 #2.mp4'))
+    service.invalidateClipsCache()
+    expect(service.countClipsForDate(clipsDir, 'Halo', '2025-01-15')).toBe(2)
+  })
 })
 
 // ─── deleteFile ───────────────────────────────────────────────────
@@ -216,7 +232,104 @@ describe('deleteFile', () => {
   })
 })
 
-// ─── createClip ───────────────────────────────────────────────────
+// ─── scanRecordings folder cap ────────────────────────────────────
+describe('scanRecordings folder file cap', () => {
+  it('caps files per game folder at MAX_FILES_PER_FOLDER (500) and logs a warning', () => {
+    const gameDir = path.join(destDir, 'Halo')
+    fs.mkdirSync(gameDir, { recursive: true })
+    // Create 502 video files — only the first 500 should be scanned
+    for (let i = 1; i <= 502; i++) {
+      fs.writeFileSync(path.join(gameDir, `Halo Session 2025-01-15 #${i}.mp4`), Buffer.alloc(1))
+    }
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    service.invalidateCache()
+    const recs = service.scanRecordings()
+    expect(recs.filter(r => r.game_name === 'Halo').length).toBe(500)
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('capping scan at 500'))
+    warnSpy.mockRestore()
+  })
+})
+
+// ─── scoped cache invalidation ────────────────────────────────────
+describe('scoped cache invalidation', () => {
+  it('invalidateRecordingsCache does not clear the clips cache', () => {
+    makeFile(path.join(clipsDir, 'Halo Clip 2025-01-15 #1.mp4'))
+    const clips1 = service.scanClips()
+    service.invalidateRecordingsCache()
+    expect(service.scanClips()).toBe(clips1) // same reference — clips cache intact
+  })
+
+  it('invalidateClipsCache does not clear the recordings cache', () => {
+    makeFile(path.join(destDir, 'Halo', 'Halo Session 2025-01-15 #1.mp4'))
+    const recs1 = service.scanRecordings()
+    service.invalidateClipsCache()
+    expect(service.scanRecordings()).toBe(recs1) // same reference — recordings cache intact
+  })
+
+  it('deleteFile of a recording only invalidates the recordings cache', () => {
+    const clipFp = path.join(clipsDir, 'Halo Clip 2025-01-15 #1.mp4')
+    const recFp  = path.join(destDir, 'Halo', 'Halo Session 2025-01-15 #1.mp4')
+    makeFile(clipFp)
+    makeFile(recFp)
+    service.invalidateCache()
+    const clips1 = service.scanClips()
+    service.scanRecordings()
+    service.deleteFile(recFp)
+    // Clips cache should be untouched (same reference)
+    expect(service.scanClips()).toBe(clips1)
+    // Recordings cache was cleared so the deleted file is gone
+    expect(service.scanRecordings().every(r => r.path !== recFp)).toBe(true)
+  })
+
+  it('deleteFile of a clip only invalidates the clips cache', () => {
+    const clipFp = path.join(clipsDir, 'Halo Clip 2025-01-15 #1.mp4')
+    const recFp  = path.join(destDir, 'Halo', 'Halo Session 2025-01-15 #1.mp4')
+    makeFile(clipFp)
+    makeFile(recFp)
+    service.invalidateCache()
+    const recs1 = service.scanRecordings()
+    service.scanClips()
+    service.deleteFile(clipFp)
+    // Recordings cache should be untouched (same reference)
+    expect(service.scanRecordings()).toBe(recs1)
+    // Clips cache was cleared so the deleted clip is gone
+    expect(service.scanClips().every(c => c.path !== clipFp)).toBe(true)
+  })
+})
+
+// ─── isClipPath ───────────────────────────────────────────────────
+describe('isClipPath', () => {
+  it('returns true for a file inside the clips directory', () => {
+    const fp = path.join(clipsDir, 'Halo Clip 2025-01-15 #1.mp4')
+    expect(service.isClipPath(fp)).toBe(true)
+  })
+
+  it('returns false for a file in the recordings directory', () => {
+    const fp = path.join(destDir, 'Halo', 'Halo Session 2025-01-15 #1.mp4')
+    expect(service.isClipPath(fp)).toBe(false)
+  })
+
+  it('returns false for the clips directory itself', () => {
+    expect(service.isClipPath(clipsDir)).toBe(false)
+  })
+
+  it('returns false when no clips path is configured', () => {
+    store._data.settings.destinationPath = ''
+    store._data.settings.obsRecordingPath = ''
+    const fp = path.join(clipsDir, 'Halo Clip 2025-01-15 #1.mp4')
+    expect(service.isClipPath(fp)).toBe(false)
+  })
+
+  it('returns false for path traversal attempts above clips dir', () => {
+    const fp = path.join(clipsDir, '..', 'Halo', 'Halo Session 2025-01-15 #1.mp4')
+    expect(service.isClipPath(fp)).toBe(false)
+  })
+
+  it('handles non-normalized paths with redundant separators', () => {
+    const fp = clipsDir + path.sep + path.sep + 'Halo Clip 2025-01-15 #1.mp4'
+    expect(service.isClipPath(fp)).toBe(true)
+  })
+})
 describe('createClip', () => {
   beforeEach(async () => {
     const cp = await import('child_process')
