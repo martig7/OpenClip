@@ -672,6 +672,10 @@ export default function GamesPage() {
   async function saveEditModal() {
     if (!editGameModal) return;
     const { game } = editGameModal;
+    if (!game.name || !game.selector) {
+      showToast('Game name and window selector are required.');
+      return;
+    }
     const payload = {
       name: game.name,
       selector: game.selector,
