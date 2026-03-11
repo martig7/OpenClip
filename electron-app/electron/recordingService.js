@@ -77,6 +77,10 @@ function getClipsPath() {
   return org ? path.join(org, 'Clips') : null;
 }
 
+// --- Scan limits ---
+
+const MAX_FILES_PER_FOLDER = 500;
+
 // --- Cache ---
 
 const CACHE_TTL_MS = 5000; // 5 seconds
@@ -85,15 +89,36 @@ const cache = {
   clips: { data: null, time: 0 },
 };
 
-function invalidateCache() {
+// Per-date clip count cache: key = `${clipsPath}\x00${gameName}\x00${dateStr}` → maxClipNum.
+// Cleared whenever a clip is added or deleted.
+const clipsDateCache = new Map();
+
+function invalidateRecordingsCache() {
   cache.recordings.data = null;
   cache.recordings.time = 0;
+}
+
+function invalidateClipsCache() {
   cache.clips.data = null;
   cache.clips.time = 0;
+  clipsDateCache.clear();
+}
+
+function invalidateCache() {
+  invalidateRecordingsCache();
+  invalidateClipsCache();
 }
 
 function isCacheValid(entry) {
   return entry.data !== null && (Date.now() - entry.time) < CACHE_TTL_MS;
+}
+
+// Returns true when filePath lives inside the Clips directory.
+function isClipPath(filePath) {
+  const clipsPath = getClipsPath();
+  if (!clipsPath) return false;
+  const rel = path.relative(clipsPath, filePath);
+  return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
 }
 
 // --- Scanning ---
@@ -114,7 +139,11 @@ function scanRecordings() {
           ? entry.name.split(' - Week of')[0]
           : entry.name;
         try {
-          for (const file of fs.readdirSync(folderPath)) {
+          const folderFiles = fs.readdirSync(folderPath);
+          if (folderFiles.length > MAX_FILES_PER_FOLDER) {
+            console.warn(`[recordingService] Folder "${entry.name}" has ${folderFiles.length} files; capping scan at ${MAX_FILES_PER_FOLDER}.`);
+          }
+          for (const file of folderFiles.slice(0, MAX_FILES_PER_FOLDER)) {
             if (!isVideoFile(file)) continue;
             const fp = path.join(folderPath, file);
             if (activeRemuxPaths.has(path.normalize(fp).toLowerCase())) continue;
@@ -172,6 +201,9 @@ function scanClips() {
 }
 
 function countClipsForDate(clipsPath, gameName, dateStr) {
+  const cacheKey = JSON.stringify([clipsPath, gameName, dateStr]);
+  if (clipsDateCache.has(cacheKey)) return clipsDateCache.get(cacheKey);
+
   const pattern = `${gameName} Clip ${dateStr} #`;
   let count = 0;
   try {
@@ -182,6 +214,7 @@ function countClipsForDate(clipsPath, gameName, dateStr) {
       }
     }
   } catch {}
+  clipsDateCache.set(cacheKey, count);
   return count;
 }
 
@@ -249,8 +282,7 @@ function createClip(sourcePath, startTime, endTime, gameName = 'Unknown', audioT
       (error, _stdout, stderr) => {
         activeFFmpeg.delete(proc);
         if (error) return reject(new Error(`FFmpeg error: ${stderr || error.message}`));
-        cache.clips.data = null;
-        cache.clips.time = 0;
+        invalidateClipsCache();
         const info = parseRecordingInfo(outputPath, gameName);
         resolve(info || { filename: outputFilename, path: outputPath });
       }
@@ -263,7 +295,11 @@ function deleteFile(filePath) {
   try {
     fs.unlinkSync(filePath);
     try { fs.unlinkSync(filePath + '.tracks.json'); } catch {}
-    invalidateCache();
+    if (isClipPath(filePath)) {
+      invalidateClipsCache();
+    } else {
+      invalidateRecordingsCache();
+    }
     return { success: true };
   } catch (e) {
     if (e.code === 'ENOENT') return { error: 'Not found', status: 404 };
@@ -330,7 +366,11 @@ function reencodeVideo(sourcePath, { codec = 'h265', crf = 23, preset = 'medium'
           }
         }
 
-        invalidateCache();
+        if (isClipPath(sourcePath)) {
+          invalidateClipsCache();
+        } else {
+          invalidateRecordingsCache();
+        }
         const stat = fs.statSync(finalPath);
         const savings = originalSize > 0 ? originalSize - stat.size : 0;
         resolve({
@@ -406,6 +446,8 @@ function runAutoDelete() {
 module.exports = {
   init,
   invalidateCache,
+  invalidateRecordingsCache,
+  invalidateClipsCache,
   parseRecordingInfo,
   getOrganizedPath,
   getObsPath,

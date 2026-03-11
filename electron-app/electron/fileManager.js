@@ -85,11 +85,11 @@ async function organizeRecordings(store, gameName) {
         } catch {}
       } finally {
         service.unmarkRemuxing(src, dest);
-        service.invalidateCache();
+        service.invalidateRecordingsCache();
       }
     } else {
       fs.renameSync(src, dest);
-      service.invalidateCache();
+      service.invalidateRecordingsCache();
     }
   }
 
@@ -309,7 +309,7 @@ async function organizeSpecificRecording(store, filePath, gameName) {
       }
     } finally {
       service.unmarkRemuxing(filePath, dest);
-      service.invalidateCache();
+      service.invalidateRecordingsCache();
     }
     return { success: true, path: finalPath, filename: path.basename(finalPath) };
   } else {
@@ -318,7 +318,7 @@ async function organizeSpecificRecording(store, filePath, gameName) {
     } catch (err) {
       throw new Error(`Could not move file (it may still be open by OBS): ${err.message}`);
     }
-    service.invalidateCache();
+    service.invalidateRecordingsCache();
     return { success: true, path: dest, filename: destFilename };
   }
 }
