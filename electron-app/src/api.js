@@ -66,6 +66,7 @@ const mockApi = {
   onUpdateAvailable: () => noop,
   onUpdateProgress: () => noop,
   onUpdateDownloaded: () => noop,
+  onUpdateError: () => noop,
 };
 
 const api = window.api || mockApi;
