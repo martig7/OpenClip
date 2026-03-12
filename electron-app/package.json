@@ -99,6 +99,7 @@
       "signAndEditExecutable": true
     },
     "nsis": {
+      "artifactName": "Open-Clip-Setup-${version}.${ext}",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,

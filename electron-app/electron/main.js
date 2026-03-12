@@ -1,5 +1,5 @@
 const { app, BrowserWindow, ipcMain, dialog, shell, globalShortcut, protocol, net, clipboard } = require('electron');
-const { setupAutoUpdater, registerUpdateHandlers } = require('./autoUpdater');
+const { setupAutoUpdater, setupDevAutoUpdater, devCheckAndDownload, registerUpdateHandlers } = require('./autoUpdater');
 
 // Register custom scheme before app is ready (required by Electron)
 // localfile:///C:/path/to/file.png → main process serves the file safely
@@ -1074,7 +1074,7 @@ ipcMain.handle('recordings:organize', async (_event, { filePath, gameName }) => 
 });
 
 // Auto-updater IPC handlers (safe to register before app is ready)
-registerUpdateHandlers(ipcMain);
+registerUpdateHandlers(ipcMain, () => mainWindow);
 
 app.whenReady().then(() => {
   // Serve local filesystem files (e.g. game icons) via localfile:// protocol.
@@ -1109,8 +1109,14 @@ app.whenReady().then(() => {
   createWindow();
   registerHotkey();
 
-  // Auto-updater only runs in packaged builds
-  if (app.isPackaged) setupAutoUpdater(() => mainWindow);
+  // In production, run the full auto-updater (checks, downloads, and installs on quit).
+  // In dev, wire up events and settings so a manual check triggers a real check+download
+  // against GitHub releases, but stops short of installing.
+  if (app.isPackaged) {
+    setupAutoUpdater(() => mainWindow);
+  } else {
+    setupDevAutoUpdater(() => mainWindow);
+  }
 
   // Auto-start watcher on startup if configured
   if (store.get('settings.startWatcherOnStartup')) {
