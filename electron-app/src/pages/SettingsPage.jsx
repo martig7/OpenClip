@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { FolderOpen, RefreshCw, Copy, Save, Wand2, Download } from 'lucide-react';
+import { FolderOpen, RefreshCw, Copy, Save, Wand2, Download, Package, Trash2, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 import api from '../api';
 import OnboardingModal from '../components/OnboardingModal';
 
@@ -112,9 +112,15 @@ export default function SettingsPage() {
   const [showWizard, setShowWizard] = useState(false);
   const [updateStatus, setUpdateStatus] = useState(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [pluginInstalled, setPluginInstalled] = useState(null);
+  const [pluginBusy, setPluginBusy] = useState(false);
+  const [pluginMsg, setPluginMsg] = useState(null); // { ok: bool, text: string }
+  const [obsInstallPath, setObsInstallPath] = useState('');
 
   useEffect(() => {
     loadSettings();
+    api.isOBSPluginRegistered().then(setPluginInstalled);
+    api.getOBSInstallPath().then(p => setObsInstallPath(p || ''));
   }, []);
 
   useEffect(() => {
@@ -179,6 +185,34 @@ export default function SettingsPage() {
   function showToast(msg) {
     setToast(msg);
     setTimeout(() => setToast(null), 4000);
+  }
+
+  async function installPlugin() {
+    setPluginBusy(true);
+    setPluginMsg(null);
+    const savedPath = obsInstallPath.trim() || null;
+    if (savedPath) await api.setOBSInstallPath(savedPath);
+    const result = await api.installOBSPlugin(savedPath);
+    if (result?.success) {
+      setPluginInstalled(true);
+      setPluginMsg({ ok: true, text: 'Plugin installed. Restart OBS to apply.' });
+    } else {
+      setPluginMsg({ ok: false, text: result?.message || 'Installation failed.' });
+    }
+    setPluginBusy(false);
+  }
+
+  async function removePlugin() {
+    setPluginBusy(true);
+    setPluginMsg(null);
+    const result = await api.removeOBSPlugin();
+    if (result?.success) {
+      setPluginInstalled(false);
+      setPluginMsg({ ok: true, text: 'Plugin removed. Restart OBS to apply.' });
+    } else {
+      setPluginMsg({ ok: false, text: result?.message || 'Removal failed.' });
+    }
+    setPluginBusy(false);
   }
 
   async function checkForUpdate() {
@@ -423,6 +457,89 @@ export default function SettingsPage() {
               </div>
             </>
           )}
+        </div>
+
+        {/* OBS Plugin */}
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-title">OBS Plugin</div>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 12px' }}>
+            The OpenClip native plugin controls recording and scene management inside OBS.
+          </p>
+
+          <div className="form-group" style={{ marginBottom: 12 }}>
+            <label className="form-label">OBS Install Folder</label>
+            <div className="form-input-row">
+              <input
+                className="form-input"
+                value={obsInstallPath}
+                onChange={e => setObsInstallPath(e.target.value)}
+                placeholder="e.g. C:\Program Files\obs-studio"
+              />
+              <button
+                className="btn btn-secondary btn-sm"
+                title="Auto-detect"
+                onClick={async () => {
+                  const p = await api.detectOBSInstallPath();
+                  if (p) setObsInstallPath(p);
+                }}
+              >
+                <RefreshCw size={13} />
+              </button>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={async () => {
+                  const dir = await api.openDirectoryDialog();
+                  if (dir) setObsInstallPath(dir);
+                }}
+              >
+                <FolderOpen size={13} />
+              </button>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={installPlugin}
+              disabled={pluginBusy}
+            >
+              {pluginBusy && !pluginInstalled
+                ? <Loader size={13} style={{ animation: 'spin 1s linear infinite' }} />
+                : <Package size={13} />}
+              {pluginInstalled ? 'Reinstall Plugin' : 'Install Plugin'}
+            </button>
+            {pluginInstalled && (
+              <button
+                className="btn btn-danger btn-sm"
+                onClick={removePlugin}
+                disabled={pluginBusy}
+              >
+                {pluginBusy
+                  ? <Loader size={13} style={{ animation: 'spin 1s linear infinite' }} />
+                  : <Trash2 size={13} />}
+                Remove Plugin
+              </button>
+            )}
+            {pluginMsg && (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: pluginMsg.ok ? 'var(--text-muted)' : 'var(--color-error, #e55)' }}>
+                {pluginMsg.ok ? <CheckCircle size={13} /> : <AlertCircle size={13} />}
+                {pluginMsg.text}
+              </span>
+            )}
+            {pluginInstalled === null && (
+              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                <Loader size={13} style={{ animation: 'spin 1s linear infinite', verticalAlign: 'middle' }} /> Checking…
+              </span>
+            )}
+            {pluginInstalled === false && !pluginMsg && (
+              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Not installed</span>
+            )}
+            {pluginInstalled === true && !pluginMsg && (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text-muted)' }}>
+                <CheckCircle size={13} /> Installed
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Updates */}

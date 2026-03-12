@@ -41,3 +41,5 @@ obs-plugin/tools/cmake
 
 # OBS plugin build directory (CMake/MSBuild artifacts)
 obs-plugin/build/
+
+.vscode/

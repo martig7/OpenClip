@@ -97,6 +97,7 @@ contextBridge.exposeInMainWorld('api', {
   isOnboardingComplete: () => ipcRenderer.invoke('onboarding:isComplete'),
   setOnboardingComplete: (v) => ipcRenderer.invoke('onboarding:setComplete', v),
   installOBSPlugin: (obsInstallPath) => ipcRenderer.invoke('obs:install-plugin', obsInstallPath),
+  removeOBSPlugin: () => ipcRenderer.invoke('obs:remove-plugin'),
   detectOBSInstallPath: () => ipcRenderer.invoke('obs:detect-install'),
   setOBSInstallPath: (p) => ipcRenderer.invoke('obs:set-install-path', p),
   getOBSInstallPath: () => ipcRenderer.invoke('obs:get-install-path'),

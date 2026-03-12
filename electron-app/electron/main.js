@@ -847,16 +847,65 @@ ipcMain.handle('obs:get-install-path', () => {
   return store._electron().obsInstallPath || '';
 });
 
-// Auto-install: copy our native OBS plugin DLL into the OBS user plugins directory
-// and register it in OBS's plugin_manager/modules.json so OBS discovers it.
+/**
+ * Run PowerShell lines in an elevated (UAC) process.
+ * Writes a temp .ps1, launches it via Start-Process -Verb RunAs -Wait, and reads
+ * a result file the elevated script writes.  Returns { success, message? }.
+ */
+function runElevated(psLines) {
+  const os = require('os');
+  const { execSync } = require('child_process');
+  const id = Date.now();
+  const scriptPath = path.join(os.tmpdir(), `openclip-install-${id}.ps1`);
+  const resultPath = path.join(os.tmpdir(), `openclip-result-${id}.txt`);
+  const esc = p => p.replace(/'/g, "''"); // PS single-quote escape
+
+  const script = [
+    'try {',
+    ...psLines.map(l => `  ${l}`),
+    `  Set-Content -Path '${esc(resultPath)}' -Value 'ok' -Encoding UTF8`,
+    '} catch {',
+    `  Set-Content -Path '${esc(resultPath)}' -Value $_.Exception.Message -Encoding UTF8`,
+    '}',
+  ].join('\r\n');
+
+  fs.writeFileSync(scriptPath, script, 'utf-8');
+
+  try {
+    execSync(
+      `powershell -NoProfile -Command "Start-Process powershell -Verb RunAs -Wait -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File','${esc(scriptPath)}')"`,
+      { stdio: 'pipe', windowsHide: true }
+    );
+  } catch {
+    return { success: false, message: 'Administrator permission was denied.' };
+  } finally {
+    try { fs.rmSync(scriptPath, { force: true }); } catch {}
+  }
+
+  try {
+    const result = fs.readFileSync(resultPath, 'utf-8').trim();
+    fs.rmSync(resultPath, { force: true });
+    if (result === 'ok') return { success: true };
+    return { success: false, message: result };
+  } catch {
+    return { success: false, message: 'Elevated installer did not produce a result — UAC may have been cancelled.' };
+  }
+}
+
+// Auto-install: copy the OBS plugin DLL to both the system obs-plugins\64bit folder
+// (auto-discovered by OBS) and the per-user AppData path (for OBS v28+ per-user support).
+// Writing to Program Files requires elevation; we try direct copy first and fall back to UAC.
 ipcMain.handle('obs:install-plugin', (_event, obsInstallPath) => {
   try {
+    if (!obsInstallPath || !path.isAbsolute(obsInstallPath)) {
+      return { success: false, message: 'OBS install folder is required. Set it in Settings before installing.' };
+    }
+
     // Locate the plugin DLL bundled with the app
     let dllSrc;
     if (app.isPackaged) {
       dllSrc = path.join(process.resourcesPath, 'obs-plugin', PLUGIN_DLL_NAME);
     } else {
-      // Dev mode: look for built DLL or fall back to resources
       const devBuild = path.join(__dirname, '..', '..', 'obs-plugin', 'build', 'Release', PLUGIN_DLL_NAME);
       const resBuild = path.join(__dirname, '..', 'resources', 'obs-plugin', PLUGIN_DLL_NAME);
       if (fs.existsSync(devBuild)) dllSrc = devBuild;
@@ -868,124 +917,153 @@ ipcMain.handle('obs:install-plugin', (_event, obsInstallPath) => {
       return { success: false, message: `Plugin DLL not found at ${dllSrc}` };
     }
 
-    // Determine the install base: use the caller-supplied path when provided and absolute,
-    // otherwise default to ProgramData (system-wide third-party plugin directory).
-    let obsProgramData;
-    if (obsInstallPath && path.isAbsolute(obsInstallPath)) {
-      obsProgramData = obsInstallPath;
-    } else {
-      obsProgramData = path.join(process.env.ProgramData || 'C:\\ProgramData', 'obs-studio');
-    }
+    // ── 1. Program Files (system-wide, auto-discovered by OBS) ───────────────
+    const sysPluginDir = path.join(obsInstallPath, 'obs-plugins', '64bit');
+    const sysDest      = path.join(sysPluginDir, PLUGIN_DLL_NAME);
+    const sysLocaleDir = path.join(obsInstallPath, 'data', 'obs-plugins', 'openclip-obs', 'locale');
+    const sysLocale    = path.join(sysLocaleDir, 'en-US.ini');
 
-    // 1. Copy the DLL to the plugins directory:
-    //    <base>/plugins/openclip-obs/bin/64bit/
-    const pluginDir = path.join(obsProgramData, 'plugins', 'openclip-obs', 'bin', '64bit');
-    let dest;
+    let needsElevation = false;
     try {
-      fs.mkdirSync(pluginDir, { recursive: true });
-      dest = path.join(pluginDir, PLUGIN_DLL_NAME);
-      fs.copyFileSync(dllSrc, dest);
-      console.log(`[main] Plugin DLL installed to ${dest}`);
+      fs.mkdirSync(sysPluginDir, { recursive: true });
+      fs.copyFileSync(dllSrc, sysDest);
+      fs.mkdirSync(sysLocaleDir, { recursive: true });
+      if (!fs.existsSync(sysLocale)) fs.writeFileSync(sysLocale, '');
+      console.log(`[main] Plugin installed (system) to ${sysDest}`);
     } catch (fsErr) {
-      if (fsErr.code === 'EPERM' || fsErr.code === 'EACCES') {
-        // Elevation required for ProgramData — fall back to per-user AppData path
-        const userPluginDir = path.join(
-          app.getPath('appData'), 'obs-studio', 'plugins', 'openclip-obs', 'bin', '64bit'
-        );
-        try {
-          fs.mkdirSync(userPluginDir, { recursive: true });
-          dest = path.join(userPluginDir, PLUGIN_DLL_NAME);
-          fs.copyFileSync(dllSrc, dest);
-          console.log(`[main] Plugin DLL installed to per-user path ${dest}`);
-        } catch (fallbackErr) {
-          return {
-            success: false,
-            message: `Permission denied writing to ${pluginDir}. Try running as administrator, or install OBS as the current user.\n(${fsErr.message})`,
-          };
-        }
+      if (fsErr.code === 'EPERM' || fsErr.code === 'EACCES' || fsErr.code === 'EBUSY') {
+        needsElevation = true;
       } else {
         throw fsErr;
       }
     }
 
-    // 2. Create an empty data directory (OBS expects data/<plugin-name>/ to exist)
-    const dataDir = path.join(path.dirname(path.dirname(path.dirname(dest))), 'data');
-    fs.mkdirSync(dataDir, { recursive: true });
+    if (needsElevation) {
+      const esc = p => p.replace(/'/g, "''");
+      const elevResult = runElevated([
+        `New-Item -ItemType Directory -Force -Path '${esc(sysPluginDir)}' | Out-Null`,
+        `Copy-Item -Path '${esc(dllSrc)}' -Destination '${esc(sysDest)}' -Force`,
+        `New-Item -ItemType Directory -Force -Path '${esc(sysLocaleDir)}' | Out-Null`,
+        `if (-not (Test-Path '${esc(sysLocale)}')) { New-Item -ItemType File -Path '${esc(sysLocale)}' | Out-Null }`,
+      ]);
+      if (!elevResult.success) return elevResult;
+      console.log(`[main] Plugin installed (system, elevated) to ${sysDest}`);
+    }
 
-    // 3. Register the plugin in plugin_manager/modules.json so OBS discovers it
-    const obsAppData = path.join(app.getPath('appData'), 'obs-studio');
-    const modulesPath = path.join(obsAppData, 'plugin_manager', 'modules.json');
-    let modules = [];
-    let parseSucceeded = true;
-    if (fs.existsSync(modulesPath)) {
-      try {
-        modules = JSON.parse(fs.readFileSync(modulesPath, 'utf-8'));
-      } catch (parseErr) {
-        parseSucceeded = false;
-        console.error(`[main] Failed to parse ${modulesPath}:`, parseErr.message);
-        // Rename the corrupted file to preserve it instead of overwriting
-        const backupPath = `${modulesPath}.corrupt.${Date.now()}`;
-        try {
-          fs.renameSync(modulesPath, backupPath);
-          console.error(`[main] Corrupted modules.json moved to ${backupPath}`);
-          modules = []; // start fresh after backup
-          parseSucceeded = true;
-        } catch (renameErr) {
-          console.error(`[main] Could not back up corrupted modules.json:`, renameErr.message);
-          // Cannot safely write — skip the modules.json update
-        }
+    // ── 2. AppData per-user path (OBS v28+ alternative scan path) ────────────
+    const userBase      = path.join(app.getPath('appData'), 'obs-studio', 'plugins', 'openclip-obs');
+    const userPluginDir = path.join(userBase, 'obs-plugins', '64bit');
+    const userDest      = path.join(userPluginDir, PLUGIN_DLL_NAME);
+    const userLocaleDir = path.join(userBase, 'data', 'obs-plugins', 'openclip-obs', 'locale');
+    const userLocale    = path.join(userLocaleDir, 'en-US.ini');
+
+    try {
+      fs.mkdirSync(userPluginDir, { recursive: true });
+      fs.copyFileSync(dllSrc, userDest);
+      fs.mkdirSync(userLocaleDir, { recursive: true });
+      if (!fs.existsSync(userLocale)) fs.writeFileSync(userLocale, '');
+      console.log(`[main] Plugin installed (user) to ${userDest}`);
+    } catch (userErr) {
+      console.warn('[main] Could not install to AppData path:', userErr.message);
+    }
+
+    // Write modules.json entry — OBS won't auto-add our plugin from the discovery
+    // scan (it silently skips DLLs that fail its load probe), but it WILL load plugins
+    // that are already listed in modules.json with enabled:true.
+    try {
+      const modulesJson = path.join(app.getPath('appData'), 'obs-studio', 'plugin_manager', 'modules.json');
+      let modules = [];
+      if (fs.existsSync(modulesJson)) {
+        try { modules = JSON.parse(fs.readFileSync(modulesJson, 'utf-8')); } catch {}
       }
-    } else {
-      fs.mkdirSync(path.join(obsAppData, 'plugin_manager'), { recursive: true });
-    }
-    if (parseSucceeded) {
-      // Remove any existing entry for our plugin
-      modules = modules.filter(m => m.module_name !== 'openclip-obs');
-      // Add our plugin entry
-      modules.push({
-        display_name: 'OpenClip',
-        enabled: true,
-        encoders: [],
-        id: '',
-        module_name: 'openclip-obs',
-        outputs: [],
-        services: [],
-        sources: [],
-        version: ''
-      });
-      fs.writeFileSync(modulesPath, JSON.stringify(modules, null, 4), 'utf-8');
-      console.log(`[main] Plugin registered in ${modulesPath}`);
+      const existing = modules.find(m => m.module_name === 'openclip-obs');
+      if (existing) {
+        existing.enabled = true;
+        if (!existing.display_name) existing.display_name = 'OpenClip';
+        if (!('id' in existing)) existing.id = '';
+        if (!('version' in existing)) existing.version = '';
+      } else {
+        modules.push({ display_name: 'OpenClip', enabled: true, encoders: [], id: '', module_name: 'openclip-obs', outputs: [], services: [], sources: [], version: '' });
+      }
+      fs.mkdirSync(path.dirname(modulesJson), { recursive: true });
+      fs.writeFileSync(modulesJson, JSON.stringify(modules, null, 4));
+      console.log('[main] modules.json updated — openclip-obs enabled');
+    } catch (jsonErr) {
+      console.warn('[main] Could not patch modules.json:', jsonErr.message);
     }
 
-    // 4. Create a plugin_config entry directory
-    const configDir = path.join(obsAppData, 'plugin_config', 'openclip-obs');
-    fs.mkdirSync(configDir, { recursive: true });
-
-    return { success: true, path: dest };
+    return { success: true, path: sysDest };
   } catch (err) {
+    console.error('[main] Plugin install error:', err.message);
     return { success: false, message: err.message };
   }
 });
 
-// Check whether the native OBS plugin DLL is installed in the ProgramData plugins directory
-// or the per-user AppData plugins directory (fallback when ProgramData is not writable).
 ipcMain.handle('obs:is-plugin-registered', () => {
   try {
-    // System-wide OBS installation under ProgramData (default for OBS)
-    const obsProgramData = path.join(process.env.ProgramData || 'C:\\ProgramData', 'obs-studio');
-    const programDataDest = path.join(
-      obsProgramData, 'plugins', 'openclip-obs', 'bin', '64bit', PLUGIN_DLL_NAME
-    );
-
-    // Per-user OBS installation under AppData (fallback when installer lacked ProgramData access)
-    const obsUserData = path.join(app.getPath('appData'), 'obs-studio');
-    const userDataDest = path.join(
-      obsUserData, 'plugins', 'openclip-obs', 'bin', '64bit', PLUGIN_DLL_NAME
-    );
-
-    return fs.existsSync(programDataDest) || fs.existsSync(userDataDest);
+    const obsInstallPath = store._electron().obsInstallPath || '';
+    if (obsInstallPath) {
+      if (fs.existsSync(path.join(obsInstallPath, 'obs-plugins', '64bit', PLUGIN_DLL_NAME))) return true;
+    }
+    if (fs.existsSync(path.join(app.getPath('appData'), 'obs-studio', 'plugins', 'openclip-obs', 'obs-plugins', '64bit', PLUGIN_DLL_NAME))) return true;
+    return false;
   } catch {
     return false;
+  }
+});
+
+// Remove the native OBS plugin DLL from all install locations
+ipcMain.handle('obs:remove-plugin', () => {
+  try {
+    // Remove from Program Files (may need elevation)
+    const obsInstallPath = store._electron().obsInstallPath || '';
+    if (obsInstallPath) {
+      const sysDest   = path.join(obsInstallPath, 'obs-plugins', '64bit', PLUGIN_DLL_NAME);
+      const sysLocale = path.join(obsInstallPath, 'data', 'obs-plugins', 'openclip-obs');
+      if (fs.existsSync(sysDest)) {
+        let needsElevation = false;
+        try {
+          fs.rmSync(sysDest, { force: true });
+          if (fs.existsSync(sysLocale)) fs.rmSync(sysLocale, { recursive: true, force: true });
+          console.log(`[main] Removed system plugin: ${sysDest}`);
+        } catch (fsErr) {
+          if (fsErr.code === 'EPERM' || fsErr.code === 'EACCES' || fsErr.code === 'EBUSY') needsElevation = true;
+        }
+        if (needsElevation) {
+          const esc = p => p.replace(/'/g, "''");
+          runElevated([
+            `Remove-Item -Path '${esc(sysDest)}' -Force -ErrorAction SilentlyContinue`,
+            `Remove-Item -Path '${esc(sysLocale)}' -Recurse -Force -ErrorAction SilentlyContinue`,
+          ]);
+        }
+      }
+    }
+
+    // Remove from AppData per-user path
+    const userBase = path.join(app.getPath('appData'), 'obs-studio', 'plugins', 'openclip-obs');
+    if (fs.existsSync(userBase)) {
+      fs.rmSync(userBase, { recursive: true, force: true });
+      console.log(`[main] Removed user plugin folder: ${userBase}`);
+    }
+
+    // Remove from modules.json so OBS doesn't show a stale greyed-out entry
+    try {
+      const modulesJson = path.join(app.getPath('appData'), 'obs-studio', 'plugin_manager', 'modules.json');
+      if (fs.existsSync(modulesJson)) {
+        let modules = JSON.parse(fs.readFileSync(modulesJson, 'utf-8'));
+        const filtered = modules.filter(m => m.module_name !== 'openclip-obs');
+        if (filtered.length !== modules.length) {
+          fs.writeFileSync(modulesJson, JSON.stringify(filtered, null, 4));
+          console.log('[main] Removed openclip-obs from modules.json');
+        }
+      }
+    } catch (jsonErr) {
+      console.warn('[main] Could not update modules.json on remove:', jsonErr.message);
+    }
+
+    return { success: true };
+  } catch (err) {
+    return { success: false, message: err.message };
   }
 });
 
