@@ -1017,8 +1017,12 @@ ipcMain.handle('obs:is-plugin-registered', () => {
 });
 
 // Remove the native OBS plugin DLL from all install locations
-ipcMain.handle('obs:remove-plugin', () => {
+ipcMain.handle('obs:remove-plugin', async () => {
   try {
+    if (await isOBSRunning()) {
+      return { success: false, message: 'OBS is currently open. Please close OBS before removing the plugin.' };
+    }
+
     // Remove from Program Files (may need elevation)
     const obsInstallPath = store._electron().obsInstallPath || '';
     if (obsInstallPath) {
