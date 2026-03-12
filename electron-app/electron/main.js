@@ -895,10 +895,14 @@ function runElevated(psLines) {
 // Auto-install: copy the OBS plugin DLL to both the system obs-plugins\64bit folder
 // (auto-discovered by OBS) and the per-user AppData path (for OBS v28+ per-user support).
 // Writing to Program Files requires elevation; we try direct copy first and fall back to UAC.
-ipcMain.handle('obs:install-plugin', (_event, obsInstallPath) => {
+ipcMain.handle('obs:install-plugin', async (_event, obsInstallPath) => {
   try {
     if (!obsInstallPath || !path.isAbsolute(obsInstallPath)) {
       return { success: false, message: 'OBS install folder is required. Set it in Settings before installing.' };
+    }
+
+    if (await isOBSRunning()) {
+      return { success: false, message: 'OBS is currently open. Please close OBS before installing the plugin.' };
     }
 
     // Locate the plugin DLL bundled with the app
