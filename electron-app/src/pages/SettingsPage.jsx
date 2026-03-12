@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { FolderOpen, RefreshCw, Copy, Save, Wand2 } from 'lucide-react';
+import { FolderOpen, RefreshCw, Copy, Save, Wand2, Download } from 'lucide-react';
 import api from '../api';
 import OnboardingModal from '../components/OnboardingModal';
 
@@ -110,9 +110,30 @@ export default function SettingsPage() {
   const [isDirty, setIsDirty] = useState(false);
   const [toast, setToast] = useState(null);
   const [showWizard, setShowWizard] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
 
   useEffect(() => {
     loadSettings();
+  }, []);
+
+  useEffect(() => {
+    const unsubAvailable = api.onUpdateAvailable?.((info) => {
+      setUpdateStatus({ type: 'available', version: info.version });
+      setCheckingUpdate(false);
+    });
+    const unsubProgress = api.onUpdateProgress?.((progress) => {
+      setUpdateStatus({ type: 'progress', percent: progress.percent });
+    });
+    const unsubDownloaded = api.onUpdateDownloaded?.(() => {
+      setUpdateStatus({ type: 'downloaded' });
+      setCheckingUpdate(false);
+    });
+    return () => {
+      unsubAvailable?.();
+      unsubProgress?.();
+      unsubDownloaded?.();
+    };
   }, []);
 
   async function loadSettings() {
@@ -158,6 +179,19 @@ export default function SettingsPage() {
   function showToast(msg) {
     setToast(msg);
     setTimeout(() => setToast(null), 4000);
+  }
+
+  async function checkForUpdate() {
+    setCheckingUpdate(true);
+    setUpdateStatus(null);
+    await api.checkForUpdate?.();
+    // If no update is available, electron-updater fires no event, so clear the spinner after a reasonable timeout.
+    const UPDATE_CHECK_TIMEOUT_MS = 10000;
+    setTimeout(() => setCheckingUpdate(false), UPDATE_CHECK_TIMEOUT_MS);
+  }
+
+  async function installUpdate() {
+    await api.installUpdate?.();
   }
 
   if (!settings) return null;
@@ -389,6 +423,36 @@ export default function SettingsPage() {
               </div>
             </>
           )}
+        </div>
+
+        {/* Updates */}
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-title">Updates</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={checkForUpdate}
+              disabled={checkingUpdate || updateStatus?.type === 'downloaded'}
+            >
+              <RefreshCw size={13} style={{ animation: checkingUpdate ? 'spin 1s linear infinite' : 'none' }} />
+              {checkingUpdate ? 'Checking…' : 'Check for Updates'}
+            </button>
+            {updateStatus?.type === 'available' && (
+              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                Version {updateStatus.version} available — downloading…
+              </span>
+            )}
+            {updateStatus?.type === 'progress' && (
+              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                Downloading… {Math.round(updateStatus.percent)}%
+              </span>
+            )}
+            {updateStatus?.type === 'downloaded' && (
+              <button className="btn btn-primary btn-sm" onClick={installUpdate}>
+                <Download size={13} /> Install &amp; Restart
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
