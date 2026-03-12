@@ -44,20 +44,38 @@ if (require.main === module) {
   const version = pkg.version;
   const tag = `v${version}`;
   const distDir = path.join(__dirname, '..', 'dist');
-  const rootDir = path.join(__dirname, '..');
 
-  function run(cmd) {
+  function run(cmd, opts = {}) {
     console.log(`\n> ${cmd}`);
-    execSync(cmd, { stdio: 'inherit', cwd: rootDir });
+    execSync(cmd, { stdio: 'inherit', cwd: path.join(__dirname, '..'), ...opts });
   }
 
-  // 1. Build Vite frontend
+  // 1. Build the native OBS plugin DLL and stage it for packaging
+  const obsPluginSrc = path.join(__dirname, '..', '..', 'obs-plugin');
+  const obsBuildDir = path.join(obsPluginSrc, 'build', 'Release');
+  const obsPluginStaging = path.join(__dirname, '..', 'resources', 'obs-plugin');
+  const pluginDllName = 'openclip-obs.dll';
+
+  console.log('\nBuilding OBS plugin\u2026');
+  run('cmake -S . -B build -G "Visual Studio 17 2022" -A x64', { cwd: obsPluginSrc });
+  run('cmake --build build --config Release', { cwd: obsPluginSrc });
+
+  const dllSrc = path.join(obsBuildDir, pluginDllName);
+  if (!fs.existsSync(dllSrc)) {
+    console.error(`\nPlugin DLL not found after build: ${dllSrc}`);
+    process.exit(1);
+  }
+  fs.mkdirSync(obsPluginStaging, { recursive: true });
+  fs.copyFileSync(dllSrc, path.join(obsPluginStaging, pluginDllName));
+  console.log(`Staged ${pluginDllName} \u2192 resources/obs-plugin/`);
+
+  // 2. Build Vite frontend
   run('npx vite build');
 
-  // 2. Build Windows installer — publish never; gh handles the upload
+  // 3. Build Windows installer — publish never; gh handles the upload
   run('npx electron-builder --win --publish never');
 
-  // 3. Collect artefacts produced by electron-builder
+  // 4. Collect artefacts produced by electron-builder
   const releaseFiles = collectArtifacts(distDir);
 
   if (releaseFiles.length === 0) {
@@ -68,7 +86,7 @@ if (require.main === module) {
   console.log('\nRelease artefacts:');
   releaseFiles.forEach((f) => console.log(`  ${f}`));
 
-  // 4. Publish GitHub release via gh CLI
+  // 5. Publish GitHub release via gh CLI
   run(buildGhCommand(tag, distDir, releaseFiles));
 
   console.log(`\nRelease ${tag} published successfully!`);

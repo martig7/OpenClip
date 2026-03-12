@@ -81,6 +81,10 @@
       {
         "from": "resources/obs_game_recorder.lua",
         "to": "obs_game_recorder.lua"
+      },
+      {
+        "from": "resources/obs-plugin/openclip-obs.dll",
+        "to": "obs-plugin/openclip-obs.dll"
       }
     ],
     "win": {
