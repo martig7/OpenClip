@@ -197,14 +197,22 @@ describe('setupAutoUpdater', () => {
 describe('registerUpdateHandlers', () => {
   let handlers;
   let mockIpcMain;
+  let electronApp;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Simulate packaged (production) environment so the prod code paths run.
+    electronApp = _req('electron').app;
+    electronApp.isPackaged = true;
     handlers = {};
     mockIpcMain = {
       handle: vi.fn((channel, fn) => { handlers[channel] = fn; }),
     };
     registerUpdateHandlers(mockIpcMain);
+  });
+
+  afterEach(() => {
+    electronApp.isPackaged = false;
   });
 
   it('registers update:check handler', () => {
@@ -240,5 +248,26 @@ describe('registerUpdateHandlers', () => {
   it('update:install calls quitAndInstall', () => {
     handlers['update:install']();
     expect(mockAutoUpdater.quitAndInstall).toHaveBeenCalledOnce();
+  });
+
+  describe('dev mode (isPackaged = false)', () => {
+    beforeEach(() => {
+      electronApp.isPackaged = false;
+    });
+
+    it('update:check does not call checkForUpdates', () => {
+      // devCheckAndDownload is called instead; it will fail gracefully since
+      // there is no real network in unit tests — we just confirm prod path is skipped.
+      handlers['update:check']();
+      expect(mockAutoUpdater.checkForUpdates).not.toHaveBeenCalled();
+    });
+
+    it('update:install does not call quitAndInstall', () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      handlers['update:install']();
+      expect(mockAutoUpdater.quitAndInstall).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Install blocked in dev mode'));
+      warnSpy.mockRestore();
+    });
   });
 });
