@@ -232,6 +232,9 @@ export default function GamesPage() {
     trackLoading, setTrackLoading,
   } = useTrackState();
 
+  // Guards the initial load of persisted track data — same pattern as masterAudioLoadedRef
+  const trackDataLoadedRef = useRef(false);
+
   // Load track info whenever scene audio sources or master audio sources change
   useEffect(() => {
     const allInputNames = new Set([
@@ -249,19 +252,21 @@ export default function GamesPage() {
           // OBS, because the source may not exist in every scene (user may have removed it
           // from some games on purpose). The persisted value is loaded on mount.
           if (name === 'Game Audio') return null;
-          return api.getInputAudioTracks(name)
-            .then(tracks => ({ name, tracks }))
-            .catch(() => ({ name, tracks: {} }));
+          const tracks = await api.getInputAudioTracks(name).catch(() => ({}));
+          // Only use OBS data when it returns something — if OBS is closed or the source
+          // isn't found it returns {}, in which case we keep the persisted value.
+          if (Object.keys(tracks).length === 0) return null;
+          return { name, tracks };
         })
       );
       if (cancelled) return;
-      setTrackData(prev => {
-        const next = { ...prev };
-        for (const entry of results) {
-          if (entry) next[entry.name] = entry.tracks;
-        }
-        return next;
-      });
+      const fresh = {};
+      for (const entry of results) {
+        if (entry) fresh[entry.name] = entry.tracks;
+      }
+      if (Object.keys(fresh).length > 0) {
+        setTrackData(prev => ({ ...prev, ...fresh }));
+      }
     })();
     return () => { cancelled = true; };
   }, [editGameModal?.sceneAudioSources, masterAudioSources]);
@@ -275,8 +280,6 @@ export default function GamesPage() {
     setTrackLoading(prev => ({ ...prev, [inputName]: true }));
     try {
       if (inputName === 'Game Audio') {
-        // Persist locally so the setting survives scenes that don't have this source
-        api.setStore('gameAudioTracks', updated).catch(() => {});
         const promises = [];
         for (const game of games) {
           if (game.scene) {
@@ -303,10 +306,13 @@ export default function GamesPage() {
       masterAudioLoadedRef.current = true;
       if (Array.isArray(saved) && saved.length > 0) setMasterAudioSources(saved);
     }).catch(() => { masterAudioLoadedRef.current = true; });
-    // Restore persisted Game Audio track routing (stored locally, not fetched from OBS)
-    api.getStore('gameAudioTracks').then(saved => {
-      if (saved && typeof saved === 'object') setTrackData(prev => ({ ...prev, 'Game Audio': saved }));
-    }).catch(() => {});
+    // Restore all persisted track routing so tracks appear even when OBS is closed
+    api.getStore('audioTracks').then(saved => {
+      trackDataLoadedRef.current = true;
+      if (saved && typeof saved === 'object' && Object.keys(saved).length > 0) {
+        setTrackData(prev => ({ ...prev, ...saved }));
+      }
+    }).catch(() => { trackDataLoadedRef.current = true; });
     api.getWatcherStatus().then(s => {
       setWatcherStatus(s);
       if (s.running) {
@@ -324,6 +330,12 @@ export default function GamesPage() {
     if (!masterAudioLoadedRef.current) return; // skip until initial load has resolved
     api.setStore('masterAudioSources', masterAudioSources).catch(() => {});
   }, [masterAudioSources]);
+
+  // Persist track data whenever it changes — covers both OBS-fetched and user-toggled values
+  useEffect(() => {
+    if (!trackDataLoadedRef.current) return; // skip until initial load has resolved
+    api.setStore('audioTracks', trackData).catch(() => {});
+  }, [trackData]);
 
 
   async function loadGames() {
@@ -2157,7 +2169,7 @@ function EditGameModal({
               {/* List of existing scene audio sources */}
               {sceneAudioSources.length === 0 ? (
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '8px 10px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-sm)' }}>
-                  No audio sources found in this OBS scene.
+                  No audio sources found in this OBS scene. This may mean OBS is closed or the OpenClip plugin is not installed.
                 </div>
               ) : (
                 <div style={{ background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-sm)', overflow: 'hidden', marginBottom: 10 }}>
