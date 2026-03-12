@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld('api', {
   getEncodingSettings: (profileDir) => ipcRenderer.invoke('obs:encoding:get', profileDir),
   setEncodingSettings: (profileDir, settings) => ipcRenderer.invoke('obs:encoding:set', profileDir, settings),
   isOBSRunning: () => ipcRenderer.invoke('obs:running'),
+  launchOBS: () => ipcRenderer.invoke('obs:launch'),
 
   // OBS Plugin (scene/audio control via native plugin HTTP API)
   isOBSScriptLoaded: () => ipcRenderer.invoke('obs:ws:script-loaded'),

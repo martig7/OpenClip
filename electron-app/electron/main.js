@@ -168,6 +168,7 @@ const store = {
     }
     if (key === 'windowBounds') return this._electron().windowBounds || electronConfigDefaults.windowBounds;
     if (key === 'masterAudioSources') return this._electron().masterAudioSources || [];
+    if (key === 'audioTracks') return this._electron().audioTracks || {};
     if (key === 'clipMarkers') return loadElectronMarkers();
     if (key === 'lockedRecordings') return this._ms().locked_recordings || [];
     if (key === 'storageSettings') return this._ms().storage_settings || {};
@@ -199,6 +200,11 @@ const store = {
     }
     if (key === 'masterAudioSources') {
       this._electron().masterAudioSources = value;
+      this._saveElectron();
+      return;
+    }
+    if (key === 'audioTracks') {
+      this._electron().audioTracks = value;
       this._saveElectron();
       return;
     }
@@ -262,7 +268,7 @@ const store = {
 const { setupGameWatcher } = require('./gameWatcher');
 const { setupFileManager } = require('./fileManager');
 const { readOBSRecordingPath } = require('./obsIntegration');
-const { getProfiles, readEncodingSettings, writeEncodingSettings, isOBSRunning } = require('./obsEncoding');
+const { getProfiles, readEncodingSettings, writeEncodingSettings, isOBSRunning, findOBSExecutable } = require('./obsEncoding');
 const {
   getOBSScenes,
   createSceneFromTemplate,
@@ -577,6 +583,13 @@ ipcMain.handle('obs:profiles',      () => getProfiles());
 ipcMain.handle('obs:encoding:get',  (_e, profileDir) => readEncodingSettings(profileDir));
 ipcMain.handle('obs:encoding:set',  (_e, profileDir, settings) => { writeEncodingSettings(profileDir, settings); return { success: true }; });
 ipcMain.handle('obs:running',       () => isOBSRunning());
+ipcMain.handle('obs:launch', async () => {
+  const obsPath = findOBSExecutable();
+  if (!obsPath) return { success: false, message: 'OBS executable not found' };
+  const error = await shell.openPath(obsPath);
+  if (error) return { success: false, message: error };
+  return { success: true };
+});
 
 // OBS Plugin
 ipcMain.handle('obs:ws:script-loaded', async () => {
@@ -618,15 +631,15 @@ ipcMain.handle('obs:ws:get-scene-audio-sources', async (_e, sceneName) => {
   try {
     return await getSceneAudioSources(undefined, sceneName);
   } catch (err) {
-    console.error('[main] obs:ws:get-scene-audio-sources error:', err.message);
+    // Expected when OBS/plugin is not running; UI handles this gracefully
     throw err;
   }
 });
 ipcMain.handle('obs:ws:get-input-audio-tracks', async (_e, inputName) => {
   try {
     return await getInputAudioTracks(undefined, inputName);
-  } catch (err) {
-    console.error('[main] obs:ws:get-input-audio-tracks error:', err.message);
+  } catch {
+    // Expected when OBS/plugin is not running or source not found
     return {};
   }
 });
