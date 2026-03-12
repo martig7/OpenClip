@@ -575,7 +575,7 @@ export default function SettingsPage() {
               </button>
             )}
             {updateStatus?.type === 'error' && (
-              <span style={{ fontSize: 13, color: 'var(--color-danger, #e55)' }}>
+              <span style={{ fontSize: 13, color: 'var(--color-error, #e55)' }}>
                 Update failed: {updateStatus.message || 'unknown error'}
               </span>
             )}

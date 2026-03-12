@@ -160,6 +160,7 @@ describe('setupAutoUpdater', () => {
   // ── error ─────────────────────────────────────────────────────────────────
   describe('error event', () => {
     beforeEach(() => setupAutoUpdater(() => win));
+    afterEach(() => vi.restoreAllMocks());
 
     it('logs the error message without throwing', () => {
       const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
