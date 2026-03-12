@@ -167,6 +167,28 @@ describe('setupAutoUpdater', () => {
       expect(spy).toHaveBeenCalledWith('[updater] error:', 'boom');
       spy.mockRestore();
     });
+
+    it('sends update:error IPC with message when window is open', () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      getRegisteredHandler('error')(new Error('download failed'));
+      expect(win.webContents.send).toHaveBeenCalledWith('update:error', { message: 'download failed' });
+    });
+
+    it('does not send IPC when window is destroyed', () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      win.isDestroyed.mockReturnValue(true);
+      getRegisteredHandler('error')(new Error('boom'));
+      expect(win.webContents.send).not.toHaveBeenCalled();
+    });
+
+    it('does not send IPC when window is null', () => {
+      const { setupAutoUpdater: su } = _req('../../electron/autoUpdater.js');
+      vi.clearAllMocks();
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      su(() => null);
+      getRegisteredHandler('error')?.(new Error('boom'));
+      expect(win.webContents.send).not.toHaveBeenCalled();
+    });
   });
 });
 

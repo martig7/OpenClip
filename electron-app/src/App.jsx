@@ -43,7 +43,11 @@ export default function App() {
     const offDownloaded = api.onUpdateDownloaded(() =>
       setUpdateState(s => ({ ...s, status: 'ready' }))
     );
-    return () => { offAvailable(); offProgress(); offDownloaded(); };
+    const offError = api.onUpdateError((info) => {
+      console.error('[updater] download error:', info?.message);
+      setUpdateState(null);
+    });
+    return () => { offAvailable(); offProgress(); offDownloaded(); offError(); };
   }, []);
 
   useEffect(() => {

@@ -33,6 +33,10 @@ function setupAutoUpdater(getMainWindow) {
 
   autoUpdater.on('error', (err) => {
     console.error('[updater] error:', err.message);
+    const win = getMainWindow();
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('update:error', { message: err.message });
+    }
   });
 
   // Delay the first check so the UI has time to load.
