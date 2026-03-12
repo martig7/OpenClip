@@ -364,7 +364,11 @@ export default function GamesPage() {
   }
 
   async function addGame() {
-    if (!newGame.name || !newGame.selector) return;
+    const missing = ['name', 'selector', 'scene'].filter(f => !newGame[f]);
+    if (missing.length > 0) {
+      showToast(`Required fields missing: ${missing.join(', ')}.`);
+      return;
+    }
 
     // Auto-create the OBS scene before saving the game
     if (autoCreateScene && newGame.scene) {
@@ -718,8 +722,8 @@ export default function GamesPage() {
   async function saveEditModal() {
     if (!editGameModal) return;
     const { game } = editGameModal;
-    if (!game.name || !game.selector) {
-      showToast('Game name and window selector are required.');
+    if (!game.name || !game.selector || !game.scene) {
+      showToast('Game name, window selector, and scene are required.');
       return;
     }
     const payload = {
@@ -743,6 +747,7 @@ export default function GamesPage() {
     resetAddModal();
     setShowAddModal(true);
     refreshWindows();
+    loadOBSScenes(); // Proactively load scenes for template selection
   }
 
   function goToSettings() {
@@ -1111,7 +1116,7 @@ export default function GamesPage() {
       </div>
 
       {showAddModal && (
-        <div className="modal-overlay" onClick={() => { resetAddModal(); setShowAddModal(false); }}>
+        <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) { resetAddModal(); setShowAddModal(false); } } }>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <h2>Add Game</h2>
             <p>Add a game to monitor for automatic OBS recording.</p>
@@ -1135,7 +1140,19 @@ export default function GamesPage() {
                 />
                 <button
                   className="btn btn-secondary btn-sm"
-                  onClick={() => setShowWindowPicker(!showWindowPicker)}
+                  onClick={async () => {
+                    const nextState = !showWindowPicker;
+                    setShowWindowPicker(nextState);
+                    if (nextState) {
+                      setLoadingWindows(true);
+                      try {
+                        const windows = await api.getVisibleWindows();
+                        setVisibleWindows(windows);
+                      } finally {
+                        setLoadingWindows(false);
+                      }
+                    }
+                  }}
                   title="Pick from running windows"
                 >
                   <ChevronDown size={13} />
@@ -1148,15 +1165,20 @@ export default function GamesPage() {
                 >
                   <RefreshCw size={13} className={loadingWindows ? 'spinning' : ''} />
                 </button>
-              </div>
-              {showWindowPicker && (
-                <div style={{
+                {showWindowPicker && (
+                  <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  zIndex: 200,
                   marginTop: 4,
                   background: 'var(--bg-tertiary)',
                   border: '1px solid var(--border-light)',
                   borderRadius: 'var(--radius-sm)',
-                  maxHeight: 180,
+                  maxHeight: 400,
                   overflowY: 'auto',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
                 }}>
                   {visibleWindows.length === 0 ? (
                     <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-muted)' }}>
@@ -1184,6 +1206,7 @@ export default function GamesPage() {
                   )}
                 </div>
               )}
+              </div>
               {newGame.selector && newGame.exe && (
                 <span style={{ fontSize: 11, color: 'var(--primary)', marginTop: 4, display: 'block' }}>
                   ✓ Exact match binding set: {newGame.exe}
@@ -1220,12 +1243,13 @@ export default function GamesPage() {
               </span>
             </div>
             <div className="form-group">
-              <label className="form-label">OBS Scene (optional)</label>
+              <label className="form-label">OBS Scene <span style={{ color: 'var(--danger)' }}>*</span></label>
               <input
                 className="form-input"
-                placeholder="e.g. Gaming Scene"
+                placeholder="e.g. Gaming Scene (required)"
                 value={newGame.scene}
                 onChange={e => setNewGame({ ...newGame, scene: e.target.value })}
+                required
               />
             </div>
 
@@ -1500,7 +1524,7 @@ export default function GamesPage() {
 
       {/* Track Editor Modal */}
       {showTrackEditor && (
-        <div className="modal-overlay" onClick={() => !savingTrackLabels && setShowTrackEditor(false)}>
+        <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget && !savingTrackLabels) setShowTrackEditor(false); }}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <h2>Edit Track Labels</h2>
             <p>Customize the names of OBS audio tracks to easily identify them (e.g. "Stream Mix", "VOD Track"). These names will be saved to your OBS profile.</p>
@@ -1574,7 +1598,7 @@ export default function GamesPage() {
       {toast && <div className="toast">{toast}</div>}
 
       {confirmDeleteGame && (
-        <div className="modal-overlay" onClick={() => setConfirmDeleteGame(null)}>
+        <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setConfirmDeleteGame(null); }}>
           <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 400 }}>
             <h2>Remove Game</h2>
             <p>
@@ -1772,6 +1796,23 @@ function EditGameModal({
   const [loadingWindows, setLoadingWindows] = useState(false);
   const [visibleWindows, setVisibleWindows] = useState([]);
 
+  // Eagerly load data when the modal opens
+  useEffect(() => {
+    (async () => {
+      setLoadingWindows(true);
+      try {
+        const windows = await api.getVisibleWindows();
+        setVisibleWindows(windows);
+      } finally {
+        setLoadingWindows(false);
+      }
+    })();
+    
+    if (game.scene) {
+      loadModalAudioInputs();
+    }
+  }, []);
+
   // Close modal audio dropdown on outside click
   useEffect(() => {
     if (!showModalAudioDropdown) return;
@@ -1809,7 +1850,7 @@ function EditGameModal({
   const [editCapturePref, setEditCapturePref] = useState('game_capture');
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 560 }}>
         <h2>Edit Game</h2>
         <p>Edit game details and manage audio sources for this scene.</p>
@@ -1837,28 +1878,40 @@ function EditGameModal({
             />
             <button
               className="btn btn-secondary btn-sm"
-              onClick={async () => {
-                if (!showWindowPicker) {
-                  setLoadingWindows(true);
-                  const windows = await api.getVisibleWindows();
-                  setVisibleWindows(windows);
-                  setLoadingWindows(false);
+              onClick={() => {
+                const next = !showWindowPicker;
+                setShowWindowPicker(next);
+                // Refresh windows on open just in case, but non-blocking
+                if (next) {
+                  (async () => {
+                    setLoadingWindows(true);
+                    try {
+                      const windows = await api.getVisibleWindows();
+                      setVisibleWindows(windows);
+                    } finally {
+                      setLoadingWindows(false);
+                    }
+                  })();
                 }
-                setShowWindowPicker(!showWindowPicker);
               }}
               title="Pick from running windows"
             >
               <ChevronDown size={13} />
             </button>
-          </div>
-          {showWindowPicker && (
-            <div style={{
+            {showWindowPicker && (
+              <div style={{
+              position: 'absolute',
+              top: '100%',
+              left: 0,
+              right: 0,
+              zIndex: 200,
               marginTop: 4,
               background: 'var(--bg-tertiary)',
               border: '1px solid var(--border-light)',
               borderRadius: 'var(--radius-sm)',
-              maxHeight: 180,
+              maxHeight: 300,
               overflowY: 'auto',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
             }}>
               {visibleWindows.length === 0 ? (
                 <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-muted)' }}>
@@ -1894,6 +1947,7 @@ function EditGameModal({
               )}
             </div>
           )}
+          </div>
           {game.selector && game.exe && (
             <span style={{ fontSize: 11, color: 'var(--primary)', marginTop: 4, display: 'block' }}>
               ✓ Exact match binding set: {game.exe}
@@ -1935,13 +1989,14 @@ function EditGameModal({
 
         {/* Scene */}
         <div className="form-group">
-          <label className="form-label">OBS Scene</label>
+          <label className="form-label">OBS Scene <span style={{ color: 'var(--danger)' }}>*</span></label>
           <input
             className="form-input"
             value={game.scene || ''}
             onChange={e => onChangeGame({ scene: e.target.value })}
-            placeholder="e.g. Gaming Scene (optional)"
+            placeholder="e.g. Gaming Scene (required)"
             style={isDuplicateScene ? { borderColor: '#f59e0b' } : {}}
+            required
           />
           {isDuplicateScene && (
             <div style={{

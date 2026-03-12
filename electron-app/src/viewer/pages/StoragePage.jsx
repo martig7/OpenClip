@@ -1100,7 +1100,7 @@ function StoragePage() {
 
       {/* ── Reencode Modal ── */}
       {reencodeModal && (
-        <div className="modal-overlay" onClick={() => !isReencoding && setReencodeModal(false)}>
+        <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget && !isReencoding) setReencodeModal(false); }}>
           <div className="modal-content reencode-modal" onClick={e => e.stopPropagation()}>
             <h2>Reencode Videos</h2>
             <p>Reencode {selectedCount} selected video(s) to a different codec</p>

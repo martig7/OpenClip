@@ -2,7 +2,7 @@ function Modal({ isOpen, title, message, onConfirm, onCancel, confirmText = 'Con
   if (!isOpen) return null
 
   return (
-    <div className="modal-overlay" onClick={onCancel}>
+    <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h3>{title}</h3>
         <p>{message}</p>

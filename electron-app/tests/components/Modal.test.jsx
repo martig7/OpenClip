@@ -25,7 +25,7 @@ describe('Modal', () => {
     render(
       <Modal isOpen title="T" message="m" onConfirm={vi.fn()} onCancel={onCancel} />
     )
-    fireEvent.click(document.querySelector('.modal-overlay'))
+    fireEvent.mouseDown(document.querySelector('.modal-overlay'))
     expect(onCancel).toHaveBeenCalledOnce()
   })
 
