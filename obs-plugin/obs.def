@@ -33,6 +33,7 @@ EXPORTS
     obs_data_release
     obs_data_set_string
     obs_data_set_int
+    obs_data_set_double
     obs_data_set_bool
     obs_get_video_info
     config_get_string
