@@ -135,10 +135,15 @@ export default function SettingsPage() {
       setUpdateStatus({ type: 'downloaded' });
       setCheckingUpdate(false);
     });
+    const unsubError = api.onUpdateError?.((info) => {
+      setUpdateStatus({ type: 'error', message: info?.message });
+      setCheckingUpdate(false);
+    });
     return () => {
       unsubAvailable?.();
       unsubProgress?.();
       unsubDownloaded?.();
+      unsubError?.();
     };
   }, []);
 
@@ -568,6 +573,11 @@ export default function SettingsPage() {
               <button className="btn btn-primary btn-sm" onClick={installUpdate}>
                 <Download size={13} /> Install &amp; Restart
               </button>
+            )}
+            {updateStatus?.type === 'error' && (
+              <span style={{ fontSize: 13, color: 'var(--color-error, #e55)' }}>
+                Update failed: {updateStatus.message || 'unknown error'}
+              </span>
             )}
           </div>
         </div>
