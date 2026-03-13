@@ -55,6 +55,10 @@ function getDiskUsage(dirPath) {
         if (error) return resolve(null);
         try {
           const d = JSON.parse(stdout);
+          if (typeof d !== 'object' || d === null || !Number.isFinite(d.Used) || !Number.isFinite(d.Free)) {
+            console.error('[videoMetadata] Invalid disk usage data:', d);
+            return resolve(null);
+          }
           const total = d.Used + d.Free;
           const result = {
             total, used: d.Used, free: d.Free,

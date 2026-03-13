@@ -98,7 +98,7 @@ export default function SceneAudioSourcesCard({
                           const meta = AUDIO_KIND_META[entry.kind];
                           return (
                             <button
-                              key={i}
+                              key={entry.name}
                               onClick={() => !alreadyAdded && onAddSource(entry)}
                               disabled={alreadyAdded}
                               style={{
@@ -130,7 +130,7 @@ export default function SceneAudioSourcesCard({
                           const alreadyAdded = masterAudioSources.some(s => s.name === entry.name);
                           return (
                             <button
-                              key={i}
+                              key={entry.name}
                               onClick={() => !alreadyAdded && onAddSource(entry)}
                               disabled={alreadyAdded}
                               style={{
@@ -162,7 +162,7 @@ export default function SceneAudioSourcesCard({
                           const alreadyAdded = masterAudioSources.some(s => s.name === entry.name);
                           return (
                             <button
-                              key={i}
+                              key={entry.name}
                               onClick={() => !alreadyAdded && onAddSource(entry)}
                               disabled={alreadyAdded}
                               style={{

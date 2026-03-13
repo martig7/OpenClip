@@ -677,7 +677,13 @@ function registerIpcHandlers(store, appState) {
             runElevated([
               `Remove-Item -Path '${esc(sysDest)}' -Force -ErrorAction SilentlyContinue`,
               `Remove-Item -Path '${esc(sysLocale)}' -Recurse -Force -ErrorAction SilentlyContinue`,
-            ]);
+            ]).then(result => {
+              if (!result.success) {
+                console.error('[main] Elevated removal failed:', result.error);
+              }
+            }).catch(err => {
+              console.error('[main] Elevated removal error:', err);
+            });
           }
         }
       }

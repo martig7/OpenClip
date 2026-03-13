@@ -50,7 +50,7 @@ export default function AddGameModal({
     setShowWindowPicker(false);
     api.extractWindowIcon(win.process).then(iconPath => {
       if (iconPath) setNewGame(g => ({ ...g, icon_path: iconPath }));
-    });
+    }).catch(() => {});
   }
 
   async function loadOBSScenes() {
@@ -474,7 +474,7 @@ export default function AddGameModal({
         </div>
         <div className="modal-actions">
           <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={onAddGame}>Add Game</button>
+          <button className="btn btn-primary" onClick={() => { if (!newGame.scene) return; onAddGame(); }} disabled={!newGame.scene}>Add Game</button>
         </div>
       </div>
     </div>

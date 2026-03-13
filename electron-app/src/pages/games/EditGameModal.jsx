@@ -8,6 +8,8 @@ import {
   getAppAudioWindowKey,
   isAppAudioKind,
 } from './audioSourceUtils';
+import WindowPicker from './WindowPicker';
+import AudioSourceDropdown from './AudioSourceDropdown';
 
 /**
  * EditGameModal — allows editing game name, selector, OBS scene, and per-scene audio sources.
@@ -46,6 +48,8 @@ export default function EditGameModal({
       try {
         const windows = await api.getVisibleWindows();
         setVisibleWindows(windows);
+      } catch (err) {
+        console.error('Failed to get visible windows:', err);
       } finally {
         setLoadingWindows(false);
       }
@@ -54,6 +58,7 @@ export default function EditGameModal({
     if (game.scene) {
       loadModalAudioInputs();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Close modal audio dropdown on outside click
@@ -118,77 +123,20 @@ export default function EditGameModal({
               onChange={e => onChangeGame({ selector: e.target.value, exe: '', windowClass: '' })}
               placeholder="e.g. VALORANT or valorant.exe"
             />
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={() => {
-                const next = !showWindowPicker;
-                setShowWindowPicker(next);
-                // Refresh windows on open just in case, but non-blocking
-                if (next) {
-                  (async () => {
-                    setLoadingWindows(true);
-                    try {
-                      const windows = await api.getVisibleWindows();
-                      setVisibleWindows(windows);
-                    } finally {
-                      setLoadingWindows(false);
-                    }
-                  })();
-                }
+            <WindowPicker
+              showPicker={showWindowPicker}
+              setShowPicker={setShowWindowPicker}
+              visibleWindows={visibleWindows}
+              loadingWindows={loadingWindows}
+              onSelect={(win) => {
+                onChangeGame({
+                  selector: win.title,
+                  exe: win.exe,
+                  windowClass: win.windowClass,
+                  windowMatchPriority: game.windowMatchPriority !== undefined ? game.windowMatchPriority : 0
+                });
               }}
-              title="Pick from running windows"
-            >
-              <ChevronDown size={13} />
-            </button>
-            {showWindowPicker && (
-              <div style={{
-              position: 'absolute',
-              top: '100%',
-              left: 0,
-              right: 0,
-              zIndex: 200,
-              marginTop: 4,
-              background: 'var(--bg-tertiary)',
-              border: '1px solid var(--border-light)',
-              borderRadius: 'var(--radius-sm)',
-              maxHeight: 300,
-              overflowY: 'auto',
-              boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-            }}>
-              {visibleWindows.length === 0 ? (
-                <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-muted)' }}>
-                  {loadingWindows ? 'Loading...' : 'No windows found. Click again to refresh.'}
-                </div>
-              ) : (
-                visibleWindows.map((win, i) => (
-                  <div
-                    key={i}
-                    onClick={() => {
-                      onChangeGame({
-                        selector: win.title,
-                        exe: win.exe,
-                        windowClass: win.windowClass,
-                        windowMatchPriority: game.windowMatchPriority !== undefined ? game.windowMatchPriority : 0
-                      });
-                      setShowWindowPicker(false);
-                    }}
-                    style={{
-                      padding: '6px 12px',
-                      fontSize: 12,
-                      cursor: 'pointer',
-                      borderBottom: '1px solid var(--border)',
-                      transition: 'background 0.1s',
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                  >
-                    <div style={{ color: 'var(--text-primary)' }}>{win.title}</div>
-                    <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>[{win.exe}] {win.windowClass !== win.process ? win.windowClass : ''}</div>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
+            />
           </div>
           {game.selector && game.exe && (
             <span style={{ fontSize: 11, color: 'var(--primary)', marginTop: 4, display: 'block' }}>

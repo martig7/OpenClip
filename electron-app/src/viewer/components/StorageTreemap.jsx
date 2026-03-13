@@ -38,6 +38,7 @@ export default function StorageTreemap({ items, selectedItems, onSelect, lockedR
   const zoomRef = useRef(1)
   const panRef = useRef({ x: 0, y: 0 })
   const dragRef = useRef(null)
+  const dragHandlersRef = useRef({ move: null, up: null })
 
   // ResizeObserver — sizes the canvas to match its container
   useEffect(() => {
@@ -93,6 +94,15 @@ export default function StorageTreemap({ items, selectedItems, onSelect, lockedR
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+
+  // Cleanup drag handlers on unmount
+  useEffect(() => {
+    return () => {
+      const { move, up } = dragHandlersRef.current
+      if (move) window.removeEventListener('mousemove', move)
+      if (up) window.removeEventListener('mouseup', up)
+    }
   }, [])
 
   // Keep viewport ref in sync
@@ -355,8 +365,10 @@ export default function StorageTreemap({ items, selectedItems, onSelect, lockedR
           setIsDragging(false)
           window.removeEventListener('mousemove', onMove)
           window.removeEventListener('mouseup', onUp)
+          dragHandlersRef.current = { move: null, up: null }
           if (wasDrag) window.addEventListener('click', e => e.stopPropagation(), { capture: true, once: true })
         }
+        dragHandlersRef.current = { move: onMove, up: onUp }
         window.addEventListener('mousemove', onMove)
         window.addEventListener('mouseup', onUp)
       }}

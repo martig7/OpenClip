@@ -10,11 +10,12 @@ Current file sizes and guidance for merging branches into the modularized codeba
 
 | File | Lines |
 |------|------:|
-| `src/pages/GamesPage.jsx` | 759 |
-| `src/components/OnboardingModal.jsx` | 711 |
-| `src/viewer/pages/StoragePage.jsx` | 652 |
-| `src/pages/games/EditGameModal.jsx` | 626 |
-| `src/pages/SettingsPage.jsx` | 590 |
+| `src/pages/GamesPage.jsx` | 720 |
+| `src/components/OnboardingSteps.jsx` | 498 |
+| `src/viewer/pages/StoragePage.jsx` | 584 |
+| `src/pages/games/EditGameModal.jsx` | 571 |
+| `src/pages/SettingsPage.jsx` | 489 |
+| `src/components/OnboardingModal.jsx` | 213 |
 | `src/pages/games/AddGameModal.jsx` | 482 |
 | `src/viewer/components/VideoPlayer.jsx` | 453 |
 | `src/viewer/components/ZoomTimeline.jsx` | 398 |
@@ -29,13 +30,17 @@ Current file sizes and guidance for merging branches into the modularized codeba
 | `src/pages/games/WatcherStatusCard.jsx` | 124 |
 | `src/viewer/pages/RecordingsPage.jsx` | 107 |
 | `src/viewer/components/Sidebar.jsx` | 94 |
+| `src/pages/games/AudioSourceDropdown.jsx` | 91 |
 | `src/viewer/components/ClipControls.jsx` | 84 |
+| `src/pages/games/WindowPicker.jsx` | 68 |
 | `src/viewer/components/AudioWaveformTrack.jsx` | 79 |
 | `src/api.js` | 74 |
 | `src/hooks/useAddGameModalState.js` | 55 |
+| `src/components/ConfirmDeleteDialog.jsx` | 51 |
 | `src/viewer/apiBase.js` | 49 |
 | `src/hooks/useAudioSourcesState.js` | 44 |
 | `src/viewer/utils/storageColors.js` | 38 |
+| `src/viewer/components/ReencodeModal.jsx` | 103 |
 | `src/hooks/useTrackState.js` | 29 |
 | `src/hooks/useGameWatcherState.js` | 27 |
 | `src/hooks/useToastState.js` | 26 |

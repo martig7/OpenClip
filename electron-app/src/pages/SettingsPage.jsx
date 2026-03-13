@@ -2,108 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { FolderOpen, RefreshCw, Copy, Save, Wand2, Download, Package, Trash2, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 import api from '../api';
 import OnboardingModal from '../components/OnboardingModal';
-
-const MODIFIER_KEYS = new Set(['Control', 'Shift', 'Alt', 'Meta', 'OS']);
-
-const NUMPAD_MAP = {
-  Numpad0: 'num0', Numpad1: 'num1', Numpad2: 'num2', Numpad3: 'num3',
-  Numpad4: 'num4', Numpad5: 'num5', Numpad6: 'num6', Numpad7: 'num7',
-  Numpad8: 'num8', Numpad9: 'num9', NumpadAdd: 'numadd',
-  NumpadSubtract: 'numsub', NumpadMultiply: 'nummult',
-  NumpadDivide: 'numdiv', NumpadDecimal: 'numdec', NumpadEnter: 'Return',
-};
-
-const SPECIAL_KEYS = {
-  ' ': 'Space', ArrowUp: 'Up', ArrowDown: 'Down',
-  ArrowLeft: 'Left', ArrowRight: 'Right', Enter: 'Return',
-};
-
-function buildAccelerator(e, useModifiers) {
-  let key;
-  if (e.code.startsWith('Numpad')) {
-    key = NUMPAD_MAP[e.code];
-  } else {
-    key = SPECIAL_KEYS[e.key] ?? (e.key.length === 1 ? e.key.toUpperCase() : e.key);
-  }
-  if (!key) return null;
-
-  const parts = [];
-  if (useModifiers) {
-    if (e.ctrlKey) parts.push('Ctrl');
-    if (e.altKey) parts.push('Alt');
-    if (e.shiftKey) parts.push('Shift');
-    if (e.metaKey) parts.push('Meta');
-  }
-  parts.push(key);
-  return parts.join('+');
-}
-
-function HotkeyInput({ value, onChange }) {
-  const [listening, setListening] = useState(false);
-  const [useModifiers, setUseModifiers] = useState(() => (value || '').includes('+'));
-  const containerRef = useRef(null);
-
-  // Sync modifier toggle when value changes from outside (e.g. on load)
-  useEffect(() => {
-    if (!listening) setUseModifiers((value || '').includes('+'));
-  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (!listening) return;
-
-    const handleKeyDown = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (MODIFIER_KEYS.has(e.key)) return;
-      // Escape with no modifiers cancels
-      if (e.key === 'Escape' && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey) {
-        setListening(false);
-        return;
-      }
-      const accelerator = buildAccelerator(e, useModifiers);
-      if (accelerator) {
-        onChange(accelerator);
-        setListening(false);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown, true);
-    return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [listening, useModifiers, onChange]);
-
-  // Click outside cancels
-  useEffect(() => {
-    if (!listening) return;
-    const handlePointerDown = (e) => {
-      if (!containerRef.current?.contains(e.target)) setListening(false);
-    };
-    document.addEventListener('pointerdown', handlePointerDown);
-    return () => document.removeEventListener('pointerdown', handlePointerDown);
-  }, [listening]);
-
-  return (
-    <div ref={containerRef} className="hotkey-input-wrap">
-      <button
-        type="button"
-        className={`hotkey-capture-btn${listening ? ' listening' : ''}`}
-        onClick={() => setListening(l => !l)}
-      >
-        {listening ? 'Press a key…' : (value || 'Click to set')}
-      </button>
-      <div className="toggle-row" style={{ paddingTop: 10, borderTop: 'none' }}>
-        <div>
-          <div className="toggle-label" style={{ fontSize: 12 }}>Include modifier keys</div>
-          <div className="toggle-desc">Allow Ctrl, Alt, Shift combined with the hotkey</div>
-        </div>
-        <button
-          type="button"
-          className={`toggle ${useModifiers ? 'on' : ''}`}
-          onClick={() => setUseModifiers(m => !m)}
-        />
-      </div>
-    </div>
-  );
-}
+import { HotkeyCapture } from '../components/OnboardingSteps';
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState(null);
@@ -341,7 +240,7 @@ export default function SettingsPage() {
           <div className="card-title">Clip Marker Hotkey</div>
           <div className="form-group" style={{ marginTop: 16 }}>
             <label className="form-label">Hotkey</label>
-            <HotkeyInput
+            <HotkeyCapture
               value={settings.clipMarkerHotkey || 'F9'}
               onChange={v => updateSetting('clipMarkerHotkey', v)}
             />

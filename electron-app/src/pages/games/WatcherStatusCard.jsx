@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useState, useEffect } from 'react';
 import { ExternalLink, Square, Play, Circle, AlertTriangle, X, Settings } from 'lucide-react';
 
 function formatUptime(startedAt) {
@@ -30,7 +30,14 @@ function parseGameState(gameState) {
 }
 
 const WatcherStatusCard = memo(function WatcherStatusCard({ status, onToggle, scriptWarning, onDismissWarning, onGoToSettings, onOpenOBS }) {
+  const [tick, setTick] = useState(0);
   const state = parseGameState(status.gameState);
+
+  useEffect(() => {
+    if (!status.running) return;
+    const interval = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(interval);
+  }, [status.running]);
 
   return (
     <div className="card">
