@@ -132,6 +132,47 @@ describe('GET /api/markers', () => {
   })
 })
 
+describe('POST /api/markers/add', () => {
+  it('returns 400 when game_name is missing', async () => {
+    const res = await request(server)
+      .post('/api/markers/add')
+      .send({ timestamp: 1705340100 })
+    expect(res.status).toBe(400)
+  })
+
+  it('returns 400 when timestamp is not a number', async () => {
+    const res = await request(server)
+      .post('/api/markers/add')
+      .send({ game_name: 'Halo', timestamp: 'bad' })
+    expect(res.status).toBe(400)
+  })
+
+  it('creates the markers file and adds the marker', async () => {
+    const res = await request(server)
+      .post('/api/markers/add')
+      .send({ game_name: 'Halo', timestamp: 1705340100 })
+    expect(res.status).toBe(200)
+    expect(res.body.success).toBe(true)
+
+    const data = JSON.parse(fs.readFileSync(markersFile, 'utf-8'))
+    expect(data.markers).toHaveLength(1)
+    expect(data.markers[0].game_name).toBe('Halo')
+    expect(data.markers[0].timestamp).toBe(1705340100)
+    expect(data.markers[0].created_at).toBeDefined()
+  })
+
+  it('appends to existing markers', async () => {
+    setMarkers([{ game_name: 'Halo', timestamp: 1705339800, created_at: '' }])
+    const res = await request(server)
+      .post('/api/markers/add')
+      .send({ game_name: 'Halo', timestamp: 1705340100 })
+    expect(res.status).toBe(200)
+
+    const data = JSON.parse(fs.readFileSync(markersFile, 'utf-8'))
+    expect(data.markers).toHaveLength(2)
+  })
+})
+
 describe('POST /api/markers/delete', () => {
   it('returns 404 when marker timestamp not found', async () => {
     setMarkers([{ game_name: 'Halo', timestamp: 9999, created_at: '' }])
@@ -156,5 +197,14 @@ describe('POST /api/markers/delete', () => {
     const remaining = JSON.parse(fs.readFileSync(markersFile, 'utf-8'))
     expect(remaining.markers).toHaveLength(1)
     expect(remaining.markers[0].timestamp).toBe(1705340100)
+  })
+})
+
+describe('GET /api/processing', () => {
+  it('returns processing=false and empty jobs when nothing is running', async () => {
+    const res = await request(server).get('/api/processing')
+    expect(res.status).toBe(200)
+    expect(res.body.processing).toBe(false)
+    expect(res.body.jobs).toEqual([])
   })
 })

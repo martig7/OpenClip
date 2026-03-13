@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Folder, Calendar, HardDrive, Play, FolderOpen, Trash2, Film, Check, X } from 'lucide-react'
+import { Folder, Calendar, HardDrive, Play, FolderOpen, Trash2, Film, Check, X, Loader2 } from 'lucide-react'
 import Sidebar from '../components/Sidebar'
 import Modal from '../components/Modal'
 import { apiFetch, apiPost, getBase } from '../apiBase'
+
+const PROCESSING_POLL_MS = 3000
 
 function ClipsPage() {
   const [clips, setClips] = useState([])
@@ -12,11 +14,33 @@ function ClipsPage() {
   const [deleteModal, setDeleteModal] = useState(false)
   const [toast, setToast] = useState(null)
   const [searchParams, setSearchParams] = useSearchParams()
+  const [processingJobs, setProcessingJobs] = useState([])
   const toastTimerRef = useRef(null)
+  const processingTimerRef = useRef(null)
 
   useEffect(() => {
-    return () => clearTimeout(toastTimerRef.current)
+    return () => {
+      clearTimeout(toastTimerRef.current)
+      clearTimeout(processingTimerRef.current)
+    }
   }, [])
+
+  const pollProcessing = useCallback(async () => {
+    try {
+      const res = await apiFetch('/api/processing')
+      const data = await res.json()
+      const jobs = data.jobs || []
+      setProcessingJobs(prev => {
+        if (prev.length > 0 && jobs.length === 0) {
+          fetchClips()
+        }
+        return jobs
+      })
+      if (jobs.length > 0) {
+        processingTimerRef.current = setTimeout(pollProcessing, PROCESSING_POLL_MS)
+      }
+    } catch {}
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchClips = useCallback(async () => {
     try {
@@ -44,7 +68,8 @@ function ClipsPage() {
         }
       }
     })
-  }, [fetchClips, initialPathParam, setSearchParams])
+    pollProcessing()
+  }, [fetchClips, initialPathParam, setSearchParams, pollProcessing])
 
   const handleDelete = useCallback(async () => {
     if (!selectedClip) return
@@ -85,6 +110,14 @@ function ClipsPage() {
 
   return (
     <div className="page-content">
+      {processingJobs.length > 0 && (
+        <div className="processing-banner">
+          <Loader2 size={14} className="processing-spinner" />
+          {processingJobs.length === 1
+            ? `Converting "${processingJobs[0].filename}" to MP4…`
+            : `Converting ${processingJobs.length} recordings to MP4…`}
+        </div>
+      )}
       <Sidebar
         items={clips}
         selectedItem={selectedClip}

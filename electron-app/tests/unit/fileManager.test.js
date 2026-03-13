@@ -9,6 +9,18 @@ import os from 'os'
 
 import { makeMockStore } from '../helpers/mockStore.js'
 
+// MARKERS_FILE path matches the electron mock: os.tmpdir()/openclip-test/userData/runtime/clip_markers.json
+const MARKERS_FILE = path.join(os.tmpdir(), 'openclip-test', 'userData', 'runtime', 'clip_markers.json')
+
+function writeMarkersFile(markers) {
+  fs.mkdirSync(path.dirname(MARKERS_FILE), { recursive: true })
+  fs.writeFileSync(MARKERS_FILE, JSON.stringify({ markers }))
+}
+
+function cleanMarkersFile() {
+  try { fs.unlinkSync(MARKERS_FILE) } catch {}
+}
+
 // Helper: build a minimal ipcMain mock that captures handlers by channel name
 function makeMockIpcMain() {
   const handlers = {}
@@ -203,13 +215,13 @@ describe('organizeRecordings', () => {
       removeMarkers: false,
       deleteFullRecording: false,
     }
-    store._data.clipMarkers = []
+    // No markers → processAutoClips returns early, should not throw
+    cleanMarkersFile()
 
     const { organizeRecordings } = await import('../../electron/fileManager.js')
     const src = path.join(obsDir, 'video.mp4')
     fs.writeFileSync(src, Buffer.alloc(1024))
 
-    // Should not throw even with empty markers
     await organizeRecordings(store, 'MyGame')
   })
 
@@ -227,14 +239,13 @@ describe('organizeRecordings', () => {
     const recordingMtime = Date.now() / 1000
     const duration = 60
     const recordingStartUnix = recordingMtime - duration
-    store._data.clipMarkers = [
-      { game: 'MyGame', timestamp: recordingStartUnix + 30 },
-    ]
+    writeMarkersFile([
+      { game_name: 'MyGame', timestamp: recordingStartUnix + 30, created_at: '' },
+    ])
 
     const { organizeRecordings } = await import('../../electron/fileManager.js')
     const src = path.join(obsDir, 'video.mp4')
-    const srcBuf = Buffer.alloc(1024)
-    fs.writeFileSync(src, srcBuf)
+    fs.writeFileSync(src, Buffer.alloc(1024))
 
     // Mock execFile: handle ffprobe duration probe and ffmpeg clip extraction
     cp.execFile.mockImplementation((bin, args, opts, callback) => {
@@ -252,7 +263,7 @@ describe('organizeRecordings', () => {
     await organizeRecordings(store, 'MyGame')
 
     // Verify execFile was called with ffmpeg clip-extraction args (not execSync)
-    const ffmpegCalls = cp.execFile.mock.calls.filter(([bin, args]) =>
+    const ffmpegCalls = cp.execFile.mock.calls.filter(([_bin, args]) =>
       !args.includes('-show_entries') && args.includes('-avoid_negative_ts')
     )
     expect(ffmpegCalls).toHaveLength(1)
@@ -319,49 +330,3 @@ describe('setupFileManager IPC path validation', () => {
   }
 })
 
-// ─────────────────────────────────────────────────────────────────
-// setupFileManager — recordings:delete / clips:delete path validation
-// ─────────────────────────────────────────────────────────────────
-describe('setupFileManager IPC path validation', () => {
-  let store
-  let ipc
-
-  beforeEach(async () => {
-    vi.resetModules()
-    store = makeMockStore({
-      settings: { obsRecordingPath: obsDir, destinationPath: destDir },
-    })
-    ipc = makeMockIpcMain()
-    const { setupFileManager } = await import('../../electron/fileManager.js')
-    setupFileManager(ipc, store)
-  })
-
-  for (const channel of ['recordings:delete', 'clips:delete']) {
-    describe(channel, () => {
-      it('deletes a valid file inside destPath', async () => {
-        const fp = path.join(destDir, 'game', 'recording.mp4')
-        fs.mkdirSync(path.dirname(fp), { recursive: true })
-        fs.writeFileSync(fp, Buffer.alloc(8))
-        const result = await ipc.invoke(channel, fp)
-        expect(result.success).toBe(true)
-        expect(fs.existsSync(fp)).toBe(false)
-      })
-
-      it('rejects a path traversal attempt with .. sequences', async () => {
-        // Construct a path that starts with destDir string but escapes via ..
-        const traversal = path.join(destDir, '..', 'secret.txt')
-        await expect(ipc.invoke(channel, traversal)).rejects.toThrow('Invalid path')
-      })
-
-      it('rejects a path outside destPath', async () => {
-        const outside = path.join(tmpDir, 'outside.mp4')
-        fs.writeFileSync(outside, Buffer.alloc(8))
-        await expect(ipc.invoke(channel, outside)).rejects.toThrow('Invalid path')
-      })
-
-      it('rejects destPath itself (not a file inside it)', async () => {
-        await expect(ipc.invoke(channel, destDir)).rejects.toThrow('Invalid path')
-      })
-    })
-  }
-})

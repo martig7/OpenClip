@@ -34,14 +34,31 @@ function killAllProcesses() {
 // to prevent file-access errors and duplicate entries while ffmpeg is running.
 const activeRemuxPaths = new Set();
 
+// Map of srcPath (normalized) → { srcPath, destPath, filename, startedAt }
+// Provides human-readable status for the /api/processing endpoint.
+const activeRemuxJobs = new Map();
+
 function markRemuxing(srcPath, destPath) {
-  activeRemuxPaths.add(path.normalize(srcPath).toLowerCase());
+  const normSrc = path.normalize(srcPath).toLowerCase();
+  activeRemuxPaths.add(normSrc);
   if (destPath) activeRemuxPaths.add(path.normalize(destPath).toLowerCase());
+  activeRemuxJobs.set(normSrc, {
+    srcPath,
+    destPath: destPath || null,
+    filename: path.basename(srcPath),
+    startedAt: Date.now(),
+  });
 }
 
 function unmarkRemuxing(srcPath, destPath) {
-  activeRemuxPaths.delete(path.normalize(srcPath).toLowerCase());
+  const normSrc = path.normalize(srcPath).toLowerCase();
+  activeRemuxPaths.delete(normSrc);
   if (destPath) activeRemuxPaths.delete(path.normalize(destPath).toLowerCase());
+  activeRemuxJobs.delete(normSrc);
+}
+
+function getActiveProcessing() {
+  return Array.from(activeRemuxJobs.values());
 }
 
 // --- Helpers ---
@@ -475,4 +492,5 @@ module.exports = {
   killAllProcesses,
   markRemuxing,
   unmarkRemuxing,
+  getActiveProcessing,
 };

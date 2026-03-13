@@ -23,9 +23,14 @@ function loadMarkers() {
 
 function saveMarkers(data) {
   try {
+    const dir = path.dirname(MARKERS_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(MARKERS_FILE, JSON.stringify(data, null, 2), 'utf-8');
     return true;
-  } catch { return false; }
+  } catch (e) {
+    console.error('[markers] Failed to save markers file:', e.message);
+    return false;
+  }
 }
 
 // Cache for getVideoDuration keyed by "filePath:mtime"; bounded to prevent unbounded memory growth
@@ -264,14 +269,34 @@ function startApiServer(appStore) {
         return json(res, { markers: matching, duration });
       }
 
+      // POST /api/markers/add
+      if (pathname === '/api/markers/add' && req.method === 'POST') {
+        const data = await readBody(req);
+        const { game_name, timestamp, created_at } = data;
+        if (!game_name || typeof timestamp !== 'number') {
+          return json(res, { error: 'game_name and numeric timestamp are required' }, 400);
+        }
+        const markersData = loadMarkers();
+        markersData.markers.push({ game_name, timestamp, created_at: created_at || new Date().toISOString() });
+        if (!saveMarkers(markersData)) return json(res, { error: 'Failed to save marker' }, 500);
+        return json(res, { success: true });
+      }
+
       // POST /api/markers/delete
       if (pathname === '/api/markers/delete' && req.method === 'POST') {
         const data = await readBody(req);
         const markersData = loadMarkers();
         const before = markersData.markers.length;
         markersData.markers = markersData.markers.filter(m => m.timestamp !== data.timestamp);
-        if (markersData.markers.length < before) { saveMarkers(markersData); return json(res, { success: true }); }
-        return json(res, { error: 'Not found' }, 404);
+        if (markersData.markers.length === before) return json(res, { error: 'Not found' }, 404);
+        if (!saveMarkers(markersData)) return json(res, { error: 'Failed to save markers' }, 500);
+        return json(res, { success: true });
+      }
+
+      // GET /api/processing
+      if (pathname === '/api/processing' && req.method === 'GET') {
+        const jobs = service.getActiveProcessing();
+        return json(res, { processing: jobs.length > 0, jobs });
       }
 
       // GET /api/storage/stats

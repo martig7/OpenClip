@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
-const { isVideoFile, CODEC_MAP, FFMPEG_PATH, FFPROBE_PATH } = require('./constants');
+const { isVideoFile, CODEC_MAP, FFMPEG_PATH, FFPROBE_PATH, MARKERS_FILE } = require('./constants');
 const service = require('./recordingService');
 
 const execFileAsync = promisify(execFile);
@@ -22,10 +22,7 @@ async function organizeRecordings(store, gameName) {
   if (!obsPath || !destPath || !fs.existsSync(obsPath)) return;
 
   const files = fs.readdirSync(obsPath).filter(f => isVideoFile(f));
-
   const now = new Date();
-  const weekFolder = `${gameName} - ${getWeekFolder(now)}`;
-  const targetDir = path.join(destPath, weekFolder);
 
   for (const file of files) {
     const src = path.join(obsPath, file);
@@ -42,10 +39,14 @@ async function organizeRecordings(store, gameName) {
       continue;
     }
 
+    // Use the file's own mtime for the date so the session lands in the correct week folder
+    const fileDate = statCheck.mtime;
+    const weekFolder = `${gameName} - ${getWeekFolder(fileDate)}`;
+    const targetDir = path.join(destPath, weekFolder);
     fs.mkdirSync(targetDir, { recursive: true });
 
-    const dateStr = now.toISOString().slice(0, 10);
-    const existing = fs.readdirSync(targetDir).filter(f => f.includes(dateStr));
+    const dateStr = fileDate.toISOString().slice(0, 10);
+    const existing = fs.readdirSync(targetDir).filter(f => isVideoFile(f) && f.includes(dateStr));
     const sessionNum = existing.length + 1;
     const ext = path.extname(file);
     const newName = `${gameName} Session ${dateStr} #${sessionNum}.mp4`;
@@ -96,7 +97,7 @@ async function organizeRecordings(store, gameName) {
   // Auto-clip from markers when auto-clip is enabled
   const autoClipSettings = store.get('settings.autoClip');
   if (autoClipSettings && autoClipSettings.enabled) {
-    await processAutoClips(store, gameName, targetDir);
+    await processAutoClips(store, gameName, destPath);
   }
 }
 
@@ -114,11 +115,32 @@ async function getVideoDuration(filePath) {
   }
 }
 
-async function processAutoClips(store, gameName, recordingDir) {
-  const markers = (store.get('clipMarkers') || []).filter(m => m.game === gameName);
+function loadMarkersFile() {
+  try {
+    return JSON.parse(fs.readFileSync(MARKERS_FILE, 'utf-8'));
+  } catch {
+    return { markers: [] };
+  }
+}
+
+function saveMarkersFile(data) {
+  try {
+    const dir = path.dirname(MARKERS_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(MARKERS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+    return true;
+  } catch (e) {
+    console.error('[markers] Failed to save markers file:', e.message);
+    return false;
+  }
+}
+
+async function processAutoClips(store, gameName, destPath) {
+  // Read markers from the canonical JSON file (same source as the HTTP API)
+  const markersData = loadMarkersFile();
+  const markers = (markersData.markers || []).filter(m => m.game_name === gameName);
   if (markers.length === 0) return;
 
-  const destPath = store.get('settings.destinationPath');
   const clipsDir = path.join(destPath, 'Clips');
   fs.mkdirSync(clipsDir, { recursive: true });
 
@@ -126,32 +148,34 @@ async function processAutoClips(store, gameName, recordingDir) {
   const bufferBefore = autoClip.bufferBefore || 15;
   const bufferAfter = autoClip.bufferAfter || 15;
 
-  // Find the most recent recording file
-  if (!fs.existsSync(recordingDir)) return;
-  const names = fs.readdirSync(recordingDir, { withFileTypes: true })
-    .filter(f => f.isFile() && f.name.endsWith('.mp4'))
-    .map(f => f.name);
-  const settled = await Promise.allSettled(
-    names.map(async f => {
-      const fp = path.join(recordingDir, f);
-      const { mtime } = await fs.promises.stat(fp);
-      return { name: f, path: fp, mtime };
-    })
-  );
-  const recordings = settled
-    .filter(r => r.status === 'fulfilled')
-    .map(r => r.value)
-    .sort((a, b) => b.mtime - a.mtime);
+  // Find the most recent recording for this game across all week folders in destPath
+  const allRecordings = [];
+  if (fs.existsSync(destPath)) {
+    for (const entry of fs.readdirSync(destPath, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      if (!entry.name.startsWith(gameName + ' - ')) continue;
+      const folderPath = path.join(destPath, entry.name);
+      try {
+        for (const f of fs.readdirSync(folderPath)) {
+          if (!f.endsWith('.mp4')) continue;
+          const fp = path.join(folderPath, f);
+          const stat = fs.statSync(fp);
+          allRecordings.push({ path: fp, mtime: stat.mtime });
+        }
+      } catch {}
+    }
+  }
 
-  if (recordings.length === 0) return;
-  const recording = recordings[0];
+  if (allRecordings.length === 0) return;
+  allRecordings.sort((a, b) => b.mtime - a.mtime);
+  const recording = allRecordings[0];
 
   // Determine recording time window to convert absolute marker timestamps → video positions
   const duration = await getVideoDuration(recording.path);
   if (!duration) return;
   const recordingStartUnix = recording.mtime.getTime() / 1000 - duration;
 
-  const dateStr = new Date().toISOString().slice(0, 10);
+  const dateStr = recording.mtime.toISOString().slice(0, 10);
   let clipNum = service.countClipsForDate(clipsDir, gameName, dateStr) + 1;
 
   for (const marker of markers) {
@@ -175,14 +199,14 @@ async function processAutoClips(store, gameName, recordingDir) {
       ], { timeout: 5 * 60 * 1000, killSignal: 'SIGKILL' });
       clipNum++;
       service.invalidateClipsCache();
-    } catch {
-      // Skip failed clips
+    } catch (e) {
+      console.warn(`[autoClip] Failed to create clip for marker at ${marker.timestamp}:`, e.message);
     }
   }
 
   if (autoClip.removeMarkers) {
-    const remaining = (store.get('clipMarkers') || []).filter(m => m.game !== gameName);
-    store.set('clipMarkers', remaining);
+    markersData.markers = markersData.markers.filter(m => m.game_name !== gameName);
+    saveMarkersFile(markersData);
   }
 
   if (autoClip.deleteFullRecording) {
@@ -226,14 +250,15 @@ function setupFileManager(ipcMain, store) {
   });
 
   ipcMain.handle('markers:list', () => {
-    return store.get('clipMarkers') || [];
+    return loadMarkersFile().markers;
   });
 
-  ipcMain.handle('markers:delete', (_event, index) => {
-    const markers = store.get('clipMarkers') || [];
-    markers.splice(index, 1);
-    store.set('clipMarkers', markers);
-    return markers;
+  ipcMain.handle('markers:delete', (_event, timestamp) => {
+    const data = loadMarkersFile();
+    const before = data.markers.length;
+    data.markers = data.markers.filter(m => m.timestamp !== timestamp);
+    if (data.markers.length < before) saveMarkersFile(data);
+    return data.markers;
   });
 
   ipcMain.handle('storage:stats', () => {

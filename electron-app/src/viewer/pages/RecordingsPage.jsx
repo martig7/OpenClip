@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Check, X } from 'lucide-react'
+import { Check, X, Loader2 } from 'lucide-react'
 import Sidebar from '../components/Sidebar'
 import VideoPlayer from '../components/VideoPlayer'
 import { apiFetch } from '../apiBase'
 import api from '../../api'
+
+const PROCESSING_POLL_MS = 3000
 
 function RecordingsPage() {
   const [recordings, setRecordings] = useState([])
@@ -13,11 +15,37 @@ function RecordingsPage() {
   const [toast, setToast] = useState(null)
   const [searchParams, setSearchParams] = useSearchParams()
   const [games, setGames] = useState([])
+  const [processingJobs, setProcessingJobs] = useState([])
   const toastTimerRef = useRef(null)
+  const processingTimerRef = useRef(null)
 
   useEffect(() => {
-    return () => clearTimeout(toastTimerRef.current)
+    return () => {
+      clearTimeout(toastTimerRef.current)
+      clearTimeout(processingTimerRef.current)
+    }
   }, [])
+
+  // Poll /api/processing while jobs are active; refresh recordings list when processing ends
+  const pollProcessing = useCallback(async () => {
+    try {
+      const res = await apiFetch('/api/processing')
+      const data = await res.json()
+      const jobs = data.jobs || []
+      setProcessingJobs(prev => {
+        if (prev.length > 0 && jobs.length === 0) {
+          // Jobs just finished — refresh recordings list
+          fetchRecordings()
+        }
+        return jobs
+      })
+      if (jobs.length > 0) {
+        processingTimerRef.current = setTimeout(pollProcessing, PROCESSING_POLL_MS)
+      }
+    } catch {
+      // Silently ignore — API may not be ready yet
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchRecordings = useCallback(async () => {
     try {
@@ -46,7 +74,8 @@ function RecordingsPage() {
       }
     })
     api.getGames().then(g => setGames(g || [])).catch(() => {})
-  }, [fetchRecordings, initialPathParam, setSearchParams])
+    pollProcessing()
+  }, [fetchRecordings, initialPathParam, setSearchParams, pollProcessing])
 
   const handleClipCreated = useCallback((clip) => {
     setToast({ type: 'success', message: `Clip created: ${clip.filename}` })
@@ -60,7 +89,10 @@ function RecordingsPage() {
     toastTimerRef.current = setTimeout(() => setToast(null), 4000)
     setSelectedRecording(null)
     fetchRecordings()
-  }, [fetchRecordings])
+    // Restart processing poll — the organize may have kicked off a remux
+    clearTimeout(processingTimerRef.current)
+    processingTimerRef.current = setTimeout(pollProcessing, 500)
+  }, [fetchRecordings, pollProcessing])
 
   const handleOrganizeError = useCallback((msg) => {
     setToast({ type: 'error', message: msg })
@@ -80,6 +112,14 @@ function RecordingsPage() {
 
   return (
     <div className="page-content">
+      {processingJobs.length > 0 && (
+        <div className="processing-banner">
+          <Loader2 size={14} className="processing-spinner" />
+          {processingJobs.length === 1
+            ? `Converting "${processingJobs[0].filename}" to MP4…`
+            : `Converting ${processingJobs.length} recordings to MP4…`}
+        </div>
+      )}
       <Sidebar
         items={recordings}
         selectedItem={selectedRecording}

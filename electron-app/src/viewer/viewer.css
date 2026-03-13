@@ -790,6 +790,34 @@ body {
     opacity: 1;
   }
 }
+/* Processing Banner */
+.processing-banner {
+  position: fixed;
+  top: 48px; /* below the nav bar */
+  left: 0;
+  right: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: color-mix(in srgb, var(--accent) 15%, var(--bg-secondary));
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.processing-spinner {
+  animation: spin 1.2s linear infinite;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
 /* Storage Page */
 .storage-page {
   display: flex;
