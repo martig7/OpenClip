@@ -5,7 +5,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { exec, execFile, spawn } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const { shell } = require('electron');
 const url = require('url');
 
@@ -70,26 +70,27 @@ function getDiskUsage(dirPath) {
   if (cached && now - cached.ts < DISK_USAGE_TTL_MS) return Promise.resolve(cached.data);
 
   return new Promise((resolve) => {
-    exec(
-      `powershell -Command "(Get-PSDrive -Name (Split-Path '${dirPath.replace(/'/g, "''")}' -Qualifier).TrimEnd(':')) | Select-Object Used, Free | ConvertTo-Json"`,
-      { encoding: 'utf-8', timeout: 5000 },
-      (error, stdout) => {
-        if (error) return resolve(null);
-        try {
-          const d = JSON.parse(stdout);
-          const total = d.Used + d.Free;
-          const result = {
-            total, used: d.Used, free: d.Free,
-            total_formatted: formatFileSize(total),
-            used_formatted: formatFileSize(d.Used),
-            free_formatted: formatFileSize(d.Free),
-            percent_used: total > 0 ? (d.Used / total * 100) : 0,
-          };
-          _diskUsageCache.set(driveKey, { data: result, ts: Date.now() });
-          resolve(result);
-        } catch { resolve(null); }
+    fs.statfs(dirPath, (error, stats) => {
+      if (error || !stats) return resolve(null);
+      try {
+        const total = Number(stats.blocks) * Number(stats.bsize);
+        const free = Number(stats.bavail) * Number(stats.bsize);
+        const used = Math.max(0, total - free);
+        const result = {
+          total,
+          used,
+          free,
+          total_formatted: formatFileSize(total),
+          used_formatted: formatFileSize(used),
+          free_formatted: formatFileSize(free),
+          percent_used: total > 0 ? (used / total * 100) : 0,
+        };
+        _diskUsageCache.set(driveKey, { data: result, ts: Date.now() });
+        resolve(result);
+      } catch {
+        resolve(null);
       }
-    );
+    });
   });
 }
 

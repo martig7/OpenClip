@@ -6,7 +6,6 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { exec } = require('child_process');
 const ini = require('./iniParser');
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -47,11 +46,8 @@ function iniReplaceValue(lines, section, key, value) {
 }
 
 function isOBSRunning() {
-  return new Promise((resolve) => {
-    exec('tasklist /FO CSV /NH', { encoding: 'utf-8', timeout: 5000 }, (err, out) => {
-      resolve(!err && !!out && out.toLowerCase().includes('obs64.exe'));
-    });
-  });
+  const { getRunningProcessNames } = require('./processDetector');
+  return Promise.resolve(getRunningProcessNames().some(n => n === 'obs64.exe'));
 }
 
 /**
