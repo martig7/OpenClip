@@ -288,8 +288,8 @@ export default function AddGameModal({
                     </div>
                     <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                       {capturePref === 'window_capture'
-                        ? 'Cross-platform. Use if Game Capture doesn't work for this title.'
-                        : 'Best for games on Windows. Fits source to canvas automatically.'}
+                        ? "Cross-platform. Use if Game Capture doesn't work for this title."
+                        : "Best for games on Windows. Fits source to canvas automatically."}
                     </span>
 
                     <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>

@@ -22,7 +22,7 @@ Current file sizes and guidance for merging branches into the modularized codeba
 | `src/pages/games/SceneAudioSourcesCard.jsx` | 347 |
 | `src/pages/EncodingPage.jsx` | 331 |
 | `src/viewer/pages/ClipsPage.jsx` | 165 |
-| `src/pages/games/audioSourceUtils.js` | 153 |
+| `src/pages/games/audioSourceUtils.jsx` | 153 |
 | `src/viewer/components/Timeline.jsx` | 148 |
 | `src/viewer/utils/treemapUtils.js` | 145 |
 | `src/App.jsx` | 137 |
