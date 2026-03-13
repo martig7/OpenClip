@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, Edit2, Check, X, Gamepad2, RefreshCw, ChevronDown, Image, Wand2, Settings, AlertTriangle, Music, Mic } from 'lucide-react';
+import { Plus, Trash2, Edit2, Gamepad2, AlertTriangle } from 'lucide-react';
 import api from '../api';
 import { useGameWatcherState } from '../hooks/useGameWatcherState';
 import { useAudioSourcesState } from '../hooks/useAudioSourcesState';
@@ -9,13 +9,14 @@ import { useAddGameModalState } from '../hooks/useAddGameModalState';
 import { useTrackState } from '../hooks/useTrackState';
 import {
   AUDIO_KIND_META,
-  AudioIcon,
   buildAvailableAudioInputs,
   getAppAudioWindowKey,
   isAppAudioKind,
 } from './games/audioSourceUtils';
 import WatcherStatusCard from './games/WatcherStatusCard';
 import EditGameModal from './games/EditGameModal';
+import AddGameModal from './games/AddGameModal';
+import SceneAudioSourcesCard from './games/SceneAudioSourcesCard';
 
 
 export default function GamesPage() {
@@ -61,9 +62,6 @@ export default function GamesPage() {
 
   const {
     trackLabels, setTrackLabels,
-    showTrackEditor, setShowTrackEditor,
-    tempTrackLabels, setTempTrackLabels,
-    savingTrackLabels, setSavingTrackLabels,
     trackData, setTrackData,
     trackLoading, setTrackLoading,
   } = useTrackState();
@@ -327,14 +325,6 @@ export default function GamesPage() {
     }
   }
 
-
-  async function pickIcon() {
-    const filePath = await api.openFileDialog({
-      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'ico', 'bmp', 'gif', 'webp'] }],
-    });
-    if (filePath) setNewGame(g => ({ ...g, icon_path: filePath }));
-  }
-
   async function removeGame(id) {
     const game = games.find(g => g.id === id);
     if (!game) return;
@@ -359,48 +349,6 @@ export default function GamesPage() {
   async function toggleGame(id) {
     await api.toggleGame(id);
     loadGames();
-  }
-
-  async function refreshWindows() {
-    setLoadingWindows(true);
-    try {
-      const windows = await api.getVisibleWindows();
-      setVisibleWindows(windows);
-    } catch (err) {
-      showToast(err?.message || 'Failed to load windows');
-    } finally {
-      setLoadingWindows(false);
-    }
-  }
-
-  function selectWindow(win) {
-    setNewGame(g => ({
-      ...g,
-      name: g.name || win.process,
-      selector: win.title,
-      exe: win.exe,
-      windowClass: win.windowClass,
-      windowMatchPriority: 0,
-    }));
-    setShowWindowPicker(false);
-    // Try to extract the exe icon in the background
-    api.extractWindowIcon(win.process).then(iconPath => {
-      if (iconPath) setNewGame(g => ({ ...g, icon_path: iconPath }));
-    });
-  }
-
-  async function loadOBSScenes() {
-    setLoadingScenes(true);
-    setScenesError(null);
-    try {
-      const scenes = await api.getOBSWSScenes();
-      setObsScenes(scenes || []);
-    } catch (err) {
-      setObsScenes([]);
-      setScenesError(err.message || 'Failed to load OBS scenes');
-    } finally {
-      setLoadingScenes(false);
-    }
   }
 
   /** Collect all scene names from games that have a scene set. */
@@ -582,8 +530,7 @@ export default function GamesPage() {
   function openAddModal() {
     resetAddModal();
     setShowAddModal(true);
-    refreshWindows();
-    loadOBSScenes(); // Proactively load scenes for template selection
+    // Windows and OBS scenes are loaded by AddGameModal's useEffect on mount
   }
 
   function goToSettings() {
@@ -591,7 +538,6 @@ export default function GamesPage() {
     resetAddModal();
     navigate('/settings');
   }
-
 
   const toggleWatcher = useCallback(async () => {
     try {
@@ -684,728 +630,58 @@ export default function GamesPage() {
           )}
         </div>
 
-        {/* Scene Audio Sources card */}
-        <div className="card" style={{ marginTop: 16 }}>
-          <div className="card-header">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span className="card-title">Scene Audio Sources</span>
-              <button
-                className="btn btn-secondary btn-sm"
-                style={{ padding: '3px 8px', fontSize: 10 }}
-                onClick={() => {
-                  setTempTrackLabels([...trackLabels]);
-                  setShowTrackEditor(true);
-                }}
-              >
-                <Edit2 size={10} style={{ marginRight: 4 }} /> Edit Track Labels
-              </button>
-            </div>
-            <div style={{ position: 'relative' }} ref={audioDropdownRef}>
-              <button
-                className="btn btn-primary btn-sm"
-                onClick={() => {
-                  if (!showAudioDropdown) {
-                    setShowAudioDropdown(true);
-                    loadAudioInputsForDropdown();
-                  } else {
-                    setShowAudioDropdown(false);
-                  }
-                }}
-              >
-                <Plus size={13} /> Add Source
-              </button>
-
-              {showAudioDropdown && (
-                <div style={{
-                  position: 'absolute',
-                  top: 'calc(100% + 6px)',
-                  right: 0,
-                  zIndex: 200,
-                  minWidth: 300,
-                  background: 'var(--bg-secondary)',
-                  border: '1px solid var(--border-light)',
-                  borderRadius: 'var(--radius)',
-                  boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-                  overflow: 'hidden',
-                }}>
-                  <div style={{ padding: '8px 12px', fontSize: 11, color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Select Audio Source
-                  </div>
-                  {loadingAudioInputs ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px', fontSize: 12, color: 'var(--text-muted)' }}>
-                      <RefreshCw size={13} className="spinning" /> Loading audio sources…
-                    </div>
-                  ) : audioDropdownError ? (
-                    <div style={{ padding: '10px 14px' }}>
-                      <div style={{ fontSize: 12, color: 'var(--danger)', marginBottom: 4 }}>{audioDropdownError}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Make sure OBS is running and WebSocket is configured.</div>
-                    </div>
-                  ) : availableAudioInputs.length === 0 ? (
-                    <div style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)' }}>
-                      No audio sources found. Ensure OBS is running.
-                    </div>
-                  ) : (
-                    <div style={{ maxHeight: 240, overflowY: 'auto' }}>
-                      {/* Group: OBS sources */}
-                      {availableAudioInputs.filter(a => a.source === 'obs').length > 0 && (
-                        <>
-                          <div style={{ padding: '6px 12px 2px', fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>OBS Inputs</div>
-                          {availableAudioInputs.filter(a => a.source === 'obs').map((entry, i) => {
-                            const alreadyAdded = masterAudioSources.some(s => s.name === entry.name);
-                            const meta = AUDIO_KIND_META[entry.kind];
-                            return (
-                              <button
-                                key={i}
-                                onClick={() => !alreadyAdded && addMasterSource(entry)}
-                                disabled={alreadyAdded}
-                                style={{
-                                  display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-                                  padding: '7px 14px', background: 'none', border: 'none',
-                                  cursor: alreadyAdded ? 'default' : 'pointer', textAlign: 'left',
-                                  opacity: alreadyAdded ? 0.5 : 1,
-                                  transition: 'background 0.1s',
-                                }}
-                                onMouseEnter={e => { if (!alreadyAdded) e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                                onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
-                              >
-                                <AudioIcon kind={entry.kind} size={14} />
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.name}</div>
-                                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{meta?.label || entry.kind}</div>
-                                </div>
-                                {alreadyAdded && <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>Added</span>}
-                              </button>
-                            );
-                          })}
-                        </>
-                      )}
-                      {/* Group: Windows devices not in OBS */}
-                      {availableAudioInputs.filter(a => a.source === 'windows').length > 0 && (
-                        <>
-                          <div style={{ padding: '6px 12px 2px', fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', borderTop: '1px solid var(--border)', marginTop: 4 }}>Windows Audio Devices</div>
-                          {availableAudioInputs.filter(a => a.source === 'windows').map((entry, i) => {
-                            const alreadyAdded = masterAudioSources.some(s => s.name === entry.name);
-                            return (
-                              <button
-                                key={i}
-                                onClick={() => !alreadyAdded && addMasterSource(entry)}
-                                disabled={alreadyAdded}
-                                style={{
-                                  display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-                                  padding: '7px 14px', background: 'none', border: 'none',
-                                  cursor: alreadyAdded ? 'default' : 'pointer', textAlign: 'left',
-                                  opacity: alreadyAdded ? 0.5 : 1,
-                                  transition: 'background 0.1s',
-                                }}
-                                onMouseEnter={e => { if (!alreadyAdded) e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                                onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
-                              >
-                                {entry.kind === 'wasapi_input_capture' ? <Mic size={14} /> : <Music size={14} />}
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.name}</div>
-                                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{entry.kind === 'wasapi_input_capture' ? 'Input device' : 'Output device'}</div>
-                                </div>
-                                {alreadyAdded && <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>Added</span>}
-                              </button>
-                            );
-                          })}
-                        </>
-                      )}
-                      {/* Group: Running Applications (Application Audio Capture) */}
-                      {availableAudioInputs.filter(a => a.source === 'app').length > 0 && (
-                        <>
-                          <div style={{ padding: '6px 12px 2px', fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', borderTop: '1px solid var(--border)', marginTop: 4 }}>Applications</div>
-                          {availableAudioInputs.filter(a => a.source === 'app').map((entry, i) => {
-                            const alreadyAdded = masterAudioSources.some(s => s.name === entry.name);
-                            return (
-                              <button
-                                key={i}
-                                onClick={() => !alreadyAdded && addMasterSource(entry)}
-                                disabled={alreadyAdded}
-                                style={{
-                                  display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-                                  padding: '7px 14px', background: 'none', border: 'none',
-                                  cursor: alreadyAdded ? 'default' : 'pointer', textAlign: 'left',
-                                  opacity: alreadyAdded ? 0.5 : 1,
-                                  transition: 'background 0.1s',
-                                }}
-                                onMouseEnter={e => { if (!alreadyAdded) e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                                onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
-                              >
-                                <ChevronDown size={14} style={{ transform: 'rotate(-90deg)', flexShrink: 0 }} />
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.name}</div>
-                                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Application Audio Capture</div>
-                                </div>
-                                {alreadyAdded && <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>Added</span>}
-                              </button>
-                            );
-                          })}
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Description */}
-          <div style={{ padding: '4px 16px 10px', fontSize: 12, color: 'var(--text-muted)', borderBottom: '1px solid var(--border)' }}>
-            Audio sources added here are applied to all game scenes. Use the Edit button on a game to manage per-scene sources.
-          </div>
-
-          {/* Master source list */}
-          {masterAudioSources.length === 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '28px 16px', gap: 8 }}>
-              <Music size={28} style={{ color: 'var(--text-muted)', opacity: 0.5 }} />
-              <div style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center' }}>No audio sources added yet.</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', opacity: 0.7 }}>Click <strong>Add Source</strong> to pick from OBS inputs or Windows audio devices.</div>
-            </div>
-          ) : (
-            <>
-              {/* Track label header row */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-end', padding: '5px 16px 2px', borderBottom: '1px solid var(--border)' }}>
-                <div style={{ display: 'flex', gap: 5, marginRight: 82 }}>
-                  {[1, 2, 3, 4, 5, 6].map(num => (
-                    <div key={num} style={{ width: 22, textAlign: 'center', fontSize: 9, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1 }}>
-                      {trackLabels[num - 1] || `T${num}`}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {masterAudioSources.map(src => {
-              const meta = AUDIO_KIND_META[src.kind];
-              const isApplying = applyingSource === src.name;
-              const tracks = trackData[src.name] || {};
-              const isTrackLoading = trackLoading[src.name];
-              
-              return (
-                <div key={src.name} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, padding: '9px 16px', borderBottom: '1px solid var(--border)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 'var(--radius-sm)', background: 'var(--bg-tertiary)', flexShrink: 0 }}>
-                    <AudioIcon kind={src.kind} size={15} />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 200 }}>
-                    <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{src.name}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{meta?.label || src.kind}</div>
-                  </div>
-
-                  {/* Track routing chips */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 0' }}>
-                    {[1, 2, 3, 4, 5, 6].map(num => {
-                      const active = tracks[String(num)] === true;
-                      return (
-                        <button
-                          key={num}
-                          title={`${trackLabels[num - 1] || `Track ${num}`}: ${active ? 'active' : 'inactive'}`}
-                          disabled={isTrackLoading}
-                          onClick={() => toggleTrack(src.name, num)}
-                          style={{
-                            width: 22, height: 22,
-                            borderRadius: 4,
-                            border: active ? '1.5px solid var(--primary)' : '1.5px solid var(--border-light)',
-                            background: active ? 'var(--primary)' : 'var(--bg-secondary)',
-                            color: active ? '#fff' : 'var(--text-muted)',
-                            fontSize: 10, fontWeight: 600,
-                            cursor: isTrackLoading ? 'default' : 'pointer',
-                            opacity: isTrackLoading ? 0.6 : 1,
-                            transition: 'background 0.12s, border-color 0.12s, color 0.12s',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            lineHeight: 1,
-                          }}
-                        >
-                          {num}
-                        </button>
-                      );
-                    })}
-                    {isTrackLoading && <RefreshCw size={11} className="spinning" style={{ color: 'var(--text-muted)', marginLeft: 2 }} />}
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, minWidth: 70, justifyContent: 'flex-end' }}>
-                    {isApplying && (
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <RefreshCw size={11} className="spinning" /> Applying…
-                      </span>
-                    )}
-                    <button
-                      className="btn-icon"
-                      onClick={() => removeMasterSource(src.name)}
-                      title="Remove from master list"
-                      style={{ color: 'var(--danger)', marginLeft: 8 }}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-            </>
-          )}
-
-          {masterAudioSources.length > 0 && (
-            <div style={{ padding: '8px 16px', fontSize: 11, color: 'var(--text-muted)' }}>
-              OBS must be running with WebSocket enabled. Removing from this list does not remove from existing scenes.
-            </div>
-          )}
-        </div>
+        <SceneAudioSourcesCard
+          masterAudioSources={masterAudioSources}
+          applyingSource={applyingSource}
+          showAudioDropdown={showAudioDropdown}
+          setShowAudioDropdown={setShowAudioDropdown}
+          audioDropdownRef={audioDropdownRef}
+          availableAudioInputs={availableAudioInputs}
+          loadingAudioInputs={loadingAudioInputs}
+          audioDropdownError={audioDropdownError}
+          trackLabels={trackLabels}
+          setTrackLabels={setTrackLabels}
+          trackData={trackData}
+          trackLoading={trackLoading}
+          onLoadAudioInputs={loadAudioInputsForDropdown}
+          onAddSource={addMasterSource}
+          onRemoveSource={removeMasterSource}
+          onToggleTrack={toggleTrack}
+          showToast={showToast}
+        />
       </div>
 
       {showAddModal && (
-        <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) { resetAddModal(); setShowAddModal(false); } } }>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <h2>Add Game</h2>
-            <p>Add a game to monitor for automatic OBS recording.</p>
-            <div className="form-group">
-              <label className="form-label">Game Name</label>
-              <input
-                className="form-input"
-                placeholder="e.g. Valorant"
-                value={newGame.name}
-                onChange={e => setNewGame({ ...newGame, name: e.target.value })}
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Window Selector</label>
-              <div className="form-input-row">
-                <input
-                  className="form-input"
-                  placeholder="e.g. VALORANT or valorant.exe"
-                  value={newGame.selector}
-                  onChange={e => setNewGame({ ...newGame, selector: e.target.value })}
-                />
-                <button
-                  className="btn btn-secondary btn-sm"
-                  onClick={async () => {
-                    const nextState = !showWindowPicker;
-                    setShowWindowPicker(nextState);
-                    if (nextState) {
-                      setLoadingWindows(true);
-                      try {
-                        const windows = await api.getVisibleWindows();
-                        setVisibleWindows(windows);
-                      } finally {
-                        setLoadingWindows(false);
-                      }
-                    }
-                  }}
-                  title="Pick from running windows"
-                >
-                  <ChevronDown size={13} />
-                </button>
-                <button
-                  className="btn btn-secondary btn-sm"
-                  onClick={refreshWindows}
-                  title="Refresh window list"
-                  disabled={loadingWindows}
-                >
-                  <RefreshCw size={13} className={loadingWindows ? 'spinning' : ''} />
-                </button>
-                {showWindowPicker && (
-                  <div style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  right: 0,
-                  zIndex: 200,
-                  marginTop: 4,
-                  background: 'var(--bg-tertiary)',
-                  border: '1px solid var(--border-light)',
-                  borderRadius: 'var(--radius-sm)',
-                  maxHeight: 400,
-                  overflowY: 'auto',
-                  boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-                }}>
-                  {visibleWindows.length === 0 ? (
-                    <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-muted)' }}>
-                      {loadingWindows ? 'Loading...' : 'No windows found. Click refresh.'}
-                    </div>
-                  ) : (
-                    visibleWindows.map((win, i) => (
-                      <div
-                        key={i}
-                        onClick={() => selectWindow(win)}
-                        style={{
-                          padding: '6px 12px',
-                          fontSize: 12,
-                          cursor: 'pointer',
-                          borderBottom: '1px solid var(--border)',
-                          transition: 'background 0.1s',
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                      >
-                        <div style={{ color: 'var(--text-primary)' }}>{win.title}</div>
-                        <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>[{win.exe}] {win.windowClass !== win.process ? win.windowClass : ''}</div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-              </div>
-              {newGame.selector && newGame.exe && (
-                <span style={{ fontSize: 11, color: 'var(--primary)', marginTop: 4, display: 'block' }}>
-                  ✓ Exact match binding set: {newGame.exe}
-                </span>
-              )}
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
-                {newGame.exe ? (
-                  newGame.windowMatchPriority === 2 ? (
-                    <>Watcher detects by exact process name (<strong>{newGame.exe}</strong>), not window title.</>
-                  ) : newGame.windowMatchPriority === 1 ? (
-                    <>Watcher primarily matches window title; if not found, it may fall back to the process executable (<strong>{newGame.exe}</strong>).</>
-                  ) : (
-                    <>Watcher matches window title. The exe binding (<strong>{newGame.exe}</strong>) is mainly used for OBS Application Audio Capture window selection.</>
-                  )
-                ) : (
-                  'Pick a running window (recommended) or type a process name / window title to match'
-                )}
-              </span>
-            </div>
-            {/* Window Match Priority */}
-            <div className="form-group">
-              <label className="form-label">Window Match Priority</label>
-              <select
-                className="form-input"
-                value={newGame.windowMatchPriority !== undefined ? newGame.windowMatchPriority : 0}
-                onChange={e => setNewGame({ ...newGame, windowMatchPriority: parseInt(e.target.value, 10) })}
-              >
-                <option value={0}>Match title, otherwise find window of same type</option>
-                <option value={1}>Match title, otherwise find window of same executable</option>
-                <option value={2}>Match executable</option>
-              </select>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
-                Controls how the watcher detects this game and how OBS Application Audio Capture picks its window.
-              </span>
-            </div>
-            <div className="form-group">
-              <label className="form-label">OBS Scene <span style={{ color: 'var(--danger)' }}>*</span></label>
-              <input
-                className="form-input"
-                placeholder="e.g. Gaming Scene (required)"
-                value={newGame.scene}
-                onChange={e => setNewGame({ ...newGame, scene: e.target.value })}
-                required
-              />
-            </div>
-
-            {newGame.scene && (
-              <div className="form-group" style={{ background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <Wand2 size={13} /> Auto-create scene in OBS
-                    </div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                      Create this scene in OBS with sources and audio inputs
-                    </div>
-                  </div>
-                  <button
-                    className={`toggle ${autoCreateScene ? 'on' : ''}`}
-                    onClick={() => {
-                      const next = !autoCreateScene;
-                      setAutoCreateScene(next);
-                      setSceneCreateStatus(null);
-                      if (next && createMode === 'template' && obsScenes.length === 0) loadOBSScenes();
-                    }}
-                  />
-                </div>
-
-                {autoCreateScene && (
-                  <div style={{ marginTop: 10 }}>
-                    {/* Mode selector */}
-                    <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-                      <button
-                        className={`btn btn-sm ${createMode === 'scratch' ? 'btn-primary' : 'btn-secondary'}`}
-                        onClick={() => setCreateMode('scratch')}
-                        style={{ flex: 1 }}
-                      >
-                        Build from scratch
-                      </button>
-                      <button
-                        className={`btn btn-sm ${createMode === 'template' ? 'btn-primary' : 'btn-secondary'}`}
-                        onClick={() => { setCreateMode('template'); if (obsScenes.length === 0) loadOBSScenes(); }}
-                        style={{ flex: 1 }}
-                      >
-                        Copy from template
-                      </button>
-                    </div>
-
-                    {createMode === 'scratch' && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {/* Capture type header row */}
-                        <div style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <Check size={14} style={{ color: 'var(--success)', flexShrink: 0 }} />
-                          <span>
-                            <span style={{ fontWeight: 500 }}>
-                              {capturePref === 'window_capture' ? 'Window Capture' : 'Game Capture'}
-                            </span>
-                            {newGame.selector && (
-                              <span style={{ color: 'var(--text-muted)', marginLeft: 4 }}>
-                                — <em>{newGame.selector}</em>
-                              </span>
-                            )}
-                          </span>
-                        </div>
-
-                        {/* Capture kind picker */}
-                        <div style={{ display: 'flex', gap: 4 }}>
-                          {[
-                            { key: 'game_capture', label: 'Game Capture' },
-                            { key: 'window_capture', label: 'Window Capture' },
-                          ].map(({ key, label }) => (
-                            <button
-                              key={key}
-                              className={`btn btn-sm ${capturePref === key ? 'btn-primary' : 'btn-secondary'}`}
-                              style={{ flex: 1, fontSize: 11 }}
-                              onClick={() => setCapturePref(key)}
-                            >
-                              {label}
-                            </button>
-                          ))}
-                        </div>
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                          {capturePref === 'window_capture'
-                            ? 'Cross-platform. Use if Game Capture doesn’t work for this title.'
-                            : 'Best for games on Windows. Fits source to canvas automatically.'}
-                        </span>
-
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                          Audio sources are managed in the <strong>Scene Audio Sources</strong> card on the main Games page.
-                        </span>
-                      </div>
-                    )}
-
-                    {createMode === 'template' && (
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                          <label className="form-label" style={{ margin: 0, flex: 1 }}>Template scene (optional)</label>
-                          <button
-                            className="btn btn-secondary btn-sm"
-                            onClick={loadOBSScenes}
-                            disabled={loadingScenes}
-                            title="Refresh scene list from OBS"
-                          >
-                            <RefreshCw size={12} className={loadingScenes ? 'spinning' : ''} />
-                          </button>
-                        </div>
-                        {loadingScenes ? (
-                          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading scenes from OBS...</div>
-                        ) : scenesError ? (
-                          <div style={{ 
-                            fontSize: 12, 
-                            color: 'var(--danger)', 
-                            padding: '6px 8px', 
-                            background: 'rgba(239,68,68,0.1)', 
-                            borderRadius: 'var(--radius-sm)',
-                            border: '1px solid rgba(239,68,68,0.3)'
-                          }}>
-                            {scenesError}{' '}
-                            <button
-                              onClick={goToSettings}
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                color: 'var(--primary)',
-                                textDecoration: 'underline',
-                                cursor: 'pointer',
-                                padding: 0,
-                                font: 'inherit',
-                                display: 'inline',
-                              }}
-                            >
-                              <Settings size={12} style={{ verticalAlign: 'middle', marginRight: 2 }} />
-                              Configure WebSocket
-                            </button>
-                          </div>
-                        ) : obsScenes.length === 0 ? (
-                          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                            No scenes found. Make sure OBS is running and{' '}
-                            <button
-                              onClick={goToSettings}
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                color: 'var(--primary)',
-                                textDecoration: 'underline',
-                                cursor: 'pointer',
-                                padding: 0,
-                                font: 'inherit',
-                                display: 'inline',
-                              }}
-                            >
-                              <Settings size={12} style={{ verticalAlign: 'middle', marginRight: 2 }} />
-                              WebSocket is configured
-                            </button>
-                            .
-                          </div>
-                        ) : (
-                          <select
-                            className="form-input"
-                            value={templateScene}
-                            onChange={e => setTemplateScene(e.target.value)}
-                          >
-                            <option value="">— Create empty scene —</option>
-                            {obsScenes.map(s => (
-                              <option key={s} value={s}>{s}</option>
-                            ))}
-                          </select>
-                        )}
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
-                          All sources from the selected template will be copied into the new scene
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {sceneCreateStatus && (
-                  <div style={{
-                    marginTop: 8,
-                    padding: '8px 10px',
-                    borderRadius: 'var(--radius-sm)',
-                    fontSize: 12,
-                    background: sceneCreateStatus.type === 'conflict'
-                      ? 'rgba(245,158,11,0.1)'
-                      : sceneCreateStatus.type === 'success'
-                        ? 'rgba(34,197,94,0.1)'
-                        : sceneCreateStatus.type === 'loading'
-                          ? 'rgba(99,102,241,0.1)'
-                          : 'rgba(239,68,68,0.1)',
-                    color: sceneCreateStatus.type === 'conflict'
-                      ? '#f59e0b'
-                      : sceneCreateStatus.type === 'success'
-                        ? 'var(--success)'
-                        : sceneCreateStatus.type === 'loading'
-                          ? 'var(--primary)'
-                          : 'var(--danger)',
-                    border: `1px solid ${
-                      sceneCreateStatus.type === 'conflict'
-                        ? 'rgba(245,158,11,0.3)'
-                        : sceneCreateStatus.type === 'success'
-                          ? 'rgba(34,197,94,0.3)'
-                          : sceneCreateStatus.type === 'loading'
-                            ? 'rgba(99,102,241,0.3)'
-                            : 'rgba(239,68,68,0.3)'
-                    }`,
-                  }}>
-                    {sceneCreateStatus.type === 'conflict' ? (
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                          <AlertTriangle size={12} style={{ flexShrink: 0 }} />
-                          A scene named <strong style={{ margin: '0 3px' }}>{newGame.scene}</strong> already exists in OBS.
-                        </div>
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          <button
-                            className="btn btn-secondary btn-sm"
-                            style={{ fontSize: 11 }}
-                            onClick={handleSceneConflictUseExisting}
-                          >
-                            Use Existing
-                          </button>
-                          <button
-                            className="btn btn-sm"
-                            style={{ fontSize: 11, background: 'var(--danger)', color: '#fff', border: 'none' }}
-                            onClick={handleSceneConflictOverwrite}
-                          >
-                            Overwrite
-                          </button>
-                        </div>
-                      </div>
-                    ) : sceneCreateStatus.type === 'loading' ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <RefreshCw size={12} className="spinning" />
-                        {sceneCreateStatus.message}
-                      </div>
-                    ) : (
-                      sceneCreateStatus.message
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-            <div className="form-group">
-              <label className="form-label">Icon (optional)</label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {newGame.icon_path && (
-                  <img
-                    src={`localfile:///${newGame.icon_path.replace(/\\/g, '/')}`}
-                    alt=""
-                    style={{ width: 32, height: 32, objectFit: 'contain', borderRadius: 4, flexShrink: 0 }}
-                    onError={e => { e.currentTarget.style.display = 'none'; }}
-                  />
-                )}
-                <button className="btn btn-secondary btn-sm" onClick={pickIcon} style={{ flex: 1 }}>
-                  <Image size={13} /> {newGame.icon_path ? 'Change Icon' : 'Choose Icon'}
-                </button>
-                {newGame.icon_path && (
-                  <button className="btn-icon" onClick={() => setNewGame(g => ({ ...g, icon_path: '' }))} title="Remove icon">
-                    <X size={13} />
-                  </button>
-                )}
-              </div>
-              {newGame.icon_path && (
-                <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
-                  {newGame.icon_path}
-                </span>
-              )}
-            </div>
-            <div className="modal-actions">
-              <button className="btn btn-secondary" onClick={() => { resetAddModal(); setShowAddModal(false); }}>Cancel</button>
-              <button className="btn btn-primary" onClick={addGame}>Add Game</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Track Editor Modal */}
-      {showTrackEditor && (
-        <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget && !savingTrackLabels) setShowTrackEditor(false); }}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <h2>Edit Track Labels</h2>
-            <p>Customize the names of OBS audio tracks to easily identify them (e.g. "Stream Mix", "VOD Track"). These names will be saved to your OBS profile.</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 16 }}>
-              {[0, 1, 2, 3, 4, 5].map(idx => (
-                <div key={idx} className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Track {idx + 1}</label>
-                  <input
-                    className="form-input"
-                    value={tempTrackLabels[idx] || ''}
-                    placeholder={`Track ${idx + 1}`}
-                    disabled={savingTrackLabels}
-                    onChange={e => {
-                      const newArr = [...tempTrackLabels];
-                      newArr[idx] = e.target.value;
-                      setTempTrackLabels(newArr);
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-            <div className="modal-actions" style={{ marginTop: 24 }}>
-              <button className="btn btn-secondary" onClick={() => setShowTrackEditor(false)} disabled={savingTrackLabels}>Cancel</button>
-              <button
-                className="btn btn-primary"
-                disabled={savingTrackLabels}
-                onClick={async () => {
-                  setSavingTrackLabels(true);
-                  try {
-                    await api.setTrackNames(tempTrackLabels);
-                    setTrackLabels(tempTrackLabels);
-                    showToast('Track labels updated successfully');
-                    setShowTrackEditor(false);
-                  } catch (err) {
-                    showToast('Failed to save track labels');
-                  } finally {
-                    setSavingTrackLabels(false);
-                  }
-                }}
-              >
-                {savingTrackLabels ? <RefreshCw size={14} className="spinning" /> : 'Save Labels'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <AddGameModal
+          newGame={newGame}
+          setNewGame={setNewGame}
+          showWindowPicker={showWindowPicker}
+          setShowWindowPicker={setShowWindowPicker}
+          visibleWindows={visibleWindows}
+          setVisibleWindows={setVisibleWindows}
+          loadingWindows={loadingWindows}
+          setLoadingWindows={setLoadingWindows}
+          autoCreateScene={autoCreateScene}
+          setAutoCreateScene={setAutoCreateScene}
+          createMode={createMode}
+          setCreateMode={setCreateMode}
+          capturePref={capturePref}
+          setCapturePref={setCapturePref}
+          obsScenes={obsScenes}
+          setObsScenes={setObsScenes}
+          loadingScenes={loadingScenes}
+          setLoadingScenes={setLoadingScenes}
+          scenesError={scenesError}
+          setScenesError={setScenesError}
+          templateScene={templateScene}
+          setTemplateScene={setTemplateScene}
+          sceneCreateStatus={sceneCreateStatus}
+          onClose={() => { resetAddModal(); setShowAddModal(false); }}
+          onAddGame={addGame}
+          onSceneConflictUseExisting={handleSceneConflictUseExisting}
+          onSceneConflictOverwrite={handleSceneConflictOverwrite}
+          onGoToSettings={goToSettings}
+        />
       )}
 
       {/* Edit Game Modal */}
