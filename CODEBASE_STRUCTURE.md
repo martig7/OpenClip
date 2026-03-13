@@ -2,9 +2,35 @@
 
 Current file sizes and guidance for merging branches into the modularized codebase.
 
+## Overview
+
+This repository contains two main applications:
+
+1. **Electron App** (`electron-app/`) — Desktop application for game recording management
+2. **OBS Plugin** (`obs-plugin/`) — Native OBS Studio plugin providing HTTP API
+
 ---
 
 ## Current File Sizes
+
+### OBS Plugin — `obs-plugin/`
+
+The OBS plugin provides a JSON HTTP API for controlling OBS Studio. See [`obs-plugin/README.md`](obs-plugin/README.md) for full documentation.
+
+| File | Lines |
+|------|------:|
+| `obs-plugin/src/scene-handlers.c` | 362 |
+| `obs-plugin/src/audio-handlers.c` | 191 |
+| `obs-plugin/src/source-handlers.c` | 173 |
+| `obs-plugin/src/http-server.c` | 498 |
+| `obs-plugin/src/api-handlers.c` | 136 |
+| `obs-plugin/src/api-utils.c` | 113 |
+| `obs-plugin/src/recording-handlers.c` | 89 |
+| `obs-plugin/src/video-handlers.c` | 25 |
+
+See [`obs-plugin/src/README.md`](obs-plugin/src/README.md) for complete source documentation.
+
+---
 
 ### Frontend — `electron-app/src/`
 
@@ -13,13 +39,13 @@ Current file sizes and guidance for merging branches into the modularized codeba
 | `src/pages/GamesPage.jsx` | 720 |
 | `src/components/OnboardingSteps.jsx` | 498 |
 | `src/viewer/pages/StoragePage.jsx` | 584 |
-| `src/pages/games/EditGameModal.jsx` | 571 |
+| `src/pages/games/EditGameModal.jsx` | 574 |
 | `src/pages/SettingsPage.jsx` | 489 |
 | `src/components/OnboardingModal.jsx` | 213 |
 | `src/pages/games/AddGameModal.jsx` | 482 |
 | `src/viewer/components/VideoPlayer.jsx` | 453 |
 | `src/viewer/components/ZoomTimeline.jsx` | 398 |
-| `src/viewer/components/StorageTreemap.jsx` | 394 |
+| `src/viewer/components/StorageTreemap.jsx` | 406 |
 | `src/pages/games/SceneAudioSourcesCard.jsx` | 347 |
 | `src/pages/EncodingPage.jsx` | 331 |
 | `src/viewer/pages/ClipsPage.jsx` | 165 |
@@ -27,7 +53,7 @@ Current file sizes and guidance for merging branches into the modularized codeba
 | `src/viewer/components/Timeline.jsx` | 148 |
 | `src/viewer/utils/treemapUtils.js` | 145 |
 | `src/App.jsx` | 137 |
-| `src/pages/games/WatcherStatusCard.jsx` | 124 |
+| `src/pages/games/WatcherStatusCard.jsx` | 131 |
 | `src/viewer/pages/RecordingsPage.jsx` | 107 |
 | `src/viewer/components/Sidebar.jsx` | 94 |
 | `src/pages/games/AudioSourceDropdown.jsx` | 91 |
@@ -53,7 +79,7 @@ Current file sizes and guidance for merging branches into the modularized codeba
 | File | Lines |
 |------|------:|
 | `electron/obsWebSocket.js` | 743 |
-| `electron/ipcHandlers.js` | 721 |
+| `electron/ipcHandlers.js` | 727 |
 | `electron/recordingService.js` | 478 |
 | `electron/apiServer.js` | 424 |
 | `electron/obsPlugin.js` | 365 |
@@ -67,10 +93,29 @@ Current file sizes and guidance for merging branches into the modularized codeba
 | `electron/qrCodeReader.js` | 124 |
 | `electron/processDetector.js` | 84 |
 | `electron/constants.js` | 83 |
-| `electron/videoMetadata.js` | 74 |
+| `electron/videoMetadata.js` | 78 |
 | `electron/obsIntegration.js` | 59 |
 | `electron/iniParser.js` | 26 |
 | `electron/markerService.js` | 21 |
+
+### OBS Plugin — `obs-plugin/src/`
+
+| File | Lines |
+|------|------:|
+| `src/scene-handlers.c` | 362 |
+| `src/audio-handlers.c` | 191 |
+| `src/source-handlers.c` | 173 |
+| `src/api-handlers.c` | 136 |
+| `src/api-utils.c` | 113 |
+| `src/recording-handlers.c` | 89 |
+| `src/video-handlers.c` | 25 |
+| `src/api-handlers.h` | 24 |
+| `src/scene-handlers.h` | 21 |
+| `src/audio-handlers.h` | 13 |
+| `src/source-handlers.h` | 11 |
+| `src/api-utils.h` | 26 |
+| `src/recording-handlers.h` | 16 |
+| `src/video-handlers.h` | 9 |
 
 **Target: no file should exceed 800 lines.**
 
