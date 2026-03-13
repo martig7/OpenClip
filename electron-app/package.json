@@ -7,7 +7,7 @@
     "dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron . --dev\"",
     "build": "vite build",
     "dist": "vite build && electron-builder --win",
-    "release": "node scripts/release.js",
+    "release": "vitest run tests/unit/release.test.js tests/unit/bundleDependencies.test.js && node scripts/release.js",
     "preview": "vite build && electron .",
     "test": "vitest run",
     "test:watch": "vitest",
