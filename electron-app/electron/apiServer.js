@@ -9,89 +9,12 @@ const { exec, execFile, spawn } = require('child_process');
 const { shell } = require('electron');
 const url = require('url');
 
-const { MIME_TYPES, MARKERS_FILE, formatFileSize, FFMPEG_PATH, FFPROBE_PATH } = require('./constants');
+const { MIME_TYPES, formatFileSize, FFMPEG_PATH, FFPROBE_PATH } = require('./constants');
 const service = require('./recordingService');
+const { loadMarkers, saveMarkers } = require('./markerService');
+const { getVideoDuration, getDiskUsage } = require('./videoMetadata');
 
 let store; // set in startApiServer
-
-function loadMarkers() {
-  try {
-    return JSON.parse(fs.readFileSync(MARKERS_FILE, 'utf-8'));
-  } catch {}
-  return { markers: [] };
-}
-
-function saveMarkers(data) {
-  try {
-    fs.writeFileSync(MARKERS_FILE, JSON.stringify(data, null, 2), 'utf-8');
-    return true;
-  } catch { return false; }
-}
-
-// Cache for getVideoDuration keyed by "filePath:mtime"; bounded to prevent unbounded memory growth
-const _videoDurationCache = new Map();
-const VIDEO_DURATION_CACHE_MAX = 500;
-
-function getVideoDuration(filePath) {
-  let mtime = 0;
-  try { mtime = fs.statSync(filePath).mtimeMs; } catch { /* file may not exist */ }
-  const cacheKey = `${filePath}:${mtime}`;
-  if (_videoDurationCache.has(cacheKey)) return Promise.resolve(_videoDurationCache.get(cacheKey));
-
-  return new Promise((resolve) => {
-    execFile(
-      FFPROBE_PATH,
-      ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', filePath],
-      { encoding: 'utf-8', timeout: 10000 },
-      (error, stdout) => {
-        if (error) return resolve(null);
-        const duration = parseFloat(stdout.trim()) || null;
-        if (duration !== null) {
-          if (_videoDurationCache.size >= VIDEO_DURATION_CACHE_MAX) {
-            _videoDurationCache.delete(_videoDurationCache.keys().next().value);
-          }
-          _videoDurationCache.set(cacheKey, duration);
-        }
-        resolve(duration);
-      }
-    );
-  });
-}
-
-// Cache for getDiskUsage: keyed by drive letter (supports multiple drives), 30-second TTL
-const _diskUsageCache = new Map(); // driveKey -> { data, ts }
-const DISK_USAGE_TTL_MS = 30000;
-
-function getDiskUsage(dirPath) {
-  const parsed = path.win32.parse(dirPath);
-  const driveKey = (parsed.root || dirPath).toLowerCase(); // e.g. "c:\", "\\server\share\"
-  const now = Date.now();
-  const cached = _diskUsageCache.get(driveKey);
-  if (cached && now - cached.ts < DISK_USAGE_TTL_MS) return Promise.resolve(cached.data);
-
-  return new Promise((resolve) => {
-    exec(
-      `powershell -Command "(Get-PSDrive -Name (Split-Path '${dirPath.replace(/'/g, "''")}' -Qualifier).TrimEnd(':')) | Select-Object Used, Free | ConvertTo-Json"`,
-      { encoding: 'utf-8', timeout: 5000 },
-      (error, stdout) => {
-        if (error) return resolve(null);
-        try {
-          const d = JSON.parse(stdout);
-          const total = d.Used + d.Free;
-          const result = {
-            total, used: d.Used, free: d.Free,
-            total_formatted: formatFileSize(total),
-            used_formatted: formatFileSize(d.Used),
-            free_formatted: formatFileSize(d.Free),
-            percent_used: total > 0 ? (d.Used / total * 100) : 0,
-          };
-          _diskUsageCache.set(driveKey, { data: result, ts: Date.now() });
-          resolve(result);
-        } catch { resolve(null); }
-      }
-    );
-  });
-}
 
 const MAX_BODY_SIZE = 1024 * 1024; // 1 MB
 
