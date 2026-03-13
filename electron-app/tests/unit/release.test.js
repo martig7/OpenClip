@@ -127,3 +127,4 @@ describe('buildGhCommand', () => {
     expect(cmd).toContain('"v1.0.0-beta.3"');
   });
 });
+

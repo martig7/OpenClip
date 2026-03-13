@@ -86,7 +86,28 @@ if (require.main === module) {
   console.log('\nRelease artefacts:');
   releaseFiles.forEach((f) => console.log(`  ${f}`));
 
-  // 5. Publish GitHub release via gh CLI
+  // 5. Fail fast with a clear message when the release tag already exists.
+  try {
+    execSync(`gh release view "${tag}"`, {
+      cwd: path.join(__dirname, '..'),
+      stdio: 'pipe',
+    });
+    console.error(
+      `\nRelease ${tag} already exists.\n` +
+      `Use a new version in package.json (for example bump beta.9 -> beta.10), then run npm run release again.`,
+    );
+    process.exit(1);
+  } catch (err) {
+    const stderr = String(err?.stderr || '').toLowerCase();
+    const stdout = String(err?.stdout || '').toLowerCase();
+    const output = `${stdout}\n${stderr}`;
+    // "release not found" means it's safe to create the release.
+    if (!output.includes('release not found') && !output.includes('not found')) {
+      throw err;
+    }
+  }
+
+  // 6. Publish GitHub release via gh CLI
   run(buildGhCommand(tag, distDir, releaseFiles));
 
   console.log(`\nRelease ${tag} published successfully!`);

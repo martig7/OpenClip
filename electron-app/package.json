@@ -1,6 +1,6 @@
 {
   "name": "open-clip",
-  "version": "1.0.0-beta.9",
+  "version": "1.0.0-beta.11",
   "description": "Automatic recording manager for OBS Studio — detects games, organizes recordings, and creates clips.",
   "main": "electron/main.js",
   "scripts": {
@@ -27,7 +27,8 @@
     "jimp": "^1.6.0",
     "jsqr": "^1.4.0",
     "koffi": "^2.15.1",
-    "obs-websocket-js": "^5.0.7"
+    "obs-websocket-js": "^5.0.7",
+    "semver": "^7.7.4"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
