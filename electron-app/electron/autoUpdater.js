@@ -201,6 +201,7 @@ function setupDevAutoUpdater() {
 function setupAutoUpdater(getMainWindow) {
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.allowPrerelease = true;
 
   autoUpdater.on('update-available', (info) => {
     const win = getMainWindow();
