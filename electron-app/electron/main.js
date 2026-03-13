@@ -31,11 +31,7 @@ if (isTestMode) {
   setupGameWatcher = testGameWatcher.setupGameWatcher;
   const testObsIntegration = require('./obsIntegration-testing');
   readOBSRecordingPath = testObsIntegration.readOBSRecordingPath;
-  startApiServer = () => ({
-    on: () => {},
-    address: () => ({ port: 47531 }),
-    close: () => {},
-  });
+  ({ startApiServer } = require('./apiServer-testing'));
   setupAutoUpdater = () => {};
   setupDevAutoUpdater = () => {};
   RUNTIME_DIR = path.join(USER_DATA, 'runtime');

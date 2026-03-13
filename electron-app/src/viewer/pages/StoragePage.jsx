@@ -19,7 +19,7 @@ function StoragePage() {
   const [settings, setSettings] = useState(null)
   const [editedSettings, setEditedSettings] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [listView, setListView] = useState(null)
+  const [listView, setListView] = useState(true)
   const [selectedItems, setSelectedItems] = useState(new Set())
   const [deleteModal, setDeleteModal] = useState(false)
   const [reencodeModal, setReencodeModal] = useState(false)
@@ -269,7 +269,7 @@ function StoragePage() {
 
   const totalBytes = useMemo(() => Object.values(byGameBytes).reduce((s, v) => s + v, 0), [byGameBytes])
 
-  if (loading || listView === null) {
+  if (loading) {
     return (
       <div className="page-content">
         <div className="loading"><div className="spinner" /></div>

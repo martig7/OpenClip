@@ -10,7 +10,12 @@ const electronConfigDefaults = {
   obsInstallPath: '',
 };
 
-const gamesConfigDefaults = { games: [] };
+const gamesConfigDefaults = {
+  games: [
+    { id: '1', name: 'Valorant', exe: 'VALORANT.exe', windowClass: 'RiotWindowClass', selector: 'valorant', scene: 'Valorant', icon_path: '', enabled: true },
+    { id: '2', name: 'Counter-Strike 2', exe: 'cs2.exe', windowClass: 'class512', selector: 'cs2', scene: 'CS2', icon_path: '', enabled: true },
+  ],
+};
 const managerSettingsDefaults = {
   organized_path: '',
   auto_organize: true,
