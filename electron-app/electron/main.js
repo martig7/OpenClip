@@ -1,5 +1,7 @@
 const { app, BrowserWindow, ipcMain, globalShortcut, protocol, net } = require('electron');
 
+const isTestMode = process.env.OPENCLIP_TEST_MODE === 'true' || process.argv.includes('--test-mode');
+
 // Register custom scheme before app is ready (required by Electron)
 // localfile:///C:/path/to/file.png → main process serves the file safely
 protocol.registerSchemesAsPrivileged([
@@ -12,18 +14,43 @@ const fs = require('fs');
 // productName-derived "Open Clip" to avoid path issues.
 app.setPath('userData', path.join(app.getPath('appData'), 'open-clip'));
 
-// store.js must be required AFTER app.setPath('userData', ...) is called above
-const { store } = require('./store');
-const { registerIpcHandlers } = require('./ipcHandlers');
-const { setupGameWatcher } = require('./gameWatcher');
-const { readOBSRecordingPath } = require('./obsIntegration');
-const { startApiServer } = require('./apiServer');
-const { setupAutoUpdater, setupDevAutoUpdater } = require('./autoUpdater');
-const { RUNTIME_DIR, STATE_FILE, ICONS_DIR } = require('./constants');
+// Get constants that work in both modes
+const PLUGIN_DLL_NAME = process.platform === 'win32' ? 'openclip-obs.dll' : 'openclip-obs.so';
+const USER_DATA = app.getPath('userData');
 
-// Seed default config files and OBS plugin DLL into userData on first run
-const { PLUGIN_DLL_NAME } = require('./constants');
-const { USER_DATA } = require('./constants');
+// store.js must be required AFTER app.setPath('userData', ...) is called above
+// In test mode, use the in-memory store
+let store, registerIpcHandlers, setupGameWatcher, readOBSRecordingPath, startApiServer, setupAutoUpdater, setupDevAutoUpdater, RUNTIME_DIR, STATE_FILE, ICONS_DIR;
+
+if (isTestMode) {
+  const testStore = require('./store-testing');
+  store = testStore.store;
+  const testIpcHandlers = require('./ipcHandlers-testing');
+  registerIpcHandlers = testIpcHandlers.registerIpcHandlers;
+  const testGameWatcher = require('./gameWatcher-testing');
+  setupGameWatcher = testGameWatcher.setupGameWatcher;
+  const testObsIntegration = require('./obsIntegration-testing');
+  readOBSRecordingPath = testObsIntegration.readOBSRecordingPath;
+  startApiServer = () => ({
+    on: () => {},
+    address: () => ({ port: 47531 }),
+    close: () => {},
+  });
+  setupAutoUpdater = () => {};
+  setupDevAutoUpdater = () => {};
+  RUNTIME_DIR = path.join(USER_DATA, 'runtime');
+  STATE_FILE = path.join(RUNTIME_DIR, 'game_state');
+  ICONS_DIR = path.join(USER_DATA, 'icons');
+} else {
+  const realStore = require('./store');
+  store = realStore.store;
+  ({ registerIpcHandlers } = require('./ipcHandlers'));
+  ({ setupGameWatcher } = require('./gameWatcher'));
+  ({ readOBSRecordingPath } = require('./obsIntegration'));
+  ({ startApiServer } = require('./apiServer'));
+  ({ setupAutoUpdater, setupDevAutoUpdater } = require('./autoUpdater'));
+  ({ RUNTIME_DIR, STATE_FILE, ICONS_DIR } = require('./constants'));
+}
 
 function seedFirstRun() {
   const defaultsDir = app.isPackaged

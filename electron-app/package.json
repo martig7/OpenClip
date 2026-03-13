@@ -16,7 +16,10 @@
     "test:api": "vitest run tests/api/",
     "test:unit": "vitest run tests/unit/",
     "test:components": "vitest run tests/components/",
-    "test:integration": "vitest run --config vite.integration.config.js"
+    "test:integration": "vitest run --config vite.integration.config.js",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "dev:test": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron . --dev --test-mode\""
   },
   "dependencies": {
     "chokidar": "^4.0.3",
@@ -31,6 +34,7 @@
     "semver": "^7.7.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
@@ -43,6 +47,7 @@
     "jsdom": "^28.1.0",
     "lucide-react": "^0.475.0",
     "msw": "^2.12.10",
+    "playwright": "^1.58.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.3.0",

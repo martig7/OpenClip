@@ -40,7 +40,7 @@ See [`obs-plugin/src/README.md`](obs-plugin/src/README.md) for complete source d
 | `src/components/OnboardingSteps.jsx` | 498 |
 | `src/viewer/pages/StoragePage.jsx` | 584 |
 | `src/pages/games/EditGameModal.jsx` | 574 |
-| `src/pages/SettingsPage.jsx` | 489 |
+| `src/pages/SettingsPage.jsx` | 499 |
 | `src/components/OnboardingModal.jsx` | 213 |
 | `src/pages/games/AddGameModal.jsx` | 482 |
 | `src/viewer/components/VideoPlayer.jsx` | 453 |
@@ -60,7 +60,8 @@ See [`obs-plugin/src/README.md`](obs-plugin/src/README.md) for complete source d
 | `src/viewer/components/ClipControls.jsx` | 84 |
 | `src/pages/games/WindowPicker.jsx` | 68 |
 | `src/viewer/components/AudioWaveformTrack.jsx` | 79 |
-| `src/api.js` | 74 |
+| `src/api.js` | 105 |
+| `src/mockData.js` | 87 |
 | `src/hooks/useAddGameModalState.js` | 55 |
 | `src/components/ConfirmDeleteDialog.jsx` | 51 |
 | `src/viewer/apiBase.js` | 49 |
@@ -97,6 +98,23 @@ See [`obs-plugin/src/README.md`](obs-plugin/src/README.md) for complete source d
 | `electron/obsIntegration.js` | 59 |
 | `electron/iniParser.js` | 26 |
 | `electron/markerService.js` | 21 |
+
+### Test Infrastructure — `electron-app/`
+
+| File | Lines |
+|------|------:|
+| `electron/store-testing.js` | 242 |
+| `electron/ipcHandlers-testing.js` | ~210 |
+| `electron/obsPlugin-testing.js` | ~180 |
+| `electron/processDetector-testing.js` | ~100 |
+| `electron/gameWatcher-testing.js` | ~90 |
+| `electron/obsIntegration-testing.js` | ~50 |
+| `playwright.config.js` | 27 |
+| `tests/e2e/navigation.spec.js` | 21 |
+| `tests/e2e/games.spec.js` | 13 |
+| `tests/e2e/settings.spec.js` | 9 |
+| `tests/e2e/pages.spec.js` | 42 |
+| `tests/e2e/interactions.spec.js` | 60 |
 
 ### OBS Plugin — `obs-plugin/src/`
 

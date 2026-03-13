@@ -6,6 +6,7 @@ import { HotkeyCapture } from '../components/OnboardingSteps';
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [isDirty, setIsDirty] = useState(false);
   const [toast, setToast] = useState(null);
   const [showWizard, setShowWizard] = useState(false);
@@ -49,6 +50,7 @@ export default function SettingsPage() {
   async function loadSettings() {
     const s = await api.getStore('settings');
     setSettings(s);
+    setIsLoading(false);
   }
 
   function updateSetting(path, value) {
@@ -130,6 +132,14 @@ export default function SettingsPage() {
 
   async function installUpdate() {
     await api.installUpdate?.();
+  }
+
+  if (isLoading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
+        <Loader size={24} style={{ animation: 'spin 1s linear infinite' }} />
+      </div>
+    );
   }
 
   if (!settings) return null;
