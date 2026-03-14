@@ -1,0 +1,44 @@
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV DISPLAY=:99
+ENV HOME=/root
+
+# Base system + OBS PPA
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      software-properties-common \
+      gnupg2 \
+      ca-certificates \
+      wget \
+      netcat-openbsd \
+      xvfb \
+      libgl1-mesa-glx \
+      libgles2-mesa \
+      libglib2.0-0 && \
+    add-apt-repository ppa:obsproject/obs-studio && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends obs-studio && \
+    rm -rf /var/lib/apt/lists/*
+
+# OBS config directories
+RUN mkdir -p \
+    /root/.config/obs-studio/basic/profiles/OpenClipTest \
+    /root/.config/obs-studio/basic/scenes \
+    /recordings
+
+# Pre-configured OBS settings (WebSocket server enabled, no auth)
+COPY obs-config/global.ini /root/.config/obs-studio/global.ini
+COPY obs-config/basic/profiles/OpenClipTest/basic.ini \
+     /root/.config/obs-studio/basic/profiles/OpenClipTest/basic.ini
+
+COPY scripts/start-obs.sh /start-obs.sh
+RUN chmod +x /start-obs.sh
+
+# WebSocket port
+EXPOSE 4455
+
+HEALTHCHECK --interval=5s --timeout=3s --retries=30 --start-period=30s \
+  CMD nc -z localhost 4455 || exit 1
+
+CMD ["/start-obs.sh"]

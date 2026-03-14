@@ -58,19 +58,19 @@ function registerIpcHandlers(store, appState) {
     return games;
   });
   ipcMain.handle('games:remove', (_event, id) => {
-    const games = store.get('games').filter((g) => g.id !== id);
+    const games = (store.get('games') || []).filter((g) => g.id !== id);
     store.set('games', games);
     return games;
   });
   ipcMain.handle('games:toggle', (_event, id) => {
-    const games = store.get('games');
+    const games = store.get('games') || [];
     const game = games.find((g) => g.id === id);
     if (game) game.enabled = !game.enabled;
     store.set('games', games);
     return games;
   });
   ipcMain.handle('games:update', (_event, id, updates) => {
-    const games = store.get('games');
+    const games = store.get('games') || [];
     const game = games.find((g) => g.id === id);
     if (game) Object.assign(game, updates);
     store.set('games', games);
@@ -142,7 +142,9 @@ function registerIpcHandlers(store, appState) {
       appState.currentGame = null;
       try {
         fs.writeFileSync(STATE_FILE, 'IDLE', 'utf-8');
-      } catch {}
+      } catch (err) {
+        console.error('[test] Failed to write STATE_FILE:', err.message);
+      }
     }
     return { running: false };
   });

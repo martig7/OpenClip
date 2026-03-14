@@ -1,5 +1,5 @@
 /**
- * obsHelper.js
+ * obsHelper.mjs
  *
  * Manages the lifecycle of a headless OBS Studio process for integration
  * testing.  Each call to startOBS():
@@ -390,6 +390,9 @@ function _writeOBSConfig(obsConfigDir, wsPort, initialScenes) {
   // Seed scene collection.  OBS will fail to start if the collection is absent
   // or completely empty, so we always create at least the first named scene.
   const firstScene = initialScenes[0] || 'Scene';
+  // Guarantee at least one scene even when initialScenes is empty, so that
+  // current_scene / current_program_scene always reference an existing scene.
+  const sceneList = initialScenes.length > 0 ? initialScenes : [firstScene];
   writeFileSync(
     join(obsConfigDir, 'basic', 'scenes', 'Test.json'),
     JSON.stringify({
@@ -398,8 +401,8 @@ function _writeOBSConfig(obsConfigDir, wsPort, initialScenes) {
       groups: [],
       modules: {},
       name: 'Test',
-      scene_order: initialScenes.map(name => ({ name })),
-      scenes: initialScenes.map(name => ({
+      scene_order: sceneList.map(name => ({ name })),
+      scenes: sceneList.map(name => ({
         id: 'scene',
         name,
         settings: { custom_size: false, id_counter: 0, items: [] },
@@ -436,10 +439,30 @@ async function _verifyOBSWebSocketHandshake(host, port, password) {
     // supplied.  We pass the password read back from the on-disk config so
     // we always use the credentials OBS is actually enforcing.
     await obs.connect(`ws://${host}:${port}`, password);
+
     // Call GetVersion to confirm OBS is fully initialised and ready to handle
     // requests.  The WS handshake alone only proves the plugin is loaded; OBS
     // may still be setting up its scene/source subsystems at that point.
-    await obs.call('GetVersion');
+    //
+    // OBS WebSocket can accept connections before OBS finishes initialising and
+    // returns RequestStatus 207 (NotReady) for any request during that window.
+    // Retry with back-off until OBS is ready or we exhaust the attempts.
+    const MAX_ATTEMPTS = 20;
+    const RETRY_MS = 500;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        await obs.call('GetVersion');
+        return; // success
+      } catch (err) {
+        const isNotReady = err?.code === 207 ||
+          (typeof err?.message === 'string' && err.message.toLowerCase().includes('not ready'));
+        if (!isNotReady || attempt === MAX_ATTEMPTS) throw err;
+        if (process.env.OBS_DEBUG) {
+          console.debug(`[obsHelper] GetVersion NotReady (attempt ${attempt}/${MAX_ATTEMPTS}), retrying in ${RETRY_MS}ms`);
+        }
+        await new Promise(r => setTimeout(r, RETRY_MS));
+      }
+    }
   } finally {
     // Always disconnect, even if connect() or GetVersion threw.  Disconnect
     // errors are suppressed because the earlier error is the one that matters.

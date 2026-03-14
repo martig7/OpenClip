@@ -45,10 +45,14 @@ function StoragePage() {
 
   const fetchStats = useCallback(async () => {
     try {
-      const response = await apiFetch('/api/storage/stats')
+      const [response, s] = await Promise.all([
+        apiFetch('/api/storage/stats'),
+        api.getStore('settings').catch(() => null),
+      ])
       const data = await response.json()
       setStats(data)
       setLockedRecordings(new Set(data.locked_recordings || []))
+      if (s) setListView(s.listView ?? true)
     } catch (error) {
       console.error('Failed to fetch storage stats:', error)
     } finally {
@@ -70,9 +74,6 @@ function StoragePage() {
   useEffect(() => {
     fetchStats()
     fetchSettings()
-    api.getStore('settings').then(s => {
-      if (s) setListView(s.listView ?? true)
-    }).catch(() => {})
   }, [fetchStats, fetchSettings])
 
   const showToast = useCallback((type, message) => {

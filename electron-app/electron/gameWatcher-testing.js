@@ -9,10 +9,15 @@ let mockWatcher = null;
 let lastState = { currentGame: null, status: 'idle' };
 let onStateChangeCallback = null;
 let pollInterval = null;
+let mockTitles = [];
+
+function setGameTitles(titles) {
+  mockTitles = titles || [];
+}
 
 function detectRunningGame(games) {
   const processes = setGameProcesses.__mock_returns || [];
-  const titles = [];
+  const titles = mockTitles;
 
   for (const game of games) {
     if (!game.enabled) continue;
@@ -99,6 +104,7 @@ function resetWatcher() {
     mockWatcher.stop();
   }
   lastState = { currentGame: null, status: 'idle' };
+  mockTitles = [];
   clearMockData();
   onStateChangeCallback = null;
 }
@@ -109,4 +115,5 @@ module.exports = {
   simulateGameStart,
   simulateGameStop,
   resetWatcher,
+  setGameTitles,
 };

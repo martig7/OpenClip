@@ -115,10 +115,7 @@ export const testStorageSettings = {
 };
 
 export async function setupTestGames(page) {
-  await page.evaluate(() => {
-    window.__testGames = [
-      { id: 'test-1', name: 'Test Game 1', exe: 'testgame1.exe', selector: 'Test Game 1', enabled: true, scene: 'GameCapture' },
-      { id: 'test-2', name: 'Test Game 2', exe: 'testgame2.exe', selector: 'Test Game 2 Window', enabled: true, scene: 'Scene' },
-    ];
-  });
+  await page.evaluate((games) => {
+    window.__testGames = games;
+  }, testGames);
 }

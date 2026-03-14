@@ -96,7 +96,7 @@ function startApiServer() {
     if (pathname === '/api/storage/stats' && req.method === 'GET') {
       return json(res, MOCK_STORAGE_STATS);
     }
-    if (pathname === '/api/storage/settings') {
+    if (pathname === '/api/storage/settings' && req.method === 'GET') {
       return json(res, MOCK_STORAGE_SETTINGS);
     }
     if (pathname === '/api/markers' && req.method === 'GET') {

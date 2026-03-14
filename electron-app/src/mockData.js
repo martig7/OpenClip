@@ -76,7 +76,7 @@ export const mockClips = [
 ];
 
 export const mockStorageStats = {
-  totalSize: 5200000000,
+  totalSize: 4750000000,
   recordingCount: 2,
   clipCount: 1,
   byGame: {

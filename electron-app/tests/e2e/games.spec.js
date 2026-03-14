@@ -32,7 +32,7 @@ test.describe('Games Page', () => {
     await expect(page.locator('.list-item-title:has-text("Valorant")')).toBeVisible();
     // First game toggle starts ON (enabled: true in mockGames)
     const firstToggle = page.locator('.list-item .toggle').first();
-    await expect(firstToggle).toHaveClass(/on/);
+    await expect(firstToggle).toHaveClass(/\bon\b/);
     await firstToggle.click();
     await expect(firstToggle).not.toHaveClass(/\bon\b/);
   });
@@ -44,7 +44,7 @@ test.describe('Games Page', () => {
     await firstToggle.click(); // disable
     await expect(firstToggle).not.toHaveClass(/\bon\b/);
     await firstToggle.click(); // re-enable
-    await expect(firstToggle).toHaveClass(/on/);
+    await expect(firstToggle).toHaveClass(/\bon\b/);
   });
 
   test('clicking delete on game with scene shows confirm dialog', async ({ page }) => {

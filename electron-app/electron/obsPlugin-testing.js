@@ -17,6 +17,8 @@ let currentScene = 'Scene';
 function resetState() {
   recordingActive = false;
   currentScene = 'Scene';
+  mockScenes.length = 0;
+  mockScenes.push('Scene', 'Game Capture', 'Desktop Audio');
   mockSceneItems['Scene'] = [
     { sceneItemId: 1, sourceName: 'Desktop Audio', inputKind: 'audio_output' },
     { sceneItemId: 2, sourceName: 'Mic/Aux', inputKind: 'audio_input' },
@@ -24,6 +26,7 @@ function resetState() {
   mockSceneItems['Game Capture'] = [
     { sceneItemId: 1, sourceName: 'Game Capture', inputKind: 'game_capture' },
   ];
+  mockSceneItems['Desktop Audio'] = [];
 }
 
 resetState();
@@ -178,12 +181,14 @@ async function addAudioSourceToScenes(_wsSettings, sceneNames, inputKind, inputN
     }
   }
 
+  const added = results.filter((r) => r.status === 'added').length;
+  const errors = results.filter((r) => r.status === 'error').length;
   return {
-    success: true,
-    message: `"${inputName}" added to ${sceneNames.length} scene(s)`,
+    success: errors === 0,
+    message: `"${inputName}" added to ${added} scene(s)`,
     results,
-    added: sceneNames.length,
-    skipped: 0,
+    added,
+    skipped: sceneNames.length - added - errors,
   };
 }
 

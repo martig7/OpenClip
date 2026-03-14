@@ -79,7 +79,8 @@ See [`obs-plugin/src/README.md`](obs-plugin/src/README.md) for complete source d
 
 | File | Lines |
 |------|------:|
-| `electron/obsWebSocket.js` | 743 |
+| `electron/obsWebSocket.js` | 443 |
+| `electron/obsWsAudio.js` | 346 |
 | `electron/ipcHandlers.js` | 727 |
 | `electron/recordingService.js` | 478 |
 | `electron/apiServer.js` | 424 |
@@ -99,23 +100,6 @@ See [`obs-plugin/src/README.md`](obs-plugin/src/README.md) for complete source d
 | `electron/iniParser.js` | 26 |
 | `electron/markerService.js` | 21 |
 
-### Test Infrastructure — `electron-app/`
-
-| File | Lines |
-|------|------:|
-| `electron/store-testing.js` | 242 |
-| `electron/ipcHandlers-testing.js` | ~210 |
-| `electron/obsPlugin-testing.js` | ~180 |
-| `electron/processDetector-testing.js` | ~100 |
-| `electron/gameWatcher-testing.js` | ~90 |
-| `electron/obsIntegration-testing.js` | ~50 |
-| `playwright.config.js` | 27 |
-| `tests/e2e/navigation.spec.js` | 21 |
-| `tests/e2e/games.spec.js` | 13 |
-| `tests/e2e/settings.spec.js` | 9 |
-| `tests/e2e/pages.spec.js` | 42 |
-| `tests/e2e/interactions.spec.js` | 60 |
-
 ### OBS Plugin — `obs-plugin/src/`
 
 | File | Lines |
@@ -134,6 +118,26 @@ See [`obs-plugin/src/README.md`](obs-plugin/src/README.md) for complete source d
 | `src/api-utils.h` | 26 |
 | `src/recording-handlers.h` | 16 |
 | `src/video-handlers.h` | 9 |
+
+### Test Infrastructure — `electron-app/`
+
+| File | Lines |
+|------|------:|
+| `electron/store-testing.js` | ~250 |
+| `electron/ipcHandlers-testing.js` | ~215 |
+| `electron/obsPlugin-testing.js` | ~285 |
+| `electron/processDetector-testing.js` | ~100 |
+| `electron/gameWatcher-testing.js` | ~120 |
+| `electron/obsIntegration-testing.js` | ~50 |
+| `electron/apiServer-testing.js` | ~130 |
+| `playwright.config.js` | 27 |
+| `tests/e2e/navigation.spec.js` | ~25 |
+| `tests/e2e/games.spec.js` | ~120 |
+| `tests/e2e/settings.spec.js` | ~80 |
+| `tests/e2e/pages.spec.js` | ~130 |
+| `tests/e2e/interactions.spec.js` | ~130 |
+| `tests/e2e/fixtures/testData.js` | ~120 |
+| `tests/e2e/fixtures/routes.js` | ~30 |
 
 **Target: no file should exceed 800 lines.**
 

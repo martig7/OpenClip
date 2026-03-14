@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, globalShortcut, protocol, net } = require('electron');
 
 const isTestMode = process.env.OPENCLIP_TEST_MODE === 'true' || process.argv.includes('--test-mode');
+const isIntegrationMode = process.env.OPENCLIP_INTEGRATION_TEST === 'true' || process.argv.includes('--integration-mode');
 
 // Register custom scheme before app is ready (required by Electron)
 // localfile:///C:/path/to/file.png → main process serves the file safely
@@ -12,10 +13,12 @@ const fs = require('fs');
 
 // Force the userData folder to "open-clip" (lowercase, no spaces) instead of the
 // productName-derived "Open Clip" to avoid path issues.
-app.setPath('userData', path.join(app.getPath('appData'), 'open-clip'));
+// Integration mode uses an isolated data directory so it never touches production config.
+const userDataName = isIntegrationMode ? 'open-clip-integration' : 'open-clip';
+app.setPath('userData', path.join(app.getPath('appData'), userDataName));
 
 // Get constants that work in both modes
-const PLUGIN_DLL_NAME = process.platform === 'win32' ? 'openclip-obs.dll' : 'openclip-obs.so';
+const PLUGIN_DLL_NAME = process.platform === 'win32' ? 'openclip-obs.dll' : process.platform === 'darwin' ? 'openclip-obs.dylib' : 'openclip-obs.so';
 const USER_DATA = app.getPath('userData');
 
 // store.js must be required AFTER app.setPath('userData', ...) is called above
@@ -38,14 +41,22 @@ if (isTestMode) {
   STATE_FILE = path.join(RUNTIME_DIR, 'game_state');
   ICONS_DIR = path.join(USER_DATA, 'icons');
 } else {
+  // Integration and production both use real modules. The only difference is
+  // the auto-updater: integration mode disables it to avoid update prompts
+  // during tests.
   const realStore = require('./store');
   store = realStore.store;
   ({ registerIpcHandlers } = require('./ipcHandlers'));
   ({ setupGameWatcher } = require('./gameWatcher'));
   ({ readOBSRecordingPath } = require('./obsIntegration'));
   ({ startApiServer } = require('./apiServer'));
-  ({ setupAutoUpdater, setupDevAutoUpdater } = require('./autoUpdater'));
   ({ RUNTIME_DIR, STATE_FILE, ICONS_DIR } = require('./constants'));
+  if (isIntegrationMode) {
+    setupAutoUpdater = () => {};
+    setupDevAutoUpdater = () => {};
+  } else {
+    ({ setupAutoUpdater, setupDevAutoUpdater } = require('./autoUpdater'));
+  }
 }
 
 function seedFirstRun() {
@@ -166,8 +177,25 @@ app.whenReady().then(() => {
 
   ensureGameState();
 
-  // Auto-detect OBS recording path on startup if not set
-  if (!store.get('settings.obsRecordingPath')) {
+  // Integration mode: seed store with Docker OBS connection and test paths.
+  // Environment variables override any persisted values so tests get a predictable state.
+  if (isIntegrationMode) {
+    store.set('settings.obsWebSocket', {
+      host: process.env.OBS_HOST || 'localhost',
+      port: parseInt(process.env.OBS_PORT || '4455', 10),
+      password: process.env.OBS_PASSWORD || '',
+    });
+    if (process.env.OBS_RECORDING_PATH) {
+      store.set('settings.obsRecordingPath', process.env.OBS_RECORDING_PATH);
+    }
+    if (process.env.OPENCLIP_DEST_PATH) {
+      store.set('settings.destinationPath', process.env.OPENCLIP_DEST_PATH);
+    }
+    console.log('[integration] Store seeded with OBS WebSocket settings and paths');
+  }
+
+  // Auto-detect OBS recording path on startup in production (non-integration) mode if not set
+  if (!isIntegrationMode && !store.get('settings.obsRecordingPath')) {
     const detected = readOBSRecordingPath();
     if (detected) store.set('settings.obsRecordingPath', detected);
   }

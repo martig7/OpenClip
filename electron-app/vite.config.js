@@ -30,7 +30,7 @@ export default defineConfig(({ mode }) => ({
     globals: true,
     environment: 'node',
     setupFiles: ['./tests/setup.js'],
-    exclude: [...configDefaults.exclude, 'tests/integration/**'],
+    exclude: [...configDefaults.exclude, 'tests/integration/**', 'tests/e2e/**'],
     server: {
       deps: {
         // Force 'electron' npm package through Vite's transform so the

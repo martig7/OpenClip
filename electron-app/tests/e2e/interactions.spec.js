@@ -67,7 +67,7 @@ test.describe('Settings Page Interactions', () => {
     }).locator('.toggle');
     await expect(watcherToggle).not.toHaveClass(/\bon\b/);
     await watcherToggle.click();
-    await expect(watcherToggle).toHaveClass(/on/);
+    await expect(watcherToggle).toHaveClass(/\bon\b/);
   });
 
   test('changing a setting enables the save button', async ({ page }) => {

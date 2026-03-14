@@ -24,7 +24,7 @@ const mockApi = {
   },
   getGames: async () => store.games,
   addGame: async (game) => {
-    const newGame = { id: Date.now().toString(36), ...game, enabled: true };
+    const newGame = { enabled: true, ...game, id: Date.now().toString(36) };
     store.games = [...store.games, newGame];
     return store.games;
   },

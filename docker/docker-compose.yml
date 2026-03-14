@@ -1,0 +1,34 @@
+version: '3.8'
+
+# OpenClip integration test infrastructure
+# Provides a headless OBS Studio instance with WebSocket enabled for real API testing.
+#
+# Usage:
+#   docker compose -f docker/docker-compose.yml up -d   # start OBS
+#   docker compose -f docker/docker-compose.yml down    # stop OBS
+#   docker compose -f docker/docker-compose.yml logs    # view OBS logs
+
+services:
+  obs:
+    build:
+      context: .
+      dockerfile: Dockerfile.obs
+    image: openclip-obs-test:latest
+    container_name: openclip-obs
+    ports:
+      # OBS WebSocket — bound to localhost only; do not expose to untrusted networks
+      - "127.0.0.1:4455:4455"
+    volumes:
+      # Pre-create ./recordings on the host with correct ownership before running
+      # docker compose up (e.g.: mkdir -p docker/recordings && chmod 755 docker/recordings)
+      # to avoid root-owned files being written to the host directory.
+      - ./recordings:/recordings
+    environment:
+      - DISPLAY=:99
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "4455"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
