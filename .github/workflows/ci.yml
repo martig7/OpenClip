@@ -29,9 +29,13 @@ jobs:
         working-directory: electron-app
         run: npx playwright install --with-deps
 
-      - name: Run tests
+      - name: Run unit and component tests
         working-directory: electron-app
-        run: npm test
+        run: npx vitest run
+
+      - name: Run E2E tests
+        working-directory: electron-app
+        run: npx playwright test
 
   obs-integration:
     name: OBS Integration Tests
@@ -72,6 +76,14 @@ jobs:
         working-directory: electron-app
         run: npm ci
 
-      - name: Run OBS integration tests
+      - name: Install Playwright browsers
+        working-directory: electron-app
+        run: npx playwright install --with-deps chromium
+
+      - name: Run OBS Vitest integration tests
         working-directory: electron-app
         run: npm run test:integration -- --reporter=verbose
+
+      - name: Run OBS Playwright integration tests
+        working-directory: electron-app
+        run: npx playwright test --config playwright.integration.config.js

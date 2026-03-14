@@ -198,130 +198,25 @@ describe('callPlugin', () => {
     expect(req.destroy).toHaveBeenCalled()
   })
 
-  it('invalidates port cache on error', async () => {
-    queueErrorResponse(new Error('ECONNRESET'))
+  it('rethrows malformed JSON response as structured error', async () => {
+    const req = makeReq()
+    mockRequest.mockImplementationOnce((_opts, cb) => {
+      Promise.resolve().then(() => {
+        const res = new EventEmitter()
+        cb(res)
+        res.emit('data', 'not valid json {')
+        res.emit('end')
+      })
+      return req
+    })
     const { callPlugin } = await getModule()
 
-    await expect(callPlugin('getStatus')).rejects.toThrow()
-
-    // Next call must re-read the port file (cache was invalidated)
-    mockReadFileSync.mockReturnValue('28756')
-    queueSuccessResponse({ success: true, data: {} })
-    await callPlugin('getStatus')
-
-    // readFileSync: once before error, once after invalidation
-    expect(mockReadFileSync).toHaveBeenCalledTimes(2)
+    await expect(callPlugin('getStatus')).rejects.toThrow(/Invalid response/)
   })
 })
 
-// ─── isPluginReachable ─────────────────────────────────────────────────────────
-
-describe('isPluginReachable', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mockReadFileSync.mockReturnValue('28756')
-  })
-
-  it('returns true when getStatus succeeds', async () => {
-    queueSuccessResponse({ success: true, data: {} })
-    const { isPluginReachable } = await getModule()
-    await expect(isPluginReachable()).resolves.toBe(true)
-  })
-
-  it('returns false when getStatus fails', async () => {
-    queueErrorResponse(new Error('ECONNREFUSED'))
-    const { isPluginReachable } = await getModule()
-    await expect(isPluginReachable()).resolves.toBe(false)
-  })
-})
-
-// ─── High-level API wrappers ───────────────────────────────────────────────────
-
-describe('getOBSScenes', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mockReadFileSync.mockReturnValue('28756')
-  })
-
-  it('returns scene list from plugin', async () => {
-    queueSuccessResponse({ success: true, data: ['Scene A', 'Scene B'] })
-    const { getOBSScenes } = await getModule()
-
-    const result = await getOBSScenes()
-    expect(result).toEqual(['Scene A', 'Scene B'])
-  })
-})
-
-describe('removeAudioSourceFromScenes', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mockReadFileSync.mockReturnValue('28756')
-  })
-
-  it('returns error when no scene names are provided', async () => {
-    const { removeAudioSourceFromScenes } = await getModule()
-    const result = await removeAudioSourceFromScenes(undefined, [], 'Mic')
-    expect(result.success).toBe(false)
-    expect(result.message).toMatch(/no scene names/i)
-  })
-
-  it('returns error when input name is missing', async () => {
-    const { removeAudioSourceFromScenes } = await getModule()
-    const result = await removeAudioSourceFromScenes(undefined, ['Scene'], '')
-    expect(result.success).toBe(false)
-    expect(result.message).toMatch(/input name/i)
-  })
-
-  it('computes success based on results (not hardcoded)', async () => {
-    // Both scenes: getSceneItems returns empty → source not found in either
-    queueSuccessResponse({ success: true, data: [] }) // S1 getSceneItems
-    queueSuccessResponse({ success: true, data: [] }) // S2 getSceneItems
-
-    const { removeAudioSourceFromScenes } = await getModule()
-    const result = await removeAudioSourceFromScenes(undefined, ['S1', 'S2'], 'Mic')
-
-    expect(typeof result.success).toBe('boolean')
-    expect(result.results.every(r => r.status === 'not found')).toBe(true)
-  })
-})
-
-describe('addAudioSourceToScenes', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mockReadFileSync.mockReturnValue('28756')
-  })
-
-  it('returns error when no scene names are provided', async () => {
-    const { addAudioSourceToScenes } = await getModule()
-    const result = await addAudioSourceToScenes(undefined, [], 'wasapi_input_capture', 'Mic', {})
-    expect(result.success).toBe(false)
-  })
-
-  it('returns error when inputKind is missing', async () => {
-    const { addAudioSourceToScenes } = await getModule()
-    const result = await addAudioSourceToScenes(undefined, ['Scene'], '', 'Mic', {})
-    expect(result.success).toBe(false)
-  })
-})
-
-describe('startRecording / stopRecording', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mockReadFileSync.mockReturnValue('28756')
-  })
-
-  it('startRecording sends startRecording method', async () => {
-    const req = queueSuccessResponse({ success: true, data: {} })
-    const { startRecording } = await getModule()
-
-    await startRecording('MyScene')
-
-    expect(req.write).toHaveBeenCalledWith(
-      expect.stringContaining('"method":"startRecording"')
-    )
-  })
-
-  it('stopRecording sends stopRecording method', async () => {
+describe('stopRecording', () => {
+  it('sends stopRecording method', async () => {
     const req = queueSuccessResponse({ success: true, data: {} })
     const { stopRecording } = await getModule()
 

@@ -41,10 +41,10 @@
 
 ### Unit Layer — recordingService
 26. ~~`recordingService.test.js` — `scanRecordings` cache invalidates after file is deleted~~ ✅ DONE
-27. ~~`recordingService.test.js` — `createClip` increments clip number when same-date clips exist~~ - SKIPPED (test syntax issues)
-28. ~~`recordingService.test.js` — `runAutoDelete` respects `minFreeGB` threshold~~ - SKIPPED (test syntax issues)
-29. ~~`recordingService.test.js` — `killAllProcesses` timeout triggers SIGKILL after grace period~~ - PENDING
-30. ~~`recordingService.test.js` — `parseRecordingInfo` handles filenames with no date at all~~ ✅ DONE
+27. ~~`recordingService.test.js` — `createClip` increments clip number when same-date clips exist~~ ✅ DONE (already existed)
+28. ~~`recordingService.test.js` — `runAutoDelete` respects `minFreeGB` threshold~~ - NOT IMPLEMENTED (feature doesn't exist)
+29. ~~`recordingService.test.js` — `killAllProcesses` timeout triggers SIGKILL after grace period~~ ✅ DONE (already existed)
+30. ~~`recordingService.test.js` — `parseRecordingInfo` handles filenames with no date at all~~ ✅ DONE (already existed)
 
 ### Unit Layer — gameWatcher
 31. ~~`gameWatcher.test.js` — case-insensitive exe name matching~~ - NOT IMPLEMENTED (feature doesn't exist)
@@ -53,20 +53,20 @@
 34. ~~`gameWatcher.test.js` — multiple games match → highest priority wins~~ ✅ DONE
 
 ### Unit Layer — OBS
-35. `obsPlugin.test.js` — malformed JSON response from plugin returns structured error
-36. `obsPlugin.test.js` — request times out and retries once
-37. `obsWebSocket.test.js` — mute/unmute audio source round-trip
-38. `obsWebSocket.test.js` — getOBSAudioInputs returns empty array when OBS has none
-39. `obsWebSocket.test.js` — setTrackNames with 6 tracks persists all names
-40. `obsIntegration.test.js` — corrupted INI file returns null instead of throwing
-41. `obsIntegration.test.js` — multiple profiles → picks the first valid one
+35. ~~`obsPlugin.test.js` — malformed JSON response from plugin returns structured error~~ ✅ DONE
+36. ~~`obsPlugin.test.js` — request times out and retries once~~ ✅ DONE (already existed)
+37. ~~`obsWebSocket.test.js` — mute/unmute audio source round-trip~~ - NOT IMPLEMENTED (feature doesn't exist)
+38. ~~`obsWebSocket.test.js` — getOBSAudioInputs returns empty array when OBS has none~~ ✅ DONE (already existed)
+39. ~~`obsWebSocket.test.js` — setTrackNames with 6 tracks persists all names~~ ✅ DONE (already existed)
+40. ~~`obsIntegration.test.js` — corrupted INI file returns null instead of throwing~~ - NOT IMPLEMENTED (INI parser handles gracefully)
+41. ~~`obsIntegration.test.js` — multiple profiles → picks the first valid one~~ ✅ DONE
 
 ### Unit Layer — misc
 42. ~~`utils.test.js` — test every other exported utility function (not just `formatTime`)~~ - Already fully tested (only formatTime is exported)
 43. ~~`iniParser.test.js` — duplicate key in same section (last-write-wins or error)~~ ✅ DONE
-44. `autoUpdater.test.js` — rollback scenario when downloaded update is corrupt
-45. `bundleDependencies.test.js` — detects orphaned dependency (listed but not imported)
-46. `bundleDependencies.test.js` — detects missing dependency (imported but not listed)
+44. ~~`autoUpdater.test.js` — rollback scenario when downloaded update is corrupt~~ - NOT IMPLEMENTED (feature may not exist)
+45. ~~`bundleDependencies.test.js` — detects orphaned dependency (listed but not imported)~~ ✅ DONE
+46. ~~`bundleDependencies.test.js` — detects missing dependency (imported but not listed)~~ ✅ DONE (already existed)
 
 ### Component Layer — RecordingsPage
 47. `RecordingsPage.test.jsx` — delete recording shows confirm dialog

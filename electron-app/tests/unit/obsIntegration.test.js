@@ -124,4 +124,30 @@ describe('readOBSRecordingPath', () => {
     // Should not return the nonexistent path
     expect(readOBSRecordingPath()).toBeNull()
   })
+
+  it('picks the first valid profile when multiple profiles exist', async () => {
+    const profilesDir = path.join(tmpDir, 'obs-studio', 'basic', 'profiles')
+    const p1 = path.join(profilesDir, 'First')
+    const p2 = path.join(profilesDir, 'Second')
+    fs.mkdirSync(p1, { recursive: true })
+    fs.mkdirSync(p2, { recursive: true })
+
+    const recPath1 = path.join(tmpDir, 'FirstRec')
+    const recPath2 = path.join(tmpDir, 'SecondRec')
+    fs.mkdirSync(recPath1, { recursive: true })
+    fs.mkdirSync(recPath2, { recursive: true })
+
+    fs.writeFileSync(
+      path.join(p1, 'basic.ini'),
+      `[SimpleOutput]\nFilePath=${recPath1}\n`
+    )
+    fs.writeFileSync(
+      path.join(p2, 'basic.ini'),
+      `[SimpleOutput]\nFilePath=${recPath2}\n`
+    )
+
+    vi.stubEnv('APPDATA', tmpDir)
+    const { readOBSRecordingPath } = await getModule()
+    expect(readOBSRecordingPath()).toBe(recPath1)
+  })
 })
