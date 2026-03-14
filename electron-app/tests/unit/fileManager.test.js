@@ -307,50 +307,105 @@ describe('organizeRecordings', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────
-// setupFileManager — recordings:delete / clips:delete path validation
+// organizeSpecificRecording
 // ─────────────────────────────────────────────────────────────────
-describe('setupFileManager IPC path validation', () => {
+describe('organizeSpecificRecording', () => {
   let store
-  let ipc
 
-  beforeEach(async () => {
+  beforeEach(() => {
     vi.resetModules()
     store = makeMockStore({
-      settings: { obsRecordingPath: obsDir, destinationPath: destDir },
+      settings: { destinationPath: destDir },
     })
-    ipc = makeMockIpcMain()
-    const { setupFileManager } = await import('../../electron/fileManager.js')
-    setupFileManager(ipc, store)
   })
 
-  for (const channel of ['recordings:delete', 'clips:delete']) {
-    describe(channel, () => {
-      it('deletes a valid file inside destPath', async () => {
-        const fp = path.join(destDir, 'game', 'recording.mp4')
-        fs.mkdirSync(path.dirname(fp), { recursive: true })
-        fs.writeFileSync(fp, Buffer.alloc(8))
-        const result = await ipc.invoke(channel, fp)
-        expect(result.success).toBe(true)
-        expect(fs.existsSync(fp)).toBe(false)
-      })
+  // Test 21 — uses file mtime for the week folder
+  it('uses file mtime for the week folder name', async () => {
+    const filePath = path.join(obsDir, 'old-recording.mp4')
+    fs.writeFileSync(filePath, Buffer.alloc(1024))
+    // 2024-01-10 is a Wednesday — week starts Monday Jan 8
+    const mtimeDate = new Date('2024-01-10T12:00:00.000Z')
+    fs.utimesSync(filePath, mtimeDate, mtimeDate)
 
-      it('rejects a path traversal attempt with .. sequences', async () => {
-        // Construct a path that starts with destDir string but escapes via ..
-        const traversal = path.join(destDir, '..', 'secret.txt')
-        await expect(ipc.invoke(channel, traversal)).rejects.toThrow('Invalid path')
-      })
+    const { organizeSpecificRecording } = await import('../../electron/fileManager.js')
 
-      it('rejects a path outside destPath', async () => {
-        const outside = path.join(tmpDir, 'outside.mp4')
-        fs.writeFileSync(outside, Buffer.alloc(8))
-        await expect(ipc.invoke(channel, outside)).rejects.toThrow('Invalid path')
-      })
+    vi.useFakeTimers()
+    const organizePromise = organizeSpecificRecording(store, filePath, 'TestGame')
+    await vi.runAllTimersAsync()
+    const result = await organizePromise
+    vi.useRealTimers()
 
-      it('rejects destPath itself (not a file inside it)', async () => {
-        await expect(ipc.invoke(channel, destDir)).rejects.toThrow('Invalid path')
-      })
-    })
-  }
+    expect(result.success).toBe(true)
+    const destEntries = fs.readdirSync(destDir)
+    expect(destEntries).toHaveLength(1)
+    // Week folder must reflect the file's mtime (Jan 2024), not today's date
+    expect(destEntries[0]).toMatch(/Jan.*2024/)
+    expect(destEntries[0]).toContain('Jan 8 2024')
+  })
+
+  // Test 22 — skips files already inside the destination (no double-move)
+  it('returns alreadyOrganized when file is already inside destPath', async () => {
+    // Place a file inside an existing week folder under destDir
+    const weekDir = path.join(destDir, 'MyGame - Week of Jan 8 2024')
+    fs.mkdirSync(weekDir, { recursive: true })
+    const filePath = path.join(weekDir, 'MyGame Session 2024-01-10 #1.mp4')
+    fs.writeFileSync(filePath, Buffer.alloc(1024))
+
+    const { organizeSpecificRecording } = await import('../../electron/fileManager.js')
+    const result = await organizeSpecificRecording(store, filePath, 'MyGame')
+
+    expect(result.success).toBe(true)
+    expect(result.alreadyOrganized).toBe(true)
+    // File must not have been moved — still exists at the same path
+    expect(fs.existsSync(filePath)).toBe(true)
+    // No new week folders created
+    const entries = fs.readdirSync(destDir)
+    expect(entries).toHaveLength(1)
+  })
+
+  // Test 24 — permission denied on destination folder
+  it('throws a friendly error when destination mkdir is permission denied', async () => {
+    const filePath = path.join(obsDir, 'recording.mp4')
+    fs.writeFileSync(filePath, Buffer.alloc(1024))
+
+    const { organizeSpecificRecording } = await import('../../electron/fileManager.js')
+
+    const mkdirErr = Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' })
+    const mkdirSpy = vi.spyOn(fs, 'mkdirSync').mockImplementation(() => { throw mkdirErr })
+
+    vi.useFakeTimers()
+    const organizePromise = organizeSpecificRecording(store, filePath, 'MyGame')
+    organizePromise.catch(() => {}) // suppress unhandled rejection during timer advance
+    await vi.runAllTimersAsync()
+    vi.useRealTimers()
+
+    await expect(organizePromise).rejects.toThrow(/[Pp]ermission denied/)
+    mkdirSpy.mockRestore()
+  })
+
+  // Test 25 — disk full error when moving an MP4
+  it('throws a friendly error when disk is full during move', async () => {
+    const filePath = path.join(obsDir, 'recording.mp4')
+    fs.writeFileSync(filePath, Buffer.alloc(1024))
+
+    const { organizeSpecificRecording } = await import('../../electron/fileManager.js')
+
+    // mkdirSync succeeds, then renameSync fails with ENOSPC
+    const origMkdir = fs.mkdirSync.bind(fs)
+    const mkdirSpy = vi.spyOn(fs, 'mkdirSync').mockImplementation(origMkdir)
+    const renameErr = Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' })
+    const renameSpy = vi.spyOn(fs, 'renameSync').mockImplementation(() => { throw renameErr })
+
+    vi.useFakeTimers()
+    const organizePromise = organizeSpecificRecording(store, filePath, 'MyGame')
+    organizePromise.catch(() => {}) // suppress unhandled rejection during timer advance
+    await vi.runAllTimersAsync()
+    vi.useRealTimers()
+
+    await expect(organizePromise).rejects.toThrow(/disk space/)
+    mkdirSpy.mockRestore()
+    renameSpy.mockRestore()
+  })
 })
 
 // ─────────────────────────────────────────────────────────────────

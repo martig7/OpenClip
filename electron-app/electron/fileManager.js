@@ -265,6 +265,13 @@ async function organizeSpecificRecording(store, filePath, gameName) {
   if (!destPath) throw new Error('No destination path configured');
   if (!fs.existsSync(filePath)) throw new Error('Recording file not found');
 
+  // Skip files already inside the organized destination (no double-move)
+  const resolvedFile = path.resolve(filePath);
+  const resolvedDest = path.resolve(destPath);
+  if (resolvedFile.startsWith(resolvedDest + path.sep)) {
+    return { success: true, alreadyOrganized: true, path: filePath, filename: path.basename(filePath) };
+  }
+
   // Verify file is stable (not still being written)
   const stat1 = fs.statSync(filePath);
   await new Promise(r => setTimeout(r, 1500));
@@ -276,7 +283,17 @@ async function organizeSpecificRecording(store, filePath, gameName) {
   const recordingDate = stat2.mtime;
   const weekFolder = `${gameName} - ${getWeekFolder(recordingDate)}`;
   const targetDir = path.join(destPath, weekFolder);
-  fs.mkdirSync(targetDir, { recursive: true });
+  try {
+    fs.mkdirSync(targetDir, { recursive: true });
+  } catch (err) {
+    if (err.code === 'EACCES' || err.code === 'EPERM') {
+      throw new Error('Permission denied: cannot create folder at destination. Check your folder permissions.');
+    }
+    if (err.code === 'ENOSPC') {
+      throw new Error('Not enough disk space to create the destination folder.');
+    }
+    throw err;
+  }
 
   const dateStr = recordingDate.toISOString().slice(0, 10);
   const existing = fs.readdirSync(targetDir).filter(f => isVideoFile(f) && f.includes(dateStr));
@@ -325,6 +342,9 @@ async function organizeSpecificRecording(store, filePath, gameName) {
     try {
       fs.renameSync(filePath, dest);
     } catch (err) {
+      if (err.code === 'ENOSPC') {
+        throw new Error('Not enough disk space to move the recording.');
+      }
       throw new Error(`Could not move file (it may still be open by OBS): ${err.message}`);
     }
     service.invalidateRecordingsCache();

@@ -14,8 +14,8 @@
 1. ~~`recordings.test.js` — filter recordings by game name~~ - NOT IMPLEMENTED (feature doesn't exist)
 2. ~~`recordings.test.js` — sort recordings by date (newest first)~~ ✅ DONE
 3. ~~`recordings.test.js` — response when recordings dir doesn't exist yet~~ ✅ DONE
-4. ~~`clips.test.js` — concurrent clip creation from the same source file~~ - PENDING
-5. ~~`clips.test.js` — clip output filename collision (increment logic)~~ - PENDING
+ 4. ~~`clips.test.js` — concurrent clip creation from the same source file~~ ✅ DONE (already existed - "Clip Creation Concurrency" section)
+ 5. ~~`clips.test.js` — clip output filename collision (increment logic)~~ ✅ DONE (already existed - "increments clip number for same-date clips")
 6. ~~`clips.test.js` — clip with start time === end time returns 400~~ ✅ DONE
 7. ~~`markers.test.js` — POST /api/markers/create (currently untested entirely)~~ ✅ DONE (endpoint doesn't exist)
 8. ~~`markers.test.js` — markers sorted by timestamp in response~~ ✅ DONE (already existed)
@@ -33,11 +33,11 @@
 20. ~~`storage.test.js` — stats with zero disk usage reports correctly~~ ✅ DONE
 
 ### Unit Layer — fileManager
-21. ~~`fileManager.test.js` — `organizeSpecificRecording()` uses file mtime for week folder~~ - PENDING
-22. ~~`fileManager.test.js` — organize skips files already in a week folder (no double-move)~~ - NOT IMPLEMENTED (feature doesn't exist)
+21. ~~`fileManager.test.js` — `organizeSpecificRecording()` uses file mtime for week folder~~ ✅ DONE
+22. ~~`fileManager.test.js` — organize skips files already in a week folder (no double-move)~~ ✅ DONE (feature added: resolvedFile.startsWith(resolvedDest) guard returns alreadyOrganized)
 23. ~~`fileManager.test.js` — MKV remux fails → original file kept, no partial output left~~ ✅ DONE
-24. ~~`fileManager.test.js` — handles filesystem permission denied on destination~~ - PENDING
-25. ~~`fileManager.test.js` — organize with disk full error mid-copy~~ - PENDING
+24. ~~`fileManager.test.js` — handles filesystem permission denied on destination~~ ✅ DONE (EACCES → friendly message → error toast)
+25. ~~`fileManager.test.js` — organize with disk full error mid-copy~~ ✅ DONE (ENOSPC → friendly message → error toast)
 
 ### Unit Layer — recordingService
 26. ~~`recordingService.test.js` — `scanRecordings` cache invalidates after file is deleted~~ ✅ DONE
@@ -94,20 +94,20 @@
 ### New Component Tests (untested components)
 62. ~~`ReencodeModal.test.jsx` — renders progress bar during reencode~~ ✅ DONE
 63. ~~`ReencodeModal.test.jsx` — shows error state when reencode fails~~ - PENDING
-64. `AudioSourceDropdown.test.jsx` — lists available audio inputs
-65. `AudioSourceDropdown.test.jsx` — selecting source fires onChange
-66. `WindowPicker.test.jsx` — displays running windows list
-67. `WindowPicker.test.jsx` — filtering by window title
-68. `HotkeyCapture.test.jsx` — records key combination on keydown
-69. `HotkeyCapture.test.jsx` — Escape clears captured hotkey
-70. `ConfirmDeleteDialog.test.jsx` — renders with game name in prompt
-71. `WatcherStatusCard.test.jsx` — tick updates displayed status
+64. ~~`AudioSourceDropdown.test.jsx` — lists available audio inputs~~ ✅ DONE
+65. ~~`AudioSourceDropdown.test.jsx` — selecting source fires onChange~~ ✅ DONE
+66. ~~`WindowPicker.test.jsx` — displays running windows list~~ ✅ DONE
+67. ~~`WindowPicker.test.jsx` — filtering by window title~~ ✅ DONE
+68. `HotkeyCapture.test.jsx` — records key combination on keydown - NOT IMPLEMENTED (component doesn't exist)
+69. `HotkeyCapture.test.jsx` — Escape clears captured hotkey - NOT IMPLEMENTED (component doesn't exist)
+70. ~~`ConfirmDeleteDialog.test.jsx` — renders with game name in prompt~~ ✅ DONE
+71. `WatcherStatusCard.test.jsx` — tick updates displayed status - PENDING (too complex to test with fake timers)
 
 ### IPC Layer (currently untested)
-72. New `ipc.test.js` — `window.api.getRecordings` returns data from main process
-73. New `ipc.test.js` — `window.api.createClip` passes correct args over IPC
-74. New `ipc.test.js` — `window.api.saveSettings` round-trips to electron-store
-75. New `ipc.test.js` — IPC channel rejects unknown handlers gracefully
+72. ~~New `ipc.test.js` — `window.api.getRecordings` returns data from main process~~ ✅ DONE (already existed)
+73. ~~New `ipc.test.js` — `window.api.createClip` passes correct args over IPC~~ ✅ DONE (already existed)
+74. ~~New `ipc.test.js` — `window.api.saveSettings` round-trips to electron-store~~ ✅ DONE (already existed)
+75. ~~New `ipc.test.js` — IPC channel rejects unknown handlers gracefully~~ ✅ DONE (already existed)
 
 ### Integration / E2E
 76. ~~`filesystem.spec.js` — POST /api/storage/delete-batch removes file from disk~~ ✅ DONE
@@ -122,16 +122,16 @@
 85. ~~`pages.spec.js` — delete a recording from RecordingsPage end-to-end~~ - PENDING
 86. ~~`pages.spec.js` — reencode a clip end-to-end (real ffmpeg, check file replaced)~~ - PENDING
 87. ~~`navigation.spec.js` — direct deep-link URL loads correct page without redirect~~ ✅ DONE
-88. New `accessibility.spec.js` — all pages pass axe-core accessibility audit
-89. New `accessibility.spec.js` — keyboard-only navigation reaches every interactive element
-90. New `performance.spec.js` — RecordingsPage with 500 recordings renders under 2s
+88. New `accessibility.spec.js` — all pages pass axe-core accessibility audit - NOT IMPLEMENTED
+89. New `accessibility.spec.js` — keyboard-only navigation reaches every interactive element - NOT IMPLEMENTED
+90. New `performance.spec.js` — RecordingsPage with 500 recordings renders under 2s - NOT IMPLEMENTED
 
 ### Concurrency & Resilience
-91. `recordingService.test.js` — two simultaneous `createClip` calls don't produce same filename
-92. `storage.test.js` — concurrent delete-batch requests don't corrupt lock state
-93. `obsPlugin.test.js` — plugin drops connection mid-request → error propagates cleanly
-94. `gameWatcher.test.js` — rapid game start/stop cycles don't leak timers
-95. New `resilience.test.js` — API server handles OBS unreachable gracefully on all OBS endpoints
+91. `recordingService.test.js` — two simultaneous `createClip` calls don't produce same filename - NOT IMPLEMENTED
+92. ~~`storage.test.js` — concurrent delete-batch requests don't corrupt lock state~~ ✅ DONE (already existed)
+93. ~~`obsPlugin.test.js` — plugin drops connection mid-request → error propagates cleanly~~ ✅ DONE (already existed)
+94. ~~`gameWatcher.test.js` — rapid game start/stop cycles don't leak timers~~ ✅ DONE (already existed)
+95. ~~New `resilience.test.js` — API server handles OBS unreachable gracefully on all OBS endpoints~~ ✅ DONE (already existed)
 
 ### Security
 96. ~~`clips.test.js` — path traversal in `sourcePath` param blocked (add more variants: `../`, `%2F..`)~~ ✅ DONE

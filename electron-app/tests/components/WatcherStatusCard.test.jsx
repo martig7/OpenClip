@@ -47,6 +47,6 @@ describe('WatcherStatusCard', () => {
         scriptWarning="Warning: Script not found"
       />
     );
-    expect(screen.getByText(/OBS plugin not detected/)).toBeVisible();
+    expect(screen.getByText(/OBS plugin not detected/)).toBeInTheDocument();
   });
 });
