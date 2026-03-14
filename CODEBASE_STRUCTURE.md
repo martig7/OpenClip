@@ -138,6 +138,11 @@ See [`obs-plugin/src/README.md`](obs-plugin/src/README.md) for complete source d
 | `tests/e2e/interactions.spec.js` | ~130 |
 | `tests/e2e/fixtures/testData.js` | ~120 |
 | `tests/e2e/fixtures/routes.js` | ~30 |
+| `tests/TEST_COVERAGE_ANALYSIS.md` | 141 |
+| `tests/integration/ffmpeg/fileManager.ffmpeg.test.js` | 128 |
+| `tests/integration/ffmpeg/api.ffmpeg.test.js` | 251 |
+| `tests/integration/ffmpeg/setup.js` | 19 |
+| `vite.ffmpeg.config.js` | 20 |
 
 **Target: no file should exceed 800 lines.**
 

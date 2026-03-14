@@ -148,6 +148,40 @@ describe('organizeRecordings', () => {
     expect(files.some(f => f.endsWith('.mp4'))).toBe(true)
   })
 
+  it('MKV remux failure cleans up partial MP4 and keeps the original file', async () => {
+    const { organizeRecordings } = await import('../../electron/fileManager.js')
+    const src = path.join(obsDir, 'video.mkv')
+    fs.writeFileSync(src, Buffer.alloc(1024))
+
+    cp.execFile.mockImplementation((bin, args, opts, callback) => {
+      if (args.includes('-show_streams')) {
+        // ffprobe probe succeeds
+        callback(null, { stdout: '{"streams":[]}', stderr: '' })
+      } else {
+        // ffmpeg writes a partial output then errors
+        const outPath = args[args.length - 1]
+        fs.writeFileSync(outPath, Buffer.alloc(128))
+        callback(new Error('ffmpeg: encoder error'))
+      }
+    })
+
+    await organizeRecordings(store, 'MyGame')
+
+    // No .mp4 should survive in dest — the partial output must have been deleted
+    const weekDirs = fs.readdirSync(destDir)
+    for (const dir of weekDirs) {
+      const files = fs.readdirSync(path.join(destDir, dir))
+      expect(files.filter(f => f.endsWith('.mp4'))).toHaveLength(0)
+    }
+
+    // Original .mkv must still be accessible (renamed into dest dir or still in obsDir)
+    const mkvInObs = fs.existsSync(src)
+    const mkvInDest = weekDirs.some(dir =>
+      fs.readdirSync(path.join(destDir, dir)).some(f => f.endsWith('.mkv'))
+    )
+    expect(mkvInObs || mkvInDest).toBe(true)
+  })
+
   it('writes .tracks.json sidecar when ffprobe finds titled streams', async () => {
     const { organizeRecordings } = await import('../../electron/fileManager.js')
     const src = path.join(obsDir, 'video.mkv')

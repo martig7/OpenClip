@@ -21,7 +21,8 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:integration": "playwright test --config playwright.integration.config.js",
     "dev:test": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron . --dev --test-mode\"",
-    "dev:integration": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron . --dev --integration-mode\""
+    "dev:integration": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron . --dev --integration-mode\"",
+    "test:ffmpeg": "vitest run --config vite.ffmpeg.config.js"
   },
   "dependencies": {
     "chokidar": "^4.0.3",

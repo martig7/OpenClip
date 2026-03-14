@@ -35,7 +35,7 @@
 ### Unit Layer — fileManager
 21. ~~`fileManager.test.js` — `organizeSpecificRecording()` uses file mtime for week folder~~ - PENDING
 22. ~~`fileManager.test.js` — organize skips files already in a week folder (no double-move)~~ - NOT IMPLEMENTED (feature doesn't exist)
-23. ~~`fileManager.test.js` — MKV remux fails → original file kept, no partial output left~~ - NOT IMPLEMENTED (feature doesn't exist)
+23. ~~`fileManager.test.js` — MKV remux fails → original file kept, no partial output left~~ ✅ DONE
 24. ~~`fileManager.test.js` — handles filesystem permission denied on destination~~ - PENDING
 25. ~~`fileManager.test.js` — organize with disk full error mid-copy~~ - PENDING
 
@@ -111,8 +111,8 @@
 
 ### Integration / E2E
 76. ~~`filesystem.spec.js` — POST /api/storage/delete-batch removes file from disk~~ ✅ DONE
-77. ~~`filesystem.spec.js` — POST /api/clips/create produces a real MP4 output~~ - PENDING
-78. ~~`filesystem.spec.js` — POST /api/reencode replaces file atomically~~ - PENDING
+77. ~~`filesystem.spec.js` — POST /api/clips/create produces a real MP4 output~~ ✅ DONE (api.ffmpeg.test.js)
+78. ~~`filesystem.spec.js` — POST /api/reencode replaces file atomically~~ ✅ DONE (api.ffmpeg.test.js)
 79. ~~`obs-scenes.spec.js` — set audio source mute state and verify via getSceneAudioSources~~ - PENDING
 80. ~~`obs-scenes.spec.js` — set track names and read them back via WebSocket directly~~ - PENDING
 81. ~~New `settings.spec.js` — save settings and reload page → values persist~~ ✅ DONE
