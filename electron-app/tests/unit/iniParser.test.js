@@ -75,4 +75,9 @@ describe('iniParser.parse', () => {
     const result = parse('[AdvOut]\nRecFilePath=D:\\Videos')
     expect(result.AdvOut.RecFilePath).toBe('D:\\Videos')
   })
+
+  it('duplicate key in same section uses last-write-wins', () => {
+    const result = parse('[Sec]\nkey=first\nkey=second')
+    expect(result.Sec.key).toBe('second')
+  })
 })

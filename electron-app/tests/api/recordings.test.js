@@ -76,4 +76,16 @@ describe('GET /api/recordings', () => {
     expect(res.status).toBe(204)
     expect(res.headers['access-control-allow-methods']).toContain('GET')
   })
+
+  it('returns empty array when recordings dir does not exist yet', async () => {
+    store.get.mockReturnValue({ 
+      obsRecordingPath: '/nonexistent/path', 
+      destinationPath: destDir 
+    })
+    recordingService.invalidateCache()
+    
+    const res = await request(server).get('/api/recordings')
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual([])
+  })
 })

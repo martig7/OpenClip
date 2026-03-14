@@ -168,4 +168,20 @@ describe('multiple games', () => {
     const gameB = makeGame({ name: 'B', selector: 'game b', enabled: true })
     expect(detectRunningGame([gameA, gameB])).toBe(gameB)
   })
+
+  it('returns null when all games are disabled', () => {
+    mockGetWindowTitles.mockReturnValue(['game window'])
+    const gameA = makeGame({ name: 'A', selector: 'game', enabled: false })
+    const gameB = makeGame({ name: 'B', selector: 'game', enabled: false })
+    expect(detectRunningGame([gameA, gameB])).toBeNull()
+  })
+
+  it('multiple games match - highest priority wins', () => {
+    mockGetRunningProcessNames.mockReturnValue(['game.exe'])
+    mockGetWindowTitles.mockReturnValue([])
+    const gameA = makeGame({ name: 'A', selector: 'game', exe: 'game.exe', windowMatchPriority: 0 })
+    const gameB = makeGame({ name: 'B', selector: 'game', exe: 'game.exe', windowMatchPriority: 2 })
+    const result = detectRunningGame([gameA, gameB])
+    expect(result).toBe(gameB)
+  })
 })

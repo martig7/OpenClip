@@ -198,3 +198,33 @@ describe('POST /api/storage/delete-batch', () => {
     expect(res.body.failed_count).toBe(1)
   })
 })
+
+describe('Storage - Edge Cases', () => {
+  it('stats with zero disk usage reports correctly', async () => {
+    const cp = await import('child_process')
+    cp.exec.mockImplementation((cmd, opts, cb) => {
+      cb(null, '0', '')
+    })
+    
+    const res = await request(server).get('/api/storage/stats')
+    expect(res.status).toBe(200)
+    expect(res.body).toHaveProperty('disk_usage')
+  })
+
+  it('lock/unlock round-trip persists in store', async () => {
+    const fp = path.join(destDir, 'persist.mp4')
+    fs.writeFileSync(fp, Buffer.alloc(1024))
+    
+    // Lock
+    await request(server)
+      .post('/api/storage/lock')
+      .send({ path: fp, locked: true })
+    expect(store._data.lockedRecordings).toContain(path.normalize(fp))
+    
+    // Unlock
+    await request(server)
+      .post('/api/storage/lock')
+      .send({ path: fp, locked: false })
+    expect(store._data.lockedRecordings).not.toContain(path.normalize(fp))
+  })
+})

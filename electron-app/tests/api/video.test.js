@@ -234,3 +234,15 @@ describe('GET /api/video/waveform', () => {
     expect(res.body.peaks.every(p => p >= 0 && p <= 1.0)).toBe(true)
   })
 })
+
+describe('GET /api/video/tracks - Edge Cases', () => {
+  it('byte range request returns correct Content-Range header', async () => {
+    const fp = path.join(destDir, 'big.mp4')
+    fs.writeFileSync(fp, Buffer.alloc(4096))
+    const res = await request(server)
+      .get(`/api/video?path=${encodeURIComponent(fp)}`)
+      .set('Range', 'bytes=0-1023')
+    expect(res.status).toBe(206)
+    expect(res.headers['content-range']).toMatch(/^bytes 0-1023\/4096$/)
+  })
+})

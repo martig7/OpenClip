@@ -86,6 +86,15 @@ describe('POST /api/clips/create', () => {
     expect(res.status).toBe(400)
   })
 
+  it('returns 400 when start_time equals end_time', async () => {
+    const src = path.join(obsDir, 'rec2.mp4')
+    fs.writeFileSync(src, Buffer.alloc(1024))
+    const res = await request(server)
+      .post('/api/clips/create')
+      .send({ source_path: src, start_time: 5, end_time: 5 })
+    expect(res.status).toBe(400)
+  })
+
   it('returns 200 on success (with mocked ffmpeg)', async () => {
     const cp = await import('child_process')
     cp.execFile.mockImplementation((bin, args, opts, cb) => {

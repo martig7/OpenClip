@@ -25,6 +25,10 @@ jobs:
         working-directory: electron-app
         run: npm ci
 
+      - name: Install Playwright browsers
+        working-directory: electron-app
+        run: npx playwright install --with-deps
+
       - name: Run tests
         working-directory: electron-app
         run: npm test
