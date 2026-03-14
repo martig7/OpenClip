@@ -31,20 +31,24 @@ function ClipsPage() {
     }
   }, [])
 
-  const initialPathParam = searchParams.get('path')
+  // Capture the path param once on mount. Using a ref prevents setSearchParams({})
+  // from changing initialPathParam → re-triggering this effect → double fetch.
+  const initialPathParamRef = useRef(searchParams.get('path'))
 
   useEffect(() => {
     fetchClips().then(data => {
       if (!data) return
-      if (initialPathParam) {
-        const clip = data.find(c => c.path === initialPathParam)
+      const param = initialPathParamRef.current
+      if (param) {
+        const clip = data.find(c => c.path === param)
         if (clip) {
+          initialPathParamRef.current = null
           setSelectedClip(clip)
           setSearchParams({})
         }
       }
     })
-  }, [fetchClips, initialPathParam, setSearchParams])
+  }, [fetchClips, setSearchParams])
 
   const handleDelete = useCallback(async () => {
     if (!selectedClip) return

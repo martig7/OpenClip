@@ -19,3 +19,25 @@ test.describe('Navigation', () => {
     await expect(page.getByRole('link', { name: 'Settings' })).toBeVisible();
   });
 });
+
+test.describe('Navigation - Edge Cases', () => {
+  test('direct navigation to invalid route shows main content', async ({ page }) => {
+    await page.goto('/#/nonexistent-page');
+    await expect(page.locator('.nav-brand')).toBeVisible();
+  });
+
+  test('page refresh maintains route', async ({ page }) => {
+    await page.goto('/#/settings');
+    await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 });
+    await page.reload();
+    await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 });
+  });
+
+  test('navigation via browser back/forward works', async ({ page }) => {
+    await page.goto('/');
+    await page.click('button:has-text("Add Game")');
+    await expect(page.locator('h2:has-text("Add Game")')).toBeVisible();
+    await page.goBack();
+    await expect(page.locator('h2:has-text("Add Game")')).not.toBeVisible();
+  });
+});

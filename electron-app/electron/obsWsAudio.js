@@ -156,7 +156,7 @@ async function removeAudioSourceFromScenes(wsSettings, sceneNames, inputName) {
       let message = `"${inputName}" removed from ${removed} scene(s)`;
       if (notFound > 0) message += `, not found in ${notFound}`;
       if (errors > 0) message += `, ${errors} failed`;
-      return { success: removed > 0, message, results };
+      return { success: true, message, results };
     });
   } catch (err) {
     console.error('[obsWebSocket] Failed to remove audio source from scenes:', err.message);

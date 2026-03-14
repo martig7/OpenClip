@@ -32,21 +32,25 @@ function RecordingsPage() {
     }
   }, [])
 
-  const initialPathParam = searchParams.get('path')
+  // Capture the path param once on mount. Using a ref prevents setSearchParams({})
+  // from changing initialPathParam → re-triggering this effect → double fetch.
+  const initialPathParamRef = useRef(searchParams.get('path'))
 
   useEffect(() => {
     fetchRecordings().then(data => {
       if (!data) return
-      if (initialPathParam) {
-        const recording = data.find(r => r.path === initialPathParam)
+      const param = initialPathParamRef.current
+      if (param) {
+        const recording = data.find(r => r.path === param)
         if (recording) {
+          initialPathParamRef.current = null
           setSelectedRecording(recording)
           setSearchParams({})
         }
       }
     })
     api.getGames().then(g => setGames(g || [])).catch(() => {})
-  }, [fetchRecordings, initialPathParam, setSearchParams])
+  }, [fetchRecordings, setSearchParams])
 
   const handleClipCreated = useCallback((clip) => {
     setToast({ type: 'success', message: `Clip created: ${clip.filename}` })

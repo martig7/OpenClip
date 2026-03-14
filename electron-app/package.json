@@ -9,7 +9,7 @@
     "dist": "vite build && electron-builder --win",
     "release": "vitest run tests/unit/release.test.js tests/unit/bundleDependencies.test.js && node scripts/release.js",
     "preview": "vite build && electron .",
-    "test": "vitest run",
+    "test": "vitest run && playwright test && playwright test --config playwright.integration.config.js",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",

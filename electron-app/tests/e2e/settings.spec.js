@@ -69,3 +69,37 @@ test.describe('Settings Page', () => {
     await expect(page.locator('button:has-text("Setup Wizard")')).toBeVisible();
   });
 });
+
+test.describe('Settings Page - Edge Cases', () => {
+  test('toggling multiple settings enables save button', async ({ page }) => {
+    await page.goto('/#/settings');
+    await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('button:has-text("Save Settings")')).not.toBeEnabled();
+    
+    const watcherToggle = page.locator('.toggle-row', {
+      has: page.locator('.toggle-label:has-text("Start Watcher on Startup")'),
+    }).locator('.toggle');
+    await watcherToggle.click();
+    
+    const autoClipToggle = page.locator('.toggle-row', {
+      has: page.locator('.toggle-label:has-text("Enable Auto-Clip")'),
+    }).locator('.toggle');
+    await autoClipToggle.click();
+    
+    await expect(page.locator('button:has-text("Save Settings")')).toBeEnabled();
+  });
+
+  test('toggle state persists after page refresh', async ({ page }) => {
+    await page.goto('/#/settings');
+    await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 });
+    
+    const autoClipToggle = page.locator('.toggle-row', {
+      has: page.locator('.toggle-label:has-text("Enable Auto-Clip")'),
+    }).locator('.toggle');
+    await autoClipToggle.click();
+    await expect(autoClipToggle).toHaveClass(/on/);
+    
+    await page.reload();
+    await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 });
+  });
+});

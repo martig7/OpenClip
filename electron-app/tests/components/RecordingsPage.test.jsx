@@ -49,7 +49,7 @@ function renderPage(initialPath = '/recordings') {
 }
 
 describe('RecordingsPage', () => {
-  it('shows loading spinner initially', () => {
+  it('shows loading spinner initially', async () => {
     server.use(
       http.get('/api/recordings', async () => {
         await new Promise(r => setTimeout(r, 100))
@@ -58,6 +58,9 @@ describe('RecordingsPage', () => {
     )
     renderPage()
     expect(document.querySelector('.spinner')).toBeInTheDocument()
+    // Drain the in-flight delayed fetch so all state updates complete within
+    // this test and don't leak act() warnings into subsequent tests.
+    await waitFor(() => expect(document.querySelector('.spinner')).not.toBeInTheDocument())
   })
 
   it('renders sidebar with recording list', async () => {

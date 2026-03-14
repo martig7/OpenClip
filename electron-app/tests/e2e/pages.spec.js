@@ -155,3 +155,148 @@ test.describe('Encoding Page', () => {
     await expect(page.locator('label:has-text("Encoder")').first()).toBeVisible({ timeout: 5000 });
   });
 });
+
+test.describe('Recordings Page - Edge Cases', () => {
+  test('handles empty API response', async ({ page }) => {
+    await page.route('**/api/recordings', route => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+    await page.goto('/#/recordings');
+    await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
+  });
+
+  test('handles network error gracefully', async ({ page }) => {
+    await page.route('**/api/recordings', route => route.abort('failed'));
+    await page.goto('/#/recordings');
+    await expect(page.locator('.sidebar')).toBeVisible({ timeout: 5000 });
+  });
+
+  test('search returns no results for non-existent query', async ({ page }) => {
+    await page.route('**/api/recordings', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([
+      { filename: 'Valorant_2024-01-15_20-30-45.mp4', path: 'test.mp4', game_name: 'Valorant', date: '2024-01-15', size_formatted: '1.40 GB', size_bytes: 1500000000, mtime: 1705349445000 },
+    ])}));
+    await page.goto('/#/recordings');
+    await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
+    await page.locator('.search-box input').fill('NonExistentGame123');
+    await expect(page.locator('.item-card')).not.toBeVisible();
+  });
+
+  test('search with special characters does not crash', async ({ page }) => {
+    await page.route('**/api/recordings', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([
+      { filename: 'Valorant_2024-01-15_20-30-45.mp4', path: 'test.mp4', game_name: 'Valorant', date: '2024-01-15', size_formatted: '1.40 GB', size_bytes: 1500000000, mtime: 1705349445000 },
+    ])}));
+    await page.goto('/#/recordings');
+    await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
+    await page.locator('.search-box input').fill("'; DROP TABLE users;--");
+    await expect(page.locator('.sidebar')).toBeVisible();
+  });
+
+  test('search with empty string shows all results', async ({ page }) => {
+    await page.route('**/api/recordings', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([
+      { filename: 'Valorant_2024-01-15_20-30-45.mp4', path: 'test.mp4', game_name: 'Valorant', date: '2024-01-15', size_formatted: '1.40 GB', size_bytes: 1500000000, mtime: 1705349445000 },
+      { filename: 'CS2_2024-01-14_18-22-10.mp4', path: 'test2.mp4', game_name: 'Counter-Strike 2', date: '2024-01-14', size_formatted: '2.98 GB', size_bytes: 3200000000, mtime: 1705256530000 },
+    ])}));
+    await page.goto('/#/recordings');
+    await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
+    await page.locator('.search-box input').fill('');
+    await expect(page.locator('.item-card')).toHaveCount(2);
+  });
+
+  test('can select different recordings sequentially', async ({ page }) => {
+    await page.route('**/api/recordings', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([
+      { filename: 'Valorant_2024-01-15_20-30-45.mp4', path: 'test.mp4', game_name: 'Valorant', date: '2024-01-15', size_formatted: '1.40 GB', size_bytes: 1500000000, mtime: 1705349445000 },
+      { filename: 'CS2_2024-01-14_18-22-10.mp4', path: 'test2.mp4', game_name: 'Counter-Strike 2', date: '2024-01-14', size_formatted: '2.98 GB', size_bytes: 3200000000, mtime: 1705256530000 },
+    ])}));
+    await page.goto('/#/recordings');
+    await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
+    const firstCard = page.locator('.item-card').first();
+    await firstCard.click();
+    await expect(firstCard).toHaveClass(/active/);
+    const secondCard = page.locator('.item-card').nth(1);
+    await secondCard.click();
+    await expect(secondCard).toHaveClass(/active/);
+  });
+});
+
+test.describe('Clips Page - Edge Cases', () => {
+  test('handles empty API response', async ({ page }) => {
+    await page.route('**/api/clips', route => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+    await page.goto('/#/clips');
+    await expect(page.locator('.sidebar h2:has-text("Clips")')).toBeVisible({ timeout: 5000 });
+  });
+
+  test('handles network error gracefully', async ({ page }) => {
+    await page.route('**/api/clips', route => route.abort('failed'));
+    await page.goto('/#/clips');
+    await expect(page.locator('.sidebar')).toBeVisible({ timeout: 5000 });
+  });
+
+  test('search returns no results for non-existent query', async ({ page }) => {
+    await page.route('**/api/clips', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([
+      { filename: 'Valorant_highlight_001.mp4', path: 'test.mp4', game_name: 'Valorant', date: '2024-01-15', size_formatted: '47.68 MB', size_bytes: 50000000, mtime: 1705350300000 },
+    ])}));
+    await page.goto('/#/clips');
+    await expect(page.locator('.sidebar h2:has-text("Clips")')).toBeVisible({ timeout: 5000 });
+    await page.locator('.search-box input').fill('NonExistentClip');
+    await expect(page.locator('.item-card')).not.toBeVisible();
+  });
+});
+
+test.describe('Storage Page - Edge Cases', () => {
+  test('handles empty API response', async ({ page }) => {
+    await page.route('**/api/storage/stats', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      total_size_formatted: '0 B',
+      recording_count: 0,
+      clip_count: 0,
+      recordings: [],
+      clips: [],
+      locked_recordings: [],
+    })}));
+    await page.goto('/#/storage');
+    await expect(page.locator('.sv2-title:has-text("Storage")')).toBeVisible({ timeout: 10000 });
+  });
+
+  test('handles network error gracefully', async ({ page }) => {
+    await page.route('**/api/storage/stats', route => route.abort('failed'));
+    await page.goto('/#/storage');
+    await expect(page.locator('.sv2-title')).toBeVisible({ timeout: 10000 });
+  });
+
+  test('multiple file selection shows correct count', async ({ page }) => {
+    await page.route('**/api/storage/stats', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      total_size_formatted: '4.43 GB',
+      recording_count: 3,
+      clip_count: 0,
+      recordings: [
+        { filename: 'test1.mp4', path: 'test1.mp4', game_name: 'Valorant', date: '2024-01-15', size_formatted: '1 GB', size_bytes: 1000000000, mtime: 1705349445000, type: 'recording' },
+        { filename: 'test2.mp4', path: 'test2.mp4', game_name: 'Valorant', date: '2024-01-14', size_formatted: '1 GB', size_bytes: 1000000000, mtime: 1705349445000, type: 'recording' },
+        { filename: 'test3.mp4', path: 'test3.mp4', game_name: 'CS2', date: '2024-01-13', size_formatted: '1 GB', size_bytes: 1000000000, mtime: 1705349445000, type: 'recording' },
+      ],
+      clips: [],
+      locked_recordings: [],
+    })}));
+    await page.goto('/#/storage');
+    await expect(page.locator('.sv2-title:has-text("Storage")')).toBeVisible({ timeout: 10000 });
+    await page.locator('.sv2-list-row').first().click();
+    await page.locator('.sv2-list-row').nth(1).click();
+    await expect(page.locator('.sv2-sel-pill:has-text("2 selected")')).toBeVisible();
+  });
+
+  test('deselecting all files hides selection pill', async ({ page }) => {
+    await page.route('**/api/storage/stats', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      total_size_formatted: '4.43 GB',
+      recording_count: 2,
+      clip_count: 0,
+      recordings: [
+        { filename: 'test1.mp4', path: 'test1.mp4', game_name: 'Valorant', date: '2024-01-15', size_formatted: '1 GB', size_bytes: 1000000000, mtime: 1705349445000, type: 'recording' },
+        { filename: 'test2.mp4', path: 'test2.mp4', game_name: 'CS2', date: '2024-01-14', size_formatted: '1 GB', size_bytes: 1000000000, mtime: 1705349445000, type: 'recording' },
+      ],
+      clips: [],
+      locked_recordings: [],
+    })}));
+    await page.goto('/#/storage');
+    await expect(page.locator('.sv2-title:has-text("Storage")')).toBeVisible({ timeout: 10000 });
+    await page.locator('.sv2-list-row').first().click();
+    await expect(page.locator('.sv2-sel-pill:has-text("1 selected")')).toBeVisible();
+    await page.locator('.sv2-list-row').first().click();
+    await expect(page.locator('.sv2-sel-pill')).not.toBeVisible();
+  });
+});

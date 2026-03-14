@@ -426,10 +426,19 @@ async function deleteOBSScene(wsSettings, sceneName) {
         }
       }
       await obs.call('RemoveScene', { sceneName: trimmedName });
-      // Verify removal on the same connection — OBS may silently refuse the
-      // operation on some versions/modes without throwing.
-      const { scenes: afterScenes } = await obs.call('GetSceneList');
-      if (afterScenes.some(s => s.sceneName === trimmedName)) {
+      // Verify removal — OBS may silently refuse on some versions/modes without
+      // throwing, or the scene list may lag briefly on headless builds.
+      // Retry a few times to handle propagation delay before declaring failure.
+      let stillPresent = true;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const { scenes: afterScenes } = await obs.call('GetSceneList');
+        if (!afterScenes.some(s => s.sceneName === trimmedName)) {
+          stillPresent = false;
+          break;
+        }
+        if (attempt < 4) await new Promise(r => setTimeout(r, 200));
+      }
+      if (stillPresent) {
         return { success: false, message: `Scene "${trimmedName}" could not be removed from OBS` };
       }
       return { success: true, message: `Scene "${trimmedName}" deleted from OBS` };
