@@ -64,6 +64,25 @@ test.describe('API server — real filesystem', () => {
     expect(typeof body.available).toBe('boolean');
   });
 
+  test('POST /api/storage/delete-batch removes file from disk', async ({ request }) => {
+    if (!destPath) {
+      test.skip();
+    }
+    const clipsDir = join(destPath, 'Clips');
+    mkdirSync(clipsDir, { recursive: true });
+    const testFile = join(clipsDir, 'test-clip.mp4');
+    writeFileSync(testFile, 'test content');
+    expect(require('fs').existsSync(testFile)).toBe(true);
+    
+    const res = await request.post(`${API}/api/storage/delete-batch`, {
+      data: { paths: [testFile] }
+    });
+    expect(res.status()).toBe(200);
+    const body = await res.json();
+    expect(body.deleted_count).toBe(1);
+    expect(require('fs').existsSync(testFile)).toBe(false);
+  });
+
   test('recording path and dest path are isolated from production', () => {
     // Verify we are pointing at the temp dirs created by globalSetup, not
     // production locations.  On Windows, os.tmpdir() resolves to

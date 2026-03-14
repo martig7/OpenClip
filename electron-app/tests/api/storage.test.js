@@ -36,8 +36,8 @@ beforeAll(async () => {
   await new Promise(resolve => server.on('listening', resolve))
 })
 
-afterAll((done) => {
-  server.close(done)
+afterAll(async () => {
+  await new Promise(resolve => server.close(resolve))
   fs.rmSync(tmpDir, { recursive: true, force: true })
 })
 
@@ -226,5 +226,26 @@ describe('Storage - Edge Cases', () => {
       .post('/api/storage/lock')
       .send({ path: fp, locked: false })
     expect(store._data.lockedRecordings).not.toContain(path.normalize(fp))
+  })
+
+  it('concurrent delete-batch requests succeed and maintain clean state', async () => {
+    const fp1 = path.join(destDir, 'file1.mp4')
+    const fp2 = path.join(destDir, 'file2.mp4')
+    fs.writeFileSync(fp1, Buffer.alloc(1024))
+    fs.writeFileSync(fp2, Buffer.alloc(1024))
+
+    const deleteReq1 = request(server)
+      .post('/api/storage/delete-batch')
+      .send({ paths: [fp1] })
+    
+    const deleteReq2 = request(server)
+      .post('/api/storage/delete-batch')
+      .send({ paths: [fp2] })
+
+    const [res1, res2] = await Promise.all([deleteReq1, deleteReq2])
+    
+    expect(res1.status).toBe(200)
+    expect(res2.status).toBe(200)
+    expect(store._data.lockedRecordings).toEqual([])
   })
 })

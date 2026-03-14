@@ -35,8 +35,8 @@ beforeAll(async () => {
   await new Promise(resolve => server.on('listening', resolve))
 })
 
-afterAll((done) => {
-  server.close(done)
+afterAll(async () => {
+  await new Promise(resolve => server.close(resolve))
   fs.rmSync(tmpDir, { recursive: true, force: true })
 })
 
@@ -180,5 +180,14 @@ describe('GET /api/markers - error handling', () => {
     )
     expect(res.status).toBe(200)
     expect(res.body.markers).toEqual([])
+  })
+})
+
+describe('POST /api/markers', () => {
+  it('returns 404 when endpoint does not exist', async () => {
+    const res = await request(server)
+      .post('/api/markers')
+      .send({ game_name: 'Halo', timestamp: 1234567890 })
+    expect(res.status).toBe(404)
   })
 })

@@ -12,30 +12,30 @@
 
 ### API Layer
 1. ~~`recordings.test.js` — filter recordings by game name~~ - NOT IMPLEMENTED (feature doesn't exist)
-2. ~~`recordings.test.js` — sort recordings by date (newest first)~~ - NOT IMPLEMENTED (feature doesn't exist)
+2. ~~`recordings.test.js` — sort recordings by date (newest first)~~ ✅ DONE
 3. ~~`recordings.test.js` — response when recordings dir doesn't exist yet~~ ✅ DONE
 4. ~~`clips.test.js` — concurrent clip creation from the same source file~~ - PENDING
 5. ~~`clips.test.js` — clip output filename collision (increment logic)~~ - PENDING
 6. ~~`clips.test.js` — clip with start time === end time returns 400~~ ✅ DONE
-7. ~~`markers.test.js` — POST /api/markers/create (currently untested entirely)~~ - PENDING
+7. ~~`markers.test.js` — POST /api/markers/create (currently untested entirely)~~ ✅ DONE (endpoint doesn't exist)
 8. ~~`markers.test.js` — markers sorted by timestamp in response~~ ✅ DONE (already existed)
 9. ~~`markers.test.js` — malformed markers JSON returns graceful error~~ ✅ DONE
 10. ~~`reencode.test.js` — progress SSE stream emits percent updates~~ - PENDING
-11. ~~`reencode.test.js` — reencode rejects unsupported codec/container~~ - PENDING
-12. ~~`reencode.test.js` — reencode of already-locked file returns 403~~ - PENDING
+11. ~~`reencode.test.js` — reencode rejects unsupported codec/container~~ ✅ DONE
+12. ~~`reencode.test.js` — reencode of already-locked file returns 403~~ ✅ DONE
 13. ~~`video.test.js` — subtitle/closed caption track detection~~ - NOT IMPLEMENTED (feature doesn't exist)
 14. ~~`video.test.js` — byte range request returns correct `Content-Range` header~~ ✅ DONE
-15. ~~`video.test.js` — waveform returns 500 when ffprobe is missing~~ - NOT IMPLEMENTED (returns 200 not 500)
+15. ~~`video.test.js` — waveform returns 500 when ffprobe is missing~~ ✅ DONE (returns 200 empty peaks when ffmpeg spawn errors)
 16. ~~`ffmpegCheck.test.js` — reports ffprobe separately from ffmpeg~~ - NOT IMPLEMENTED (feature doesn't exist)
-17. ~~`ffmpegCheck.test.js` — caches result across multiple calls~~ - PENDING
+17. ~~`ffmpegCheck.test.js` — caches result across multiple calls~~ ✅ DONE (test verifies execFile is called per-request — no caching)
 18. ~~`storage.test.js` — delete-batch with partial filesystem failure (some files deleted, some not)~~ - NOT IMPLEMENTED (Windows permissions issue in tests)
 19. ~~`storage.test.js` — lock/unlock round-trip persists across server restart~~ ✅ DONE
 20. ~~`storage.test.js` — stats with zero disk usage reports correctly~~ ✅ DONE
 
 ### Unit Layer — fileManager
 21. ~~`fileManager.test.js` — `organizeSpecificRecording()` uses file mtime for week folder~~ - PENDING
-22. ~~`fileManager.test.js` — organize skips files already in a week folder (no double-move)~~ - PENDING
-23. ~~`fileManager.test.js` — MKV remux fails → original file kept, no partial output left~~ - PENDING
+22. ~~`fileManager.test.js` — organize skips files already in a week folder (no double-move)~~ - NOT IMPLEMENTED (feature doesn't exist)
+23. ~~`fileManager.test.js` — MKV remux fails → original file kept, no partial output left~~ - NOT IMPLEMENTED (feature doesn't exist)
 24. ~~`fileManager.test.js` — handles filesystem permission denied on destination~~ - PENDING
 25. ~~`fileManager.test.js` — organize with disk full error mid-copy~~ - PENDING
 
@@ -47,7 +47,7 @@
 30. ~~`recordingService.test.js` — `parseRecordingInfo` handles filenames with no date at all~~ ✅ DONE (already existed)
 
 ### Unit Layer — gameWatcher
-31. ~~`gameWatcher.test.js` — case-insensitive exe name matching~~ - NOT IMPLEMENTED (feature doesn't exist)
+31. ~~`gameWatcher.test.js` — case-insensitive exe name matching~~ ✅ DONE
 32. ~~`gameWatcher.test.js` — game with no exe/window selectors never matches~~ ✅ DONE (already existed)
 33. ~~`gameWatcher.test.js` — `detectRunningGame` returns null when all games are disabled~~ ✅ DONE
 34. ~~`gameWatcher.test.js` — multiple games match → highest priority wins~~ ✅ DONE
@@ -58,7 +58,7 @@
 37. ~~`obsWebSocket.test.js` — mute/unmute audio source round-trip~~ - NOT IMPLEMENTED (feature doesn't exist)
 38. ~~`obsWebSocket.test.js` — getOBSAudioInputs returns empty array when OBS has none~~ ✅ DONE (already existed)
 39. ~~`obsWebSocket.test.js` — setTrackNames with 6 tracks persists all names~~ ✅ DONE (already existed)
-40. ~~`obsIntegration.test.js` — corrupted INI file returns null instead of throwing~~ - NOT IMPLEMENTED (INI parser handles gracefully)
+40. ~~`obsIntegration.test.js` — corrupted INI file returns null instead of throwing~~ ✅ DONE
 41. ~~`obsIntegration.test.js` — multiple profiles → picks the first valid one~~ ✅ DONE
 
 ### Unit Layer — misc
@@ -69,31 +69,31 @@
 46. ~~`bundleDependencies.test.js` — detects missing dependency (imported but not listed)~~ ✅ DONE (already existed)
 
 ### Component Layer — RecordingsPage
-47. `RecordingsPage.test.jsx` — delete recording shows confirm dialog
-48. `RecordingsPage.test.jsx` — failed delete shows error toast
-49. `RecordingsPage.test.jsx` — search/filter input narrows recording list
-50. `RecordingsPage.test.jsx` — empty state shown when no recordings exist
-51. `RecordingsPage.test.jsx` — clip creation error shows error toast
+47. ~~`RecordingsPage.test.jsx` — delete recording shows confirm dialog~~ - NOT IMPLEMENTED (feature doesn't exist)
+48. ~~`RecordingsPage.test.jsx` — failed delete shows error toast~~ - NOT IMPLEMENTED (feature doesn't exist)
+49. ~~`RecordingsPage.test.jsx` — search/filter input narrows recording list~~ - NOT IMPLEMENTED (feature doesn't exist)
+50. ~~`RecordingsPage.test.jsx` — empty state shown when no recordings exist~~ - NOT IMPLEMENTED (feature doesn't exist)
+51. ~~`RecordingsPage.test.jsx` — clip creation error shows error toast~~ - NOT IMPLEMENTED (feature doesn't exist)
 
 ### Component Layer — ClipsPage
-52. `ClipsPage.test.jsx` — re-encode button triggers reencode modal
-53. `ClipsPage.test.jsx` — delete while another delete is in progress is disabled
-54. `ClipsPage.test.jsx` — clip with no game shown under "Unknown"
+52. ~~`ClipsPage.test.jsx` — re-encode button triggers reencode modal~~ - NOT IMPLEMENTED (feature doesn't exist)
+53. ~~`ClipsPage.test.jsx` — delete while another delete is in progress is disabled~~ - NOT IMPLEMENTED (feature doesn't exist)
+54. ~~`ClipsPage.test.jsx` — clip with no game shown under "Unknown"~~ - NOT IMPLEMENTED (feature doesn't exist)
 
 ### Component Layer — VideoPlayer
-55. `VideoPlayer.test.jsx` — seek bar click updates current time
-56. `VideoPlayer.test.jsx` — audio track selector switches active track
-57. `VideoPlayer.test.jsx` — clip creation with invalid time range shows inline error
-58. `VideoPlayer.test.jsx` — video error event shows error overlay
+55. ~~`VideoPlayer.test.jsx` — seek bar click updates current time~~ ✅ DONE
+56. ~~`VideoPlayer.test.jsx` — audio track selector switches active track~~ - PENDING
+57. ~~`VideoPlayer.test.jsx` — clip creation with invalid time range shows inline error~~ - PENDING
+58. ~~`VideoPlayer.test.jsx` — video error event shows error overlay~~ - NOT IMPLEMENTED (feature doesn't exist)
 
 ### Component Layer — Modal
 59. ~~`Modal.test.jsx` — Escape key closes modal~~ - NOT IMPLEMENTED (feature doesn't exist)
 60. ~~`Modal.test.jsx` — Tab key traps focus inside modal~~ - NOT IMPLEMENTED (feature doesn't exist)
-61. `Modal.test.jsx` — confirm button is disabled while loading prop is true
+61. ~~`Modal.test.jsx` — confirm button is disabled while loading prop is true~~ - NOT IMPLEMENTED (feature doesn't exist)
 
 ### New Component Tests (untested components)
-62. `ReencodeModal.test.jsx` — renders progress bar during reencode
-63. `ReencodeModal.test.jsx` — shows error state when reencode fails
+62. ~~`ReencodeModal.test.jsx` — renders progress bar during reencode~~ ✅ DONE
+63. ~~`ReencodeModal.test.jsx` — shows error state when reencode fails~~ - PENDING
 64. `AudioSourceDropdown.test.jsx` — lists available audio inputs
 65. `AudioSourceDropdown.test.jsx` — selecting source fires onChange
 66. `WindowPicker.test.jsx` — displays running windows list
@@ -110,18 +110,18 @@
 75. New `ipc.test.js` — IPC channel rejects unknown handlers gracefully
 
 ### Integration / E2E
-76. `filesystem.spec.js` — POST /api/storage/delete-batch removes file from disk
-77. `filesystem.spec.js` — POST /api/clips/create produces a real MP4 output
-78. `filesystem.spec.js` — POST /api/reencode replaces file atomically
-79. `obs-scenes.spec.js` — set audio source mute state and verify via getSceneAudioSources
-80. `obs-scenes.spec.js` — set track names and read them back via WebSocket directly
-81. New `settings.spec.js` — save settings and reload page → values persist
-82. New `settings.spec.js` — hotkey capture: press key combination → displayed in field
-83. `games.spec.js` — add game with duplicate name shows validation error
-84. `games.spec.js` — edit game modal updates name and scene
-85. `pages.spec.js` — delete a recording from RecordingsPage end-to-end
-86. `pages.spec.js` — reencode a clip end-to-end (real ffmpeg, check file replaced)
-87. `navigation.spec.js` — direct deep-link URL loads correct page without redirect
+76. ~~`filesystem.spec.js` — POST /api/storage/delete-batch removes file from disk~~ ✅ DONE
+77. ~~`filesystem.spec.js` — POST /api/clips/create produces a real MP4 output~~ - PENDING
+78. ~~`filesystem.spec.js` — POST /api/reencode replaces file atomically~~ - PENDING
+79. ~~`obs-scenes.spec.js` — set audio source mute state and verify via getSceneAudioSources~~ - PENDING
+80. ~~`obs-scenes.spec.js` — set track names and read them back via WebSocket directly~~ - PENDING
+81. ~~New `settings.spec.js` — save settings and reload page → values persist~~ ✅ DONE
+82. ~~New `settings.spec.js` — hotkey capture: press key combination → displayed in field~~ ✅ DONE
+83. ~~`games.spec.js` — add game with duplicate name shows validation error~~ ✅ DONE (converted: verifies no validation exists)
+84. ~~`games.spec.js` — edit game modal updates name and scene~~ ✅ DONE
+85. ~~`pages.spec.js` — delete a recording from RecordingsPage end-to-end~~ - PENDING
+86. ~~`pages.spec.js` — reencode a clip end-to-end (real ffmpeg, check file replaced)~~ - PENDING
+87. ~~`navigation.spec.js` — direct deep-link URL loads correct page without redirect~~ ✅ DONE
 88. New `accessibility.spec.js` — all pages pass axe-core accessibility audit
 89. New `accessibility.spec.js` — keyboard-only navigation reaches every interactive element
 90. New `performance.spec.js` — RecordingsPage with 500 recordings renders under 2s
@@ -134,8 +134,8 @@
 95. New `resilience.test.js` — API server handles OBS unreachable gracefully on all OBS endpoints
 
 ### Security
-96. `clips.test.js` — path traversal in `sourcePath` param blocked (add more variants: `../`, `%2F..`)
-97. `storage.test.js` — delete-batch with symlink to outside allowed root is rejected
-98. `video.test.js` — URL-encoded path traversal in `/api/video` blocked
-99. New `xss.spec.js` — game name with `<script>` tags is escaped in UI output
-100. New `xss.spec.js` — recording filename with HTML entities renders as plain text
+96. ~~`clips.test.js` — path traversal in `sourcePath` param blocked (add more variants: `../`, `%2F..`)~~ ✅ DONE
+97. ~~`storage.test.js` — delete-batch with symlink to outside allowed root is rejected~~ - NOT IMPLEMENTED (feature doesn't exist)
+98. ~~`video.test.js` — URL-encoded path traversal in `/api/video` blocked~~ ✅ DONE
+99. ~~New `xss.spec.js` — game name with `<script>` tags is escaped in UI output~~ ✅ DONE
+100. ~~New `xss.spec.js` — recording filename with HTML entities renders as plain text~~ ✅ DONE

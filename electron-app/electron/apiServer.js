@@ -9,7 +9,7 @@ const { exec, execFile, spawn } = require('child_process');
 const { shell } = require('electron');
 const url = require('url');
 
-const { MIME_TYPES, formatFileSize, FFMPEG_PATH, FFPROBE_PATH } = require('./constants');
+const { MIME_TYPES, formatFileSize, FFMPEG_PATH, FFPROBE_PATH, CODEC_MAP } = require('./constants');
 const service = require('./recordingService');
 const { loadMarkers, saveMarkers } = require('./markerService');
 const { getVideoDuration, getDiskUsage } = require('./videoMetadata');
@@ -280,6 +280,9 @@ function startApiServer(appStore) {
         const data = await readBody(req);
         const { source_path, codec = 'h265', crf = 23, preset = 'medium', replace_original = false, original_size = 0, audio_tracks = null } = data;
         if (!isAllowedPath(source_path)) return json(res, { error: 'Forbidden' }, 403);
+        if (!CODEC_MAP[codec]) return json(res, { error: `Unsupported codec: ${codec}` }, 400);
+        const locked = (store.get('lockedRecordings') || []).map(p => path.normalize(p));
+        if (locked.includes(path.normalize(source_path))) return json(res, { error: 'Forbidden' }, 403);
         try {
           const result = await service.reencodeVideo(source_path, {
             codec, crf, preset,

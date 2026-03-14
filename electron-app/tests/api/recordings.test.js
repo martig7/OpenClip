@@ -78,7 +78,7 @@ describe('GET /api/recordings', () => {
   })
 
   it('returns empty array when recordings dir does not exist yet', async () => {
-    store.get.mockReturnValue({ 
+    store.get.mockReturnValueOnce({ 
       obsRecordingPath: '/nonexistent/path', 
       destinationPath: destDir 
     })
@@ -87,5 +87,26 @@ describe('GET /api/recordings', () => {
     const res = await request(server).get('/api/recordings')
     expect(res.status).toBe(200)
     expect(res.body).toEqual([])
+  })
+
+  it('returns recordings sorted by date (newest first)', async () => {
+    const gameDir = path.join(destDir, 'Halo - Week of Jan 13 2025')
+    fs.mkdirSync(gameDir, { recursive: true })
+    const olderFile = path.join(gameDir, 'Halo Session 2025-01-15 #1.mp4')
+    const newerFile = path.join(gameDir, 'Halo Session 2025-01-15 #2.mp4')
+    fs.writeFileSync(olderFile, Buffer.alloc(1024))
+    fs.writeFileSync(newerFile, Buffer.alloc(1024))
+    // Explicitly set different mtimes so sort order is deterministic
+    const olderTime = new Date('2025-01-15T10:00:00Z')
+    const newerTime = new Date('2025-01-15T11:00:00Z')
+    fs.utimesSync(olderFile, olderTime, olderTime)
+    fs.utimesSync(newerFile, newerTime, newerTime)
+
+    recordingService.invalidateCache()
+    const res = await request(server).get('/api/recordings')
+    expect(res.status).toBe(200)
+    expect(res.body.length).toBe(2)
+    // Newest first (higher mtime first)
+    expect(res.body[0].mtime).toBeGreaterThan(res.body[1].mtime)
   })
 })

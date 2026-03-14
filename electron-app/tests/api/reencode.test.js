@@ -43,6 +43,27 @@ beforeEach(() => {
 })
 
 describe('POST /api/reencode', () => {
+  it('returns 400 when codec is not supported', async () => {
+    const src = path.join(destDir, 'video.mp4')
+    fs.writeFileSync(src, Buffer.alloc(1024))
+    const res = await request(server)
+      .post('/api/reencode')
+      .send({ source_path: src, codec: 'vp9' })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/unsupported codec/i)
+  })
+
+  it('returns 403 when source file is locked', async () => {
+    const src = path.join(destDir, 'locked.mp4')
+    fs.writeFileSync(src, Buffer.alloc(1024))
+    store._data.lockedRecordings = [src]
+    const res = await request(server)
+      .post('/api/reencode')
+      .send({ source_path: src, codec: 'h265' })
+    store._data.lockedRecordings = []
+    expect(res.status).toBe(403)
+  })
+
   it('returns 403 when source_path is outside allowed roots', async () => {
     const res = await request(server)
       .post('/api/reencode')

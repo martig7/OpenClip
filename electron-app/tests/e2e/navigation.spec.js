@@ -40,4 +40,15 @@ test.describe('Navigation - Edge Cases', () => {
     await page.goBack();
     await expect(page.locator('h2:has-text("Add Game")')).not.toBeVisible();
   });
+
+  test('direct deep-link URL loads correct page without redirect', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('h1:has-text("Games")')).toBeVisible({ timeout: 5000 });
+    await page.goto('/#/recordings');
+    await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
+    await page.goto('/#/clips');
+    await expect(page.locator('.sidebar h2:has-text("Clips")')).toBeVisible({ timeout: 5000 });
+    await page.goto('/#/storage');
+    await expect(page.locator('.sv2-title:has-text("Storage")')).toBeVisible({ timeout: 5000 });
+  });
 });

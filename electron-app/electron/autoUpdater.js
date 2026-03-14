@@ -134,7 +134,7 @@ function downloadFile(url, destPath, onProgress) {
  * @param {() => Electron.BrowserWindow | null} getMainWindow
  * @returns {Promise<void>}
  */
-async function devCheckAndDownload(getMainWindow) {
+async function devCheckAndDownload(getMainWindow = () => null) {
   const sendToWindow = (channel, payload) => {
     const win = getMainWindow();
     if (win && !win.isDestroyed()) win.webContents.send(channel, payload);

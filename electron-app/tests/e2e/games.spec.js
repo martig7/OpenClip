@@ -215,3 +215,35 @@ test.describe('Games Page - Input Edge Cases', () => {
     await expect(page.locator('input[placeholder="e.g. VALORANT or valorant.exe"]')).toHaveValue(longExe);
   });
 });
+
+test.describe('Games Page - Validation', () => {
+  test('renaming a game to an existing name is allowed (no duplicate validation)', async ({ page }) => {
+    // No duplicate game name validation exists — games can share names without an error
+    await page.goto('/');
+    const valorantItem = page.locator('.list-item', {
+      has: page.locator('.list-item-title:has-text("Valorant")'),
+    });
+    await valorantItem.locator('[title="Edit game"]').click();
+    await expect(page.locator('h2:has-text("Edit Game")')).toBeVisible();
+    const nameInput = page.locator('input[placeholder="e.g. Valorant"]');
+    await nameInput.fill('Counter-Strike 2');
+    await page.locator('button:has-text("Save")').click();
+    // Save goes through with no validation error
+    await expect(page.locator('.list-item-title:has-text("Counter-Strike 2")').first()).toBeVisible();
+    await expect(page.locator('.toast-error, [role="alert"]')).not.toBeVisible();
+  });
+
+  test('edit game modal updates game name', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('.list-item-title:has-text("Valorant")')).toBeVisible();
+    const valorantItem = page.locator('.list-item', {
+      has: page.locator('.list-item-title:has-text("Valorant")'),
+    });
+    await valorantItem.locator('[title="Edit game"]').click();
+    await expect(page.locator('h2:has-text("Edit Game")')).toBeVisible();
+    const nameInput = page.locator('input[placeholder="e.g. Valorant"]');
+    await nameInput.fill('Valorant Updated');
+    await page.locator('button:has-text("Save")').click();
+    await expect(page.locator('.list-item-title:has-text("Valorant Updated")')).toBeVisible();
+  });
+});

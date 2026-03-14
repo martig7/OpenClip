@@ -227,3 +227,18 @@ describe('stopRecording', () => {
     )
   })
 })
+
+describe('Connection Resilience', () => {
+  it('plugin drops connection mid-request - error propagates cleanly', async () => {
+    mockRequest.mockImplementationOnce((opts, cb) => {
+      const res = new EventEmitter()
+      res.on('error', () => {})
+      cb(res)
+      res.emit('error', new Error('ECONNREFUSED'))
+      return { end: vi.fn() }
+    })
+    const { callPlugin } = await getModule()
+
+    await expect(callPlugin('getStatus')).rejects.toThrow()
+  })
+})

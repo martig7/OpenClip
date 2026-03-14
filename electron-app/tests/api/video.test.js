@@ -53,6 +53,13 @@ describe('GET /api/video', () => {
     expect(res.status).toBe(403)
   })
 
+  it('returns 403 when URL-encoded path traversal is attempted', async () => {
+    const maliciousPath = path.join(destDir, '..', '..', 'Windows', 'System32', 'evil.mp4')
+    const encodedPath = encodeURIComponent(maliciousPath)
+    const res = await request(server).get(`/api/video?path=${encodedPath}`)
+    expect(res.status).toBe(403)
+  })
+
   it('returns 404 when file does not exist', async () => {
     const fp = path.join(destDir, 'missing.mp4')
     const res = await request(server).get(`/api/video?path=${encodeURIComponent(fp)}`)
@@ -212,11 +219,8 @@ describe('GET /api/video/waveform', () => {
       proc.kill = vi.fn()
 
       // Emit 4 floats: [0.5, 1.0, 0.25, 0.75]
-      const buf = Buffer.allocUnsafe(16)
-      new Float32Array(buf.buffer)[0] = 0.5
-      new Float32Array(buf.buffer)[1] = 1.0
-      new Float32Array(buf.buffer)[2] = 0.25
-      new Float32Array(buf.buffer)[3] = 0.75
+      const floatArray = new Float32Array([0.5, 1.0, 0.25, 0.75])
+      const buf = Buffer.from(floatArray.buffer)
 
       setTimeout(() => {
         proc.stdout.emit('data', buf)
@@ -232,6 +236,32 @@ describe('GET /api/video/waveform', () => {
     expect(res.body.peaks.length).toBeGreaterThan(0)
     // All peaks normalized to max 1.0
     expect(res.body.peaks.every(p => p >= 0 && p <= 1.0)).toBe(true)
+  })
+
+  it('returns 200 with empty peaks when ffmpeg spawn errors', async () => {
+    const cp = await import('child_process')
+    const fp = path.join(destDir, 'spawn-error.mp4')
+    fs.writeFileSync(fp, Buffer.alloc(1024))
+
+    // execFile (ffprobe) returns a valid duration
+    cp.execFile.mockImplementation((_bin, _args, _opts, cb) => cb(null, '10', ''))
+
+    // spawn (ffmpeg) emits an error event instead of producing output
+    cp.spawn.mockImplementation(() => {
+      const proc = new EventEmitter()
+      proc.stdout = new EventEmitter()
+      proc.stderr = { resume: vi.fn() }
+      proc.kill = vi.fn()
+      setTimeout(() => proc.emit('error', new Error('spawn ENOENT')), 10)
+      return proc
+    })
+
+    const res = await request(server).get(
+      `/api/video/waveform?path=${encodeURIComponent(fp)}&track=0`
+    )
+    // API returns 200 with empty peaks rather than 500 when ffmpeg is unavailable
+    expect(res.status).toBe(200)
+    expect(res.body.peaks).toEqual([])
   })
 })
 

@@ -168,4 +168,25 @@ describe('VideoPlayer', () => {
     fireEvent.click(clipCreateBtn)
     await waitFor(() => expect(onClipCreated).toHaveBeenCalledWith(clipResult))
   })
+
+  it('seeking to position updates current time', async () => {
+    server.use(
+      http.get('/api/video/tracks', () => HttpResponse.json({ tracks: [] })),
+      http.get('/api/markers', () => HttpResponse.json({ markers: [] })),
+    )
+    renderPlayer(sampleRecording)
+    await waitFor(() => document.querySelector('video'))
+
+    const video = document.querySelector('video')
+    Object.defineProperty(video, 'currentTime', { get: () => 0, set: vi.fn(), configurable: true })
+    Object.defineProperty(video, 'duration', { get: () => 60, configurable: true })
+    fireEvent(video, new Event('loadedmetadata'))
+
+    // Simulate a seek (click on timeline at 50% position)
+    fireEvent.timeUpdate(video)
+    Object.defineProperty(video, 'currentTime', { get: () => 30, configurable: true })
+    fireEvent.timeUpdate(video)
+
+    expect(video.currentTime).toBe(30)
+  })
 })

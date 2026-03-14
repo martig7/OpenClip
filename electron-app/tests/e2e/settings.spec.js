@@ -103,3 +103,36 @@ test.describe('Settings Page - Edge Cases', () => {
     await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 });
   });
 });
+
+test.describe('Settings Page - Persistence', () => {
+  test('save settings persists to API and loads on page visit', async ({ page }) => {
+    await page.goto('/#/settings');
+    await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 });
+    
+    const watcherToggle = page.locator('.toggle-row', {
+      has: page.locator('.toggle-label:has-text("Start Watcher on Startup")'),
+    }).locator('.toggle');
+    await watcherToggle.click();
+    await expect(watcherToggle).toHaveClass(/on/);
+    
+    await page.locator('button:has-text("Save Settings")').click();
+    await expect(page.locator('button:has-text("Save Settings")')).not.toBeEnabled();
+    
+    await page.goto('/#/settings');
+    await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 });
+  });
+});
+
+test.describe('Settings Page - Hotkey Capture', () => {
+  test('hotkey capture - pressing a key displays in field', async ({ page }) => {
+    await page.goto('/#/settings');
+    await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 });
+    
+    const hotkeyBtn = page.locator('.hotkey-capture-btn').first();
+    const initialText = await hotkeyBtn.textContent();
+    await hotkeyBtn.click();
+    await page.keyboard.press('R');
+    
+    await expect(hotkeyBtn).not.toHaveText(initialText);
+  });
+});

@@ -107,7 +107,8 @@ describe('RecordingsPage', () => {
     // Select the recording so VideoPlayer renders
     await waitFor(() => screen.getByText(sampleRecording.filename))
     fireEvent.click(screen.getByText(sampleRecording.filename))
-    const video = await waitFor(() => document.querySelector('video'))
+    await waitFor(() => expect(document.querySelector('video')).toBeInTheDocument())
+    const video = document.querySelector('video')
 
     // Trigger loadedmetadata so VideoPlayer sets its duration state to 60
     await act(async () => {

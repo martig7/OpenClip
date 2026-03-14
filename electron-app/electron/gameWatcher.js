@@ -9,8 +9,8 @@ function log(message) {
 }
 
 function detectRunningGame(games) {
-  const processes = getRunningProcessNames();
-  const titles = getWindowTitles();
+  const processes = getRunningProcessNames().map(p => p.toLowerCase());
+  const titles = getWindowTitles().map(t => t.toLowerCase());
 
   for (const game of games) {
     if (!game.enabled) continue;

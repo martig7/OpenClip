@@ -85,6 +85,12 @@ describe('priority 0 — title match', () => {
     const game = makeGame({ selector: 'testgame', windowMatchPriority: 0 })
     expect(detectRunningGame([game])).toBeNull()
   })
+
+  it('matches window title case-insensitively', () => {
+    mockGetWindowTitles.mockReturnValue(['Valorant — Main Menu'])
+    const game = makeGame({ selector: 'valorant', windowMatchPriority: 0 })
+    expect(detectRunningGame([game])).toBe(game)
+  })
 })
 
 // ─────────────────────────────────────────────────────────────────
@@ -149,6 +155,13 @@ describe('priority 2 — exe only', () => {
     const game = makeGame({ selector: 'anything', exe: 'game.exe', windowMatchPriority: 2 })
     expect(detectRunningGame([game])).toBeNull()
   })
+
+  it('matches exe name case-insensitively (OS may return mixed case)', () => {
+    // Windows process list can return "VALORANT.exe" even when game.exe is "valorant.exe"
+    mockGetRunningProcessNames.mockReturnValue(['VALORANT.EXE'])
+    const game = makeGame({ selector: 'valorant', exe: 'VALORANT.exe', windowMatchPriority: 2 })
+    expect(detectRunningGame([game])).toBe(game)
+  })
 })
 
 // ─────────────────────────────────────────────────────────────────
@@ -183,5 +196,19 @@ describe('multiple games', () => {
     const gameB = makeGame({ name: 'B', selector: 'game', exe: 'game.exe', windowMatchPriority: 2 })
     const result = detectRunningGame([gameA, gameB])
     expect(result).toBe(gameB)
+  })
+
+  it('rapid game start/stop cycles do not leak timers', () => {
+    vi.useFakeTimers()
+    for (let i = 0; i < 10; i++) {
+      mockGetRunningProcessNames.mockReturnValueOnce(['game.exe'])
+      mockGetWindowTitles.mockReturnValueOnce([])
+      const result1 = detectRunningGame([makeGame({ name: 'Game1', exe: 'game.exe' })])
+      
+      mockGetRunningProcessNames.mockReturnValueOnce([])
+      mockGetWindowTitles.mockReturnValueOnce([])
+      const result2 = detectRunningGame([makeGame({ name: 'Game1', exe: 'game.exe' })])
+    }
+    vi.restoreAllMocks()
   })
 })
