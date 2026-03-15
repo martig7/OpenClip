@@ -7,8 +7,14 @@
  * Only `electron` is stubbed so constants.js can resolve app paths.
  */
 import { defineConfig } from 'vite'
+import { fileURLToPath } from 'url'
+
+const electronMockPath = fileURLToPath(new URL('./tests/mocks/electron.js', import.meta.url))
 
 export default defineConfig({
+  resolve: {
+    alias: { electron: electronMockPath },
+  },
   test: {
     globals: true,
     environment: 'node',
@@ -16,5 +22,10 @@ export default defineConfig({
     setupFiles: ['./tests/integration/ffmpeg/setup.js'],
     testTimeout: 30_000,
     hookTimeout: 30_000,
+    server: {
+      deps: {
+        inline: ['electron'],
+      },
+    },
   },
 })

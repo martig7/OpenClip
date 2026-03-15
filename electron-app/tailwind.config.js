@@ -5,5 +5,9 @@ module.exports = {
     extend: {},
   },
   plugins: [],
+  // Prevent Tailwind from generating utility classes that conflict with
+  // App.css component class names (e.g. .list-item display utility vs
+  // .list-item flex component).
+  blocklist: ['list-item'],
 }
 
