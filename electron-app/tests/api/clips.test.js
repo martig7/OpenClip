@@ -207,11 +207,8 @@ describe('Clip Creation Concurrency', () => {
 
     const cp = await import('child_process')
     cp.execFile.mockImplementation((bin, args, opts, cb) => {
-      const outputIdx = args.indexOf('-y')
-      if (outputIdx !== -1) {
-        const outputPath = args[outputIdx + 1]
-        fs.writeFileSync(outputPath, Buffer.alloc(512))
-      }
+      const outputPath = args[args.length - 1]
+      fs.writeFileSync(outputPath, Buffer.alloc(512))
       setTimeout(() => cb(null, '', ''), 10)
       return { kill: () => {} }
     })

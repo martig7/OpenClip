@@ -145,6 +145,11 @@ async function devCheckAndDownload(getMainWindow = () => null) {
     const latestVersion = release.tag_name.replace(/^v/, '');
     const currentVersion = app.getVersion();
 
+    if (!semver.valid(latestVersion)) {
+      console.warn(`[updater][dev] Skipping update check — invalid tag_name: ${release.tag_name}`);
+      return;
+    }
+
     if (!semver.gt(latestVersion, currentVersion)) {
       console.log(`[updater][dev] Already up to date (${currentVersion})`);
       return;

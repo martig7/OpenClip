@@ -139,4 +139,9 @@ endif()
 set_target_properties(openclip-obs PROPERTIES PREFIX "")
 
 # ── Install ───────────────────────────────────────────────────────────────────
-install(TARGETS openclip-obs LIBRARY DESTINATION "openclip/bin/64bit")
+if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+  set(_OBS_ARCH_DIR "64bit")
+else()
+  set(_OBS_ARCH_DIR "32bit")
+endif()
+install(TARGETS openclip-obs LIBRARY DESTINATION "openclip/bin/${_OBS_ARCH_DIR}")

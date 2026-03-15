@@ -639,6 +639,7 @@ function registerIpcHandlers(store, appState) {
             ]);
             if (!removeResult.success) {
               console.error('[main] Elevated removal failed:', removeResult.message);
+              return { success: false, message: removeResult.message || 'Elevated removal failed' };
             }
           }
         }
@@ -671,9 +672,11 @@ function registerIpcHandlers(store, appState) {
   });
 
   // --- Manual organize ---
-  ipcMain.handle('recordings:organize', async (event, { filePath, gameName }) => {
+  ipcMain.handle('recordings:organize', async (event, { filePath, gameName, remux }) => {
     const { organizeSpecificRecording } = require('./fileManager');
-    const moveOnly = store.get('settings.organizeRemux') === false;
+    const moveOnly = remux === undefined
+      ? store.get('settings.organizeRemux') === false
+      : remux === false;
     const onProgress = (stage, label) => {
       try { event.sender.send('recordings:organize-progress', { stage, label }); } catch {}
     };

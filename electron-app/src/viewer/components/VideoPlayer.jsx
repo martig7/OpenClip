@@ -248,7 +248,7 @@ function VideoPlayer({ recording, onClipCreated, games = [], onOrganized, onOrga
     setIsOrganizing(true)
     setOrganizeProgress(null)
     try {
-      const result = await api.organizeRecording(recording.path, organizeGame)
+      const result = await api.organizeRecording(recording.path, organizeGame, organizeRemux)
       if (result && result.success) {
         setOrganizeMode(false)
         if (onOrganized) onOrganized(result)
@@ -261,7 +261,7 @@ function VideoPlayer({ recording, onClipCreated, games = [], onOrganized, onOrga
       setIsOrganizing(false)
       setOrganizeProgress(null)
     }
-  }, [recording, organizeGame, isOrganizing, onOrganized, onOrganizeError])
+  }, [recording, organizeGame, organizeRemux, isOrganizing, onOrganized, onOrganizeError])
 
   if (!recording) {
     return (

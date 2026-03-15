@@ -60,7 +60,7 @@ function buildGroups(sortedItems, sortKey) {
     } else if (sortKey.startsWith('size')) {
       key = getSizeBucket(item.size_bytes)
     } else {
-      key = item.game_name || 'Unknown'
+      key = item.game_name || '(Unorganized)'
     }
     if (!groups[key]) groups[key] = []
     groups[key].push(item)
@@ -99,8 +99,8 @@ function Sidebar({ items, selectedItem, onSelect, title, emptyMessage }) {
     if (!searchQuery.trim()) return items
     const query = searchQuery.toLowerCase()
     return items.filter(item =>
-      item.filename.toLowerCase().includes(query) ||
-      item.game_name.toLowerCase().includes(query)
+      (item.filename || '').toLowerCase().includes(query) ||
+      (item.game_name || '').toLowerCase().includes(query)
     )
   }, [items, searchQuery])
 

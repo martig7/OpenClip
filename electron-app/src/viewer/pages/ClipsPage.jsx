@@ -14,7 +14,7 @@ function getSessionProgressWidth(p) {
     return 10
   }
   if (p.phase === 'clipping') {
-    return 50 + ((p.clipIndex || 1) / (p.clipTotal || 1)) * 45
+    return 50 + (((p.clipIndex ?? 0) + 1) / (p.clipTotal ?? 1)) * 45
   }
   return 100
 }

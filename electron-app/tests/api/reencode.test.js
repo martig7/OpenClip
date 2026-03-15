@@ -30,8 +30,10 @@ beforeAll(async () => {
 })
 
 afterAll((done) => {
-  server.close(done)
-  fs.rmSync(tmpDir, { recursive: true, force: true })
+  server.close(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true })
+    done()
+  })
 })
 
 beforeEach(() => {
@@ -57,11 +59,15 @@ describe('POST /api/reencode', () => {
     const src = path.join(destDir, 'locked.mp4')
     fs.writeFileSync(src, Buffer.alloc(1024))
     store._data.lockedRecordings = [src]
-    const res = await request(server)
-      .post('/api/reencode')
-      .send({ source_path: src, codec: 'h265' })
-    store._data.lockedRecordings = []
-    expect(res.status).toBe(403)
+    let res
+    try {
+      res = await request(server)
+        .post('/api/reencode')
+        .send({ source_path: src, codec: 'h265' })
+      expect(res.status).toBe(403)
+    } finally {
+      store._data.lockedRecordings = []
+    }
   })
 
   it('returns 403 when source_path is outside allowed roots', async () => {

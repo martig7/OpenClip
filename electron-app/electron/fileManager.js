@@ -3,6 +3,7 @@ const path = require('path');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 const { isVideoFile, CODEC_MAP, FFMPEG_PATH, FFPROBE_PATH } = require('./constants');
+const { pathToFileURL } = require('url');
 const service = require('./recordingService');
 
 const execFileAsync = promisify(execFile);
@@ -14,7 +15,13 @@ async function moveFileSafe(src, dest) {
   } catch (err) {
     if (err.code !== 'EXDEV') throw err;
     await fs.promises.copyFile(src, dest);
-    try { fs.unlinkSync(src); } catch {}
+    try {
+      await fs.promises.unlink(src);
+    } catch (unlinkErr) {
+      // Best-effort cleanup of the just-copied dest before rethrowing
+      try { await fs.promises.unlink(dest); } catch {}
+      throw unlinkErr;
+    }
   }
 }
 
@@ -47,6 +54,24 @@ function getWeekFolder(date) {
   return `Week of ${months[monday.getMonth()]} ${monday.getDate()} ${monday.getFullYear()}`;
 }
 
+// Format a Date as YYYY-MM-DD using the local calendar (not UTC).
+function localDateStr(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+// Sanitize a game name for use in file/folder names: remove characters invalid
+// on Windows/macOS/Linux, collapse consecutive dots, strip leading/trailing whitespace, cap length.
+function sanitizeGameName(name) {
+  return (name || '')
+    .replace(/[:/\\?*|"<>]/g, '-')
+    .replace(/\.{2,}/g, '.')
+    .replace(/^[\s.]+|[\s.]+$/g, '')
+    .slice(0, 80) || 'Unknown';
+}
+
 async function organizeRecordings(store, gameName, onProgress = () => {}) {
   const obsPath = store.get('settings.obsRecordingPath');
   const destPath = store.get('settings.destinationPath');
@@ -55,7 +80,8 @@ async function organizeRecordings(store, gameName, onProgress = () => {}) {
   const files = fs.readdirSync(obsPath).filter(f => isVideoFile(f));
 
   const now = new Date();
-  const weekFolder = `${gameName} - ${getWeekFolder(now)}`;
+  const sanitizedName = sanitizeGameName(gameName);
+  const weekFolder = `${sanitizedName} - ${getWeekFolder(now)}`;
   const targetDir = path.join(destPath, weekFolder);
 
   for (const file of files) {
@@ -77,11 +103,11 @@ async function organizeRecordings(store, gameName, onProgress = () => {}) {
 
     fs.mkdirSync(targetDir, { recursive: true });
 
-    const dateStr = now.toISOString().slice(0, 10);
+    const dateStr = localDateStr(now);
     const existing = fs.readdirSync(targetDir).filter(f => f.includes(dateStr));
     const sessionNum = existing.length + 1;
     const ext = path.extname(file);
-    const newName = `${gameName} Session ${dateStr} #${sessionNum}.mp4`;
+    const newName = `${sanitizedName} Session ${dateStr} #${sessionNum}.mp4`;
     const dest = path.join(targetDir, newName);
 
     if (ext.toLowerCase() !== '.mp4') {
@@ -116,7 +142,7 @@ async function organizeRecordings(store, gameName, onProgress = () => {}) {
         // Fallback: just move the file
         try {
           onProgress({ phase: 'recording', stage: 'moving', label: 'Moving file…', gameName });
-          fs.renameSync(src, path.join(targetDir, `${gameName} Session ${dateStr} #${sessionNum}${ext}`));
+          await moveFileSafe(src, path.join(targetDir, `${sanitizedName} Session ${dateStr} #${sessionNum}${ext}`));
         } catch {
           onProgress({ phase: 'error', gameName, error: `Could not process recording for ${gameName}: ${remuxErr.message}` });
         }
@@ -126,7 +152,7 @@ async function organizeRecordings(store, gameName, onProgress = () => {}) {
       }
     } else {
       onProgress({ phase: 'recording', stage: 'moving', label: 'Moving file…', gameName });
-      fs.renameSync(src, dest);
+      await moveFileSafe(src, dest);
       service.invalidateRecordingsCache();
     }
   }
@@ -170,7 +196,10 @@ async function processAutoClips(store, gameName, recordingDir, onProgress = () =
   const bufferAfter = autoClip.bufferAfter || 15;
 
   // Find the most recent recording file
-  if (!fs.existsSync(recordingDir)) return;
+  if (!fs.existsSync(recordingDir)) {
+    onProgress({ phase: 'complete', gameName });
+    return;
+  }
   const names = fs.readdirSync(recordingDir, { withFileTypes: true })
     .filter(f => f.isFile() && f.name.endsWith('.mp4'))
     .map(f => f.name);
@@ -186,19 +215,27 @@ async function processAutoClips(store, gameName, recordingDir, onProgress = () =
     .map(r => r.value)
     .sort((a, b) => b.mtime - a.mtime);
 
-  if (recordings.length === 0) return;
+  if (recordings.length === 0) {
+    onProgress({ phase: 'complete', gameName });
+    return;
+  }
   const recording = recordings[0];
 
   // Determine recording time window to convert absolute marker timestamps → video positions
   const duration = await getVideoDuration(recording.path);
-  if (!duration) return;
+  if (!duration) {
+    onProgress({ phase: 'complete', gameName });
+    return;
+  }
   const recordingStartUnix = recording.mtime.getTime() / 1000 - duration;
 
-  const dateStr = new Date().toISOString().slice(0, 10);
+  const sanitizedName = sanitizeGameName(gameName);
+  const dateStr = localDateStr(new Date());
   let clipNum = service.countClipsForDate(clipsDir, gameName, dateStr) + 1;
 
   const clipTotal = markers.length;
   let clipIndex = 0;
+  const processedMarkers = [];
 
   for (const marker of markers) {
     // Convert absolute Unix timestamp to position within the video
@@ -210,7 +247,7 @@ async function processAutoClips(store, gameName, recordingDir, onProgress = () =
 
     const start = Math.max(0, videoPosition - bufferBefore);
     const clipDuration = bufferBefore + bufferAfter;
-    const clipPath = path.join(clipsDir, `${gameName} Clip ${dateStr} #${clipNum}.mp4`);
+    const clipPath = path.join(clipsDir, `${sanitizedName} Clip ${dateStr} #${clipNum}.mp4`);
 
     try {
       await execFileAsync(FFMPEG_PATH, [
@@ -224,6 +261,7 @@ async function processAutoClips(store, gameName, recordingDir, onProgress = () =
       ], { timeout: 5 * 60 * 1000, killSignal: 'SIGKILL' });
       clipNum++;
       service.invalidateClipsCache();
+      processedMarkers.push(marker);
     } catch {
       // Skip failed clips
     }
@@ -231,12 +269,15 @@ async function processAutoClips(store, gameName, recordingDir, onProgress = () =
 
   onProgress({ phase: 'complete', gameName });
 
-  if (autoClip.removeMarkers) {
-    const remaining = (store.get('clipMarkers') || []).filter(m => m.game !== gameName);
+  if (autoClip.removeMarkers && processedMarkers.length > 0) {
+    const processedTimestamps = new Set(processedMarkers.map(m => m.timestamp));
+    const remaining = (store.get('clipMarkers') || []).filter(
+      m => !(m.game === gameName && processedTimestamps.has(m.timestamp))
+    );
     store.set('clipMarkers', remaining);
   }
 
-  if (autoClip.deleteFullRecording) {
+  if (autoClip.deleteFullRecording && processedMarkers.length > 0) {
     try { fs.unlinkSync(recording.path); } catch {}
   }
 }
@@ -246,10 +287,11 @@ async function finalizeDirectRecording(store, gameName, recordingDir, onProgress
 
   const files = fs.readdirSync(recordingDir).filter(f => isVideoFile(f));
   const now = new Date();
+  const sanitizedName = sanitizeGameName(gameName);
 
   for (const file of files) {
     // Skip files already in session format (from a previous finalize call)
-    if (file.startsWith(`${gameName} Session`)) continue;
+    if (file.startsWith(`${sanitizedName} Session`)) continue;
 
     const src = path.join(recordingDir, file);
     const stat = fs.statSync(src);
@@ -267,11 +309,11 @@ async function finalizeDirectRecording(store, gameName, recordingDir, onProgress
       continue;
     }
 
-    const dateStr = now.toISOString().slice(0, 10);
+    const dateStr = localDateStr(now);
     const existing = fs.readdirSync(recordingDir).filter(f => f.includes(dateStr) && f !== file);
     const sessionNum = existing.length + 1;
     const ext = path.extname(file);
-    const newName = `${gameName} Session ${dateStr} #${sessionNum}.mp4`;
+    const newName = `${sanitizedName} Session ${dateStr} #${sessionNum}.mp4`;
     const dest = path.join(recordingDir, newName);
 
     if (ext.toLowerCase() !== '.mp4') {
@@ -302,7 +344,7 @@ async function finalizeDirectRecording(store, gameName, recordingDir, onProgress
         try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch {}
         try {
           onProgress({ phase: 'recording', stage: 'moving', label: 'Renaming file…', gameName });
-          fs.renameSync(src, path.join(recordingDir, `${gameName} Session ${dateStr} #${sessionNum}${ext}`));
+          await moveFileSafe(src, path.join(recordingDir, `${sanitizedName} Session ${dateStr} #${sessionNum}${ext}`));
         } catch {
           onProgress({ phase: 'error', gameName, error: `Could not process recording for ${gameName}: ${remuxErr.message}` });
         }
@@ -312,7 +354,7 @@ async function finalizeDirectRecording(store, gameName, recordingDir, onProgress
       }
     } else {
       onProgress({ phase: 'recording', stage: 'moving', label: 'Renaming file…', gameName });
-      fs.renameSync(src, dest);
+      await moveFileSafe(src, dest);
       service.invalidateRecordingsCache();
     }
   }
@@ -342,7 +384,7 @@ function setupFileManager(ipcMain, store) {
   });
 
   ipcMain.handle('video:getURL', (_event, filePath) => {
-    return `file:///${filePath.replace(/\\/g, '/')}`;
+    return pathToFileURL(filePath).href;
   });
 
   ipcMain.handle('clips:list', () => {
@@ -421,7 +463,8 @@ async function organizeSpecificRecording(store, filePath, gameName, opts = {}) {
 
   // Use the file's mtime as the reference date so the recording lands in the correct week
   const recordingDate = stat2.mtime;
-  const weekFolder = `${gameName} - ${getWeekFolder(recordingDate)}`;
+  const sanitizedName = sanitizeGameName(gameName);
+  const weekFolder = `${sanitizedName} - ${getWeekFolder(recordingDate)}`;
   const targetDir = path.join(destPath, weekFolder);
   try {
     fs.mkdirSync(targetDir, { recursive: true });
@@ -435,13 +478,13 @@ async function organizeSpecificRecording(store, filePath, gameName, opts = {}) {
     throw err;
   }
 
-  const dateStr = recordingDate.toISOString().slice(0, 10);
+  const dateStr = localDateStr(recordingDate);
   const existing = fs.readdirSync(targetDir).filter(f => isVideoFile(f) && f.includes(dateStr));
   const sessionNum = existing.length + 1;
   const ext = path.extname(filePath);
   const shouldRemux = ext.toLowerCase() !== '.mp4' && !moveOnly;
   const destExt = shouldRemux ? '.mp4' : ext;
-  const destFilename = `${gameName} Session ${dateStr} #${sessionNum}${destExt}`;
+  const destFilename = `${sanitizedName} Session ${dateStr} #${sessionNum}${destExt}`;
   const dest = path.join(targetDir, destFilename);
 
   if (shouldRemux) {
@@ -468,7 +511,7 @@ async function organizeSpecificRecording(store, filePath, gameName, opts = {}) {
     } catch (err) {
       try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch {}
       // Fallback: move with original extension (cross-device safe)
-      const fallbackName = `${gameName} Session ${dateStr} #${sessionNum}${ext}`;
+      const fallbackName = `${sanitizedName} Session ${dateStr} #${sessionNum}${ext}`;
       finalPath = path.join(targetDir, fallbackName);
       try {
         await moveFileSafe(filePath, finalPath);

@@ -46,6 +46,7 @@ describe('setupAutoUpdater', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it('sets autoDownload to true', () => {

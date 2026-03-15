@@ -38,7 +38,7 @@ function detectRunningGame(games) {
       // Default (priority 0): title match only.
       // If no exe binding exists also check process names as a convenience (manual selectors).
       if (titleStr && titles.some(t => t.includes(titleStr))) return game;
-      if (!exeName && titleStr && processes.some(p => p.includes(titleStr))) return game;
+      if (!exeName && titleStr && processes.some(p => p === titleStr)) return game;
     }
   }
 
@@ -122,12 +122,16 @@ function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}) {
       stopRecording()
         .catch(err => log(`Plugin stopRecording failed: ${err.message}`))
         .finally(() => {
+          // Capture the target game at schedule time to guard against stale closure.
+          const targetName = detected.name;
+          const targetScene = detected.scene || '';
           // After a short delay, signal recording for the newly detected game.
           setTimeout(() => {
             if (stopped) return; // watcher was stopped during the delay
-            writeGameState(`RECORDING|${detected.name}|${detected.scene || ''}`);
-            onStateChange({ currentGame: detected.name, status: 'recording' });
-            startRecording(detected.scene || undefined).catch(err =>
+            if (!lastGame || lastGame.name !== targetName) return; // game changed again during delay
+            writeGameState(`RECORDING|${targetName}|${targetScene}`);
+            onStateChange({ currentGame: targetName, status: 'recording' });
+            startRecording(targetScene || undefined).catch(err =>
               log(`Plugin startRecording failed: ${err.message}`)
             );
           }, 500);

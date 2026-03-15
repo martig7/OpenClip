@@ -1,7 +1,7 @@
 /**
  * Vitest configuration for integration tests.
  *
- * Integration tests (tests/integration/**) are kept separate from the unit and
+ * Integration tests (tests/integration/obs/**) are kept separate from the unit and
  * component tests because they:
  *
  *  - Spawn real external processes (OBS Studio) and therefore need the genuine

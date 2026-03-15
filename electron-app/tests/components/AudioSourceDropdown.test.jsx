@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import AudioSourceDropdown from '../../src/pages/games/AudioSourceDropdown.jsx'
@@ -32,7 +32,7 @@ describe('AudioSourceDropdown', () => {
     expect(screen.getByText('Speakers (Realtek)')).toBeInTheDocument()
   })
 
-  it('selecting source fires onChange', () => {
+  it('selecting source fires onSelect', () => {
     render(<AudioSourceDropdown {...defaultProps} />)
     const desktopAudioBtn = screen.getByText('Desktop Audio')
     fireEvent.click(desktopAudioBtn)

@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import Sidebar from '../../src/viewer/components/Sidebar.jsx'
 
-const NOW = Math.floor(Date.now() / 1000)
+// Fixed timestamp: 2025-01-15 12:00:00 UTC (avoids flaky bucket assignments at day boundaries)
+const NOW = 1736942400
 const HOUR = 3600
 const DAY  = 86_400
 
@@ -94,16 +95,22 @@ describe('Sidebar — time sort groups by period', () => {
   it('time-desc: Today group appears before Older group', () => {
     renderSidebar({ items: [todayItem, olderItem] })
     const headers = getGroupHeaders()
-    expect(headers.findIndex(h => h.startsWith('Today')))
-      .toBeLessThan(headers.findIndex(h => h.startsWith('Older')))
+    const todayIndex = headers.findIndex(h => h.startsWith('Today'))
+    const olderIndex = headers.findIndex(h => h.startsWith('Older'))
+    expect(todayIndex).not.toBe(-1)
+    expect(olderIndex).not.toBe(-1)
+    expect(todayIndex).toBeLessThan(olderIndex)
   })
 
   it('time-asc: Older group appears before Today group', () => {
     renderSidebar({ items: [todayItem, olderItem] })
     fireEvent.change(screen.getByRole('combobox', { name: /sort/i }), { target: { value: 'time-asc' } })
     const headers = getGroupHeaders()
-    expect(headers.findIndex(h => h.startsWith('Older')))
-      .toBeLessThan(headers.findIndex(h => h.startsWith('Today')))
+    const olderIndex = headers.findIndex(h => h.startsWith('Older'))
+    const todayIndex = headers.findIndex(h => h.startsWith('Today'))
+    expect(olderIndex).not.toBe(-1)
+    expect(todayIndex).not.toBe(-1)
+    expect(olderIndex).toBeLessThan(todayIndex)
   })
 })
 
@@ -164,16 +171,22 @@ describe('Sidebar — size sort groups by size range', () => {
     renderSidebar({ items: [huge, small] })
     fireEvent.change(screen.getByRole('combobox', { name: /sort/i }), { target: { value: 'size-desc' } })
     const headers = getGroupHeaders()
-    expect(headers.findIndex(h => h.startsWith('Huge')))
-      .toBeLessThan(headers.findIndex(h => h.startsWith('Small')))
+    const hugeIndex = headers.findIndex(h => h.startsWith('Huge'))
+    const smallIndex = headers.findIndex(h => h.startsWith('Small'))
+    expect(hugeIndex).not.toBe(-1)
+    expect(smallIndex).not.toBe(-1)
+    expect(hugeIndex).toBeLessThan(smallIndex)
   })
 
   it('size-asc: Small bucket appears before Huge bucket', () => {
     renderSidebar({ items: [huge, small] })
     fireEvent.change(screen.getByRole('combobox', { name: /sort/i }), { target: { value: 'size-asc' } })
     const headers = getGroupHeaders()
-    expect(headers.findIndex(h => h.startsWith('Small')))
-      .toBeLessThan(headers.findIndex(h => h.startsWith('Huge')))
+    const smallIndex = headers.findIndex(h => h.startsWith('Small'))
+    const hugeIndex = headers.findIndex(h => h.startsWith('Huge'))
+    expect(smallIndex).not.toBe(-1)
+    expect(hugeIndex).not.toBe(-1)
+    expect(smallIndex).toBeLessThan(hugeIndex)
   })
 
   it('size-desc: items within a bucket ordered largest first', () => {
