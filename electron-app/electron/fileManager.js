@@ -7,6 +7,37 @@ const service = require('./recordingService');
 
 const execFileAsync = promisify(execFile);
 
+// Move a file safely across devices: try rename first, copy+delete on EXDEV
+async function moveFileSafe(src, dest) {
+  try {
+    fs.renameSync(src, dest);
+  } catch (err) {
+    if (err.code !== 'EXDEV') throw err;
+    await fs.promises.copyFile(src, dest);
+    try { fs.unlinkSync(src); } catch {}
+  }
+}
+
+// Try to open the file for writing to check if it's still held by another process
+function isFileLocked(filePath) {
+  try {
+    const fd = fs.openSync(filePath, 'r+');
+    fs.closeSync(fd);
+    return false;
+  } catch (err) {
+    return err.code === 'EBUSY' || err.code === 'EPERM' || err.code === 'EACCES';
+  }
+}
+
+// Wait until the file is not locked, checking every delayMs up to maxAttempts times
+async function waitForUnlock(filePath, maxAttempts = 5, delayMs = 2000) {
+  for (let i = 0; i < maxAttempts; i++) {
+    if (!isFileLocked(filePath)) return;
+    if (i < maxAttempts - 1) await new Promise(r => setTimeout(r, delayMs));
+  }
+  throw new Error(`File is still locked after ${maxAttempts} attempts — try again in a moment`);
+}
+
 function getWeekFolder(date) {
   const d = new Date(date);
   const day = d.getDay();
@@ -260,7 +291,9 @@ function setupFileManager(ipcMain, store) {
   });
 }
 
-async function organizeSpecificRecording(store, filePath, gameName) {
+async function organizeSpecificRecording(store, filePath, gameName, opts = {}) {
+  const { moveOnly = false, onProgress = () => {} } = opts;
+
   const destPath = store.get('settings.destinationPath');
   if (!destPath) throw new Error('No destination path configured');
   if (!fs.existsSync(filePath)) throw new Error('Recording file not found');
@@ -272,12 +305,14 @@ async function organizeSpecificRecording(store, filePath, gameName) {
     return { success: true, alreadyOrganized: true, path: filePath, filename: path.basename(filePath) };
   }
 
-  // Verify file is stable (not still being written)
+  // Verify file is stable (size not changing) and not locked by OBS
+  onProgress('checking', 'Verifying file…');
   const stat1 = fs.statSync(filePath);
   await new Promise(r => setTimeout(r, 1500));
   let stat2;
   try { stat2 = fs.statSync(filePath); } catch { throw new Error('Cannot access file'); }
   if (stat1.size !== stat2.size) throw new Error('File is still being written — please wait a moment and try again');
+  await waitForUnlock(filePath);
 
   // Use the file's mtime as the reference date so the recording lands in the correct week
   const recordingDate = stat2.mtime;
@@ -299,10 +334,13 @@ async function organizeSpecificRecording(store, filePath, gameName) {
   const existing = fs.readdirSync(targetDir).filter(f => isVideoFile(f) && f.includes(dateStr));
   const sessionNum = existing.length + 1;
   const ext = path.extname(filePath);
-  const destFilename = `${gameName} Session ${dateStr} #${sessionNum}.mp4`;
+  const shouldRemux = ext.toLowerCase() !== '.mp4' && !moveOnly;
+  const destExt = shouldRemux ? '.mp4' : ext;
+  const destFilename = `${gameName} Session ${dateStr} #${sessionNum}${destExt}`;
   const dest = path.join(targetDir, destFilename);
 
-  if (ext.toLowerCase() !== '.mp4') {
+  if (shouldRemux) {
+    onProgress('remuxing', 'Remuxing to MP4…');
     service.markRemuxing(filePath, dest);
     let finalPath = dest;
     try {
@@ -324,11 +362,11 @@ async function organizeSpecificRecording(store, filePath, gameName) {
       fs.unlinkSync(filePath);
     } catch (err) {
       try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch {}
-      // Fallback: move with original extension
+      // Fallback: move with original extension (cross-device safe)
       const fallbackName = `${gameName} Session ${dateStr} #${sessionNum}${ext}`;
       finalPath = path.join(targetDir, fallbackName);
       try {
-        fs.renameSync(filePath, finalPath);
+        await moveFileSafe(filePath, finalPath);
       } catch (renameErr) {
         service.unmarkRemuxing(filePath, dest);
         throw new Error(`Could not move file (it may still be open by OBS): ${renameErr.message}`);
@@ -339,8 +377,9 @@ async function organizeSpecificRecording(store, filePath, gameName) {
     }
     return { success: true, path: finalPath, filename: path.basename(finalPath) };
   } else {
+    onProgress('moving', 'Moving file…');
     try {
-      fs.renameSync(filePath, dest);
+      await moveFileSafe(filePath, dest);
     } catch (err) {
       if (err.code === 'ENOSPC') {
         throw new Error('Not enough disk space to move the recording.');

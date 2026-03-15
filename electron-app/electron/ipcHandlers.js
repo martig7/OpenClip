@@ -715,9 +715,13 @@ function registerIpcHandlers(store, appState) {
   });
 
   // --- Manual organize ---
-  ipcMain.handle('recordings:organize', async (_event, { filePath, gameName }) => {
+  ipcMain.handle('recordings:organize', async (event, { filePath, gameName }) => {
     const { organizeSpecificRecording } = require('./fileManager');
-    return organizeSpecificRecording(store, filePath, gameName);
+    const moveOnly = store.get('settings.organizeRemux') === false;
+    const onProgress = (stage, label) => {
+      try { event.sender.send('recordings:organize-progress', { stage, label }); } catch {}
+    };
+    return organizeSpecificRecording(store, filePath, gameName, { moveOnly, onProgress });
   });
 
   // --- Auto-updater IPC handlers ---

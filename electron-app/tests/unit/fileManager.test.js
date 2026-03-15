@@ -406,6 +406,279 @@ describe('organizeSpecificRecording', () => {
     mkdirSpy.mockRestore()
     renameSpy.mockRestore()
   })
+
+  // ── EXDEV (cross-device) fallback tests ─────────────────────────────────────
+
+  // Test 26 — MP4 cross-device: rename fails with EXDEV → falls back to copy+delete
+  it('MP4: falls back to copy+delete when rename fails with EXDEV', async () => {
+    const filePath = path.join(obsDir, 'recording.mp4')
+    fs.writeFileSync(filePath, Buffer.alloc(1024))
+
+    const { organizeSpecificRecording } = await import('../../electron/fileManager.js')
+
+    const exdevErr = Object.assign(new Error('EXDEV: cross-device link not permitted, rename'), { code: 'EXDEV' })
+    const renameSpy = vi.spyOn(fs, 'renameSync').mockImplementation(() => { throw exdevErr })
+
+    vi.useFakeTimers()
+    const organizePromise = organizeSpecificRecording(store, filePath, 'MyGame')
+    await vi.runAllTimersAsync()
+    const result = await organizePromise
+    vi.useRealTimers()
+    renameSpy.mockRestore()
+
+    expect(result.success).toBe(true)
+    // Original file must have been deleted (the 'delete' half of copy+delete)
+    expect(fs.existsSync(filePath)).toBe(false)
+    // Destination file must exist and be readable
+    expect(fs.existsSync(result.path)).toBe(true)
+    expect(result.path).toMatch(/\.mp4$/)
+  })
+
+  // Test 27 — MKV cross-device: ffmpeg fails, fallback rename fails with EXDEV → copy+delete
+  it('MKV fallback move: copy+delete when rename fails with EXDEV after ffmpeg failure', async () => {
+    const cp = await import('child_process')
+    const filePath = path.join(obsDir, 'recording.mkv')
+    fs.writeFileSync(filePath, Buffer.alloc(1024))
+
+    const { organizeSpecificRecording } = await import('../../electron/fileManager.js')
+
+    // ffprobe succeeds; ffmpeg fails so the code falls through to the rename fallback
+    cp.execFile.mockImplementation((bin, args, opts, callback) => {
+      if (args.includes('-show_streams')) {
+        callback(null, { stdout: '{"streams":[]}', stderr: '' })
+      } else {
+        callback(new Error('ffmpeg: codec error'))
+      }
+    })
+
+    const exdevErr = Object.assign(new Error('EXDEV: cross-device link not permitted, rename'), { code: 'EXDEV' })
+    const renameSpy = vi.spyOn(fs, 'renameSync').mockImplementation(() => { throw exdevErr })
+
+    vi.useFakeTimers()
+    const organizePromise = organizeSpecificRecording(store, filePath, 'MyGame')
+    await vi.runAllTimersAsync()
+    const result = await organizePromise
+    vi.useRealTimers()
+    renameSpy.mockRestore()
+
+    expect(result.success).toBe(true)
+    // Original MKV must be gone (copied then unlinked)
+    expect(fs.existsSync(filePath)).toBe(false)
+    // Fallback keeps the original extension
+    expect(result.path).toMatch(/\.mkv$/)
+    expect(fs.existsSync(result.path)).toBe(true)
+  })
+
+  // ── waitForUnlock / EBUSY retry tests ───────────────────────────────────────
+
+  // Test 28 — waitForUnlock retries on EBUSY and succeeds once lock clears
+  it('retries the lock check on EBUSY and succeeds when the file becomes unlocked', async () => {
+    const filePath = path.join(obsDir, 'locked.mp4')
+    fs.writeFileSync(filePath, Buffer.alloc(1024))
+
+    const { organizeSpecificRecording } = await import('../../electron/fileManager.js')
+
+    const origOpen = fs.openSync.bind(fs)
+    let openAttempts = 0
+    const openSpy = vi.spyOn(fs, 'openSync').mockImplementation((p, flags) => {
+      openAttempts++
+      if (openAttempts <= 2) {
+        // Simulate OBS still holding the file handle for the first two checks
+        throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' })
+      }
+      return origOpen(p, flags)
+    })
+
+    vi.useFakeTimers()
+    const organizePromise = organizeSpecificRecording(store, filePath, 'MyGame')
+    await vi.runAllTimersAsync()
+    const result = await organizePromise
+    vi.useRealTimers()
+    openSpy.mockRestore()
+
+    expect(result.success).toBe(true)
+    expect(openAttempts).toBeGreaterThanOrEqual(3)
+    expect(fs.existsSync(filePath)).toBe(false)
+  })
+
+  // Test 29 — waitForUnlock throws a clear error after exhausting all retries
+  it('throws a friendly error when the file remains locked through all retries', async () => {
+    const filePath = path.join(obsDir, 'perma-locked.mp4')
+    fs.writeFileSync(filePath, Buffer.alloc(1024))
+
+    const { organizeSpecificRecording } = await import('../../electron/fileManager.js')
+
+    const openSpy = vi.spyOn(fs, 'openSync').mockImplementation(() => {
+      throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' })
+    })
+
+    vi.useFakeTimers()
+    const organizePromise = organizeSpecificRecording(store, filePath, 'MyGame')
+    organizePromise.catch(() => {})
+    await vi.runAllTimersAsync()
+    vi.useRealTimers()
+    openSpy.mockRestore()
+
+    await expect(organizePromise).rejects.toThrow(/locked/)
+    // Original file must still be untouched — nothing was moved
+    expect(fs.existsSync(filePath)).toBe(true)
+  })
+
+  // ── onProgress callback tests ────────────────────────────────────────────────
+
+  // Test 30 — onProgress fires 'checking' first, then 'remuxing' for an MKV
+  it('calls onProgress(checking) then onProgress(remuxing) for MKV files', async () => {
+    const cp = await import('child_process')
+    const filePath = path.join(obsDir, 'recording.mkv')
+    fs.writeFileSync(filePath, Buffer.alloc(1024))
+
+    cp.execFile.mockImplementation((bin, args, opts, callback) => {
+      if (args.includes('-show_streams')) {
+        callback(null, { stdout: '{"streams":[]}', stderr: '' })
+      } else {
+        const outPath = args[args.length - 1]
+        fs.writeFileSync(outPath, Buffer.alloc(512))
+        callback(null, { stdout: '', stderr: '' })
+      }
+    })
+
+    const { organizeSpecificRecording } = await import('../../electron/fileManager.js')
+    const stages = []
+
+    vi.useFakeTimers()
+    const p = organizeSpecificRecording(store, filePath, 'MyGame', {
+      onProgress: (stage) => stages.push(stage),
+    })
+    await vi.runAllTimersAsync()
+    await p
+    vi.useRealTimers()
+
+    expect(stages[0]).toBe('checking')
+    expect(stages[1]).toBe('remuxing')
+  })
+
+  // Test 31 — onProgress fires 'checking' then 'moving' for an MP4
+  it('calls onProgress(checking) then onProgress(moving) for MP4 files', async () => {
+    const filePath = path.join(obsDir, 'recording.mp4')
+    fs.writeFileSync(filePath, Buffer.alloc(1024))
+
+    const { organizeSpecificRecording } = await import('../../electron/fileManager.js')
+    const stages = []
+
+    vi.useFakeTimers()
+    const p = organizeSpecificRecording(store, filePath, 'MyGame', {
+      onProgress: (stage) => stages.push(stage),
+    })
+    await vi.runAllTimersAsync()
+    await p
+    vi.useRealTimers()
+
+    expect(stages[0]).toBe('checking')
+    expect(stages[1]).toBe('moving')
+  })
+
+  // Test 32 — onProgress fires 'moving' (not 'remuxing') when moveOnly is true for MKV
+  it('calls onProgress(moving) and never onProgress(remuxing) when moveOnly is true', async () => {
+    const filePath = path.join(obsDir, 'recording.mkv')
+    fs.writeFileSync(filePath, Buffer.alloc(1024))
+
+    const { organizeSpecificRecording } = await import('../../electron/fileManager.js')
+    const stages = []
+
+    vi.useFakeTimers()
+    const p = organizeSpecificRecording(store, filePath, 'MyGame', {
+      moveOnly: true,
+      onProgress: (stage) => stages.push(stage),
+    })
+    await vi.runAllTimersAsync()
+    await p
+    vi.useRealTimers()
+
+    expect(stages).toContain('checking')
+    expect(stages).toContain('moving')
+    expect(stages).not.toContain('remuxing')
+  })
+
+  // ── moveOnly option tests ───────────────────────────────────────────────────
+
+  // Test 33 — moveOnly: true keeps original .mkv extension and skips ffmpeg
+  it('moveOnly: true moves MKV without remuxing, keeping the original extension', async () => {
+    const cp = await import('child_process')
+    const filePath = path.join(obsDir, 'recording.mkv')
+    fs.writeFileSync(filePath, Buffer.alloc(1024))
+
+    const { organizeSpecificRecording } = await import('../../electron/fileManager.js')
+
+    vi.useFakeTimers()
+    const p = organizeSpecificRecording(store, filePath, 'MyGame', { moveOnly: true })
+    await vi.runAllTimersAsync()
+    const result = await p
+    vi.useRealTimers()
+
+    expect(result.success).toBe(true)
+    // Dest must keep .mkv extension
+    expect(result.path).toMatch(/\.mkv$/)
+    // ffmpeg (remux) must NOT have been called
+    const remuxCalls = cp.execFile.mock.calls.filter(([, args]) =>
+      args && args.includes('-movflags')
+    )
+    expect(remuxCalls).toHaveLength(0)
+    // Source file must have been removed
+    expect(fs.existsSync(filePath)).toBe(false)
+    // Destination file must exist
+    expect(fs.existsSync(result.path)).toBe(true)
+  })
+
+  // Test 34 — moveOnly: true with an already-MP4 file still moves correctly
+  it('moveOnly: true with an MP4 file still moves to the correct destination', async () => {
+    const filePath = path.join(obsDir, 'recording.mp4')
+    fs.writeFileSync(filePath, Buffer.alloc(1024))
+
+    const { organizeSpecificRecording } = await import('../../electron/fileManager.js')
+
+    vi.useFakeTimers()
+    const p = organizeSpecificRecording(store, filePath, 'MyGame', { moveOnly: true })
+    await vi.runAllTimersAsync()
+    const result = await p
+    vi.useRealTimers()
+
+    expect(result.success).toBe(true)
+    expect(result.path).toMatch(/\.mp4$/)
+    expect(fs.existsSync(filePath)).toBe(false)
+    expect(fs.existsSync(result.path)).toBe(true)
+  })
+
+  // Test 35 — moveOnly: false (default) still remuxes MKV → MP4
+  it('moveOnly: false (default) remuxes MKV to MP4 as before', async () => {
+    const cp = await import('child_process')
+    const filePath = path.join(obsDir, 'recording.mkv')
+    fs.writeFileSync(filePath, Buffer.alloc(1024))
+
+    cp.execFile.mockImplementation((bin, args, opts, callback) => {
+      if (args.includes('-show_streams')) {
+        callback(null, { stdout: '{"streams":[]}', stderr: '' })
+      } else {
+        const outPath = args[args.length - 1]
+        fs.writeFileSync(outPath, Buffer.alloc(512))
+        callback(null, { stdout: '', stderr: '' })
+      }
+    })
+
+    const { organizeSpecificRecording } = await import('../../electron/fileManager.js')
+
+    vi.useFakeTimers()
+    const p = organizeSpecificRecording(store, filePath, 'MyGame', { moveOnly: false })
+    await vi.runAllTimersAsync()
+    const result = await p
+    vi.useRealTimers()
+
+    expect(result.success).toBe(true)
+    expect(result.path).toMatch(/\.mp4$/)
+    const remuxCalls = cp.execFile.mock.calls.filter(([, args]) =>
+      args && args.includes('-movflags')
+    )
+    expect(remuxCalls).toHaveLength(1)
+  })
 })
 
 // ─────────────────────────────────────────────────────────────────

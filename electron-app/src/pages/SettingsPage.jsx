@@ -227,6 +227,22 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {/* Organize */}
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-title">Organize</div>
+
+          <div className="toggle-row" style={{ marginTop: 8 }}>
+            <div>
+              <div className="toggle-label">Remux to MP4</div>
+              <div className="toggle-desc">Convert MKV and other formats to MP4 when organizing. Disable to move files without converting.</div>
+            </div>
+            <button
+              className={`toggle ${settings.organizeRemux !== false ? 'on' : ''}`}
+              onClick={() => updateSetting('organizeRemux', settings.organizeRemux === false)}
+            />
+          </div>
+        </div>
+
         {/* View */}
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="card-title">View</div>

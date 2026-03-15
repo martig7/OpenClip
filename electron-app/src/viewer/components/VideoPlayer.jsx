@@ -7,7 +7,7 @@ import { apiFetch, apiPost, getBase } from '../apiBase'
 import { formatTime } from '../utils'
 import api from '../../api'
 
-function VideoPlayer({ recording, onClipCreated, games = [], onOrganized, onOrganizeError }) {
+function VideoPlayer({ recording, onClipCreated, games = [], onOrganized, onOrganizeError, organizeRemux = true }) {
   const videoRef = useRef(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -33,6 +33,7 @@ function VideoPlayer({ recording, onClipCreated, games = [], onOrganized, onOrga
   const [organizeMode, setOrganizeMode] = useState(false)
   const [organizeGame, setOrganizeGame] = useState('')
   const [isOrganizing, setIsOrganizing] = useState(false)
+  const [organizeProgress, setOrganizeProgress] = useState(null) // { stage, label } | null
 
   const isUnorganized = recording?.game_name === '(Unorganized)'
 
@@ -236,9 +237,16 @@ function VideoPlayer({ recording, onClipCreated, games = [], onOrganized, onOrga
     }
   }, [recording, clipStart, clipEnd, isCreatingClip, onClipCreated, audioTracks, selectedTracks])
 
+  // Subscribe to per-stage progress events from the backend
+  useEffect(() => {
+    const unsub = api.onOrganizeProgress?.((p) => setOrganizeProgress(p))
+    return () => unsub?.()
+  }, [])
+
   const handleOrganize = useCallback(async () => {
     if (!recording || !organizeGame || isOrganizing) return
     setIsOrganizing(true)
+    setOrganizeProgress(null)
     try {
       const result = await api.organizeRecording(recording.path, organizeGame)
       if (result && result.success) {
@@ -251,6 +259,7 @@ function VideoPlayer({ recording, onClipCreated, games = [], onOrganized, onOrga
       if (onOrganizeError) onOrganizeError(err.message || 'Organize failed')
     } finally {
       setIsOrganizing(false)
+      setOrganizeProgress(null)
     }
   }, [recording, organizeGame, isOrganizing, onOrganized, onOrganizeError])
 
@@ -439,9 +448,30 @@ function VideoPlayer({ recording, onClipCreated, games = [], onOrganized, onOrga
               Cancel
             </button>
           </div>
-          {organizeGame && (
+          {isOrganizing && (
+            <div className="organize-progress">
+              <div className="organize-progress-label">
+                <div className="spinner-sm" style={{ borderColor: 'rgba(245,158,11,0.25)', borderTopColor: 'var(--amber)' }} />
+                {organizeProgress?.label ?? 'Starting…'}
+              </div>
+              <div className="progress-bar-container organize-progress-bar">
+                <div
+                  className="progress-bar-fill organize-progress-fill"
+                  style={{ width: `${organizeProgress?.stage === 'remuxing' || organizeProgress?.stage === 'moving' ? 65 : 20}%` }}
+                />
+              </div>
+            </div>
+          )}
+          {organizeGame && !isOrganizing && (
             <div className="organize-preview">
-              Will be saved as: <strong>{organizeGame}</strong> Session &gt; Week folder &gt; MP4
+              {(() => {
+                const ext = recording?.path ? recording.path.split('.').pop().toLowerCase() : ''
+                const willRemux = organizeRemux && ext !== 'mp4'
+                return <>
+                  Will be saved as: <strong>{organizeGame}</strong> Session &gt; Week folder
+                  {willRemux ? ' › remuxed to MP4' : ext ? ` › ${ext.toUpperCase()} (move only)` : ' › MP4'}
+                </>
+              })()}
             </div>
           )}
         </div>

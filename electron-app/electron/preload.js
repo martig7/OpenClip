@@ -69,6 +69,11 @@ contextBridge.exposeInMainWorld('api', {
   deleteRecording: (path) => ipcRenderer.invoke('recordings:delete', path),
   getVideoURL: (filePath) => ipcRenderer.invoke('video:getURL', filePath),
   organizeRecording: (filePath, gameName) => ipcRenderer.invoke('recordings:organize', { filePath, gameName }),
+  onOrganizeProgress: (callback) => {
+    const handler = (_event, progress) => callback(progress);
+    ipcRenderer.on('recordings:organize-progress', handler);
+    return () => ipcRenderer.removeListener('recordings:organize-progress', handler);
+  },
 
   // Clips
   getClips: () => ipcRenderer.invoke('clips:list'),

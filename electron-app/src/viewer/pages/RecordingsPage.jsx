@@ -13,6 +13,7 @@ function RecordingsPage() {
   const [toast, setToast] = useState(null)
   const [searchParams, setSearchParams] = useSearchParams()
   const [games, setGames] = useState([])
+  const [organizeRemux, setOrganizeRemux] = useState(true)
   const toastTimerRef = useRef(null)
 
   useEffect(() => {
@@ -50,6 +51,7 @@ function RecordingsPage() {
       }
     })
     api.getGames().then(g => setGames(g || [])).catch(() => {})
+    api.getStore('settings').then(s => setOrganizeRemux(s?.organizeRemux !== false)).catch(() => {})
   }, [fetchRecordings, setSearchParams])
 
   const handleClipCreated = useCallback((clip) => {
@@ -97,6 +99,7 @@ function RecordingsPage() {
         games={games}
         onOrganized={handleOrganized}
         onOrganizeError={handleOrganizeError}
+        organizeRemux={organizeRemux}
       />
 
       {toast && (

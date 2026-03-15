@@ -6,6 +6,23 @@ import { http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
 import { sampleRecording, sampleAudioTracks } from '../fixtures/data.js'
 import VideoPlayer from '../../src/viewer/components/VideoPlayer.jsx'
+import api from '../../src/api.js'
+
+// Fixture: an unorganized recording (game_name === '(Unorganized)')
+const unorganizedRecording = {
+  path: 'C:\\Users\\Test\\OBS\\2026-03-11 14-48-25.mkv',
+  filename: '2026-03-11 14-48-25.mkv',
+  game_name: '(Unorganized)',
+  date: '2026-03-11',
+  size_bytes: 1_073_741_824,
+  size_formatted: '1.0 GB',
+  mtime: 1741700000,
+}
+
+const sampleGames = [
+  { id: '1', name: 'Minecraft', enabled: true },
+  { id: '2', name: 'Overwatch', enabled: true },
+]
 
 vi.mock('../../src/viewer/apiBase.js', () => ({
   apiFetch: (path, opts) => fetch(path, opts),
@@ -188,5 +205,197 @@ describe('VideoPlayer', () => {
     fireEvent.timeUpdate(video)
 
     expect(video.currentTime).toBe(30)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────
+// Organize panel
+// ─────────────────────────────────────────────────────────────────
+describe('VideoPlayer — organize panel', () => {
+  function setupHandlers() {
+    server.use(
+      http.get('/api/video/tracks', () => HttpResponse.json({ tracks: [] })),
+      http.get('/api/markers', () => HttpResponse.json({ markers: [] })),
+    )
+  }
+
+  it('shows Unorganized badge for an unorganized recording', async () => {
+    setupHandlers()
+    render(<VideoPlayer recording={unorganizedRecording} games={sampleGames} />)
+    // Badge text is exactly 'Unorganized'; game_name in meta is '(Unorganized)'
+    await waitFor(() => expect(screen.getByText('Unorganized')).toBeInTheDocument())
+  })
+
+  it('shows Organize button instead of Create Clip for unorganized recordings', async () => {
+    setupHandlers()
+    render(<VideoPlayer recording={unorganizedRecording} games={sampleGames} />)
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /^Organize$/i })).toBeInTheDocument()
+    )
+    expect(screen.queryByRole('button', { name: /Create Clip/i })).not.toBeInTheDocument()
+  })
+
+  it('opens organize panel when Organize button is clicked', async () => {
+    setupHandlers()
+    render(<VideoPlayer recording={unorganizedRecording} games={sampleGames} />)
+    await waitFor(() => screen.getByRole('button', { name: /^Organize$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^Organize$/i }))
+    await waitFor(() => expect(screen.getByText(/Move to organized library/i)).toBeInTheDocument())
+    expect(screen.getByText('Minecraft')).toBeInTheDocument()
+    expect(screen.getByText('Overwatch')).toBeInTheDocument()
+  })
+
+  it('preview shows "remuxed to MP4" when organizeRemux=true and file is non-mp4', async () => {
+    setupHandlers()
+    render(
+      <VideoPlayer
+        recording={unorganizedRecording}
+        games={sampleGames}
+        organizeRemux={true}
+      />
+    )
+    await waitFor(() => screen.getByRole('button', { name: /^Organize$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^Organize$/i }))
+    await waitFor(() => screen.getByText(/Move to organized library/i))
+
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Minecraft' } })
+
+    await waitFor(() =>
+      expect(screen.getByText(/remuxed to MP4/i)).toBeInTheDocument()
+    )
+  })
+
+  it('preview shows "move only" when organizeRemux=false and file is non-mp4', async () => {
+    setupHandlers()
+    render(
+      <VideoPlayer
+        recording={unorganizedRecording}
+        games={sampleGames}
+        organizeRemux={false}
+      />
+    )
+    await waitFor(() => screen.getByRole('button', { name: /^Organize$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^Organize$/i }))
+    await waitFor(() => screen.getByText(/Move to organized library/i))
+
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Minecraft' } })
+
+    await waitFor(() =>
+      expect(screen.getByText(/move only/i)).toBeInTheDocument()
+    )
+  })
+
+  it('shows progress bar with "Starting…" label immediately when organizing begins', async () => {
+    setupHandlers()
+
+    // organizeRecording resolves only when we let it — so we can assert mid-flight
+    let resolveOrganize
+    vi.spyOn(api, 'organizeRecording').mockImplementation(
+      () => new Promise(resolve => { resolveOrganize = resolve })
+    )
+
+    render(
+      <VideoPlayer
+        recording={unorganizedRecording}
+        games={sampleGames}
+        onOrganized={vi.fn()}
+        onOrganizeError={vi.fn()}
+      />
+    )
+
+    await waitFor(() => screen.getByRole('button', { name: /^Organize$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^Organize$/i }))
+    await waitFor(() => screen.getByRole('combobox'))
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Minecraft' } })
+
+    // There are now two "Organize" buttons (toggle + panel submit); click the one in the panel row
+    const [, panelOrganizeBtn] = screen.getAllByRole('button', { name: /^Organize$/i })
+    fireEvent.click(panelOrganizeBtn)
+
+    await waitFor(() =>
+      expect(screen.getByText(/Starting…/i)).toBeInTheDocument()
+    )
+
+    // Clean up the pending promise
+    resolveOrganize({ success: true, filename: 'Minecraft Session 2026-03-11 #1.mkv' })
+    vi.restoreAllMocks()
+  })
+
+  it('progress label updates when onOrganizeProgress fires a stage event', async () => {
+    setupHandlers()
+
+    let resolveOrganize
+    let capturedProgressCallback
+
+    // Both spies must be registered before render so mount-time useEffect captures them
+    vi.spyOn(api, 'onOrganizeProgress').mockImplementation(cb => {
+      capturedProgressCallback = cb
+      return () => {}
+    })
+    vi.spyOn(api, 'organizeRecording').mockImplementation(
+      () => new Promise(resolve => { resolveOrganize = resolve })
+    )
+
+    render(
+      <VideoPlayer
+        recording={unorganizedRecording}
+        games={sampleGames}
+        onOrganized={vi.fn()}
+        onOrganizeError={vi.fn()}
+      />
+    )
+
+    await waitFor(() => screen.getByRole('button', { name: /^Organize$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^Organize$/i }))
+    await waitFor(() => screen.getByRole('combobox'))
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Minecraft' } })
+
+    const [, panelSubmitBtn] = screen.getAllByRole('button', { name: /^Organize$/i })
+    fireEvent.click(panelSubmitBtn)
+
+    // Simulate backend emitting a progress stage event
+    await act(async () => {
+      capturedProgressCallback?.({ stage: 'remuxing', label: 'Remuxing to MP4…' })
+    })
+
+    await waitFor(() =>
+      expect(screen.getByText(/Remuxing to MP4/i)).toBeInTheDocument()
+    )
+
+    resolveOrganize({ success: true, filename: 'Minecraft Session 2026-03-11 #1.mkv' })
+    vi.restoreAllMocks()
+  })
+
+  it('progress bar disappears and onOrganized fires after successful organize', async () => {
+    setupHandlers()
+
+    const onOrganized = vi.fn()
+    vi.spyOn(api, 'organizeRecording').mockResolvedValue({
+      success: true,
+      filename: 'Minecraft Session 2026-03-11 #1.mkv',
+      path: 'D:\\Videos\\Minecraft Session 2026-03-11 #1.mkv',
+    })
+
+    render(
+      <VideoPlayer
+        recording={unorganizedRecording}
+        games={sampleGames}
+        onOrganized={onOrganized}
+        onOrganizeError={vi.fn()}
+      />
+    )
+
+    await waitFor(() => screen.getByText(/^Organize$/i))
+    fireEvent.click(screen.getByRole('button', { name: /^Organize$/i }))
+    await waitFor(() => screen.getByRole('combobox'))
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Minecraft' } })
+
+    const [, panelOrganizeBtn] = screen.getAllByRole('button', { name: /^Organize$/i })
+    fireEvent.click(panelOrganizeBtn)
+
+    await waitFor(() => expect(onOrganized).toHaveBeenCalled())
+    // Progress bar must be gone
+    expect(screen.queryByText(/Starting…/i)).not.toBeInTheDocument()
+    vi.restoreAllMocks()
   })
 })
