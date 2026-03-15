@@ -231,6 +231,9 @@ const store = {
       }
       this._msData = electronSettingsToMs(this._ms(), value);
       this._saveMs();
+      if (value.destinationPath) {
+        try { fs.mkdirSync(normalizePath(value.destinationPath), { recursive: true }); } catch {}
+      }
       return;
     }
     if (key.startsWith('settings.')) {
@@ -258,6 +261,9 @@ const store = {
       obj[parts[parts.length - 1]] = value;
       this._msData = electronSettingsToMs(this._ms(), current);
       this._saveMs();
+      if (subKey === 'destinationPath' && value) {
+        try { fs.mkdirSync(normalizePath(value), { recursive: true }); } catch {}
+      }
       return;
     }
   },
