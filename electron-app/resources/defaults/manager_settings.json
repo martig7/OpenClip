@@ -12,8 +12,8 @@
   "clip_hotkey": "F9",
   "auto_clip_settings": {
     "enabled": false,
-    "buffer_before_seconds": 15,
-    "buffer_after_seconds": 15,
+    "buffer_before_seconds": 30,
+    "buffer_after_seconds": 5,
     "remove_processed_markers": true,
     "delete_recording_after_clips": false
   },

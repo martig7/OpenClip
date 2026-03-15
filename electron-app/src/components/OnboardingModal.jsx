@@ -2,17 +2,12 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { ChevronRight, ChevronLeft } from 'lucide-react';
 import api from '../api';
 import {
-  HotkeyCapture,
   Status,
   StepWelcome,
   StepOBSPath,
   StepOBSInstall,
   StepOBSPlugin,
-  StepHotkey,
   StepOrganizeDestination,
-  StepStorage,
-  StepAutoClip,
-  StepWatcherAutostart,
   STEP_TITLES,
   TOTAL_STEPS,
 } from './OnboardingSteps';
@@ -39,6 +34,27 @@ export default function OnboardingModal({ open, onClose }) {
     api.getStore('settings').then(s => setSettings(s ?? {})).catch(() => setSettings({}));
     api.getOBSInstallPath?.().then(p => setObsInstallPath(p || '')).catch(() => {});
   }, [open]);
+
+  // Auto-detect OBS install path when landing on step 1
+  useEffect(() => {
+    if (step !== 1) return;
+    api.detectOBSInstallPath?.().then(p => { if (p) handleInstallPathChange(p); }).catch(() => {});
+  }, [step]);
+
+  // Auto-detect OBS recording path when landing on step 2
+  useEffect(() => {
+    if (step !== 2) return;
+    api.detectOBSPath().then(p => { if (p) updateSetting('obsRecordingPath', p); }).catch(() => {});
+  }, [step]);
+
+  // Auto-populate destinationPath with <obsRecordingPath>/OpenClip when obsRecordingPath is set
+  // and destinationPath has not been manually specified
+  useEffect(() => {
+    const recPath = settings?.obsRecordingPath?.trim();
+    if (!recPath || settings?.destinationPath?.trim()) return;
+    const sep = recPath.includes('\\') ? '\\' : '/';
+    updateSetting('destinationPath', recPath.replace(/[\\/]+$/, '') + sep + 'OpenClip');
+  }, [settings?.obsRecordingPath]);
 
   // When landing on step 3 (plugin), auto-check if plugin is already installed.
   // Skipped when the user has explicitly clicked Reinstall (reinstallingRef = true).
@@ -71,10 +87,10 @@ export default function OnboardingModal({ open, onClose }) {
 
   // Whether Next is enabled for the current step
   function canAdvance() {
-    if (step === 1) return !!(settings?.obsRecordingPath?.trim());
-    if (step === 2) return !!(obsInstallPath?.trim());
+    if (step === 1) return !!(obsInstallPath?.trim());
+    if (step === 2) return !!(settings?.obsRecordingPath?.trim());
     if (step === 3) return pluginStatus === 'success';
-    if (step === 5) return !!(settings?.destinationPath?.trim());
+    if (step === 4) return !!(settings?.destinationPath?.trim());
     return true;
   }
 
@@ -124,10 +140,10 @@ export default function OnboardingModal({ open, onClose }) {
 
   // Tooltip for gated steps
   const gateHint = nextDisabled ? (
-    step === 1 ? 'Enter or detect your OBS recording folder to continue' :
-    step === 2 ? 'Enter or detect your OBS install location to continue' :
+    step === 1 ? 'Enter or detect your OBS install location to continue' :
+    step === 2 ? 'Enter or detect your OBS recording folder to continue' :
     step === 3 ? 'Click Install Plugin to install the OBS plugin' :
-    step === 5 ? 'Choose a destination folder to continue' : undefined
+    step === 4 ? 'Choose a destination folder to continue' : undefined
   ) : undefined;
 
   return (
@@ -154,13 +170,13 @@ export default function OnboardingModal({ open, onClose }) {
         {/* Body */}
         <div className="onboarding-body">
           {step === 0 && <StepWelcome />}
-          {step === 1 && <StepOBSPath settings={settings} onChange={updateSetting} />}
-          {step === 2 && (
+          {step === 1 && (
             <StepOBSInstall
               obsInstallPath={obsInstallPath}
               onChangeInstallPath={handleInstallPathChange}
             />
           )}
+          {step === 2 && <StepOBSPath settings={settings} onChange={updateSetting} />}
           {step === 3 && (
             <StepOBSPlugin
               pluginStatus={pluginStatus}
@@ -170,11 +186,7 @@ export default function OnboardingModal({ open, onClose }) {
               onVerify={handleVerifyPlugin}
             />
           )}
-          {step === 4 && <StepHotkey settings={settings} onChange={updateSetting} />}
-          {step === 5 && <StepOrganizeDestination settings={settings} onChange={updateSetting} />}
-          {step === 6 && <StepStorage settings={settings} onChange={updateSetting} />}
-          {step === 7 && <StepAutoClip settings={settings} onChange={updateSetting} />}
-          {step === 8 && <StepWatcherAutostart settings={settings} onChange={updateSetting} />}
+          {step === 4 && <StepOrganizeDestination settings={settings} onChange={updateSetting} />}
           <div className="onboarding-footer">
             <div className="onboarding-footer-right">
               <button
