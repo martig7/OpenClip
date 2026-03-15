@@ -102,7 +102,7 @@ async function organizeRecordings(store, gameName, onProgress = () => {}) {
 
         await execFileAsync(FFMPEG_PATH, [
           '-i', src, '-map', '0', '-c', 'copy', '-movflags', '+faststart', '-y', dest,
-        ], { timeout: 120000 });
+        ], { timeout: 10 * 60 * 1000 });
 
         // Save track names in a sidecar file so they survive the container conversion
         if (trackNames) {
@@ -110,14 +110,16 @@ async function organizeRecordings(store, gameName, onProgress = () => {}) {
         }
 
         fs.unlinkSync(src);
-      } catch {
+      } catch (remuxErr) {
         // Remux failed — remove any partial output so no duplicate is left behind
         try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch {}
         // Fallback: just move the file
         try {
           onProgress({ phase: 'recording', stage: 'moving', label: 'Moving file…', gameName });
           fs.renameSync(src, path.join(targetDir, `${gameName} Session ${dateStr} #${sessionNum}${ext}`));
-        } catch {}
+        } catch {
+          onProgress({ phase: 'error', gameName, error: `Could not process recording for ${gameName}: ${remuxErr.message}` });
+        }
       } finally {
         service.unmarkRemuxing(src, dest);
         service.invalidateRecordingsCache();
@@ -236,6 +238,91 @@ async function processAutoClips(store, gameName, recordingDir, onProgress = () =
 
   if (autoClip.deleteFullRecording) {
     try { fs.unlinkSync(recording.path); } catch {}
+  }
+}
+
+async function finalizeDirectRecording(store, gameName, recordingDir, onProgress = () => {}) {
+  if (!recordingDir || !fs.existsSync(recordingDir)) return;
+
+  const files = fs.readdirSync(recordingDir).filter(f => isVideoFile(f));
+  const now = new Date();
+
+  for (const file of files) {
+    // Skip files already in session format (from a previous finalize call)
+    if (file.startsWith(`${gameName} Session`)) continue;
+
+    const src = path.join(recordingDir, file);
+    const stat = fs.statSync(src);
+    // Only process files modified in the last 10 minutes
+    if (now - stat.mtime > 10 * 60 * 1000) continue;
+
+    onProgress({ phase: 'recording', stage: 'checking', label: 'Verifying recording…', gameName });
+
+    // Wait for file to stabilize — OBS may still be writing/finalizing
+    await new Promise(r => setTimeout(r, 2000));
+    let statCheck;
+    try { statCheck = fs.statSync(src); } catch { continue; }
+    if (stat.size !== statCheck.size) {
+      console.warn(`[finalize] Skipping ${file} — file size changed, still being written`);
+      continue;
+    }
+
+    const dateStr = now.toISOString().slice(0, 10);
+    const existing = fs.readdirSync(recordingDir).filter(f => f.includes(dateStr) && f !== file);
+    const sessionNum = existing.length + 1;
+    const ext = path.extname(file);
+    const newName = `${gameName} Session ${dateStr} #${sessionNum}.mp4`;
+    const dest = path.join(recordingDir, newName);
+
+    if (ext.toLowerCase() !== '.mp4') {
+      onProgress({ phase: 'recording', stage: 'remuxing', label: 'Remuxing to MP4…', gameName });
+      service.markRemuxing(src, dest);
+      try {
+        let trackNames = null;
+        try {
+          const { stdout: probeOut } = await execFileAsync(FFPROBE_PATH, [
+            '-v', 'error', '-show_streams', '-select_streams', 'a', '-of', 'json', src,
+          ], { encoding: 'utf-8', timeout: 10000 });
+          const streams = JSON.parse(probeOut).streams || [];
+          const names = streams.map(s => s.tags?.title || s.tags?.TITLE || null);
+          if (names.some(Boolean)) trackNames = names;
+        } catch {}
+
+        await execFileAsync(FFMPEG_PATH, [
+          '-i', src, '-map', '0', '-c', 'copy', '-movflags', '+faststart', '-y', dest,
+        ], { timeout: 10 * 60 * 1000 });
+
+        if (trackNames) {
+          fs.writeFileSync(dest + '.tracks.json', JSON.stringify(trackNames));
+        }
+
+        fs.unlinkSync(src);
+      } catch (remuxErr) {
+        // Remux failed — remove any partial output, keep original with session name
+        try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch {}
+        try {
+          onProgress({ phase: 'recording', stage: 'moving', label: 'Renaming file…', gameName });
+          fs.renameSync(src, path.join(recordingDir, `${gameName} Session ${dateStr} #${sessionNum}${ext}`));
+        } catch {
+          onProgress({ phase: 'error', gameName, error: `Could not process recording for ${gameName}: ${remuxErr.message}` });
+        }
+      } finally {
+        service.unmarkRemuxing(src, dest);
+        service.invalidateRecordingsCache();
+      }
+    } else {
+      onProgress({ phase: 'recording', stage: 'moving', label: 'Renaming file…', gameName });
+      fs.renameSync(src, dest);
+      service.invalidateRecordingsCache();
+    }
+  }
+
+  // Auto-clip from markers when auto-clip is enabled
+  const autoClipSettings = store.get('settings.autoClip');
+  if (autoClipSettings && autoClipSettings.enabled) {
+    await processAutoClips(store, gameName, recordingDir, onProgress);
+  } else {
+    onProgress({ phase: 'complete', gameName });
   }
 }
 
@@ -409,4 +496,4 @@ async function organizeSpecificRecording(store, filePath, gameName, opts = {}) {
   }
 }
 
-module.exports = { setupFileManager, organizeRecordings, organizeSpecificRecording };
+module.exports = { setupFileManager, organizeRecordings, organizeSpecificRecording, finalizeDirectRecording, getWeekFolder };

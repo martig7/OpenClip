@@ -90,6 +90,9 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('session:process-progress', handler);
     return () => ipcRenderer.removeListener('session:process-progress', handler);
   },
+  clearSessionProgress: () => {
+    _lastSessionProgress = null;
+  },
 
   // Clips
   getClips: () => ipcRenderer.invoke('clips:list'),

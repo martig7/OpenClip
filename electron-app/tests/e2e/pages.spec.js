@@ -16,6 +16,8 @@ test.describe('Recordings Page', () => {
     await setupApiRoutes(page);
     await page.goto('/#/recordings');
     await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
+    // Switch to name sort so items are grouped by game name
+    await page.locator('#sidebar-sort').selectOption('name-asc');
     await expect(page.locator('.group-header:has-text("Valorant")')).toBeVisible();
     await expect(page.locator('.group-header:has-text("Counter-Strike 2")')).toBeVisible();
   });
@@ -32,6 +34,8 @@ test.describe('Recordings Page', () => {
     await setupApiRoutes(page);
     await page.goto('/#/recordings');
     await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
+    // Switch to name sort so items are grouped by game name
+    await page.locator('#sidebar-sort').selectOption('name-asc');
     // Each game has 1 recording, shown as "Valorant (1)"
     await expect(page.locator('.group-header:has-text("Valorant (1)")')).toBeVisible();
     await expect(page.locator('.group-header:has-text("Counter-Strike 2 (1)")')).toBeVisible();
@@ -67,6 +71,8 @@ test.describe('Clips Page', () => {
     await setupApiRoutes(page);
     await page.goto('/#/clips');
     await expect(page.locator('.sidebar h2:has-text("Clips")')).toBeVisible({ timeout: 5000 });
+    // Switch to name sort so items are grouped by game name
+    await page.locator('#sidebar-sort').selectOption('name-asc');
     await expect(page.locator('.group-header:has-text("Valorant")')).toBeVisible();
   });
 

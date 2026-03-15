@@ -200,6 +200,11 @@ export default function AddGameModal({
           <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
             Controls how the watcher detects this game and how OBS Application Audio Capture picks its window.
           </span>
+          {(newGame.windowMatchPriority !== undefined ? newGame.windowMatchPriority : 0) === 2 && !newGame.exe && (
+            <span style={{ fontSize: 11, color: 'var(--warning)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <AlertTriangle size={11} /> No executable bound — use the window picker to set one, or the watcher won't detect this game.
+            </span>
+          )}
         </div>
         <div className="form-group">
           <label className="form-label">OBS Scene <span style={{ color: 'var(--danger)' }}>*</span></label>

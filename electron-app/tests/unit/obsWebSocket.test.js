@@ -20,6 +20,9 @@ beforeEach(async () => {
   // resetAllMocks clears implementations AND the once-queue, so leftover
   // mockResolvedValueOnce values from failing tests don't leak into the next test.
   vi.resetAllMocks()
+  // Suppress expected console noise from error-path tests (e.g. "Failed to connect to OBS")
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
   mockObsConnect.mockResolvedValue(undefined)
   mockObsDisconnect.mockResolvedValue(undefined)
   // Default behavior: return request-specific empty payloads so tests that don't

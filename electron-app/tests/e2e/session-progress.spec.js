@@ -14,7 +14,7 @@ async function injectProgressApi(page) {
     const asyncNoop = async () => null;
     const asyncArr = async () => [];
 
-    window.__sessionProgressCb = null;
+    window.__sessionProgressCbs = [];
 
     window.api = {
       // Store
@@ -74,12 +74,17 @@ async function injectProgressApi(page) {
       onOrganizeProgress: () => noop,
 
       // Session progress — mirrors preload.js replay logic for mid-session mounts
+      // Supports multiple subscribers (App.jsx + page components both subscribe).
       onSessionProgress: (cb) => {
-        window.__sessionProgressCb = cb;
+        window.__sessionProgressCbs = window.__sessionProgressCbs || [];
+        window.__sessionProgressCbs.push(cb);
         if (window.__lastSessionProgress) {
-          Promise.resolve().then(() => cb(window.__lastSessionProgress));
+          const p = window.__lastSessionProgress;
+          Promise.resolve().then(() => cb(p));
         }
-        return () => { window.__sessionProgressCb = null; };
+        return () => {
+          window.__sessionProgressCbs = (window.__sessionProgressCbs || []).filter(fn => fn !== cb);
+        };
       },
 
       // Clips
@@ -130,7 +135,7 @@ async function injectProgressApi(page) {
 async function fireProgress(page, progress) {
   await page.evaluate((p) => {
     window.__lastSessionProgress = p.phase === 'complete' ? null : p;
-    window.__sessionProgressCb?.(p);
+    (window.__sessionProgressCbs || []).forEach(cb => cb(p));
   }, progress);
 }
 

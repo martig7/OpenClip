@@ -4,7 +4,7 @@
  * Uses real ffmpeg/ffprobe binaries (from ffmpeg-static/ffprobe-static).
  * child_process is NOT mocked — execFileAsync calls actually run.
  */
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest'
 import { execFileSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
@@ -123,5 +123,78 @@ describe('organizeRecordings — real ffmpeg', () => {
       fs.readdirSync(path.join(destDir, dir)).some(f => f.endsWith('.mkv'))
     )
     expect(inObs || inDest).toBe(true)
+  })
+})
+
+describe('finalizeDirectRecording — real ffmpeg', () => {
+  let tmpDir, sessionDir, store
+
+  beforeEach(() => {
+    tmpDir     = fs.mkdtempSync(path.join(os.tmpdir(), 'openclip-finalize-'))
+    sessionDir = path.join(tmpDir, 'TestGame - Week of Jan 1 2026')
+    fs.mkdirSync(sessionDir, { recursive: true })
+    store = makeStore(path.join(tmpDir, 'obs'), tmpDir)
+  })
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  it('renames an MP4 already in the session dir to session format', async () => {
+    const src = path.join(sessionDir, '2026-01-15 14-30-00.mp4')
+    execFileSync(ffmpegPath, [
+      '-y', '-f', 'lavfi', '-i', 'testsrc=duration=1:size=32x32:rate=1',
+      '-c:v', 'libx264', '-crf', '51', '-preset', 'ultrafast', '-an', src,
+    ], { timeout: 20_000 })
+
+    const { finalizeDirectRecording } = await import('../../../electron/fileManager.js')
+    await finalizeDirectRecording(store, 'TestGame', sessionDir)
+
+    expect(fs.existsSync(src)).toBe(false)
+
+    const mp4s = fs.readdirSync(sessionDir).filter(f => f.endsWith('.mp4'))
+    expect(mp4s).toHaveLength(1)
+    expect(mp4s[0]).toMatch(/^TestGame Session \d{4}-\d{2}-\d{2} #1\.mp4$/)
+
+    const duration = probeDuration(path.join(sessionDir, mp4s[0]))
+    expect(duration).toBeGreaterThan(0)
+  })
+
+  it('remuxes an MKV already in the session dir to MP4 session format', async () => {
+    const src = path.join(sessionDir, '2026-01-15 14-30-00.mkv')
+    fs.copyFileSync(fixtureMkv, src)
+
+    const { finalizeDirectRecording } = await import('../../../electron/fileManager.js')
+    await finalizeDirectRecording(store, 'TestGame', sessionDir)
+
+    expect(fs.existsSync(src)).toBe(false)
+
+    const mp4s = fs.readdirSync(sessionDir).filter(f => f.endsWith('.mp4'))
+    expect(mp4s).toHaveLength(1)
+    expect(mp4s[0]).toMatch(/^TestGame Session \d{4}-\d{2}-\d{2} #1\.mp4$/)
+
+    const duration = probeDuration(path.join(sessionDir, mp4s[0]))
+    expect(duration).toBeGreaterThan(0)
+  })
+
+  it('skips files already in session format', async () => {
+    const alreadyOrganized = path.join(sessionDir, 'TestGame Session 2026-01-15 #1.mp4')
+    execFileSync(ffmpegPath, [
+      '-y', '-f', 'lavfi', '-i', 'testsrc=duration=1:size=32x32:rate=1',
+      '-c:v', 'libx264', '-crf', '51', '-preset', 'ultrafast', '-an', alreadyOrganized,
+    ], { timeout: 20_000 })
+
+    const { finalizeDirectRecording } = await import('../../../electron/fileManager.js')
+    await finalizeDirectRecording(store, 'TestGame', sessionDir)
+
+    expect(fs.existsSync(alreadyOrganized)).toBe(true)
+    const files = fs.readdirSync(sessionDir).filter(f => f.endsWith('.mp4'))
+    expect(files).toHaveLength(1)
+    expect(files[0]).toBe('TestGame Session 2026-01-15 #1.mp4')
+  })
+
+  it('is a no-op when the directory is empty', async () => {
+    const { finalizeDirectRecording } = await import('../../../electron/fileManager.js')
+    await expect(finalizeDirectRecording(store, 'TestGame', sessionDir)).resolves.toBeUndefined()
   })
 })

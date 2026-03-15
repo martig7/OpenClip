@@ -138,16 +138,16 @@ describe('priority 2 — exe only', () => {
     expect(detectRunningGame([game])).toBeNull()
   })
 
-  it('falls back to title/process substring when no exe is bound', () => {
+  it('returns null when no exe is bound (priority 2 requires exe)', () => {
     mockGetWindowTitles.mockReturnValue(['game window'])
     const game = makeGame({ selector: 'game window', exe: '', windowMatchPriority: 2 })
-    expect(detectRunningGame([game])).toBe(game)
+    expect(detectRunningGame([game])).toBeNull()
   })
 
-  it('falls back to process substring when no exe is bound and process matches selector', () => {
+  it('returns null when no exe is bound even if process matches selector', () => {
     mockGetRunningProcessNames.mockReturnValue(['game.exe'])
     const game = makeGame({ selector: 'game', exe: '', windowMatchPriority: 2 })
-    expect(detectRunningGame([game])).toBe(game)
+    expect(detectRunningGame([game])).toBeNull()
   })
 
   it('returns null when exe is set but not running', () => {

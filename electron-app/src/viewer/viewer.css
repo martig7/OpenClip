@@ -69,6 +69,10 @@ body {
 .search-box input { @apply w-full py-[10px] pl-10 pr-[15px] border border-[var(--border)] rounded-lg bg-[var(--bg-tertiary)] text-[var(--text-primary)] text-[0.9rem] outline-none transition-colors duration-200; }
 .search-box input:focus { border-color: var(--accent); }
 .search-box input::placeholder { color: var(--text-muted); }
+.sort-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.sort-label { font-size: 0.78rem; color: var(--text-muted); white-space: nowrap; }
+.sort-select { flex: 1; background: var(--bg-tertiary); border: 1px solid var(--border); color: var(--text-primary); font-size: 0.82rem; padding: 5px 8px; border-radius: 6px; outline: none; cursor: pointer; }
+.sort-select:focus { border-color: var(--accent); }
 .search-icon { @apply absolute left-3 top-1/2 -translate-y-1/2 text-[0.9rem] text-[var(--text-muted)]; }
 .items-list { @apply flex-1 overflow-y-auto p-[10px]; }
 .items-list::-webkit-scrollbar { width: 8px; }
@@ -343,6 +347,12 @@ body {
 .organize-progress-label { @apply flex items-center gap-[6px] text-[0.72rem] text-[var(--amber)] mb-[5px]; }
 .organize-progress-bar { background: var(--amber-muted); border: 1px solid var(--amber-border); height: 6px; }
 .organize-progress-fill { background: linear-gradient(90deg, var(--amber), var(--amber-light)); transition: width 0.5s ease; }
+.organize-error-alert { position: fixed; bottom: 20px; left: 20px; width: 300px; background: var(--bg-tertiary); border: 1px solid rgba(239,68,68,0.4); border-radius: 8px; padding: 12px 12px; z-index: 901; box-shadow: 0 4px 20px rgba(0,0,0,0.5); display: flex; align-items: flex-start; gap: 10px; color: var(--danger); }
+.organize-error-alert-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.organize-error-alert-body strong { font-size: 0.78rem; color: var(--danger); }
+.organize-error-alert-body span { font-size: 0.72rem; color: var(--text-secondary); line-height: 1.4; word-break: break-word; }
+.organize-error-alert-close { display: flex; align-items: center; justify-content: center; background: none; border: none; cursor: pointer; padding: 0; color: var(--text-muted); border-radius: 4px; width: 20px; height: 20px; flex-shrink: 0; }
+.organize-error-alert-close:hover { color: var(--text-primary); background: var(--bg-hover); }
 .session-progress-banner { position: fixed; bottom: 20px; left: 20px; width: 272px; background: var(--bg-tertiary); border: 1px solid var(--amber-border); border-radius: 8px; padding: 10px 12px; z-index: 900; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
 .session-progress-label { display: flex; align-items: center; gap: 6px; font-size: 0.72rem; color: var(--amber); margin-bottom: 6px; }
 .session-progress-bar { background: var(--amber-muted); border: 1px solid var(--amber-border); height: 6px; }

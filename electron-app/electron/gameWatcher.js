@@ -58,7 +58,10 @@ function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}) {
     const { organizeRecordings } = require('./fileManager');
     // .finally runs as a new microtask, so calling drainOrganizeQueue here is safe (no call-stack buildup).
     organizeRecordings(store, gameName, onOrganizeProgress)
-      .catch(err => log(`Organize failed: ${err.stack || err.message}`))
+      .catch(err => {
+        log(`Organize failed: ${err.stack || err.message}`);
+        onOrganizeProgress({ phase: 'error', gameName, error: err.message || 'Organize failed' });
+      })
       .finally(() => {
         organizing = false;
         drainOrganizeQueue();

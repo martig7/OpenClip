@@ -237,6 +237,8 @@ app.whenReady().then(() => {
         });
       }
       if (appState.registerHotkey) appState.registerHotkey();
+    }, (progress) => {
+      try { appState.mainWindow?.webContents.send('session:process-progress', progress); } catch {}
     });
   }
 

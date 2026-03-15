@@ -77,7 +77,7 @@ describe('ClipsPage', () => {
     await waitFor(() => screen.getByText(sampleClip.filename))
     fireEvent.click(screen.getByText(sampleClip.filename))
     await waitFor(() => expect(screen.getAllByText(sampleClip.filename).length).toBeGreaterThanOrEqual(1))
-    expect(screen.getByText(sampleClip.game_name)).toBeInTheDocument()
+    expect(screen.getAllByText(sampleClip.game_name).length).toBeGreaterThanOrEqual(1)
   })
 
   it('opens delete modal when Delete button is clicked', async () => {
@@ -136,6 +136,9 @@ describe('ClipsPage', () => {
     server.use(http.get('/api/clips', () => HttpResponse.json([sampleClip])))
     renderPage(`/clips?path=${encodeURIComponent(sampleClip.path)}`)
     await waitFor(() => expect(screen.getAllByText(sampleClip.filename).length).toBeGreaterThanOrEqual(1))
+    // Flush any re-renders triggered by setSearchParams({}) so pending fetches
+    // complete while MSW handlers are still registered, preventing afterEach warnings.
+    await act(async () => { await new Promise(r => setTimeout(r, 0)) })
   })
 
   // ── session-progress-banner tests ──────────────────────────────────────────

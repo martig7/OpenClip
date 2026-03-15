@@ -205,8 +205,9 @@ describe('Storage - Edge Cases', () => {
     cp.exec.mockImplementation((cmd, opts, cb) => {
       cb(null, '0', '')
     })
-    
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const res = await request(server).get('/api/storage/stats')
+    errorSpy.mockRestore()
     expect(res.status).toBe(200)
     expect(res.body).toHaveProperty('disk_usage')
   })

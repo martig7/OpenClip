@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Check, X } from 'lucide-react'
+import { AlertTriangle, Check, X } from 'lucide-react'
 import Sidebar from '../components/Sidebar'
 import VideoPlayer from '../components/VideoPlayer'
 import { apiFetch } from '../apiBase'
 import api from '../../api'
+import { useOrganizeError } from '../../App'
 
 function RecordingsPage() {
   const [recordings, setRecordings] = useState([])
@@ -16,6 +17,7 @@ function RecordingsPage() {
   const [organizeRemux, setOrganizeRemux] = useState(true)
   const [sessionProgress, setSessionProgress] = useState(null)
   const toastTimerRef = useRef(null)
+  const { organizeError, clearOrganizeError } = useOrganizeError()
 
   useEffect(() => {
     return () => clearTimeout(toastTimerRef.current)
@@ -82,6 +84,8 @@ function RecordingsPage() {
         fetchRecordings()
       } else if (p.phase === 'recording') {
         setSessionProgress(p)
+      } else if (p.phase === 'error') {
+        setSessionProgress(null)
       }
     })
     return () => unsub?.()
@@ -114,6 +118,19 @@ function RecordingsPage() {
         onOrganizeError={handleOrganizeError}
         organizeRemux={organizeRemux}
       />
+
+      {organizeError && (
+        <div className="organize-error-alert">
+          <AlertTriangle size={15} />
+          <div className="organize-error-alert-body">
+            <strong>Organize failed</strong>
+            <span>{organizeError}</span>
+          </div>
+          <button className="organize-error-alert-close" onClick={clearOrganizeError} title="Dismiss">
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {sessionProgress && (
         <div className="session-progress-banner">

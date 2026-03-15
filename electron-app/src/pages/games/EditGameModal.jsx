@@ -175,6 +175,11 @@ export default function EditGameModal({
           <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
             Controls how the watcher detects this game and how OBS Application Audio Capture picks its window.
           </span>
+          {(game.windowMatchPriority !== undefined ? game.windowMatchPriority : 0) === 2 && !game.exe && (
+            <span style={{ fontSize: 11, color: 'var(--warning)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <AlertTriangle size={11} /> No executable bound — use the window picker to set one, or the watcher won't detect this game.
+            </span>
+          )}
         </div>
 
         {/* Scene */}

@@ -316,8 +316,10 @@ describe('VideoPlayer — organize panel', () => {
       expect(screen.getByText(/Starting…/i)).toBeInTheDocument()
     )
 
-    // Clean up the pending promise
-    resolveOrganize({ success: true, filename: 'Minecraft Session 2026-03-11 #1.mkv' })
+    // Resolve the pending promise inside act() so React state updates are flushed cleanly
+    await act(async () => {
+      resolveOrganize({ success: true, filename: 'Minecraft Session 2026-03-11 #1.mkv' })
+    })
     vi.restoreAllMocks()
   })
 
@@ -362,7 +364,9 @@ describe('VideoPlayer — organize panel', () => {
       expect(screen.getByText(/Remuxing to MP4/i)).toBeInTheDocument()
     )
 
-    resolveOrganize({ success: true, filename: 'Minecraft Session 2026-03-11 #1.mkv' })
+    await act(async () => {
+      resolveOrganize({ success: true, filename: 'Minecraft Session 2026-03-11 #1.mkv' })
+    })
     vi.restoreAllMocks()
   })
 

@@ -142,6 +142,9 @@ describe('RecordingsPage', () => {
     )
     renderPage(`/recordings?path=${encodeURIComponent(sampleRecording.path)}`)
     await waitFor(() => document.querySelector('video'))
+    // Flush VideoPlayer's async track fetch so it completes while MSW handlers
+    // are still registered, preventing afterEach teardown warnings.
+    await act(async () => { await new Promise(r => setTimeout(r, 0)) })
   })
 
   // ── session-progress-banner tests ──────────────────────────────────────────

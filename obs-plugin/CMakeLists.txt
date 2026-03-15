@@ -78,6 +78,12 @@ add_library(openclip-obs MODULE
   src/plugin-main.c
   src/http-server.c
   src/api-handlers.c
+  src/api-utils.c
+  src/recording-handlers.c
+  src/scene-handlers.c
+  src/source-handlers.c
+  src/audio-handlers.c
+  src/video-handlers.c
 )
 
 add_dependencies(openclip-obs obs_import_libs)

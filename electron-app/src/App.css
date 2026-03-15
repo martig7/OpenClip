@@ -38,6 +38,27 @@
 }
 .update-banner span { @apply flex-1 whitespace-nowrap overflow-hidden text-ellipsis; }
 
+/* Organize Error Sidebar Banner */
+.organize-error-banner {
+  @apply flex items-center gap-[7px] px-3 py-[9px] border-t border-[var(--border)]
+    text-xs text-[var(--danger)];
+  background: rgba(239,68,68,0.08);
+}
+.organize-error-banner span { @apply flex-1 leading-snug; }
+.organize-error-close {
+  @apply flex items-center justify-center shrink-0 w-5 h-5 rounded
+    text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)];
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+/* Nav error badge */
+.nav-error-badge {
+  @apply ml-auto flex items-center text-[var(--danger)];
+}
+
 /* Sidebar Navigation */
 .sidebar-nav {
   @apply w-[200px] min-w-[200px] bg-[var(--bg-secondary)] border-r border-[var(--border)]
