@@ -6,6 +6,9 @@ import Sidebar from '../../src/viewer/components/Sidebar.jsx'
 
 // Fixed timestamp: 2025-01-15 12:00:00 UTC (avoids flaky bucket assignments at day boundaries)
 const NOW = 1736942400
+
+beforeAll(() => { vi.useFakeTimers({ now: NOW * 1000 }) })
+afterAll(() => { vi.useRealTimers() })
 const HOUR = 3600
 const DAY  = 86_400
 

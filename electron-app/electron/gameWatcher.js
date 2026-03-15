@@ -38,7 +38,7 @@ function detectRunningGame(games) {
       // Default (priority 0): title match only.
       // If no exe binding exists also check process names as a convenience (manual selectors).
       if (titleStr && titles.some(t => t.includes(titleStr))) return game;
-      if (!exeName && titleStr && processes.some(p => p === titleStr)) return game;
+      if (!exeName && titleStr && processes.some(p => p.includes(titleStr))) return game;
     }
   }
 

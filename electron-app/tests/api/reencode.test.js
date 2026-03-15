@@ -29,12 +29,12 @@ beforeAll(async () => {
   await new Promise(resolve => server.on('listening', resolve))
 })
 
-afterAll((done) => {
+afterAll(() => new Promise(resolve => {
   server.close(() => {
     fs.rmSync(tmpDir, { recursive: true, force: true })
-    done()
+    resolve()
   })
-})
+}))
 
 beforeEach(() => {
   vi.clearAllMocks()
