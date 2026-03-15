@@ -491,8 +491,8 @@ export function StepWatcherAutostart({ settings, onChange }) {
 
 export const STEP_TITLES = [
   'Welcome',
-  'OBS Recordings',
   'OBS Install',
+  'OBS Recordings',
   'OBS Plugin',
   'Recordings Dest.',
 ];
