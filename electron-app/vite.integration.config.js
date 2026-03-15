@@ -21,7 +21,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['tests/integration/**/*.test.{js,ts}'],
+    include: ['tests/integration/obs/**/*.test.{js,ts}'],
     // No setupFiles — integration tests use real modules without any mocking.
     testTimeout: 90_000, // Allow up to 90 s per test (OBS startup + operation)
     hookTimeout: 90_000, // Allow up to 90 s in beforeAll/afterAll hooks

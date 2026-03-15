@@ -80,6 +80,10 @@ jobs:
         working-directory: electron-app
         run: npx playwright install --with-deps chromium
 
+      - name: Run ffmpeg integration tests
+        working-directory: electron-app
+        run: npm run test:ffmpeg -- --reporter=verbose
+
       - name: Run OBS Vitest integration tests
         working-directory: electron-app
         run: npm run test:integration -- --reporter=verbose
