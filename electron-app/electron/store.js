@@ -28,7 +28,7 @@ const managerSettingsDefaults = {
   locked_recordings: [],
   clip_hotkey: 'F9',
   auto_clip_settings: {
-    enabled: false, buffer_before_seconds: 15, buffer_after_seconds: 15,
+    enabled: false, buffer_before_seconds: 30, buffer_after_seconds: 5,
     remove_processed_markers: true, delete_recording_after_clips: false,
   },
   obs_websocket: { host: 'localhost', port: 4455, password: '' },
@@ -59,8 +59,8 @@ function msToElectronSettings(ms, obsRecordingPath, electronData) {
     listView: electronData?.listView !== false,
     autoClip: {
       enabled: ms.auto_clip_settings?.enabled || false,
-      bufferBefore: ms.auto_clip_settings?.buffer_before_seconds ?? 15,
-      bufferAfter: ms.auto_clip_settings?.buffer_after_seconds ?? 15,
+      bufferBefore: ms.auto_clip_settings?.buffer_before_seconds ?? 30,
+      bufferAfter: ms.auto_clip_settings?.buffer_after_seconds ?? 5,
       removeMarkers: ms.auto_clip_settings?.remove_processed_markers !== false,
       deleteFullRecording: ms.auto_clip_settings?.delete_recording_after_clips || false,
     },
@@ -88,8 +88,8 @@ function electronSettingsToMs(ms, electronSettings) {
     updated.auto_clip_settings = {
       ...(ms.auto_clip_settings || {}),
       enabled: electronSettings.autoClip.enabled || false,
-      buffer_before_seconds: electronSettings.autoClip.bufferBefore ?? 15,
-      buffer_after_seconds: electronSettings.autoClip.bufferAfter ?? 15,
+      buffer_before_seconds: electronSettings.autoClip.bufferBefore ?? 30,
+      buffer_after_seconds: electronSettings.autoClip.bufferAfter ?? 5,
       remove_processed_markers: electronSettings.autoClip.removeMarkers !== false,
       delete_recording_after_clips: electronSettings.autoClip.deleteFullRecording || false,
     };

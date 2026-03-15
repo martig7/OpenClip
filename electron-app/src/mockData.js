@@ -6,8 +6,8 @@ export const defaultSettings = {
   listView: true,
   autoClip: {
     enabled: false,
-    bufferBefore: 15,
-    bufferAfter: 15,
+    bufferBefore: 30,
+    bufferAfter: 5,
     removeMarkers: true,
     deleteFullRecording: false,
   },
