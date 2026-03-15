@@ -14,6 +14,7 @@ function RecordingsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [games, setGames] = useState([])
   const [organizeRemux, setOrganizeRemux] = useState(true)
+  const [sessionProgress, setSessionProgress] = useState(null)
   const toastTimerRef = useRef(null)
 
   useEffect(() => {
@@ -74,6 +75,18 @@ function RecordingsPage() {
     toastTimerRef.current = setTimeout(() => setToast(null), 5000)
   }, [])
 
+  useEffect(() => {
+    const unsub = api.onSessionProgress?.((p) => {
+      if (p.phase === 'complete') {
+        setSessionProgress(null)
+        fetchRecordings()
+      } else if (p.phase === 'recording') {
+        setSessionProgress(p)
+      }
+    })
+    return () => unsub?.()
+  }, [fetchRecordings])
+
   if (loading) {
     return (
       <div className="page-content">
@@ -101,6 +114,21 @@ function RecordingsPage() {
         onOrganizeError={handleOrganizeError}
         organizeRemux={organizeRemux}
       />
+
+      {sessionProgress && (
+        <div className="session-progress-banner">
+          <div className="session-progress-label">
+            <div className="spinner-sm" style={{ borderColor: 'rgba(245,158,11,0.25)', borderTopColor: 'var(--amber)' }} />
+            {sessionProgress.label}
+          </div>
+          <div className="progress-bar-container session-progress-bar">
+            <div
+              className="progress-bar-fill session-progress-fill"
+              style={{ width: `${sessionProgress.stage === 'remuxing' ? 65 : sessionProgress.stage === 'moving' ? 90 : 20}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {toast && (
         <div className={`toast ${toast.type}`}>

@@ -247,6 +247,121 @@ describe('organizeRecordings', () => {
     await organizeRecordings(store, 'MyGame')
   })
 
+  // ── onProgress callback tests ─────────────────────────────────────────────
+
+  it('calls onProgress with checking then moving for a fresh MP4', async () => {
+    const { organizeRecordings } = await import('../../electron/fileManager.js')
+    const src = path.join(obsDir, 'video.mp4')
+    fs.writeFileSync(src, Buffer.alloc(1024))
+
+    const events = []
+    await organizeRecordings(store, 'MyGame', (p) => events.push(p))
+
+    const phases = events.map(e => e.stage ?? e.phase)
+    expect(phases).toContain('checking')
+    expect(phases).toContain('moving')
+    expect(events.some(e => e.phase === 'complete')).toBe(true)
+    // checking must appear before moving
+    const checkIdx = events.findIndex(e => e.stage === 'checking')
+    const moveIdx = events.findIndex(e => e.stage === 'moving')
+    expect(checkIdx).toBeLessThan(moveIdx)
+  })
+
+  it('calls onProgress with checking then remuxing for a fresh MKV', async () => {
+    const { organizeRecordings } = await import('../../electron/fileManager.js')
+    const src = path.join(obsDir, 'video.mkv')
+    fs.writeFileSync(src, Buffer.alloc(1024))
+
+    cp.execFile.mockImplementation((bin, args, opts, callback) => {
+      if (args.includes('-show_streams')) {
+        callback(null, { stdout: '{"streams":[]}', stderr: '' })
+      } else {
+        const outPath = args[args.length - 1]
+        fs.writeFileSync(outPath, Buffer.alloc(512))
+        callback(null, { stdout: '', stderr: '' })
+      }
+    })
+
+    const events = []
+    await organizeRecordings(store, 'MyGame', (p) => events.push(p))
+
+    expect(events.some(e => e.stage === 'checking')).toBe(true)
+    expect(events.some(e => e.stage === 'remuxing')).toBe(true)
+    expect(events.some(e => e.phase === 'complete')).toBe(true)
+    // checking must appear before remuxing
+    const checkIdx = events.findIndex(e => e.stage === 'checking')
+    const remuxIdx = events.findIndex(e => e.stage === 'remuxing')
+    expect(checkIdx).toBeLessThan(remuxIdx)
+  })
+
+  it('all onProgress events carry the correct gameName', async () => {
+    const { organizeRecordings } = await import('../../electron/fileManager.js')
+    const src = path.join(obsDir, 'video.mp4')
+    fs.writeFileSync(src, Buffer.alloc(1024))
+
+    const events = []
+    await organizeRecordings(store, 'SpecificGame', (p) => events.push(p))
+
+    expect(events.length).toBeGreaterThan(0)
+    expect(events.every(e => e.gameName === 'SpecificGame')).toBe(true)
+  })
+
+  it('emits complete even when no files are found in obsDir', async () => {
+    const { organizeRecordings } = await import('../../electron/fileManager.js')
+    // obsDir is empty — no video files to process
+
+    const events = []
+    await organizeRecordings(store, 'MyGame', (p) => events.push(p))
+
+    // Still emits complete even with nothing to organize
+    expect(events.some(e => e.phase === 'complete')).toBe(true)
+  })
+
+  it('emits clipping events and complete when autoClip is enabled with markers', async () => {
+    store._data.settings.autoClip = {
+      enabled: true,
+      bufferBefore: 5,
+      bufferAfter: 5,
+      removeMarkers: false,
+      deleteFullRecording: false,
+    }
+
+    const recordingMtime = Date.now() / 1000
+    const duration = 60
+    const recordingStartUnix = recordingMtime - duration
+    store._data.clipMarkers = [
+      { game: 'MyGame', timestamp: recordingStartUnix + 20 },
+      { game: 'MyGame', timestamp: recordingStartUnix + 40 },
+    ]
+
+    const { organizeRecordings } = await import('../../electron/fileManager.js')
+    const src = path.join(obsDir, 'video.mp4')
+    fs.writeFileSync(src, Buffer.alloc(1024))
+
+    cp.execFile.mockImplementation((bin, args, opts, callback) => {
+      if (args.includes('-show_entries')) {
+        callback(null, { stdout: `${duration}\n`, stderr: '' })
+      } else {
+        const outPath = args[args.length - 2]
+        fs.writeFileSync(outPath, Buffer.alloc(256))
+        callback(null, { stdout: '', stderr: '' })
+      }
+    })
+
+    const events = []
+    await organizeRecordings(store, 'MyGame', (p) => events.push(p))
+
+    const clippingEvents = events.filter(e => e.phase === 'clipping')
+    expect(clippingEvents.length).toBe(2)
+    expect(clippingEvents[0].clipIndex).toBe(1)
+    expect(clippingEvents[0].clipTotal).toBe(2)
+    expect(clippingEvents[1].clipIndex).toBe(2)
+    // complete fires after clipping
+    const completeIdx = events.findIndex(e => e.phase === 'complete')
+    const lastClipIdx = events.map((e, i) => ({ e, i })).filter(({ e }) => e.phase === 'clipping').pop().i
+    expect(completeIdx).toBeGreaterThan(lastClipIdx)
+  })
+
   it('processAutoClips uses execFileAsync (not execSync) to extract clips', async () => {
     const autoClip = {
       enabled: true,

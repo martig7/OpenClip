@@ -47,7 +47,7 @@ function getWeekFolder(date) {
   return `Week of ${months[monday.getMonth()]} ${monday.getDate()} ${monday.getFullYear()}`;
 }
 
-async function organizeRecordings(store, gameName) {
+async function organizeRecordings(store, gameName, onProgress = () => {}) {
   const obsPath = store.get('settings.obsRecordingPath');
   const destPath = store.get('settings.destinationPath');
   if (!obsPath || !destPath || !fs.existsSync(obsPath)) return;
@@ -63,6 +63,8 @@ async function organizeRecordings(store, gameName) {
     const stat = fs.statSync(src);
     // Only process files modified in the last 10 minutes
     if (now - stat.mtime > 10 * 60 * 1000) continue;
+
+    onProgress({ phase: 'recording', stage: 'checking', label: 'Verifying recording…', gameName });
 
     // Wait for file to stabilize — OBS may still be writing/finalizing
     await new Promise(r => setTimeout(r, 2000));
@@ -83,6 +85,7 @@ async function organizeRecordings(store, gameName) {
     const dest = path.join(targetDir, newName);
 
     if (ext.toLowerCase() !== '.mp4') {
+      onProgress({ phase: 'recording', stage: 'remuxing', label: 'Remuxing to MP4…', gameName });
       // Mark both paths as in-progress so scans skip them during remux
       service.markRemuxing(src, dest);
       try {
@@ -112,6 +115,7 @@ async function organizeRecordings(store, gameName) {
         try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch {}
         // Fallback: just move the file
         try {
+          onProgress({ phase: 'recording', stage: 'moving', label: 'Moving file…', gameName });
           fs.renameSync(src, path.join(targetDir, `${gameName} Session ${dateStr} #${sessionNum}${ext}`));
         } catch {}
       } finally {
@@ -119,6 +123,7 @@ async function organizeRecordings(store, gameName) {
         service.invalidateRecordingsCache();
       }
     } else {
+      onProgress({ phase: 'recording', stage: 'moving', label: 'Moving file…', gameName });
       fs.renameSync(src, dest);
       service.invalidateRecordingsCache();
     }
@@ -127,7 +132,9 @@ async function organizeRecordings(store, gameName) {
   // Auto-clip from markers when auto-clip is enabled
   const autoClipSettings = store.get('settings.autoClip');
   if (autoClipSettings && autoClipSettings.enabled) {
-    await processAutoClips(store, gameName, targetDir);
+    await processAutoClips(store, gameName, targetDir, onProgress);
+  } else {
+    onProgress({ phase: 'complete', gameName });
   }
 }
 
@@ -145,9 +152,12 @@ async function getVideoDuration(filePath) {
   }
 }
 
-async function processAutoClips(store, gameName, recordingDir) {
+async function processAutoClips(store, gameName, recordingDir, onProgress = () => {}) {
   const markers = (store.get('clipMarkers') || []).filter(m => m.game === gameName);
-  if (markers.length === 0) return;
+  if (markers.length === 0) {
+    onProgress({ phase: 'complete', gameName });
+    return;
+  }
 
   const destPath = store.get('settings.destinationPath');
   const clipsDir = path.join(destPath, 'Clips');
@@ -185,10 +195,16 @@ async function processAutoClips(store, gameName, recordingDir) {
   const dateStr = new Date().toISOString().slice(0, 10);
   let clipNum = service.countClipsForDate(clipsDir, gameName, dateStr) + 1;
 
+  const clipTotal = markers.length;
+  let clipIndex = 0;
+
   for (const marker of markers) {
     // Convert absolute Unix timestamp to position within the video
     const videoPosition = marker.timestamp - recordingStartUnix;
     if (videoPosition < 0 || videoPosition > duration) continue; // marker outside this recording
+
+    clipIndex++;
+    onProgress({ phase: 'clipping', stage: 'clipping', label: `Creating clip ${clipIndex} of ${clipTotal}…`, gameName, clipIndex, clipTotal });
 
     const start = Math.max(0, videoPosition - bufferBefore);
     const clipDuration = bufferBefore + bufferAfter;
@@ -210,6 +226,8 @@ async function processAutoClips(store, gameName, recordingDir) {
       // Skip failed clips
     }
   }
+
+  onProgress({ phase: 'complete', gameName });
 
   if (autoClip.removeMarkers) {
     const remaining = (store.get('clipMarkers') || []).filter(m => m.game !== gameName);

@@ -90,6 +90,7 @@ const mockApi = {
   deleteMarker: asyncArr,
   onMarkerAdded: () => noop,
   onOrganizeProgress: () => noop,
+  onSessionProgress: () => noop,
   getStorageStats: async () => mockStorageStats,
   registerHotkey: asyncNoop,
   reencodeVideo: asyncNoop,

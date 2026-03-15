@@ -28,12 +28,8 @@ function detectRunningGame(games) {
     //   2 — Match executable                                 → exe only
     if (priority === 2) {
       // Exe-only: exact process name match (same logic OBS uses for "match executable").
-      // Requires game.exe to be set; if it isn't, fall through to title/process substring check.
+      // Requires game.exe to be set; if not set, this game is skipped.
       if (exeName && processes.some(p => p === exeName)) return game;
-      if (!exeName && titleStr) {
-        // No exe binding — fall back to treating selector as a process/title substring.
-        if (processes.some(p => p.includes(titleStr)) || titles.some(t => t.includes(titleStr))) return game;
-      }
     } else if (priority === 1) {
       // Title first, exe fallback (OBS priority 1).
       if (titleStr && titles.some(t => t.includes(titleStr))) return game;
@@ -49,7 +45,7 @@ function detectRunningGame(games) {
   return null;
 }
 
-function setupGameWatcher(store, onStateChange) {
+function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}) {
   let lastGame = null;
   let stopped = false;
   const organizeQueue = [];
@@ -61,7 +57,7 @@ function setupGameWatcher(store, onStateChange) {
     const gameName = organizeQueue.shift();
     const { organizeRecordings } = require('./fileManager');
     // .finally runs as a new microtask, so calling drainOrganizeQueue here is safe (no call-stack buildup).
-    organizeRecordings(store, gameName)
+    organizeRecordings(store, gameName, onOrganizeProgress)
       .catch(err => log(`Organize failed: ${err.stack || err.message}`))
       .finally(() => {
         organizing = false;

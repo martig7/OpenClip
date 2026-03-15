@@ -387,6 +387,8 @@ function registerIpcHandlers(store, appState) {
       appState.currentGame = state.currentGame;
       pushWatcherStatus();
       registerHotkey();
+    }, (progress) => {
+      try { appState.mainWindow?.webContents.send('session:process-progress', progress); } catch {}
     });
     pushWatcherStatus();
     return { running: true };

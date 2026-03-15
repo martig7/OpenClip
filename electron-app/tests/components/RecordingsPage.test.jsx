@@ -7,6 +7,7 @@ import { http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
 import { sampleRecording, sampleAudioTracks } from '../fixtures/data.js'
 import RecordingsPage from '../../src/viewer/pages/RecordingsPage.jsx'
+import api from '../../src/api.js'
 
 vi.mock('../../src/viewer/apiBase.js', () => ({
   apiFetch: (path, opts) => fetch(path, opts),
@@ -141,5 +142,127 @@ describe('RecordingsPage', () => {
     )
     renderPage(`/recordings?path=${encodeURIComponent(sampleRecording.path)}`)
     await waitFor(() => document.querySelector('video'))
+  })
+
+  // ── session-progress-banner tests ──────────────────────────────────────────
+
+  it('shows session-progress-banner when a recording-phase progress event fires', async () => {
+    server.use(http.get('/api/recordings', () => HttpResponse.json([])))
+
+    let capturedProgressCb
+    vi.spyOn(api, 'onSessionProgress').mockImplementation(cb => {
+      capturedProgressCb = cb
+      return () => {}
+    })
+
+    renderPage()
+    await waitFor(() => expect(document.querySelector('.spinner')).not.toBeInTheDocument())
+
+    await act(async () => {
+      capturedProgressCb?.({ phase: 'recording', stage: 'checking', label: 'Verifying recording…', gameName: 'Halo' })
+    })
+
+    expect(document.querySelector('.session-progress-banner')).toBeInTheDocument()
+    expect(screen.getByText('Verifying recording…')).toBeInTheDocument()
+
+    vi.restoreAllMocks()
+  })
+
+  it('does not show session-progress-banner for clipping-phase events', async () => {
+    server.use(http.get('/api/recordings', () => HttpResponse.json([])))
+
+    let capturedProgressCb
+    vi.spyOn(api, 'onSessionProgress').mockImplementation(cb => {
+      capturedProgressCb = cb
+      return () => {}
+    })
+
+    renderPage()
+    await waitFor(() => expect(document.querySelector('.spinner')).not.toBeInTheDocument())
+
+    await act(async () => {
+      capturedProgressCb?.({ phase: 'clipping', stage: 'clipping', label: 'Creating clip 1 of 2…', gameName: 'Halo', clipIndex: 1, clipTotal: 2 })
+    })
+
+    expect(document.querySelector('.session-progress-banner')).not.toBeInTheDocument()
+
+    vi.restoreAllMocks()
+  })
+
+  it('hides session-progress-banner and refreshes list on complete event', async () => {
+    let fetchCount = 0
+    server.use(http.get('/api/recordings', () => {
+      fetchCount++
+      return HttpResponse.json([])
+    }))
+
+    let capturedProgressCb
+    vi.spyOn(api, 'onSessionProgress').mockImplementation(cb => {
+      capturedProgressCb = cb
+      return () => {}
+    })
+
+    renderPage()
+    await waitFor(() => expect(document.querySelector('.spinner')).not.toBeInTheDocument())
+    const fetchCountAfterMount = fetchCount
+
+    // Show the banner
+    await act(async () => {
+      capturedProgressCb?.({ phase: 'recording', stage: 'remuxing', label: 'Remuxing to MP4…', gameName: 'Halo' })
+    })
+    expect(document.querySelector('.session-progress-banner')).toBeInTheDocument()
+
+    // Fire complete
+    await act(async () => {
+      capturedProgressCb?.({ phase: 'complete', gameName: 'Halo' })
+    })
+
+    await waitFor(() => expect(document.querySelector('.session-progress-banner')).not.toBeInTheDocument())
+    expect(fetchCount).toBeGreaterThan(fetchCountAfterMount)
+
+    vi.restoreAllMocks()
+  })
+
+  it('shows banner when component mounts mid-session (replay on subscribe)', async () => {
+    server.use(http.get('/api/recordings', () => HttpResponse.json([])))
+
+    // Simulate preload.js replay: onSessionProgress immediately fires cb with last known state
+    vi.spyOn(api, 'onSessionProgress').mockImplementation(cb => {
+      Promise.resolve().then(() =>
+        cb({ phase: 'recording', stage: 'remuxing', label: 'Remuxing to MP4…', gameName: 'Halo' })
+      )
+      return () => {}
+    })
+
+    renderPage()
+    await waitFor(() => expect(document.querySelector('.spinner')).not.toBeInTheDocument())
+
+    await waitFor(() => expect(document.querySelector('.session-progress-banner')).toBeInTheDocument())
+    expect(screen.getByText('Remuxing to MP4…')).toBeInTheDocument()
+
+    vi.restoreAllMocks()
+  })
+
+  it('progress bar width is 65% when stage is remuxing', async () => {
+    server.use(http.get('/api/recordings', () => HttpResponse.json([])))
+
+    let capturedProgressCb
+    vi.spyOn(api, 'onSessionProgress').mockImplementation(cb => {
+      capturedProgressCb = cb
+      return () => {}
+    })
+
+    renderPage()
+    await waitFor(() => expect(document.querySelector('.spinner')).not.toBeInTheDocument())
+
+    await act(async () => {
+      capturedProgressCb?.({ phase: 'recording', stage: 'remuxing', label: 'Remuxing to MP4…', gameName: 'Halo' })
+    })
+
+    const fill = document.querySelector('.session-progress-fill')
+    expect(fill).toBeInTheDocument()
+    expect(fill.style.width).toBe('65%')
+
+    vi.restoreAllMocks()
   })
 })

@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from 'vitest'
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
 import { sampleClip } from '../fixtures/data.js'
 import ClipsPage from '../../src/viewer/pages/ClipsPage.jsx'
+import api from '../../src/api.js'
 
 // Mock apiBase so it resolves immediately with relative paths (no Electron port lookup)
 vi.mock('../../src/viewer/apiBase.js', () => ({
@@ -135,5 +136,133 @@ describe('ClipsPage', () => {
     server.use(http.get('/api/clips', () => HttpResponse.json([sampleClip])))
     renderPage(`/clips?path=${encodeURIComponent(sampleClip.path)}`)
     await waitFor(() => expect(screen.getAllByText(sampleClip.filename).length).toBeGreaterThanOrEqual(1))
+  })
+
+  // ── session-progress-banner tests ──────────────────────────────────────────
+
+  it('shows session-progress-banner for recording-phase events', async () => {
+    server.use(http.get('/api/clips', () => HttpResponse.json([])))
+
+    let capturedProgressCb
+    vi.spyOn(api, 'onSessionProgress').mockImplementation(cb => {
+      capturedProgressCb = cb
+      return () => {}
+    })
+
+    renderPage()
+    await waitFor(() => expect(document.querySelector('.spinner')).not.toBeInTheDocument())
+
+    await act(async () => {
+      capturedProgressCb?.({ phase: 'recording', stage: 'checking', label: 'Verifying recording…', gameName: 'Halo' })
+    })
+
+    expect(document.querySelector('.session-progress-banner')).toBeInTheDocument()
+    expect(screen.getByText(/Processing session/i)).toBeInTheDocument()
+
+    vi.restoreAllMocks()
+  })
+
+  it('shows session-progress-banner for clipping-phase events', async () => {
+    server.use(http.get('/api/clips', () => HttpResponse.json([])))
+
+    let capturedProgressCb
+    vi.spyOn(api, 'onSessionProgress').mockImplementation(cb => {
+      capturedProgressCb = cb
+      return () => {}
+    })
+
+    renderPage()
+    await waitFor(() => expect(document.querySelector('.spinner')).not.toBeInTheDocument())
+
+    await act(async () => {
+      capturedProgressCb?.({ phase: 'clipping', stage: 'clipping', label: 'Creating clip 1 of 3…', gameName: 'Halo', clipIndex: 1, clipTotal: 3 })
+    })
+
+    expect(document.querySelector('.session-progress-banner')).toBeInTheDocument()
+    expect(screen.getByText('Creating clip 1 of 3…')).toBeInTheDocument()
+
+    vi.restoreAllMocks()
+  })
+
+  it('hides session-progress-banner and refreshes clips list on complete event', async () => {
+    let fetchCount = 0
+    server.use(http.get('/api/clips', () => {
+      fetchCount++
+      return HttpResponse.json([])
+    }))
+
+    let capturedProgressCb
+    vi.spyOn(api, 'onSessionProgress').mockImplementation(cb => {
+      capturedProgressCb = cb
+      return () => {}
+    })
+
+    renderPage()
+    await waitFor(() => expect(document.querySelector('.spinner')).not.toBeInTheDocument())
+    const fetchCountAfterMount = fetchCount
+
+    // Show the banner
+    await act(async () => {
+      capturedProgressCb?.({ phase: 'clipping', stage: 'clipping', label: 'Creating clip 1 of 1…', gameName: 'Halo', clipIndex: 1, clipTotal: 1 })
+    })
+    expect(document.querySelector('.session-progress-banner')).toBeInTheDocument()
+
+    // Fire complete
+    await act(async () => {
+      capturedProgressCb?.({ phase: 'complete', gameName: 'Halo' })
+    })
+
+    await waitFor(() => expect(document.querySelector('.session-progress-banner')).not.toBeInTheDocument())
+    expect(fetchCount).toBeGreaterThan(fetchCountAfterMount)
+
+    vi.restoreAllMocks()
+  })
+
+  it('shows banner when component mounts mid-session (replay on subscribe)', async () => {
+    server.use(http.get('/api/clips', () => HttpResponse.json([])))
+
+    vi.spyOn(api, 'onSessionProgress').mockImplementation(cb => {
+      Promise.resolve().then(() =>
+        cb({ phase: 'clipping', stage: 'clipping', label: 'Creating clip 2 of 4…', gameName: 'Halo', clipIndex: 2, clipTotal: 4 })
+      )
+      return () => {}
+    })
+
+    renderPage()
+    await waitFor(() => expect(document.querySelector('.spinner')).not.toBeInTheDocument())
+
+    await waitFor(() => expect(document.querySelector('.session-progress-banner')).toBeInTheDocument())
+    expect(screen.getByText('Creating clip 2 of 4…')).toBeInTheDocument()
+
+    vi.restoreAllMocks()
+  })
+
+  it('progress bar width is higher for clipping phase than for recording checking phase', async () => {
+    server.use(http.get('/api/clips', () => HttpResponse.json([])))
+
+    let capturedProgressCb
+    vi.spyOn(api, 'onSessionProgress').mockImplementation(cb => {
+      capturedProgressCb = cb
+      return () => {}
+    })
+
+    renderPage()
+    await waitFor(() => expect(document.querySelector('.spinner')).not.toBeInTheDocument())
+
+    // Set recording-checking stage
+    await act(async () => {
+      capturedProgressCb?.({ phase: 'recording', stage: 'checking', label: 'Verifying recording…', gameName: 'Halo' })
+    })
+    const checkingWidth = parseFloat(document.querySelector('.session-progress-fill').style.width)
+
+    // Advance to clipping phase
+    await act(async () => {
+      capturedProgressCb?.({ phase: 'clipping', stage: 'clipping', label: 'Creating clip 1 of 1…', gameName: 'Halo', clipIndex: 1, clipTotal: 1 })
+    })
+    const clippingWidth = parseFloat(document.querySelector('.session-progress-fill').style.width)
+
+    expect(clippingWidth).toBeGreaterThan(checkingWidth)
+
+    vi.restoreAllMocks()
   })
 })
