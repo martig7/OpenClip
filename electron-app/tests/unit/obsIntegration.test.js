@@ -124,4 +124,45 @@ describe('readOBSRecordingPath', () => {
     // Should not return the nonexistent path
     expect(readOBSRecordingPath()).toBeNull()
   })
+
+  it('picks a valid profile when multiple profiles exist', async () => {
+    const profilesDir = path.join(tmpDir, 'obs-studio', 'basic', 'profiles')
+    const p1 = path.join(profilesDir, 'First')
+    const p2 = path.join(profilesDir, 'Second')
+    fs.mkdirSync(p1, { recursive: true })
+    fs.mkdirSync(p2, { recursive: true })
+
+    const recPath1 = path.join(tmpDir, 'FirstRec')
+    const recPath2 = path.join(tmpDir, 'SecondRec')
+    fs.mkdirSync(recPath1, { recursive: true })
+    fs.mkdirSync(recPath2, { recursive: true })
+
+    fs.writeFileSync(
+      path.join(p1, 'basic.ini'),
+      `[SimpleOutput]\nFilePath=${recPath1}\n`
+    )
+    fs.writeFileSync(
+      path.join(p2, 'basic.ini'),
+      `[SimpleOutput]\nFilePath=${recPath2}\n`
+    )
+
+    vi.stubEnv('APPDATA', tmpDir)
+    const { readOBSRecordingPath } = await getModule()
+    expect([recPath1, recPath2]).toContain(readOBSRecordingPath())
+  })
+
+  it('returns null when basic.ini contains corrupted/binary content', async () => {
+    const profilesDir = path.join(tmpDir, 'obs-studio', 'basic', 'profiles', 'Default')
+    fs.mkdirSync(profilesDir, { recursive: true })
+
+    // Write binary garbage that is not valid INI
+    const garbage = Buffer.from([0x00, 0xFF, 0xFE, 0x80, 0x90, 0xAB, 0xCD, 0xEF])
+    fs.writeFileSync(path.join(profilesDir, 'basic.ini'), garbage)
+
+    vi.stubEnv('APPDATA', tmpDir)
+    vi.stubEnv('USERPROFILE', tmpDir)
+    const { readOBSRecordingPath } = await getModule()
+    // INI parser silently ignores unrecognisable lines; no FilePath is found so null is returned
+    expect(readOBSRecordingPath()).toBeNull()
+  })
 })

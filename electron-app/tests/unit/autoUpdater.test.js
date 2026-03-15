@@ -46,6 +46,7 @@ describe('setupAutoUpdater', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it('sets autoDownload to true', () => {
@@ -81,6 +82,7 @@ describe('setupAutoUpdater', () => {
   });
 
   it('swallows checkForUpdates errors gracefully', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     mockAutoUpdater.checkForUpdates.mockImplementation(() => {
       throw new Error('network error');
     });
@@ -89,6 +91,7 @@ describe('setupAutoUpdater', () => {
   });
 
   it('swallows async checkForUpdates rejections gracefully', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     mockAutoUpdater.checkForUpdates.mockRejectedValue(new Error('network error'));
     setupAutoUpdater(() => win);
     expect(() => vi.advanceTimersByTime(5000)).not.toThrow();
@@ -200,7 +203,7 @@ describe('registerUpdateHandlers', () => {
   let electronApp;
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     // Simulate packaged (production) environment so the prod code paths run.
     electronApp = _req('electron').app;
     electronApp.isPackaged = true;
@@ -229,6 +232,7 @@ describe('registerUpdateHandlers', () => {
   });
 
   it('update:check swallows checkForUpdates errors', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     mockAutoUpdater.checkForUpdates.mockImplementation(() => {
       throw new Error('offline');
     });
@@ -236,6 +240,7 @@ describe('registerUpdateHandlers', () => {
   });
 
   it('update:check swallows rejected checkForUpdates promise', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     mockAutoUpdater.checkForUpdates.mockImplementation(() => {
       return Promise.reject(new Error('offline'));
     });

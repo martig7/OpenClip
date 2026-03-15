@@ -6,7 +6,7 @@
 /static/
 
 # Python cache
-/__pycache__/
+__pycache__/
 
 # User configuration (may contain personal paths)
 manager_settings.json
@@ -43,3 +43,7 @@ obs-plugin/tools/cmake
 obs-plugin/build/
 
 .vscode/
+playwright-report/
+playwright-report-integration/
+test-results/
+coverage/

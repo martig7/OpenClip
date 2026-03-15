@@ -16,7 +16,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
-import { isOBSAvailable, startOBS, findFreePort } from './obsHelper.js';
+import { isOBSAvailable, startOBS, findFreePort } from './obsHelper.mjs';
 import {
   getOBSScenes,
   createSceneFromTemplate,

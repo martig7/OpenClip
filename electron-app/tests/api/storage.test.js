@@ -36,8 +36,8 @@ beforeAll(async () => {
   await new Promise(resolve => server.on('listening', resolve))
 })
 
-afterAll((done) => {
-  server.close(done)
+afterAll(async () => {
+  await new Promise(resolve => server.close(resolve))
   fs.rmSync(tmpDir, { recursive: true, force: true })
 })
 
@@ -196,5 +196,57 @@ describe('POST /api/storage/delete-batch', () => {
       .send({ paths: [fp] })
     expect(res.status).toBe(200)
     expect(res.body.failed_count).toBe(1)
+  })
+})
+
+describe('Storage - Edge Cases', () => {
+  it('stats with zero disk usage reports correctly', async () => {
+    const cp = await import('child_process')
+    cp.exec.mockImplementation((cmd, opts, cb) => {
+      cb(null, '0', '')
+    })
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const res = await request(server).get('/api/storage/stats')
+    errorSpy.mockRestore()
+    expect(res.status).toBe(200)
+    expect(res.body).toHaveProperty('disk_usage')
+  })
+
+  it('lock/unlock round-trip persists in store', async () => {
+    const fp = path.join(destDir, 'persist.mp4')
+    fs.writeFileSync(fp, Buffer.alloc(1024))
+    
+    // Lock
+    await request(server)
+      .post('/api/storage/lock')
+      .send({ path: fp, locked: true })
+    expect(store._data.lockedRecordings).toContain(path.normalize(fp))
+    
+    // Unlock
+    await request(server)
+      .post('/api/storage/lock')
+      .send({ path: fp, locked: false })
+    expect(store._data.lockedRecordings).not.toContain(path.normalize(fp))
+  })
+
+  it('concurrent delete-batch requests succeed and maintain clean state', async () => {
+    const fp1 = path.join(destDir, 'file1.mp4')
+    const fp2 = path.join(destDir, 'file2.mp4')
+    fs.writeFileSync(fp1, Buffer.alloc(1024))
+    fs.writeFileSync(fp2, Buffer.alloc(1024))
+
+    const deleteReq1 = request(server)
+      .post('/api/storage/delete-batch')
+      .send({ paths: [fp1] })
+    
+    const deleteReq2 = request(server)
+      .post('/api/storage/delete-batch')
+      .send({ paths: [fp2] })
+
+    const [res1, res2] = await Promise.all([deleteReq1, deleteReq2])
+    
+    expect(res1.status).toBe(200)
+    expect(res2.status).toBe(200)
+    expect(store._data.lockedRecordings).toEqual([])
   })
 })

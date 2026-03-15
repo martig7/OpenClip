@@ -1,5 +1,9 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+// Cache the last in-flight session progress so components that mount mid-session
+// (e.g. user switches to Recordings page while organize is running) can catch up.
+let _lastSessionProgress = null;
+
 contextBridge.exposeInMainWorld('api', {
   // Store
   getStore: (key) => ipcRenderer.invoke('store:get', key),
@@ -68,7 +72,36 @@ contextBridge.exposeInMainWorld('api', {
   getRecordings: () => ipcRenderer.invoke('recordings:list'),
   deleteRecording: (path) => ipcRenderer.invoke('recordings:delete', path),
   getVideoURL: (filePath) => ipcRenderer.invoke('video:getURL', filePath),
-  organizeRecording: (filePath, gameName) => ipcRenderer.invoke('recordings:organize', { filePath, gameName }),
+  organizeRecording: (filePath, gameName, remux) => ipcRenderer.invoke('recordings:organize', { filePath, gameName, remux }),
+  onOrganizeProgress: (callback) => {
+    const handler = (_event, progress) => callback(progress);
+    ipcRenderer.on('recordings:organize-progress', handler);
+    return () => ipcRenderer.removeListener('recordings:organize-progress', handler);
+  },
+  onSessionProgress: (callback) => {
+    // Replay last known state so components that mount mid-session see the banner immediately.
+    // Capture a snapshot and cancelled flag to avoid calling back after unsubscribe.
+    const snapshot = _lastSessionProgress;
+    let cancelled = false;
+    if (snapshot) {
+      Promise.resolve().then(() => {
+        if (!cancelled && snapshot) callback(snapshot);
+      });
+    }
+    const handler = (_event, progress) => {
+      if (!progress) return;
+      _lastSessionProgress = progress.phase === 'complete' ? null : progress;
+      callback(progress);
+    };
+    ipcRenderer.on('session:process-progress', handler);
+    return () => {
+      cancelled = true;
+      ipcRenderer.removeListener('session:process-progress', handler);
+    };
+  },
+  clearSessionProgress: () => {
+    _lastSessionProgress = null;
+  },
 
   // Clips
   getClips: () => ipcRenderer.invoke('clips:list'),

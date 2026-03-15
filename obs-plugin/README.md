@@ -140,3 +140,15 @@ Responses:
 The plugin runs an HTTP server on a background thread, bound to `127.0.0.1`.
 API requests are dispatched to OBS's UI thread via `obs_queue_task()` to ensure
 thread-safe access to all OBS APIs.
+
+## Source Code
+
+See [`src/README.md`](src/README.md) for the source code structure and documentation.
+
+### Dependencies
+
+| Folder | Description |
+|--------|-------------|
+| `src/` | Plugin source code |
+| `include/` | OBS Studio SDK headers |
+| `build/` | CMake build output |

@@ -26,8 +26,8 @@ beforeAll(async () => {
   await new Promise(resolve => server.on('listening', resolve))
 })
 
-afterAll((done) => {
-  server.close(done)
+afterAll(async () => {
+  await new Promise(resolve => server.close(resolve))
   fs.rmSync(tmpDir, { recursive: true, force: true })
 })
 
@@ -52,5 +52,16 @@ describe('GET /api/ffmpeg-check', () => {
     const res = await request(server).get('/api/ffmpeg-check')
     expect(res.status).toBe(200)
     expect(res.body.available).toBe(false)
+  })
+
+  it('calls execFile on every request (result is not cached)', async () => {
+    const cp = await import('child_process')
+    cp.execFile.mockImplementation((_cmd, _args, _opts, cb) => cb(null))
+
+    await request(server).get('/api/ffmpeg-check')
+    await request(server).get('/api/ffmpeg-check')
+
+    // execFile should have been called once per request, not reused from a cache
+    expect(cp.execFile).toHaveBeenCalledTimes(2)
   })
 })

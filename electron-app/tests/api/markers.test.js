@@ -35,8 +35,8 @@ beforeAll(async () => {
   await new Promise(resolve => server.on('listening', resolve))
 })
 
-afterAll((done) => {
-  server.close(done)
+afterAll(async () => {
+  await new Promise(resolve => server.close(resolve))
   fs.rmSync(tmpDir, { recursive: true, force: true })
 })
 
@@ -48,6 +48,10 @@ beforeEach(() => {
 
 function setMarkers(markers) {
   fs.writeFileSync(markersFile, JSON.stringify({ markers }))
+}
+
+function setMalformedMarkers(content) {
+  fs.writeFileSync(markersFile, content)
 }
 
 describe('GET /api/markers', () => {
@@ -156,5 +160,34 @@ describe('POST /api/markers/delete', () => {
     const remaining = JSON.parse(fs.readFileSync(markersFile, 'utf-8'))
     expect(remaining.markers).toHaveLength(1)
     expect(remaining.markers[0].timestamp).toBe(1705340100)
+  })
+})
+
+describe('GET /api/markers - error handling', () => {
+  it('malformed markers JSON returns graceful error', async () => {
+    setMalformedMarkers('not valid json {')
+
+    const cp = await import('child_process')
+    cp.execFile.mockImplementation((bin, args, opts, cb) => cb(null, '300', ''))
+
+    const fp = path.join(destDir, 'rec.mp4')
+    fs.writeFileSync(fp, Buffer.alloc(1024))
+    const mtime = new Date()
+    fs.utimesSync(fp, mtime, mtime)
+
+    const res = await request(server).get(
+      `/api/markers?path=${encodeURIComponent(fp)}&game_name=Halo`
+    )
+    expect(res.status).toBe(200)
+    expect(res.body.markers).toEqual([])
+  })
+})
+
+describe('POST /api/markers', () => {
+  it('returns 404 when endpoint does not exist', async () => {
+    const res = await request(server)
+      .post('/api/markers')
+      .send({ game_name: 'Halo', timestamp: 1234567890 })
+    expect(res.status).toBe(404)
   })
 })

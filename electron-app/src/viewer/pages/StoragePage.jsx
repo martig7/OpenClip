@@ -1,177 +1,17 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { HardDrive, Film, Scissors, Lock, Unlock, Trash2, Save, Info, Loader, Package, Check, X, ZoomIn, ZoomOut, Filter } from 'lucide-react'
+import { HardDrive, Film, Scissors, Lock, Unlock, Trash2, Save, Info, Loader, Package, Check, X, Filter } from 'lucide-react'
 import Modal from '../components/Modal'
 import { apiFetch, apiPost } from '../apiBase'
 import api from '../../api'
+import { buildGameColors } from '../utils/storageColors'
+import StorageTreemap from '../components/StorageTreemap'
+import ReencodeModal from '../components/ReencodeModal'
 
-const GAME_PALETTE = [
-  '#7c3aed', // violet-700
-  '#3b82f6', // blue-500
-  '#06b6d4', // cyan-500
-  '#6366f1', // indigo-500
-  '#8b5cf6', // violet-500
-  '#0ea5e9', // sky-500
-  '#a78bfa', // violet-400
-  '#818cf8', // indigo-400
-  '#2dd4bf', // teal-400
-  '#c084fc', // purple-400
-  '#60a5fa', // blue-400
-  '#22d3ee', // cyan-400
-  '#4f46e5', // indigo-600
-  '#7e22ce', // purple-700
-  '#0284c7', // sky-600
-  '#0891b2', // cyan-600
-]
 
-const CELL_GAP = 2  // px gap between cells
-const MIN_DIM = 36  // px — minimum width or height for any cell; prevents hair-thin slivers
-
-// ── Squarified treemap (Bruls, Huizing & van Wijk) ───────────────────────────
-// Worst aspect ratio for a candidate row given the short side of the current rect.
-// Uses the closed-form from the paper: worst = max(w²·max/s², s²/(w²·min))
-function _worstRatio(row, shortSide) {
-  const s = row.reduce((a, d) => a + d._area, 0)
-  const max = Math.max(...row.map(d => d._area))
-  const min = Math.min(...row.map(d => d._area))
-  return Math.max(
-    (shortSide * shortSide * max) / (s * s),
-    (s * s) / (shortSide * shortSide * Math.max(min, 1e-10))
-  )
+function normPath(p) {
+  return p.replace(/\\/g, '/')
 }
-
-function _squarify(items, x, y, w, h, out) {
-  if (!items.length || w < 1 || h < 1) {
-    // Degenerate: stack remaining items as thin slices
-    if (items.length && w >= 1 && h >= 1) {
-      const isWide = w >= h
-      items.forEach((item, i) => {
-        if (isWide) {
-          out.push({ ...item, rx: x + w * i / items.length, ry: y, rw: w / items.length, rh: h })
-        } else {
-          out.push({ ...item, rx: x, ry: y + h * i / items.length, rw: w, rh: h / items.length })
-        }
-      })
-    }
-    return
-  }
-  if (items.length === 1) { out.push({ ...items[0], rx: x, ry: y, rw: w, rh: h }); return }
-
-  const isWide = w >= h
-  const short = Math.min(w, h)
-
-  // Grow the row until adding the next item worsens the worst ratio
-  let row = [items[0]]
-  for (let i = 1; i < items.length; i++) {
-    const candidate = [...row, items[i]]
-    if (row.length >= 1 && _worstRatio(candidate, short) > _worstRatio(row, short)) break
-    row = candidate
-  }
-
-  // Commit row: strip depth = rowArea / shortSide
-  const rowArea = row.reduce((a, d) => a + d._area, 0)
-  const depth = rowArea / short
-  let off = 0
-  for (const item of row) {
-    const len = (item._area / rowArea) * short
-    if (isWide) out.push({ ...item, rx: x,       ry: y + off, rw: depth, rh: len })
-    else        out.push({ ...item, rx: x + off,  ry: y,       rw: len,   rh: depth })
-    off += len
-  }
-
-  // Recurse into remaining rectangle
-  const rest = items.slice(row.length)
-  if (isWide) _squarify(rest, x + depth, y, Math.max(0, w - depth), h, out)
-  else        _squarify(rest, x, y + depth, w, Math.max(0, h - depth), out)
-}
-
-function squarifiedTreemap(items, w, h) {
-  if (!items.length || !w || !h) return []
-  const total = items.reduce((a, i) => a + i.size_bytes, 0)
-  if (!total) return []
-  const totalArea = w * h
-  const minArea = MIN_DIM * MIN_DIM
-  // Floor areas so no cell is narrower than MIN_DIM in either dimension,
-  // then renormalise so all areas still sum to totalArea.
-  const rawAreas = items.map(item => (item.size_bytes / total) * totalArea)
-  const floored = rawAreas.map(a => Math.max(a, minArea))
-  const scale = totalArea / floored.reduce((s, a) => s + a, 0)
-  const nodes = items.map((item, i) => ({ ...item, _area: floored[i] * scale }))
-  const out = []
-  _squarify(nodes, 0, 0, w, h, out)
-  return out
-}
-// ─────────────────────────────────────────────────────────────────────────────
-
-// ── Canvas rendering helpers ─────────────────────────────────────────────────
-function hexToRgba(hex, alpha) {
-  const r = parseInt(hex.slice(1, 3), 16)
-  const g = parseInt(hex.slice(3, 5), 16)
-  const b = parseInt(hex.slice(5, 7), 16)
-  return `rgba(${r},${g},${b},${alpha})`
-}
-
-function drawRoundRect(ctx, x, y, w, h, r) {
-  if (w <= 0 || h <= 0) return
-  r = Math.min(r, w / 2, h / 2)
-  ctx.beginPath()
-  ctx.moveTo(x + r, y)
-  ctx.arcTo(x + w, y, x + w, y + h, r)
-  ctx.arcTo(x + w, y + h, x, y + h, r)
-  ctx.arcTo(x, y + h, x, y, r)
-  ctx.arcTo(x, y, x + w, y, r)
-  ctx.closePath()
-}
-
-// ── Spatial grid index for O(1) hit-testing ─────────────────────────────────
-// Divides base-space layout into GRID_CELLS×GRID_CELLS buckets.
-// Built once when treemapLayout changes; getItemAt then only searches the single matching bucket.
-// 16×16 = 256 buckets: low memory overhead, and each bucket holds ~1–4 items for typical libraries
-// of a few hundred files, giving near-O(1) hit-test performance vs. the O(n) linear alternative.
-const GRID_CELLS = 16
-
-// Tooltip sizing constants — kept in sync with the .sv2-tooltip CSS rule (max-width: 280px)
-const TOOLTIP_W = 280  // matches CSS max-width
-const TOOLTIP_H = 56   // conservative height estimate for two lines of text
-const TOOLTIP_PAD = 14 // gap between cursor and tooltip corner
-
-function buildHitIndex(layout) {
-  if (!layout.length) return null
-  let maxX = 0, maxY = 0
-  for (const item of layout) {
-    if (item.rx + item.rw > maxX) maxX = item.rx + item.rw
-    if (item.ry + item.rh > maxY) maxY = item.ry + item.rh
-  }
-  const cellW = maxX / GRID_CELLS
-  const cellH = maxY / GRID_CELLS
-  const buckets = Array.from({ length: GRID_CELLS * GRID_CELLS }, () => [])
-  for (const item of layout) {
-    const c0 = Math.max(0, Math.floor(item.rx / cellW))
-    const c1 = Math.min(GRID_CELLS - 1, Math.floor((item.rx + item.rw) / cellW))
-    const r0 = Math.max(0, Math.floor(item.ry / cellH))
-    const r1 = Math.min(GRID_CELLS - 1, Math.floor((item.ry + item.rh) / cellH))
-    for (let r = r0; r <= r1; r++) {
-      for (let c = c0; c <= c1; c++) {
-        buckets[r * GRID_CELLS + c].push(item)
-      }
-    }
-  }
-  return { buckets, cellW, cellH, maxX, maxY }
-}
-
-function hitTestIndex(index, lx, ly) {
-  if (!index) return null
-  if (lx < 0 || ly < 0 || lx > index.maxX || ly > index.maxY) return null
-  const col = Math.min(GRID_CELLS - 1, Math.floor(lx / index.cellW))
-  const row = Math.min(GRID_CELLS - 1, Math.floor(ly / index.cellH))
-  const bucket = index.buckets[row * GRID_CELLS + col]
-  for (const item of bucket) {
-    if (lx >= item.rx && lx <= item.rx + item.rw &&
-        ly >= item.ry && ly <= item.ry + item.rh) return item
-  }
-  return null
-}
-
 
 function StoragePage() {
   const navigate = useNavigate()
@@ -179,7 +19,7 @@ function StoragePage() {
   const [settings, setSettings] = useState(null)
   const [editedSettings, setEditedSettings] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [listView, setListView] = useState(null)
+  const [listView, setListView] = useState(true)
   const [selectedItems, setSelectedItems] = useState(new Set())
   const [deleteModal, setDeleteModal] = useState(false)
   const [reencodeModal, setReencodeModal] = useState(false)
@@ -196,27 +36,7 @@ function StoragePage() {
   const [filterGame, setFilterGame] = useState('all')
   const [sortBy, setSortBy] = useState('date')
   const [lockedRecordings, setLockedRecordings] = useState(new Set())
-  const [zoom, setZoom] = useState(1)
-  const [isDragging, setIsDragging] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [baseSize, setBaseSize] = useState({ w: 0, h: 0 })
-  const [tooltip, setTooltip] = useState(null)
-  const containerRef = useRef(null)
-  const canvasRef = useRef(null)
-  const rafRef = useRef(null)
-  const layoutRef = useRef([])
-  const selectedItemsRef = useRef(new Set())
-  const lockedRef = useRef(new Set())
-  const gameColorsRef = useRef({})
-  // Holds the latest drawCanvas closure so hot-path handlers always call the up-to-date version
-  const drawCanvasRef = useRef(null)
-  const ctxRef = useRef(null)           // cached Canvas 2D context
-  const hitIndexRef = useRef(null)      // spatial grid index for O(1) hit-testing
-  const tooltipItemRef = useRef(null)   // last hovered item path, used to skip redundant setTooltip calls
-  const tooltipRafRef = useRef(null)    // RAF handle for mousemove throttling
-  const zoomRef = useRef(1)
-  const panRef = useRef({ x: 0, y: 0 })
-  const dragRef = useRef(null)
   const toastTimerRef = useRef(null)
 
   useEffect(() => {
@@ -225,10 +45,14 @@ function StoragePage() {
 
   const fetchStats = useCallback(async () => {
     try {
-      const response = await apiFetch('/api/storage/stats')
+      const [response, s] = await Promise.all([
+        apiFetch('/api/storage/stats'),
+        api.getStore('settings').catch(() => null),
+      ])
       const data = await response.json()
       setStats(data)
       setLockedRecordings(new Set(data.locked_recordings || []))
+      if (s) setListView(s.listView ?? true)
     } catch (error) {
       console.error('Failed to fetch storage stats:', error)
     } finally {
@@ -250,70 +74,7 @@ function StoragePage() {
   useEffect(() => {
     fetchStats()
     fetchSettings()
-    api.getStore('settings').then(s => {
-      if (s) setListView(s.listView ?? true)
-    }).catch(() => {})
   }, [fetchStats, fetchSettings])
-
-  // ResizeObserver for treemap container — also sizes the canvas to match (grid mode only)
-  useEffect(() => {
-    if (listView) return
-    const el = containerRef.current
-    if (!el) return
-    const sizeCanvas = (w, h) => {
-      const canvas = canvasRef.current
-      if (!canvas) return
-      const dpr = window.devicePixelRatio || 1
-      canvas.width = Math.round(w * dpr)
-      canvas.height = Math.round(h * dpr)
-      // Invalidate cached context when canvas element is resized
-      ctxRef.current = canvas.getContext('2d')
-    }
-    const ro = new ResizeObserver(([entry]) => {
-      const { width, height } = entry.contentRect
-      if (width > 10 && height > 10) {
-        const w = Math.floor(width), h = Math.floor(height)
-        setBaseSize({ w, h })
-        sizeCanvas(w, h)
-      }
-    })
-    ro.observe(el)
-    const r = el.getBoundingClientRect()
-    if (r.width > 10) {
-      const w = Math.floor(r.width), h = Math.floor(r.height)
-      setBaseSize({ w, h })
-      sizeCanvas(w, h)
-    }
-    return () => ro.disconnect()
-  }, [loading, listView])
-
-  // Non-passive wheel: zoom toward cursor (map-style); reads refs for fresh values (grid mode only)
-  useEffect(() => {
-    if (listView) return
-    const el = containerRef.current
-    if (!el) return
-    const onWheel = (e) => {
-      e.preventDefault()
-      const rect = el.getBoundingClientRect()
-      const factor = e.deltaY > 0 ? 0.88 : 1.14
-      const curZoom = zoomRef.current
-      const curPan = panRef.current
-      const newZoom = Math.max(0.5, Math.min(1000, curZoom * factor))
-      const mouseX = e.clientX - rect.left
-      const mouseY = e.clientY - rect.top
-      const cx = (mouseX - curPan.x) / curZoom
-      const cy = (mouseY - curPan.y) / curZoom
-      const newPanX = mouseX - cx * newZoom
-      const newPanY = mouseY - cy * newZoom
-      zoomRef.current = newZoom
-      panRef.current = { x: newPanX, y: newPanY }
-      setZoom(newZoom)
-      // Redraw canvas directly via RAF without waiting for React render cycle
-      flushRedraw()
-    }
-    el.addEventListener('wheel', onWheel, { passive: false })
-    return () => el.removeEventListener('wheel', onWheel)
-  }, [loading, listView])
 
   const showToast = useCallback((type, message) => {
     setToast({ type, message })
@@ -496,35 +257,7 @@ function StoragePage() {
     else navigate(`/recordings?path=${encodeURIComponent(item.path)}`)
   }, [navigate])
 
-  // Zoom toward the viewport centre (used by ± buttons)
-  const zoomBy = useCallback((factor) => {
-    const el = containerRef.current
-    if (!el) return
-    const rect = el.getBoundingClientRect()
-    const anchorX = rect.width / 2
-    const anchorY = rect.height / 2
-    const curZoom = zoomRef.current
-    const curPan = panRef.current
-    const newZoom = Math.max(0.5, Math.min(1000, curZoom * factor))
-    const cx = (anchorX - curPan.x) / curZoom
-    const cy = (anchorY - curPan.y) / curZoom
-    const newPanX = anchorX - cx * newZoom
-    const newPanY = anchorY - cy * newZoom
-    zoomRef.current = newZoom
-    panRef.current = { x: newPanX, y: newPanY }
-    setZoom(newZoom)
-    flushRedraw()
-  }, []) // flushRedraw reads from rafRef/drawCanvasRef which are always current
-
-  const gameColors = useMemo(() => {
-    if (!stats) return {}
-    const games = new Set()
-    stats.recordings?.forEach(r => games.add(r.game_name))
-    stats.clips?.forEach(c => games.add(c.game_name))
-    const map = {}
-    Array.from(games).sort().forEach((g, i) => { map[g] = GAME_PALETTE[i % GAME_PALETTE.length] })
-    return map
-  }, [stats])
+  const gameColors = useMemo(() => buildGameColors(stats), [stats])
 
   const byGameBytes = useMemo(() => {
     if (!stats) return {}
@@ -537,248 +270,7 @@ function StoragePage() {
 
   const totalBytes = useMemo(() => Object.values(byGameBytes).reduce((s, v) => s + v, 0), [byGameBytes])
 
-  // Layout is computed at base (zoom=1) dimensions; zoom is applied via coordinate scaling in render.
-  // This keeps squarify out of the zoom hot-path — only re-runs when items or container size change.
-  // Skip in list view to avoid unnecessary computation.
-  const treemapLayout = useMemo(
-    () => listView ? [] : squarifiedTreemap(items, baseSize.w, baseSize.h),
-    [listView, items, baseSize.w, baseSize.h]
-  )
-
-  // Keep viewport refs in sync so wheel/zoom handlers always read fresh values
-  zoomRef.current = zoom
-
-  // ── Canvas drawing (imperative, does not touch React DOM) ────────────────────
-  // Draws text truncated to maxWidth with a trailing ellipsis — avoids the Canvas
-  // native maxWidth behaviour which horizontally compresses/stretches glyphs.
-  function fillTextTruncated(ctx, text, x, y, maxWidth) {
-    if (maxWidth <= 0) return
-    if (ctx.measureText(text).width <= maxWidth) {
-      ctx.fillText(text, x, y)
-      return
-    }
-    // Binary-search for the longest prefix that fits (including '…')
-    const ellipsis = '\u2026'
-    let lo = 0, hi = text.length
-    while (lo < hi) {
-      const mid = Math.ceil((lo + hi) / 2)
-      if (ctx.measureText(text.slice(0, mid) + ellipsis).width <= maxWidth) lo = mid
-      else hi = mid - 1
-    }
-    if (lo === 0) return // not even one character fits — skip entirely
-    ctx.fillText(text.slice(0, lo) + ellipsis, x, y)
-  }
-
-  // drawCanvasRef.current is updated every render so hot-path handlers always call the latest closure
-  drawCanvasRef.current = () => {
-    const canvas = canvasRef.current
-    if (!canvas || !canvas.width || !canvas.height) return
-    // Use the cached 2D context; acquire it once on first draw or after a resize
-    if (!ctxRef.current || ctxRef.current.canvas !== canvas) {
-      ctxRef.current = canvas.getContext('2d')
-    }
-    const ctx = ctxRef.current
-    const dpr = window.devicePixelRatio || 1
-    const cssW = canvas.width / dpr
-    const cssH = canvas.height / dpr
-
-    ctx.save()
-    ctx.scale(dpr, dpr)
-    ctx.clearRect(0, 0, cssW, cssH)
-
-    const layout = layoutRef.current
-    const z = zoomRef.current
-    const { x: px, y: py } = panRef.current
-    const selected = selectedItemsRef.current
-    const locked = lockedRef.current
-    const colors = gameColorsRef.current
-
-    if (!layout.length) {
-      ctx.fillStyle = '#888'
-      ctx.font = '14px system-ui, sans-serif'
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.fillText('No files match the current filter', cssW / 2, cssH / 2)
-      ctx.restore()
-      return
-    }
-
-    for (const item of layout) {
-      const x = item.rx * z + px + CELL_GAP / 2
-      const y = item.ry * z + py + CELL_GAP / 2
-      const w = Math.max(0, item.rw * z - CELL_GAP)
-      const h = Math.max(0, item.rh * z - CELL_GAP)
-      if (w < 1 || h < 1) continue
-      // Frustum cull — skip blocks fully outside the viewport
-      if (x + w < 0 || x > cssW || y + h < 0 || y > cssH) continue
-
-      const color = colors[item.game_name] || '#888'
-      const isSelected = selected.has(item.path)
-      const isLocked = locked.has(item.path)
-      const minDim = Math.min(w, h)
-
-      // Background
-      ctx.fillStyle = isSelected ? hexToRgba(color, 0.14) : '#1e1e1e'
-      drawRoundRect(ctx, x, y, w, h, Math.min(4, minDim / 4))
-      ctx.fill()
-
-      // Border
-      ctx.strokeStyle = isSelected ? color : isLocked ? '#f59e0b' : '#3a3a3a'
-      ctx.lineWidth = isSelected ? 2 : 1
-      ctx.stroke()
-
-      // Color bar at top
-      const barH = Math.min(4, h)
-      ctx.fillStyle = color
-      ctx.fillRect(x, y, w, barH)
-
-      // Text labels (only when large enough)
-      ctx.textBaseline = 'alphabetic'
-      ctx.textAlign = 'left'
-      if (minDim >= 52) {
-        ctx.fillStyle = color
-        ctx.font = 'bold 10px system-ui, sans-serif'
-        fillTextTruncated(ctx, item.game_name, x + 5, y + 17, w - 28)
-      }
-      if (minDim >= 80) {
-        ctx.fillStyle = '#999'
-        ctx.font = '9px system-ui, sans-serif'
-        fillTextTruncated(ctx, item.filename, x + 5, y + 29, w - 10)
-        fillTextTruncated(ctx, item.size_formatted, x + 5, y + 41, w - 10)
-      }
-
-      // Lock indicator — drawn as a small padlock shape (top-right corner)
-      if (isLocked && minDim >= 36) {
-        const lx = x + w - 12, ly = y + 5, lw = 7, lh = 6, lr = 1.5
-        ctx.fillStyle = '#f59e0b'
-        // shackle (arc)
-        ctx.beginPath()
-        ctx.arc(lx + lw / 2, ly + 1, lw / 2 - 0.5, Math.PI, 0)
-        ctx.lineWidth = 1.5
-        ctx.strokeStyle = '#f59e0b'
-        ctx.stroke()
-        // body (rectangle)
-        ctx.fillRect(lx, ly + lr, lw, lh)
-      }
-
-      // Selection checkmark badge — top-left corner
-      if (isSelected) {
-        const br = 8, bcx = x + br + 3, bcy = y + br + 3
-        ctx.beginPath()
-        ctx.arc(bcx, bcy, br, 0, Math.PI * 2)
-        ctx.fillStyle = color
-        ctx.fill()
-        ctx.fillStyle = '#fff'
-        ctx.font = 'bold 9px system-ui, sans-serif'
-        ctx.textAlign = 'center'
-        ctx.textBaseline = 'middle'
-        ctx.fillText('✓', bcx, bcy)
-      }
-    }
-    ctx.restore()
-  }
-
-  // Schedule a canvas redraw via requestAnimationFrame (coalesces rapid calls)
-  const requestRedraw = useCallback(() => {
-    if (rafRef.current) return
-    rafRef.current = requestAnimationFrame(() => {
-      rafRef.current = null
-      drawCanvasRef.current()
-    })
-  }, [])
-
-  // Immediately cancel any pending RAF frame and schedule a new one (used by hot-path handlers)
-  const flushRedraw = useCallback(() => {
-    if (rafRef.current) cancelAnimationFrame(rafRef.current)
-    rafRef.current = requestAnimationFrame(() => { rafRef.current = null; drawCanvasRef.current() })
-  }, [])
-
-  // Sync render-relevant state into refs and request a canvas redraw.
-  // For lockedRecordings, convert backslash paths → forward slashes to match item.path format,
-  // so per-frame normPath() calls are unnecessary.
-  useEffect(() => { layoutRef.current = treemapLayout; hitIndexRef.current = buildHitIndex(treemapLayout); requestRedraw() }, [treemapLayout, requestRedraw])
-  useEffect(() => { selectedItemsRef.current = selectedItems; requestRedraw() }, [selectedItems, requestRedraw])
-  useEffect(() => {
-    lockedRef.current = new Set([...lockedRecordings].map(p => p.replace(/\\/g, '/')))
-    requestRedraw()
-  }, [lockedRecordings, requestRedraw])
-  useEffect(() => { gameColorsRef.current = gameColors; requestRedraw() }, [gameColors, requestRedraw])
-  useEffect(() => { requestRedraw() }, [zoom, requestRedraw])
-
-  // Hit-test: canvas (CSS) pixel → layout item (uses spatial grid index for O(1) lookup)
-  const getItemAt = useCallback((canvasX, canvasY) => {
-    const z = zoomRef.current
-    const { x: px, y: py } = panRef.current
-    const lx = (canvasX - px) / z
-    const ly = (canvasY - py) / z
-    return hitTestIndex(hitIndexRef.current, lx, ly)
-  }, [])
-
-  // Is the click within the lock-button area (top-right corner of block)?
-  const isLockArea = useCallback((item, canvasX, canvasY) => {
-    const z = zoomRef.current
-    const { x: px, y: py } = panRef.current
-    const bx = item.rx * z + px + CELL_GAP / 2
-    const by = item.ry * z + py + CELL_GAP / 2
-    const bw = Math.max(0, item.rw * z - CELL_GAP)
-    return canvasX >= bx + bw - 22 && canvasY >= by && canvasY <= by + 22
-  }, [])
-
-  const handleCanvasClick = useCallback((e) => {
-    if (dragRef.current?.moved) return
-    const rect = canvasRef.current.getBoundingClientRect()
-    const item = getItemAt(e.clientX - rect.left, e.clientY - rect.top)
-    if (!item) return
-    if (isLockArea(item, e.clientX - rect.left, e.clientY - rect.top)) {
-      toggleLock(e, item.path)
-    } else {
-      toggleSelection(item.path)
-    }
-  }, [getItemAt, isLockArea, toggleLock, toggleSelection])
-
-  const handleCanvasDblClick = useCallback((e) => {
-    const rect = canvasRef.current.getBoundingClientRect()
-    const item = getItemAt(e.clientX - rect.left, e.clientY - rect.top)
-    if (item) handleItemClick(item)
-  }, [getItemAt, handleItemClick])
-
-  const handleCanvasMouseMove = useCallback((e) => {
-    // Throttle: only process one mousemove per animation frame
-    if (tooltipRafRef.current) return
-    tooltipRafRef.current = requestAnimationFrame(() => {
-      tooltipRafRef.current = null
-      if (!canvasRef.current) return
-      const rect = canvasRef.current.getBoundingClientRect()
-      const cx = e.clientX - rect.left
-      const cy = e.clientY - rect.top
-      const item = getItemAt(cx, cy)
-      const newPath = item ? item.path : null
-      // Skip redundant state updates when the hovered item hasn't changed
-      if (newPath === tooltipItemRef.current) return
-      tooltipItemRef.current = newPath
-      if (item) {
-        const isLocked = lockedRef.current.has(item.path)
-        setTooltip({
-          x: e.clientX, y: e.clientY,
-          text: `${item.game_name} · ${item.filename}\n${item.size_formatted} · ${item.date}${isLocked ? ' · [Locked]' : ''}`
-        })
-      } else {
-        setTooltip(null)
-      }
-    })
-  }, [getItemAt])
-
-  // Pre-compute clamped tooltip position so the render path avoids recalculating on every render
-  const tooltipPos = useMemo(() => {
-    if (!tooltip) return null
-    return {
-      left: Math.min(tooltip.x + TOOLTIP_PAD, window.innerWidth  - TOOLTIP_W - TOOLTIP_PAD),
-      top:  Math.min(tooltip.y + TOOLTIP_PAD, window.innerHeight - TOOLTIP_H - TOOLTIP_PAD),
-    }
-  }, [tooltip])
-
-
-  if (loading || listView === null) {
+  if (loading) {
     return (
       <div className="page-content">
         <div className="loading"><div className="spinner" /></div>
@@ -836,13 +328,6 @@ function StoragePage() {
         )}
 
         <div className="sv2-topbar-right">
-          {!listView && (
-            <div className="sv2-zoom-ctrl">
-              <button onClick={() => zoomBy(0.8)} title="Zoom out"><ZoomOut size={13} /></button>
-              <button className="sv2-zoom-pct" onClick={() => { setZoom(1); zoomRef.current = 1; panRef.current = { x: 0, y: 0 }; flushRedraw() }} title="Reset view">{Math.round(zoom * 100)}%</button>
-              <button onClick={() => zoomBy(1.25)} title="Zoom in"><ZoomIn size={13} /></button>
-            </div>
-          )}
           {selectedCount > 0 && (
             <span className="sv2-sel-pill">{selectedCount} selected</span>
           )}
@@ -932,59 +417,15 @@ function StoragePage() {
           }
         </div>
       ) : (
-        /* ── Treemap (canvas-rendered for performance) ── */
-        <div
-          className={`sv2-treemap-container${isDragging ? ' dragging' : ''}`}
-          ref={containerRef}
-          onMouseDown={e => {
-            if (e.button !== 0) return
-            dragRef.current = { startX: e.clientX, startY: e.clientY, startPanX: panRef.current.x, startPanY: panRef.current.y, moved: false }
-            const onMove = (me) => {
-              const dx = me.clientX - dragRef.current.startX
-              const dy = me.clientY - dragRef.current.startY
-              if (!dragRef.current.moved && Math.hypot(dx, dy) > 4) {
-                dragRef.current.moved = true
-                setIsDragging(true)
-              }
-              if (dragRef.current.moved) {
-                panRef.current = { x: dragRef.current.startPanX + dx, y: dragRef.current.startPanY + dy }
-                // Redraw directly via RAF — no React state update during drag
-                flushRedraw()
-              }
-            }
-            const onUp = () => {
-              const wasDrag = dragRef.current?.moved
-              dragRef.current = null
-              setIsDragging(false)
-              window.removeEventListener('mousemove', onMove)
-              window.removeEventListener('mouseup', onUp)
-              // Swallow the synthetic click that fires after mouseup so blocks don't get selected
-              if (wasDrag) window.addEventListener('click', e => e.stopPropagation(), { capture: true, once: true })
-            }
-            window.addEventListener('mousemove', onMove)
-            window.addEventListener('mouseup', onUp)
-          }}
-        >
-          <canvas
-            ref={canvasRef}
-            className="sv2-canvas"
-            onClick={handleCanvasClick}
-            onDoubleClick={handleCanvasDblClick}
-            onMouseMove={handleCanvasMouseMove}
-            onMouseLeave={() => {
-              if (tooltipRafRef.current) { cancelAnimationFrame(tooltipRafRef.current); tooltipRafRef.current = null }
-              tooltipItemRef.current = null
-              setTooltip(null)
-            }}
-          />
-        </div>
-      )}
-
-      {/* Hover tooltip — positioned near cursor, clamped to viewport edges */}
-      {tooltipPos && (
-        <div className="sv2-tooltip" style={{ left: tooltipPos.left, top: tooltipPos.top }}>
-          {tooltip.text.split('\n').map((line, i) => <div key={i}>{line}</div>)}
-        </div>
+        <StorageTreemap
+          items={items}
+          selectedItems={selectedItems}
+          onSelect={toggleSelection}
+          lockedRecordings={lockedRecordings}
+          onLock={toggleLock}
+          gameColors={gameColors}
+          onNavigate={handleItemClick}
+        />
       )}
 
       {/* ── Settings / Options Modal ── */}
@@ -1014,6 +455,13 @@ function StoragePage() {
                   <option value="size">Largest first</option>
                   <option value="name">Name</option>
                   <option value="game">Game</option>
+                </select>
+              </div>
+              <div className="ssm-row">
+                <label>View</label>
+                <select value={listView ? 'list' : 'treemap'} onChange={e => setListView(e.target.value === 'list')}>
+                  <option value="list">List</option>
+                  <option value="treemap">Treemap</option>
                 </select>
               </div>
             </div>
@@ -1099,89 +547,20 @@ function StoragePage() {
       )}
 
       {/* ── Reencode Modal ── */}
-      {reencodeModal && (
-        <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget && !isReencoding) setReencodeModal(false); }}>
-          <div className="modal-content reencode-modal" onClick={e => e.stopPropagation()}>
-            <h2>Reencode Videos</h2>
-            <p>Reencode {selectedCount} selected video(s) to a different codec</p>
-            <div className="reencode-settings">
-              <div className="setting-row">
-                <label>Codec:</label>
-                <select value={reencodeSettings.codec} onChange={e => setReencodeSettings({ ...reencodeSettings, codec: e.target.value })} disabled={isReencoding}>
-                  <option value="h264">H.264 (widely compatible)</option>
-                  <option value="h265">H.265/HEVC (better compression)</option>
-                  <option value="av1">AV1 (best compression, slower)</option>
-                  <option value="copy">Stream Copy (track removal only, instant)</option>
-                </select>
-              </div>
-              {reencodeSettings.codec !== 'copy' && (
-                <>
-                  <div className="setting-row">
-                    <label>Quality (CRF):</label>
-                    <input type="range" min="18" max="28" value={reencodeSettings.crf} onChange={e => setReencodeSettings({ ...reencodeSettings, crf: parseInt(e.target.value) })} disabled={isReencoding} />
-                    <span>{reencodeSettings.crf} {reencodeSettings.crf < 20 ? '(high)' : reencodeSettings.crf < 24 ? '(medium)' : '(low)'}</span>
-                  </div>
-                  <div className="setting-row">
-                    <label>Speed Preset:</label>
-                    <select value={reencodeSettings.preset} onChange={e => setReencodeSettings({ ...reencodeSettings, preset: e.target.value })} disabled={isReencoding}>
-                      <option value="veryfast">Very Fast (larger file)</option>
-                      <option value="fast">Fast</option>
-                      <option value="medium">Medium (recommended)</option>
-                      <option value="slow">Slow (smaller file)</option>
-                      <option value="veryslow">Very Slow (smallest file)</option>
-                    </select>
-                  </div>
-                </>
-              )}
-              {reencodeAudioTracks.length > 1 && (
-                <div className="clip-tracks">
-                  <label className="clip-tracks-label">Audio Tracks</label>
-                  {loadingTracks
-                    ? <div className="track-loading">Loading tracks...</div>
-                    : (
-                      <div className="track-list">
-                        {reencodeAudioTracks.map((track, i) => (
-                          <label key={i} className="track-item">
-                            <input type="checkbox" checked={reencodeSelectedTracks.includes(i)} onChange={() => toggleReencodeTrack(i)} disabled={isReencoding} />
-                            <span className="track-name">{track.title || `Track ${i + 1}`}</span>
-                            <span className="track-detail">{track.codec_name} · {track.channels}ch</span>
-                          </label>
-                        ))}
-                      </div>
-                    )
-                  }
-                </div>
-              )}
-              <label className="checkbox-label">
-                <input type="checkbox" checked={reencodeSettings.replaceOriginal} onChange={e => setReencodeSettings({ ...reencodeSettings, replaceOriginal: e.target.checked })} disabled={isReencoding} />
-                Replace original files (saves space)
-              </label>
-              <p className="modal-note">
-                {reencodeSettings.codec === 'copy'
-                  ? 'Stream copy re-exports the video without re-encoding. Use this to quickly remove unwanted audio tracks.'
-                  : 'Reencoding may take several minutes per video. Lower CRF = better quality but larger files. H.265 typically saves 30-50% space compared to H.264.'}
-              </p>
-            </div>
-            {isReencoding && (
-              <div className="reencode-progress">
-                <div className="progress-info">
-                  <span>Reencoding {reencodeProgress.current} of {reencodeProgress.total}</span>
-                  <span className="progress-filename">{reencodeProgress.currentFile}</span>
-                </div>
-                <div className="progress-bar-container">
-                  <div className="progress-bar-fill" style={{ width: `${(reencodeProgress.current / reencodeProgress.total) * 100}%` }} />
-                </div>
-              </div>
-            )}
-            <div className="modal-actions">
-              <button className="btn btn-secondary" onClick={() => setReencodeModal(false)} disabled={isReencoding}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleReencode} disabled={isReencoding}>
-                {isReencoding ? <><Loader size={14} /> Processing...</> : reencodeSettings.codec === 'copy' ? <><Package size={14} /> Re-export</> : <><Film size={14} /> Start Reencoding</>}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ReencodeModal
+        isOpen={reencodeModal}
+        selectedCount={selectedCount}
+        reencodeSettings={reencodeSettings}
+        setReencodeSettings={setReencodeSettings}
+        reencodeAudioTracks={reencodeAudioTracks}
+        reencodeSelectedTracks={reencodeSelectedTracks}
+        loadingTracks={loadingTracks}
+        toggleReencodeTrack={toggleReencodeTrack}
+        isReencoding={isReencoding}
+        reencodeProgress={reencodeProgress}
+        onReencode={handleReencode}
+        onClose={() => setReencodeModal(false)}
+      />
 
       <Modal
         isOpen={deleteModal}

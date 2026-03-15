@@ -9,8 +9,8 @@ function log(message) {
 }
 
 function detectRunningGame(games) {
-  const processes = getRunningProcessNames();
-  const titles = getWindowTitles();
+  const processes = getRunningProcessNames().map(p => p.toLowerCase());
+  const titles = getWindowTitles().map(t => t.toLowerCase());
 
   for (const game of games) {
     if (!game.enabled) continue;
@@ -28,12 +28,8 @@ function detectRunningGame(games) {
     //   2 — Match executable                                 → exe only
     if (priority === 2) {
       // Exe-only: exact process name match (same logic OBS uses for "match executable").
-      // Requires game.exe to be set; if it isn't, fall through to title/process substring check.
+      // Requires game.exe to be set; if not set, this game is skipped.
       if (exeName && processes.some(p => p === exeName)) return game;
-      if (!exeName && titleStr) {
-        // No exe binding — fall back to treating selector as a process/title substring.
-        if (processes.some(p => p.includes(titleStr)) || titles.some(t => t.includes(titleStr))) return game;
-      }
     } else if (priority === 1) {
       // Title first, exe fallback (OBS priority 1).
       if (titleStr && titles.some(t => t.includes(titleStr))) return game;
@@ -49,7 +45,7 @@ function detectRunningGame(games) {
   return null;
 }
 
-function setupGameWatcher(store, onStateChange) {
+function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}) {
   let lastGame = null;
   let stopped = false;
   const organizeQueue = [];
@@ -61,8 +57,11 @@ function setupGameWatcher(store, onStateChange) {
     const gameName = organizeQueue.shift();
     const { organizeRecordings } = require('./fileManager');
     // .finally runs as a new microtask, so calling drainOrganizeQueue here is safe (no call-stack buildup).
-    organizeRecordings(store, gameName)
-      .catch(err => log(`Organize failed: ${err.stack || err.message}`))
+    organizeRecordings(store, gameName, onOrganizeProgress)
+      .catch(err => {
+        log(`Organize failed: ${err.stack || err.message}`);
+        onOrganizeProgress({ phase: 'error', gameName, error: err.message || 'Organize failed' });
+      })
       .finally(() => {
         organizing = false;
         drainOrganizeQueue();
@@ -123,12 +122,16 @@ function setupGameWatcher(store, onStateChange) {
       stopRecording()
         .catch(err => log(`Plugin stopRecording failed: ${err.message}`))
         .finally(() => {
+          // Capture the target game at schedule time to guard against stale closure.
+          const targetName = detected.name;
+          const targetScene = detected.scene || '';
           // After a short delay, signal recording for the newly detected game.
           setTimeout(() => {
             if (stopped) return; // watcher was stopped during the delay
-            writeGameState(`RECORDING|${detected.name}|${detected.scene || ''}`);
-            onStateChange({ currentGame: detected.name, status: 'recording' });
-            startRecording(detected.scene || undefined).catch(err =>
+            if (!lastGame || lastGame.name !== targetName) return; // game changed again during delay
+            writeGameState(`RECORDING|${targetName}|${targetScene}`);
+            onStateChange({ currentGame: targetName, status: 'recording' });
+            startRecording(targetScene || undefined).catch(err =>
               log(`Plugin startRecording failed: ${err.message}`)
             );
           }, 500);

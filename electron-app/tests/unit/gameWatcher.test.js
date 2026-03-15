@@ -85,6 +85,12 @@ describe('priority 0 — title match', () => {
     const game = makeGame({ selector: 'testgame', windowMatchPriority: 0 })
     expect(detectRunningGame([game])).toBeNull()
   })
+
+  it('matches window title case-insensitively', () => {
+    mockGetWindowTitles.mockReturnValue(['Valorant — Main Menu'])
+    const game = makeGame({ selector: 'valorant', windowMatchPriority: 0 })
+    expect(detectRunningGame([game])).toBe(game)
+  })
 })
 
 // ─────────────────────────────────────────────────────────────────
@@ -132,22 +138,29 @@ describe('priority 2 — exe only', () => {
     expect(detectRunningGame([game])).toBeNull()
   })
 
-  it('falls back to title/process substring when no exe is bound', () => {
+  it('returns null when no exe is bound (priority 2 requires exe)', () => {
     mockGetWindowTitles.mockReturnValue(['game window'])
     const game = makeGame({ selector: 'game window', exe: '', windowMatchPriority: 2 })
-    expect(detectRunningGame([game])).toBe(game)
+    expect(detectRunningGame([game])).toBeNull()
   })
 
-  it('falls back to process substring when no exe is bound and process matches selector', () => {
+  it('returns null when no exe is bound even if process matches selector', () => {
     mockGetRunningProcessNames.mockReturnValue(['game.exe'])
     const game = makeGame({ selector: 'game', exe: '', windowMatchPriority: 2 })
-    expect(detectRunningGame([game])).toBe(game)
+    expect(detectRunningGame([game])).toBeNull()
   })
 
   it('returns null when exe is set but not running', () => {
     mockGetRunningProcessNames.mockReturnValue(['other.exe'])
     const game = makeGame({ selector: 'anything', exe: 'game.exe', windowMatchPriority: 2 })
     expect(detectRunningGame([game])).toBeNull()
+  })
+
+  it('matches exe name case-insensitively (OS may return mixed case)', () => {
+    // Windows process list can return "VALORANT.exe" even when game.exe is "valorant.exe"
+    mockGetRunningProcessNames.mockReturnValue(['VALORANT.EXE'])
+    const game = makeGame({ selector: 'valorant', exe: 'VALORANT.exe', windowMatchPriority: 2 })
+    expect(detectRunningGame([game])).toBe(game)
   })
 })
 
@@ -167,5 +180,35 @@ describe('multiple games', () => {
     const gameA = makeGame({ name: 'A', selector: 'game a', enabled: false })
     const gameB = makeGame({ name: 'B', selector: 'game b', enabled: true })
     expect(detectRunningGame([gameA, gameB])).toBe(gameB)
+  })
+
+  it('returns null when all games are disabled', () => {
+    mockGetWindowTitles.mockReturnValue(['game window'])
+    const gameA = makeGame({ name: 'A', selector: 'game', enabled: false })
+    const gameB = makeGame({ name: 'B', selector: 'game', enabled: false })
+    expect(detectRunningGame([gameA, gameB])).toBeNull()
+  })
+
+  it('multiple games match - highest priority wins', () => {
+    mockGetRunningProcessNames.mockReturnValue(['game.exe'])
+    mockGetWindowTitles.mockReturnValue([])
+    const gameA = makeGame({ name: 'A', selector: 'game', exe: 'game.exe', windowMatchPriority: 0 })
+    const gameB = makeGame({ name: 'B', selector: 'game', exe: 'game.exe', windowMatchPriority: 2 })
+    const result = detectRunningGame([gameA, gameB])
+    expect(result).toBe(gameB)
+  })
+
+  it('rapid game start/stop cycles do not leak timers', () => {
+    vi.useFakeTimers()
+    for (let i = 0; i < 10; i++) {
+      mockGetRunningProcessNames.mockReturnValueOnce(['game.exe'])
+      mockGetWindowTitles.mockReturnValueOnce([])
+      const result1 = detectRunningGame([makeGame({ name: 'Game1', exe: 'game.exe' })])
+      
+      mockGetRunningProcessNames.mockReturnValueOnce([])
+      mockGetWindowTitles.mockReturnValueOnce([])
+      const result2 = detectRunningGame([makeGame({ name: 'Game1', exe: 'game.exe' })])
+    }
+    vi.restoreAllMocks()
   })
 })

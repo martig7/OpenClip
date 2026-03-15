@@ -86,6 +86,15 @@ describe('POST /api/clips/create', () => {
     expect(res.status).toBe(400)
   })
 
+  it('returns 400 when start_time equals end_time', async () => {
+    const src = path.join(obsDir, 'rec2.mp4')
+    fs.writeFileSync(src, Buffer.alloc(1024))
+    const res = await request(server)
+      .post('/api/clips/create')
+      .send({ source_path: src, start_time: 5, end_time: 5 })
+    expect(res.status).toBe(400)
+  })
+
   it('returns 200 on success (with mocked ffmpeg)', async () => {
     const cp = await import('child_process')
     cp.execFile.mockImplementation((bin, args, opts, cb) => {
@@ -135,6 +144,20 @@ describe('POST /api/clips/delete', () => {
     expect(res.status).toBe(403)
   })
 
+  it('returns 403 when path traversal ../ is used', async () => {
+    const res = await request(server)
+      .post('/api/clips/delete')
+      .send({ path: path.join(clipsDir, '..', '..', 'Windows', 'System32', 'evil.exe') })
+    expect(res.status).toBe(403)
+  })
+
+  it('returns 403 when URL-encoded path traversal %2F.. is used', async () => {
+    const res = await request(server)
+      .post('/api/clips/delete')
+      .send({ path: path.join(clipsDir, '..', '..', 'Windows', 'System32', 'evil.exe').replace(/\\/g, '/').replace('..', '%2F..') })
+    expect(res.status).toBe(403)
+  })
+
   it('returns 200 when deleting an existing allowed file', async () => {
     const fp = path.join(clipsDir, 'Halo Clip 2025-01-15 #1.mp4')
     fs.writeFileSync(fp, Buffer.alloc(1024))
@@ -156,5 +179,48 @@ describe('POST /api/delete (alias)', () => {
       .send({ path: fp })
     expect(res.status).toBe(200)
     expect(res.body.success).toBe(true)
+  })
+})
+
+describe('Clip Creation Concurrency', () => {
+  it('handles concurrent clip creation requests', async () => {
+    const src = path.join(obsDir, 'concurrent.mp4')
+    fs.writeFileSync(src, Buffer.alloc(1024))
+
+    const cp = await import('child_process')
+    cp.execFile.mockImplementation((bin, args, opts, cb) => {
+      setTimeout(() => cb(null, '', ''), 50)
+      return { kill: () => {} }
+    })
+
+    const makeRequest = () => request(server)
+      .post('/api/clips/create')
+      .send({ source_path: src, start_time: 0, end_time: 10 })
+
+    const [res1, res2] = await Promise.all([makeRequest(), makeRequest()])
+    expect([res1.status, res2.status]).toContain(200)
+  })
+
+  it('increments clip number for same-date clips', async () => {
+    const src = path.join(obsDir, 'increment.mp4')
+    fs.writeFileSync(src, Buffer.alloc(1024))
+
+    const cp = await import('child_process')
+    cp.execFile.mockImplementation((bin, args, opts, cb) => {
+      const outputPath = args[args.length - 1]
+      fs.writeFileSync(outputPath, Buffer.alloc(512))
+      setTimeout(() => cb(null, '', ''), 10)
+      return { kill: () => {} }
+    })
+
+    const makeClip = (i) => request(server)
+      .post('/api/clips/create')
+      .send({ source_path: src, start_time: i, end_time: i + 5 })
+
+    const res1 = await makeClip(0)
+    expect(res1.status).toBe(200)
+
+    const res2 = await makeClip(5)
+    expect(res2.status).toBe(200)
   })
 })

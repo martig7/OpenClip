@@ -4,6 +4,20 @@ import { Folder, Calendar, HardDrive, Play, FolderOpen, Trash2, Film, Check, X }
 import Sidebar from '../components/Sidebar'
 import Modal from '../components/Modal'
 import { apiFetch, apiPost, getBase } from '../apiBase'
+import api from '../../api'
+
+function getSessionProgressWidth(p) {
+  if (!p) return 0
+  if (p.phase === 'recording') {
+    if (p.stage === 'moving') return 45
+    if (p.stage === 'remuxing') return 32
+    return 10
+  }
+  if (p.phase === 'clipping') {
+    return 50 + (((p.clipIndex ?? 0) + 1) / (p.clipTotal ?? 1)) * 45
+  }
+  return 100
+}
 
 function ClipsPage() {
   const [clips, setClips] = useState([])
@@ -11,6 +25,7 @@ function ClipsPage() {
   const [loading, setLoading] = useState(true)
   const [deleteModal, setDeleteModal] = useState(false)
   const [toast, setToast] = useState(null)
+  const [sessionProgress, setSessionProgress] = useState(null)
   const [searchParams, setSearchParams] = useSearchParams()
   const toastTimerRef = useRef(null)
 
@@ -31,20 +46,36 @@ function ClipsPage() {
     }
   }, [])
 
-  const initialPathParam = searchParams.get('path')
+  // Capture the path param once on mount. Using a ref prevents setSearchParams({})
+  // from changing initialPathParam → re-triggering this effect → double fetch.
+  const initialPathParamRef = useRef(searchParams.get('path'))
 
   useEffect(() => {
     fetchClips().then(data => {
       if (!data) return
-      if (initialPathParam) {
-        const clip = data.find(c => c.path === initialPathParam)
+      const param = initialPathParamRef.current
+      if (param) {
+        const clip = data.find(c => c.path === param)
         if (clip) {
+          initialPathParamRef.current = null
           setSelectedClip(clip)
           setSearchParams({})
         }
       }
     })
-  }, [fetchClips, initialPathParam, setSearchParams])
+  }, [fetchClips, setSearchParams])
+
+  useEffect(() => {
+    const unsub = api.onSessionProgress?.((p) => {
+      if (p.phase === 'complete') {
+        setSessionProgress(null)
+        fetchClips()
+      } else {
+        setSessionProgress(p)
+      }
+    })
+    return () => unsub?.()
+  }, [fetchClips])
 
   const handleDelete = useCallback(async () => {
     if (!selectedClip) return
@@ -152,6 +183,23 @@ function ClipsPage() {
         confirmText="Delete"
         danger
       />
+
+      {sessionProgress && (
+        <div className="session-progress-banner">
+          <div className="session-progress-label">
+            <div className="spinner-sm" style={{ borderColor: 'rgba(245,158,11,0.25)', borderTopColor: 'var(--amber)' }} />
+            {sessionProgress.phase === 'recording'
+              ? `Processing session — ${sessionProgress.label}`
+              : sessionProgress.label}
+          </div>
+          <div className="progress-bar-container session-progress-bar">
+            <div
+              className="progress-bar-fill session-progress-fill"
+              style={{ width: `${getSessionProgressWidth(sessionProgress)}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {toast && (
         <div className={`toast ${toast.type}`}>

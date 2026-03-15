@@ -134,7 +134,7 @@ function downloadFile(url, destPath, onProgress) {
  * @param {() => Electron.BrowserWindow | null} getMainWindow
  * @returns {Promise<void>}
  */
-async function devCheckAndDownload(getMainWindow) {
+async function devCheckAndDownload(getMainWindow = () => null) {
   const sendToWindow = (channel, payload) => {
     const win = getMainWindow();
     if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
@@ -144,6 +144,11 @@ async function devCheckAndDownload(getMainWindow) {
     const release = await fetchJson(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`);
     const latestVersion = release.tag_name.replace(/^v/, '');
     const currentVersion = app.getVersion();
+
+    if (!semver.valid(latestVersion)) {
+      console.warn(`[updater][dev] Skipping update check — invalid tag_name: ${release.tag_name}`);
+      return;
+    }
 
     if (!semver.gt(latestVersion, currentVersion)) {
       console.log(`[updater][dev] Already up to date (${currentVersion})`);

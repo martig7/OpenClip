@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, NavLink } from 'react-router-dom';
-import { Gamepad2, Video, Film, HardDrive, Settings, Sliders, Download } from 'lucide-react';
+import { AlertTriangle, Gamepad2, Video, Film, HardDrive, Settings, Sliders, Download, X } from 'lucide-react';
 import appIcon from '../assets/icon.png';
 import api from './api';
 import GamesPage from './pages/GamesPage';
@@ -22,9 +22,13 @@ const navItems = [
   { path: '/settings', icon: Settings, label: 'Settings' },
 ];
 
+export const OrganizeErrorContext = createContext({ organizeError: null, clearOrganizeError: () => {} });
+export function useOrganizeError() { return useContext(OrganizeErrorContext); }
+
 export default function App() {
   const [updateState, setUpdateState] = useState(null); // null | { status: 'available'|'downloading'|'ready', version?, percent? }
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [organizeError, setOrganizeError] = useState(null);
 
   // First-run: show onboarding if not yet completed
   useEffect(() => {
@@ -48,6 +52,15 @@ export default function App() {
       setUpdateState(null);
     });
     return () => { offAvailable(); offProgress(); offDownloaded(); offError(); };
+  }, []);
+
+  useEffect(() => {
+    const unsub = api.onSessionProgress?.((p) => {
+      if (p.phase === 'error') {
+        setOrganizeError(p.error || 'An error occurred while organizing recordings.');
+      }
+    });
+    return () => unsub?.();
   }, []);
 
   useEffect(() => {
@@ -80,58 +93,79 @@ export default function App() {
     };
   }, []);
 
+  const clearOrganizeError = useCallback(() => {
+    setOrganizeError(null);
+    api.clearSessionProgress?.();
+  }, []);
+
   return (
-    <HashRouter>
-      <OnboardingModal open={showOnboarding} onClose={() => setShowOnboarding(false)} />
-      <div className="app-layout">
-        <div className="titlebar-drag" />
-        <nav className="sidebar-nav">
-          <div className="nav-brand">
-            <img src={appIcon} alt="OpenClip logo" className="nav-brand-logo" />
-            <span>OpenClip</span>
-          </div>
-          {navItems.map(({ path, icon: Icon, label }) => (
-            <NavLink
-              key={path}
-              to={path}
-              end={path === '/'}
-              className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-            >
-              <Icon size={18} />
-              <span>{label}</span>
-            </NavLink>
-          ))}
-          {updateState && (
-            <div className="update-banner">
-              <Download size={14} />
-              {updateState.status === 'available' && (
-                <span>v{updateState.version} available</span>
-              )}
-              {updateState.status === 'downloading' && (
-                <span>Downloading… {updateState.percent}%</span>
-              )}
-              {updateState.status === 'ready' && (
-                <>
-                  <span>Update ready</span>
-                  <button className="btn btn-primary btn-sm" onClick={() => api.installUpdate()}>
-                    Restart
-                  </button>
-                </>
-              )}
+    <OrganizeErrorContext.Provider value={{ organizeError, clearOrganizeError }}>
+      <HashRouter>
+        <OnboardingModal open={showOnboarding} onClose={() => setShowOnboarding(false)} />
+        <div className="app-layout">
+          <div className="titlebar-drag" />
+          <nav className="sidebar-nav">
+            <div className="nav-brand">
+              <img src={appIcon} alt="OpenClip logo" className="nav-brand-logo" />
+              <span>OpenClip</span>
             </div>
-          )}
-        </nav>
-        <main className="main-content">
-          <Routes>
-            <Route path="/" element={<GamesPage />} />
-            <Route path="/recordings" element={<ViewerRecordingsPage />} />
-            <Route path="/clips" element={<ViewerClipsPage />} />
-            <Route path="/storage" element={<ViewerStoragePage />} />
-            <Route path="/encoding" element={<EncodingPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-          </Routes>
-        </main>
-      </div>
-    </HashRouter>
+            {navItems.map(({ path, icon: Icon, label }) => (
+              <NavLink
+                key={path}
+                to={path}
+                end={path === '/'}
+                className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+              >
+                <Icon size={18} />
+                <span>{label}</span>
+                {label === 'Recordings' && organizeError && (
+                  <span className="nav-error-badge" title={organizeError}>
+                    <AlertTriangle size={12} />
+                  </span>
+                )}
+              </NavLink>
+            ))}
+            {updateState && (
+              <div className="update-banner">
+                <Download size={14} />
+                {updateState.status === 'available' && (
+                  <span>v{updateState.version} available</span>
+                )}
+                {updateState.status === 'downloading' && (
+                  <span>Downloading… {updateState.percent}%</span>
+                )}
+                {updateState.status === 'ready' && (
+                  <>
+                    <span>Update ready</span>
+                    <button className="btn btn-primary btn-sm" onClick={() => api.installUpdate()}>
+                      Restart
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+            {organizeError && (
+              <div className="organize-error-banner">
+                <AlertTriangle size={13} />
+                <span>Organize failed — see Recordings</span>
+                <button className="organize-error-close" onClick={clearOrganizeError} title="Dismiss">
+                  <X size={12} />
+                </button>
+              </div>
+            )}
+          </nav>
+          <main className="main-content">
+            <Routes>
+              <Route path="/" element={<GamesPage />} />
+              <Route path="/recordings" element={<ViewerRecordingsPage />} />
+              <Route path="/clips" element={<ViewerClipsPage />} />
+              <Route path="/storage" element={<ViewerStoragePage />} />
+              <Route path="/encoding" element={<EncodingPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+            </Routes>
+          </main>
+        </div>
+      </HashRouter>
+    </OrganizeErrorContext.Provider>
   );
 }

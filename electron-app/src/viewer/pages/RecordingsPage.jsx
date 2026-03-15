@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Check, X } from 'lucide-react'
+import { AlertTriangle, Check, X } from 'lucide-react'
 import Sidebar from '../components/Sidebar'
 import VideoPlayer from '../components/VideoPlayer'
 import { apiFetch } from '../apiBase'
 import api from '../../api'
+import { useOrganizeError } from '../../App'
 
 function RecordingsPage() {
   const [recordings, setRecordings] = useState([])
@@ -13,7 +14,10 @@ function RecordingsPage() {
   const [toast, setToast] = useState(null)
   const [searchParams, setSearchParams] = useSearchParams()
   const [games, setGames] = useState([])
+  const [organizeRemux, setOrganizeRemux] = useState(true)
+  const [sessionProgress, setSessionProgress] = useState(null)
   const toastTimerRef = useRef(null)
+  const { organizeError, clearOrganizeError } = useOrganizeError()
 
   useEffect(() => {
     return () => clearTimeout(toastTimerRef.current)
@@ -32,21 +36,26 @@ function RecordingsPage() {
     }
   }, [])
 
-  const initialPathParam = searchParams.get('path')
+  // Capture the path param once on mount. Using a ref prevents setSearchParams({})
+  // from changing initialPathParam → re-triggering this effect → double fetch.
+  const initialPathParamRef = useRef(searchParams.get('path'))
 
   useEffect(() => {
     fetchRecordings().then(data => {
       if (!data) return
-      if (initialPathParam) {
-        const recording = data.find(r => r.path === initialPathParam)
+      const param = initialPathParamRef.current
+      if (param) {
+        const recording = data.find(r => r.path === param)
         if (recording) {
+          initialPathParamRef.current = null
           setSelectedRecording(recording)
           setSearchParams({})
         }
       }
     })
     api.getGames().then(g => setGames(g || [])).catch(() => {})
-  }, [fetchRecordings, initialPathParam, setSearchParams])
+    api.getStore('settings').then(s => setOrganizeRemux(s?.organizeRemux !== false)).catch(() => {})
+  }, [fetchRecordings, setSearchParams])
 
   const handleClipCreated = useCallback((clip) => {
     setToast({ type: 'success', message: `Clip created: ${clip.filename}` })
@@ -67,6 +76,20 @@ function RecordingsPage() {
     clearTimeout(toastTimerRef.current)
     toastTimerRef.current = setTimeout(() => setToast(null), 5000)
   }, [])
+
+  useEffect(() => {
+    const unsub = api.onSessionProgress?.((p) => {
+      if (p.phase === 'complete') {
+        setSessionProgress(null)
+        fetchRecordings()
+      } else if (p.phase === 'recording') {
+        setSessionProgress(p)
+      } else if (p.phase === 'error') {
+        setSessionProgress(null)
+      }
+    })
+    return () => unsub?.()
+  }, [fetchRecordings])
 
   if (loading) {
     return (
@@ -93,7 +116,36 @@ function RecordingsPage() {
         games={games}
         onOrganized={handleOrganized}
         onOrganizeError={handleOrganizeError}
+        organizeRemux={organizeRemux}
       />
+
+      {organizeError && (
+        <div className="organize-error-alert">
+          <AlertTriangle size={15} />
+          <div className="organize-error-alert-body">
+            <strong>Organize failed</strong>
+            <span>{organizeError}</span>
+          </div>
+          <button className="organize-error-alert-close" onClick={clearOrganizeError} title="Dismiss">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {sessionProgress && (
+        <div className="session-progress-banner">
+          <div className="session-progress-label">
+            <div className="spinner-sm" style={{ borderColor: 'rgba(245,158,11,0.25)', borderTopColor: 'var(--amber)' }} />
+            {sessionProgress.label}
+          </div>
+          <div className="progress-bar-container session-progress-bar">
+            <div
+              className="progress-bar-fill session-progress-fill"
+              style={{ width: `${sessionProgress.stage === 'remuxing' ? 65 : sessionProgress.stage === 'moving' ? 90 : 20}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {toast && (
         <div className={`toast ${toast.type}`}>

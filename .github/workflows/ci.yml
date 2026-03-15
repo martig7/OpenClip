@@ -25,9 +25,35 @@ jobs:
         working-directory: electron-app
         run: npm ci
 
-      - name: Run tests
+      - name: Get Playwright version
+        id: pw-version
         working-directory: electron-app
-        run: npm test
+        run: echo "version=$(node -e "console.log(require('./package-lock.json').packages['node_modules/@playwright/test'].version)")" >> $GITHUB_OUTPUT
+
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ steps.pw-version.outputs.version }}-ubuntu
+
+      - name: Install Playwright browsers
+        working-directory: electron-app
+        run: npx playwright install --with-deps
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+
+      - name: Install Playwright system dependencies
+        working-directory: electron-app
+        run: npx playwright install-deps
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+
+      - name: Run unit and component tests
+        working-directory: electron-app
+        run: npx vitest run
+
+      - name: Run E2E tests
+        working-directory: electron-app
+        run: npx playwright test
 
   obs-integration:
     name: OBS Integration Tests
@@ -68,6 +94,32 @@ jobs:
         working-directory: electron-app
         run: npm ci
 
-      - name: Run OBS integration tests
+      - name: Get Playwright version
+        id: pw-version
+        working-directory: electron-app
+        run: echo "version=$(node -e "console.log(require('./package-lock.json').packages['node_modules/@playwright/test'].version)")" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.LOCALAPPDATA }}\ms-playwright
+          key: playwright-${{ steps.pw-version.outputs.version }}-windows-chromium
+
+      - name: Install Playwright browsers
+        working-directory: electron-app
+        run: npx playwright install --with-deps chromium
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+
+      - name: Run ffmpeg integration tests
+        working-directory: electron-app
+        run: npm run test:ffmpeg -- --reporter=verbose
+
+      - name: Run OBS Vitest integration tests
         working-directory: electron-app
         run: npm run test:integration -- --reporter=verbose
+
+      - name: Run OBS Playwright integration tests
+        working-directory: electron-app
+        run: npx playwright test --config playwright.integration.config.js

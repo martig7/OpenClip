@@ -1,19 +1,45 @@
 // When running inside Electron, window.api is injected by preload.js.
 // When running in a browser (vite dev without electron), provide a mock.
 
+import { defaultSettings, mockGames, mockRecordings, mockClips, mockStorageStats } from './mockData';
+
 const noop = () => {};
 const asyncNoop = async () => null;
 const asyncArr = async () => [];
-const asyncObj = async (val) => val;
+
+let store = {
+  settings: { ...defaultSettings },
+  games: [...mockGames],
+};
 
 const mockApi = {
-  getStore: asyncNoop,
-  setStore: asyncNoop,
-  getGames: asyncArr,
-  addGame: asyncArr,
-  removeGame: asyncArr,
-  toggleGame: asyncArr,
-  updateGame: asyncArr,
+  getStore: async (key) => {
+    if (key === 'settings') return store.settings;
+    if (key === 'games') return store.games;
+    return null;
+  },
+  setStore: async (key, value) => {
+    if (key === 'settings') store.settings = value;
+    if (key === 'games') store.games = value;
+  },
+  getGames: async () => store.games,
+  addGame: async (game) => {
+    const newGame = { enabled: true, ...game, id: Date.now().toString(36) };
+    store.games = [...store.games, newGame];
+    return store.games;
+  },
+  removeGame: async (id) => {
+    store.games = store.games.filter(g => g.id !== id);
+    return store.games;
+  },
+  toggleGame: async (id) => {
+    store.games = store.games.map(g => g.id === id ? { ...g, enabled: !g.enabled } : g);
+    return store.games;
+  },
+  updateGame: async (id, updates) => {
+    store.games = store.games.map(g => g.id === id ? { ...g, ...updates } : g);
+    return store.games;
+  },
   getVisibleWindows: asyncArr,
   extractWindowIcon: asyncNoop,
   startWatcher: async () => ({ running: false }),
@@ -30,6 +56,11 @@ const mockApi = {
   isOBSScriptLoaded: async () => false,
   installOBSPlugin: async () => ({ success: false, message: 'Not in Electron' }),
   isOBSPluginRegistered: async () => false,
+  detectOBSInstallPath: asyncNoop,
+  setOBSInstallPath: asyncNoop,
+  getOBSInstallPath: asyncNoop,
+  isOnboardingComplete: async () => true,
+  setOnboardingComplete: asyncNoop,
   getOBSWSScenes: asyncArr,
   createOBSScene: async () => ({ success: false, message: 'Not in Electron' }),
   createOBSSceneFromScratch: async () => ({ success: false, message: 'Not in Electron' }),
@@ -48,17 +79,19 @@ const mockApi = {
   openFileDialog: asyncNoop,
   showInExplorer: noop,
   openExternal: noop,
-  getRecordings: asyncArr,
+  getRecordings: async () => mockRecordings,
   deleteRecording: asyncNoop,
   getVideoURL: asyncNoop,
   organizeRecording: asyncNoop,
-  getClips: asyncArr,
+  getClips: async () => mockClips,
   createClip: asyncNoop,
   deleteClip: asyncNoop,
   getMarkers: asyncArr,
   deleteMarker: asyncArr,
   onMarkerAdded: () => noop,
-  getStorageStats: async () => ({ totalSize: 0, recordingCount: 0, clipCount: 0, byGame: {} }),
+  onOrganizeProgress: () => noop,
+  onSessionProgress: () => noop,
+  getStorageStats: async () => mockStorageStats,
   registerHotkey: asyncNoop,
   reencodeVideo: asyncNoop,
   checkForUpdate: asyncNoop,

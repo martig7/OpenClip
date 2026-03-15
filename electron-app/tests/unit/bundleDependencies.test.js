@@ -98,4 +98,36 @@ describe('bundle runtime dependencies', () => {
     expect(dependencyNames.has('semver')).toBe(true);
     expect(devDependencyNames.has('semver')).toBe(false);
   });
+
+  it('does not have orphaned dependencies (listed but not imported)', () => {
+    const electronDir = path.resolve(process.cwd(), 'electron');
+    const files = walkJsFiles(electronDir);
+
+    const usedPackages = new Set();
+
+    for (const filePath of files) {
+      const source = fs.readFileSync(filePath, 'utf8');
+      const specs = collectSpecifiers(source);
+
+      for (const spec of specs) {
+        if (isRelativeOrAbsolute(spec)) continue;
+        if (builtinSet.has(spec)) continue;
+
+        const packageName = toPackageName(spec);
+        if (runtimeProvidedModules.has(packageName)) continue;
+
+        usedPackages.add(packageName);
+      }
+    }
+
+    const knownUnused = ['chokidar', 'fluent-ffmpeg'];
+    const orphaned = [];
+    for (const dep of dependencyNames) {
+      if (!usedPackages.has(dep) && !knownUnused.includes(dep) && !dep.startsWith('@electron') && dep !== 'electron') {
+        orphaned.push(dep);
+      }
+    }
+
+    expect(orphaned).toEqual([]);
+  });
 });

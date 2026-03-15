@@ -3,9 +3,47 @@ const path = require('path');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 const { isVideoFile, CODEC_MAP, FFMPEG_PATH, FFPROBE_PATH } = require('./constants');
+const { pathToFileURL } = require('url');
 const service = require('./recordingService');
 
 const execFileAsync = promisify(execFile);
+
+// Move a file safely across devices: try rename first, copy+delete on EXDEV
+async function moveFileSafe(src, dest) {
+  try {
+    fs.renameSync(src, dest);
+  } catch (err) {
+    if (err.code !== 'EXDEV') throw err;
+    await fs.promises.copyFile(src, dest);
+    try {
+      await fs.promises.unlink(src);
+    } catch (unlinkErr) {
+      // Best-effort cleanup of the just-copied dest before rethrowing
+      try { await fs.promises.unlink(dest); } catch {}
+      throw unlinkErr;
+    }
+  }
+}
+
+// Try to open the file for writing to check if it's still held by another process
+function isFileLocked(filePath) {
+  try {
+    const fd = fs.openSync(filePath, 'r+');
+    fs.closeSync(fd);
+    return false;
+  } catch (err) {
+    return err.code === 'EBUSY' || err.code === 'EPERM' || err.code === 'EACCES';
+  }
+}
+
+// Wait until the file is not locked, checking every delayMs up to maxAttempts times
+async function waitForUnlock(filePath, maxAttempts = 5, delayMs = 2000) {
+  for (let i = 0; i < maxAttempts; i++) {
+    if (!isFileLocked(filePath)) return;
+    if (i < maxAttempts - 1) await new Promise(r => setTimeout(r, delayMs));
+  }
+  throw new Error(`File is still locked after ${maxAttempts} attempts — try again in a moment`);
+}
 
 function getWeekFolder(date) {
   const d = new Date(date);
@@ -16,7 +54,25 @@ function getWeekFolder(date) {
   return `Week of ${months[monday.getMonth()]} ${monday.getDate()} ${monday.getFullYear()}`;
 }
 
-async function organizeRecordings(store, gameName) {
+// Format a Date as YYYY-MM-DD using the local calendar (not UTC).
+function localDateStr(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+// Sanitize a game name for use in file/folder names: remove characters invalid
+// on Windows/macOS/Linux, collapse consecutive dots, strip leading/trailing whitespace, cap length.
+function sanitizeGameName(name) {
+  return (name || '')
+    .replace(/[:/\\?*|"<>]/g, '-')
+    .replace(/\.{2,}/g, '.')
+    .replace(/^[\s.]+|[\s.]+$/g, '')
+    .slice(0, 80) || 'Unknown';
+}
+
+async function organizeRecordings(store, gameName, onProgress = () => {}) {
   const obsPath = store.get('settings.obsRecordingPath');
   const destPath = store.get('settings.destinationPath');
   if (!obsPath || !destPath || !fs.existsSync(obsPath)) return;
@@ -24,7 +80,8 @@ async function organizeRecordings(store, gameName) {
   const files = fs.readdirSync(obsPath).filter(f => isVideoFile(f));
 
   const now = new Date();
-  const weekFolder = `${gameName} - ${getWeekFolder(now)}`;
+  const sanitizedName = sanitizeGameName(gameName);
+  const weekFolder = `${sanitizedName} - ${getWeekFolder(now)}`;
   const targetDir = path.join(destPath, weekFolder);
 
   for (const file of files) {
@@ -32,6 +89,8 @@ async function organizeRecordings(store, gameName) {
     const stat = fs.statSync(src);
     // Only process files modified in the last 10 minutes
     if (now - stat.mtime > 10 * 60 * 1000) continue;
+
+    onProgress({ phase: 'recording', stage: 'checking', label: 'Verifying recording…', gameName });
 
     // Wait for file to stabilize — OBS may still be writing/finalizing
     await new Promise(r => setTimeout(r, 2000));
@@ -44,14 +103,15 @@ async function organizeRecordings(store, gameName) {
 
     fs.mkdirSync(targetDir, { recursive: true });
 
-    const dateStr = now.toISOString().slice(0, 10);
+    const dateStr = localDateStr(now);
     const existing = fs.readdirSync(targetDir).filter(f => f.includes(dateStr));
     const sessionNum = existing.length + 1;
     const ext = path.extname(file);
-    const newName = `${gameName} Session ${dateStr} #${sessionNum}.mp4`;
+    const newName = `${sanitizedName} Session ${dateStr} #${sessionNum}.mp4`;
     const dest = path.join(targetDir, newName);
 
     if (ext.toLowerCase() !== '.mp4') {
+      onProgress({ phase: 'recording', stage: 'remuxing', label: 'Remuxing to MP4…', gameName });
       // Mark both paths as in-progress so scans skip them during remux
       service.markRemuxing(src, dest);
       try {
@@ -68,7 +128,7 @@ async function organizeRecordings(store, gameName) {
 
         await execFileAsync(FFMPEG_PATH, [
           '-i', src, '-map', '0', '-c', 'copy', '-movflags', '+faststart', '-y', dest,
-        ], { timeout: 120000 });
+        ], { timeout: 10 * 60 * 1000 });
 
         // Save track names in a sidecar file so they survive the container conversion
         if (trackNames) {
@@ -76,19 +136,23 @@ async function organizeRecordings(store, gameName) {
         }
 
         fs.unlinkSync(src);
-      } catch {
+      } catch (remuxErr) {
         // Remux failed — remove any partial output so no duplicate is left behind
         try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch {}
         // Fallback: just move the file
         try {
-          fs.renameSync(src, path.join(targetDir, `${gameName} Session ${dateStr} #${sessionNum}${ext}`));
-        } catch {}
+          onProgress({ phase: 'recording', stage: 'moving', label: 'Moving file…', gameName });
+          await moveFileSafe(src, path.join(targetDir, `${sanitizedName} Session ${dateStr} #${sessionNum}${ext}`));
+        } catch {
+          onProgress({ phase: 'error', gameName, error: `Could not process recording for ${gameName}: ${remuxErr.message}` });
+        }
       } finally {
         service.unmarkRemuxing(src, dest);
         service.invalidateRecordingsCache();
       }
     } else {
-      fs.renameSync(src, dest);
+      onProgress({ phase: 'recording', stage: 'moving', label: 'Moving file…', gameName });
+      await moveFileSafe(src, dest);
       service.invalidateRecordingsCache();
     }
   }
@@ -96,7 +160,9 @@ async function organizeRecordings(store, gameName) {
   // Auto-clip from markers when auto-clip is enabled
   const autoClipSettings = store.get('settings.autoClip');
   if (autoClipSettings && autoClipSettings.enabled) {
-    await processAutoClips(store, gameName, targetDir);
+    await processAutoClips(store, gameName, targetDir, onProgress);
+  } else {
+    onProgress({ phase: 'complete', gameName });
   }
 }
 
@@ -114,9 +180,12 @@ async function getVideoDuration(filePath) {
   }
 }
 
-async function processAutoClips(store, gameName, recordingDir) {
+async function processAutoClips(store, gameName, recordingDir, onProgress = () => {}) {
   const markers = (store.get('clipMarkers') || []).filter(m => m.game === gameName);
-  if (markers.length === 0) return;
+  if (markers.length === 0) {
+    onProgress({ phase: 'complete', gameName });
+    return;
+  }
 
   const destPath = store.get('settings.destinationPath');
   const clipsDir = path.join(destPath, 'Clips');
@@ -127,7 +196,10 @@ async function processAutoClips(store, gameName, recordingDir) {
   const bufferAfter = autoClip.bufferAfter || 15;
 
   // Find the most recent recording file
-  if (!fs.existsSync(recordingDir)) return;
+  if (!fs.existsSync(recordingDir)) {
+    onProgress({ phase: 'complete', gameName });
+    return;
+  }
   const names = fs.readdirSync(recordingDir, { withFileTypes: true })
     .filter(f => f.isFile() && f.name.endsWith('.mp4'))
     .map(f => f.name);
@@ -143,25 +215,39 @@ async function processAutoClips(store, gameName, recordingDir) {
     .map(r => r.value)
     .sort((a, b) => b.mtime - a.mtime);
 
-  if (recordings.length === 0) return;
+  if (recordings.length === 0) {
+    onProgress({ phase: 'complete', gameName });
+    return;
+  }
   const recording = recordings[0];
 
   // Determine recording time window to convert absolute marker timestamps → video positions
   const duration = await getVideoDuration(recording.path);
-  if (!duration) return;
+  if (!duration) {
+    onProgress({ phase: 'complete', gameName });
+    return;
+  }
   const recordingStartUnix = recording.mtime.getTime() / 1000 - duration;
 
-  const dateStr = new Date().toISOString().slice(0, 10);
+  const sanitizedName = sanitizeGameName(gameName);
+  const dateStr = localDateStr(new Date());
   let clipNum = service.countClipsForDate(clipsDir, gameName, dateStr) + 1;
+
+  const clipTotal = markers.length;
+  let clipIndex = 0;
+  const processedMarkers = [];
 
   for (const marker of markers) {
     // Convert absolute Unix timestamp to position within the video
     const videoPosition = marker.timestamp - recordingStartUnix;
     if (videoPosition < 0 || videoPosition > duration) continue; // marker outside this recording
 
+    clipIndex++;
+    onProgress({ phase: 'clipping', stage: 'clipping', label: `Creating clip ${clipIndex} of ${clipTotal}…`, gameName, clipIndex, clipTotal });
+
     const start = Math.max(0, videoPosition - bufferBefore);
     const clipDuration = bufferBefore + bufferAfter;
-    const clipPath = path.join(clipsDir, `${gameName} Clip ${dateStr} #${clipNum}.mp4`);
+    const clipPath = path.join(clipsDir, `${sanitizedName} Clip ${dateStr} #${clipNum}.mp4`);
 
     try {
       await execFileAsync(FFMPEG_PATH, [
@@ -175,18 +261,110 @@ async function processAutoClips(store, gameName, recordingDir) {
       ], { timeout: 5 * 60 * 1000, killSignal: 'SIGKILL' });
       clipNum++;
       service.invalidateClipsCache();
+      processedMarkers.push(marker);
     } catch {
       // Skip failed clips
     }
   }
 
-  if (autoClip.removeMarkers) {
-    const remaining = (store.get('clipMarkers') || []).filter(m => m.game !== gameName);
+  onProgress({ phase: 'complete', gameName });
+
+  if (autoClip.removeMarkers && processedMarkers.length > 0) {
+    const processedTimestamps = new Set(processedMarkers.map(m => m.timestamp));
+    const remaining = (store.get('clipMarkers') || []).filter(
+      m => !(m.game === gameName && processedTimestamps.has(m.timestamp))
+    );
     store.set('clipMarkers', remaining);
   }
 
-  if (autoClip.deleteFullRecording) {
+  if (autoClip.deleteFullRecording && processedMarkers.length > 0) {
     try { fs.unlinkSync(recording.path); } catch {}
+  }
+}
+
+async function finalizeDirectRecording(store, gameName, recordingDir, onProgress = () => {}) {
+  if (!recordingDir || !fs.existsSync(recordingDir)) return;
+
+  const files = fs.readdirSync(recordingDir).filter(f => isVideoFile(f));
+  const now = new Date();
+  const sanitizedName = sanitizeGameName(gameName);
+
+  for (const file of files) {
+    // Skip files already in session format (from a previous finalize call)
+    if (file.startsWith(`${sanitizedName} Session`)) continue;
+
+    const src = path.join(recordingDir, file);
+    const stat = fs.statSync(src);
+    // Only process files modified in the last 10 minutes
+    if (now - stat.mtime > 10 * 60 * 1000) continue;
+
+    onProgress({ phase: 'recording', stage: 'checking', label: 'Verifying recording…', gameName });
+
+    // Wait for file to stabilize — OBS may still be writing/finalizing
+    await new Promise(r => setTimeout(r, 2000));
+    let statCheck;
+    try { statCheck = fs.statSync(src); } catch { continue; }
+    if (stat.size !== statCheck.size) {
+      console.warn(`[finalize] Skipping ${file} — file size changed, still being written`);
+      continue;
+    }
+
+    const dateStr = localDateStr(now);
+    const existing = fs.readdirSync(recordingDir).filter(f => f.includes(dateStr) && f !== file);
+    const sessionNum = existing.length + 1;
+    const ext = path.extname(file);
+    const newName = `${sanitizedName} Session ${dateStr} #${sessionNum}.mp4`;
+    const dest = path.join(recordingDir, newName);
+
+    if (ext.toLowerCase() !== '.mp4') {
+      onProgress({ phase: 'recording', stage: 'remuxing', label: 'Remuxing to MP4…', gameName });
+      service.markRemuxing(src, dest);
+      try {
+        let trackNames = null;
+        try {
+          const { stdout: probeOut } = await execFileAsync(FFPROBE_PATH, [
+            '-v', 'error', '-show_streams', '-select_streams', 'a', '-of', 'json', src,
+          ], { encoding: 'utf-8', timeout: 10000 });
+          const streams = JSON.parse(probeOut).streams || [];
+          const names = streams.map(s => s.tags?.title || s.tags?.TITLE || null);
+          if (names.some(Boolean)) trackNames = names;
+        } catch {}
+
+        await execFileAsync(FFMPEG_PATH, [
+          '-i', src, '-map', '0', '-c', 'copy', '-movflags', '+faststart', '-y', dest,
+        ], { timeout: 10 * 60 * 1000 });
+
+        if (trackNames) {
+          fs.writeFileSync(dest + '.tracks.json', JSON.stringify(trackNames));
+        }
+
+        fs.unlinkSync(src);
+      } catch (remuxErr) {
+        // Remux failed — remove any partial output, keep original with session name
+        try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch {}
+        try {
+          onProgress({ phase: 'recording', stage: 'moving', label: 'Renaming file…', gameName });
+          await moveFileSafe(src, path.join(recordingDir, `${sanitizedName} Session ${dateStr} #${sessionNum}${ext}`));
+        } catch {
+          onProgress({ phase: 'error', gameName, error: `Could not process recording for ${gameName}: ${remuxErr.message}` });
+        }
+      } finally {
+        service.unmarkRemuxing(src, dest);
+        service.invalidateRecordingsCache();
+      }
+    } else {
+      onProgress({ phase: 'recording', stage: 'moving', label: 'Renaming file…', gameName });
+      await moveFileSafe(src, dest);
+      service.invalidateRecordingsCache();
+    }
+  }
+
+  // Auto-clip from markers when auto-clip is enabled
+  const autoClipSettings = store.get('settings.autoClip');
+  if (autoClipSettings && autoClipSettings.enabled) {
+    await processAutoClips(store, gameName, recordingDir, onProgress);
+  } else {
+    onProgress({ phase: 'complete', gameName });
   }
 }
 
@@ -206,7 +384,7 @@ function setupFileManager(ipcMain, store) {
   });
 
   ipcMain.handle('video:getURL', (_event, filePath) => {
-    return `file:///${filePath.replace(/\\/g, '/')}`;
+    return pathToFileURL(filePath).href;
   });
 
   ipcMain.handle('clips:list', () => {
@@ -260,32 +438,57 @@ function setupFileManager(ipcMain, store) {
   });
 }
 
-async function organizeSpecificRecording(store, filePath, gameName) {
+async function organizeSpecificRecording(store, filePath, gameName, opts = {}) {
+  const { moveOnly = false, onProgress = () => {} } = opts;
+
   const destPath = store.get('settings.destinationPath');
   if (!destPath) throw new Error('No destination path configured');
   if (!fs.existsSync(filePath)) throw new Error('Recording file not found');
 
-  // Verify file is stable (not still being written)
+  // Skip files already inside the organized destination (no double-move)
+  const resolvedFile = path.resolve(filePath);
+  const resolvedDest = path.resolve(destPath);
+  if (resolvedFile.startsWith(resolvedDest + path.sep)) {
+    return { success: true, alreadyOrganized: true, path: filePath, filename: path.basename(filePath) };
+  }
+
+  // Verify file is stable (size not changing) and not locked by OBS
+  onProgress('checking', 'Verifying file…');
   const stat1 = fs.statSync(filePath);
   await new Promise(r => setTimeout(r, 1500));
   let stat2;
   try { stat2 = fs.statSync(filePath); } catch { throw new Error('Cannot access file'); }
   if (stat1.size !== stat2.size) throw new Error('File is still being written — please wait a moment and try again');
+  await waitForUnlock(filePath);
 
   // Use the file's mtime as the reference date so the recording lands in the correct week
   const recordingDate = stat2.mtime;
-  const weekFolder = `${gameName} - ${getWeekFolder(recordingDate)}`;
+  const sanitizedName = sanitizeGameName(gameName);
+  const weekFolder = `${sanitizedName} - ${getWeekFolder(recordingDate)}`;
   const targetDir = path.join(destPath, weekFolder);
-  fs.mkdirSync(targetDir, { recursive: true });
+  try {
+    fs.mkdirSync(targetDir, { recursive: true });
+  } catch (err) {
+    if (err.code === 'EACCES' || err.code === 'EPERM') {
+      throw new Error('Permission denied: cannot create folder at destination. Check your folder permissions.');
+    }
+    if (err.code === 'ENOSPC') {
+      throw new Error('Not enough disk space to create the destination folder.');
+    }
+    throw err;
+  }
 
-  const dateStr = recordingDate.toISOString().slice(0, 10);
+  const dateStr = localDateStr(recordingDate);
   const existing = fs.readdirSync(targetDir).filter(f => isVideoFile(f) && f.includes(dateStr));
   const sessionNum = existing.length + 1;
   const ext = path.extname(filePath);
-  const destFilename = `${gameName} Session ${dateStr} #${sessionNum}.mp4`;
+  const shouldRemux = ext.toLowerCase() !== '.mp4' && !moveOnly;
+  const destExt = shouldRemux ? '.mp4' : ext;
+  const destFilename = `${sanitizedName} Session ${dateStr} #${sessionNum}${destExt}`;
   const dest = path.join(targetDir, destFilename);
 
-  if (ext.toLowerCase() !== '.mp4') {
+  if (shouldRemux) {
+    onProgress('remuxing', 'Remuxing to MP4…');
     service.markRemuxing(filePath, dest);
     let finalPath = dest;
     try {
@@ -307,11 +510,11 @@ async function organizeSpecificRecording(store, filePath, gameName) {
       fs.unlinkSync(filePath);
     } catch (err) {
       try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch {}
-      // Fallback: move with original extension
-      const fallbackName = `${gameName} Session ${dateStr} #${sessionNum}${ext}`;
+      // Fallback: move with original extension (cross-device safe)
+      const fallbackName = `${sanitizedName} Session ${dateStr} #${sessionNum}${ext}`;
       finalPath = path.join(targetDir, fallbackName);
       try {
-        fs.renameSync(filePath, finalPath);
+        await moveFileSafe(filePath, finalPath);
       } catch (renameErr) {
         service.unmarkRemuxing(filePath, dest);
         throw new Error(`Could not move file (it may still be open by OBS): ${renameErr.message}`);
@@ -322,9 +525,13 @@ async function organizeSpecificRecording(store, filePath, gameName) {
     }
     return { success: true, path: finalPath, filename: path.basename(finalPath) };
   } else {
+    onProgress('moving', 'Moving file…');
     try {
-      fs.renameSync(filePath, dest);
+      await moveFileSafe(filePath, dest);
     } catch (err) {
+      if (err.code === 'ENOSPC') {
+        throw new Error('Not enough disk space to move the recording.');
+      }
       throw new Error(`Could not move file (it may still be open by OBS): ${err.message}`);
     }
     service.invalidateRecordingsCache();
@@ -332,4 +539,4 @@ async function organizeSpecificRecording(store, filePath, gameName) {
   }
 }
 
-module.exports = { setupFileManager, organizeRecordings, organizeSpecificRecording };
+module.exports = { setupFileManager, organizeRecordings, organizeSpecificRecording, finalizeDirectRecording, getWeekFolder };
