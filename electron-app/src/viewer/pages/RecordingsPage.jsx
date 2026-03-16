@@ -15,7 +15,6 @@ function RecordingsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [games, setGames] = useState([])
   const [organizeRemux, setOrganizeRemux] = useState(true)
-  const [sessionProgress, setSessionProgress] = useState(null)
   const toastTimerRef = useRef(null)
   const { organizeError, clearOrganizeError } = useOrganizeError()
 
@@ -77,16 +76,10 @@ function RecordingsPage() {
     toastTimerRef.current = setTimeout(() => setToast(null), 5000)
   }, [])
 
+  // Refresh the list when auto-organize completes (progress display is handled globally in App).
   useEffect(() => {
     const unsub = api.onSessionProgress?.((p) => {
-      if (p.phase === 'complete') {
-        setSessionProgress(null)
-        fetchRecordings()
-      } else if (p.phase === 'recording') {
-        setSessionProgress(p)
-      } else if (p.phase === 'error') {
-        setSessionProgress(null)
-      }
+      if (p.phase === 'complete') fetchRecordings()
     })
     return () => unsub?.()
   }, [fetchRecordings])
@@ -129,21 +122,6 @@ function RecordingsPage() {
           <button className="organize-error-alert-close" onClick={clearOrganizeError} title="Dismiss">
             <X size={14} />
           </button>
-        </div>
-      )}
-
-      {sessionProgress && (
-        <div className="session-progress-banner">
-          <div className="session-progress-label">
-            <div className="spinner-sm" style={{ borderColor: 'rgba(245,158,11,0.25)', borderTopColor: 'var(--amber)' }} />
-            {sessionProgress.label}
-          </div>
-          <div className="progress-bar-container session-progress-bar">
-            <div
-              className="progress-bar-fill session-progress-fill"
-              style={{ width: `${sessionProgress.stage === 'remuxing' ? 65 : sessionProgress.stage === 'moving' ? 90 : 20}%` }}
-            />
-          </div>
         </div>
       )}
 

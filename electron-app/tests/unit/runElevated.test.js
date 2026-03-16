@@ -1,217 +1,87 @@
 /**
  * Unit tests for runElevated.js
  *
- * runElevated() is synchronous: it writes a temp .ps1, calls execSync to launch
- * an elevated PowerShell process, then reads a result file the script writes.
- * child_process is mocked via setup.js; fs calls are real (tmpdir only).
+ * runElevated() is async and delegates to winUtils.runElevatedOps().
+ * winUtils is mocked via require.cache injection (vi.mock only intercepts Vite's
+ * ESM pipeline, not native require() calls inside CJS source files — see setup.js).
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import fs from 'fs'
-import os from 'os'
-import path from 'path'
-import { _cpMock } from '../setup.js'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { createRequire } from 'module'
 
-const FIXED_ID = 99999
+// ── Inject mock into require.cache BEFORE runElevated.js loads winUtils ──────
 
-// Predictable temp paths based on the mocked Date.now
-const scriptPath = path.join(os.tmpdir(), `openclip-install-${FIXED_ID}.ps1`)
-const resultPath = path.join(os.tmpdir(), `openclip-result-${FIXED_ID}.txt`)
+const _runElevatedOpsMock = vi.fn()
+const _winUtilsMock = {
+  runElevatedOps:           _runElevatedOpsMock,
+  getDiskFreeSpace:         vi.fn(),
+  listWindowsWithProcesses: vi.fn(),
+  listRunningApps:          vi.fn(),
+  listAudioDevices:         vi.fn(),
+  extractProcessIcon:       vi.fn(),
+}
 
-let runElevated
+const _req = createRequire(import.meta.url)
+const _winUtilsPath    = _req.resolve('../../electron/winUtils.js')
+const _runElevatedPath = _req.resolve('../../electron/runElevated.js')
 
-beforeEach(async () => {
-  vi.spyOn(Date, 'now').mockReturnValue(FIXED_ID)
+// Override (or create) the winUtils cache entry so require('./winUtils') returns our mock
+_req.cache[_winUtilsPath] = {
+  id: _winUtilsPath,
+  filename: _winUtilsPath,
+  loaded: true,
+  exports: _winUtilsMock,
+}
+
+// Clear runElevated from cache so it re-requires and picks up the mocked winUtils
+delete _req.cache[_runElevatedPath]
+
+const { runElevated } = _req('../../electron/runElevated.js')
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+beforeEach(() => {
   vi.clearAllMocks()
-  // Re-import each time so Date.now is already mocked when the module runs
-  vi.resetModules()
-  ;({ runElevated } = await import('../../electron/runElevated.js'))
-  // Clean up any leftover temp files
-  try { fs.rmSync(scriptPath, { force: true }) } catch {}
-  try { fs.rmSync(resultPath, { force: true }) } catch {}
 })
-
-afterEach(() => {
-  vi.restoreAllMocks()
-  try { fs.rmSync(scriptPath, { force: true }) } catch {}
-  try { fs.rmSync(resultPath, { force: true }) } catch {}
-})
-
-// ── Success path ─────────────────────────────────────────────────────────────
 
 describe('success path', () => {
-  it('returns { success: true } when execSync succeeds and result file contains "ok"', () => {
-    _cpMock.execSync.mockImplementation(() => {
-      // Simulate the elevated script writing "ok" to the result file
-      fs.writeFileSync(resultPath, 'ok', 'utf-8')
-    })
-
-    const result = runElevated(['Copy-Item foo bar'])
-
+  it('returns { success: true } from runElevatedOps', async () => {
+    _runElevatedOpsMock.mockResolvedValue({ success: true })
+    const result = await runElevated([{ type: 'mkdir', path: 'C:\\test' }])
     expect(result).toEqual({ success: true })
   })
 
-  it('cleans up the result file on success', () => {
-    _cpMock.execSync.mockImplementation(() => {
-      fs.writeFileSync(resultPath, 'ok', 'utf-8')
-    })
-
-    runElevated(['echo hi'])
-
-    expect(fs.existsSync(resultPath)).toBe(false)
+  it('passes the ops array to runElevatedOps', async () => {
+    _runElevatedOpsMock.mockResolvedValue({ success: true })
+    const ops = [{ type: 'copy', src: 'C:\\src.dll', dest: 'C:\\dest.dll' }]
+    await runElevated(ops)
+    expect(_runElevatedOpsMock).toHaveBeenCalledWith(ops)
   })
 })
 
-// ── UAC / execSync failure ───────────────────────────────────────────────────
-
-describe('execSync throws (UAC denied / cancelled)', () => {
-  it('returns { success: false, message: denied } when execSync throws', () => {
-    _cpMock.execSync.mockImplementation(() => { throw new Error('UAC cancelled') })
-
-    const result = runElevated(['echo test'])
-
-    expect(result).toEqual({ success: false, message: 'Administrator permission was denied.' })
+describe('failure path', () => {
+  it('returns { success: false, message } when runElevatedOps reports failure', async () => {
+    _runElevatedOpsMock.mockResolvedValue({ success: false, message: 'UAC cancelled' })
+    const result = await runElevated([])
+    expect(result).toEqual({ success: false, message: 'UAC cancelled' })
   })
 
-  it('cleans up the .ps1 script file even when execSync throws', () => {
-    _cpMock.execSync.mockImplementation(() => { throw new Error('denied') })
-
-    runElevated(['echo test'])
-
-    expect(fs.existsSync(scriptPath)).toBe(false)
-  })
-
-  it('does not attempt to read the result file when execSync throws', () => {
-    _cpMock.execSync.mockImplementation(() => { throw new Error('denied') })
-    const readSpy = vi.spyOn(fs, 'readFileSync')
-
-    runElevated(['echo test'])
-
-    expect(readSpy).not.toHaveBeenCalledWith(resultPath, expect.anything())
-  })
-})
-
-// ── Elevated script error ────────────────────────────────────────────────────
-
-describe('elevated script writes an error message', () => {
-  it('returns { success: false, message } from result file when script fails', () => {
-    _cpMock.execSync.mockImplementation(() => {
-      fs.writeFileSync(resultPath, 'Access to the path is denied.', 'utf-8')
-    })
-
-    const result = runElevated(['Copy-Item C:\\protected dst'])
-
-    expect(result).toEqual({ success: false, message: 'Access to the path is denied.' })
-  })
-
-  it('trims whitespace from the error message in the result file', () => {
-    _cpMock.execSync.mockImplementation(() => {
-      fs.writeFileSync(resultPath, '  some error  \r\n', 'utf-8')
-    })
-
-    const result = runElevated(['echo test'])
-
-    expect(result.message).toBe('some error')
-  })
-})
-
-// ── Missing result file ──────────────────────────────────────────────────────
-
-describe('result file absent (execSync succeeded but script never wrote result)', () => {
-  it('returns { success: false } with the "did not produce a result" message', () => {
-    _cpMock.execSync.mockReturnValue(undefined) // succeeds but writes no file
-
-    const result = runElevated(['echo test'])
-
+  it('returns { success: false, message } when runElevatedOps rejects', async () => {
+    _runElevatedOpsMock.mockRejectedValue(new Error('koffi error'))
+    const result = await runElevated([])
     expect(result.success).toBe(false)
-    expect(result.message).toMatch(/did not produce a result/)
+    expect(result.message).toMatch(/koffi error/)
   })
 })
 
-// ── Script generation ────────────────────────────────────────────────────────
-
-describe('generated PowerShell script', () => {
-  function captureScript() {
-    let content = null
-    _cpMock.execSync.mockImplementation(() => {
-      // Script file still exists at this point (before the finally cleanup)
-      if (fs.existsSync(scriptPath)) content = fs.readFileSync(scriptPath, 'utf-8')
-    })
-    return () => content
-  }
-
-  it('wraps psLines in a try/catch block', () => {
-    const getScript = captureScript()
-    runElevated(['Write-Host "hello"'])
-    expect(getScript()).toContain('try {')
-    expect(getScript()).toContain('} catch {')
-    expect(getScript()).toContain('Write-Host "hello"')
-  })
-
-  it('includes Set-Content "ok" on success in the try block', () => {
-    const getScript = captureScript()
-    runElevated(['echo hi'])
-    expect(getScript()).toContain("Set-Content")
-    expect(getScript()).toContain("'ok'")
-  })
-
-  it('writes $_.Exception.Message to result file in the catch block', () => {
-    const getScript = captureScript()
-    runElevated(['echo hi'])
-    expect(getScript()).toContain('$_.Exception.Message')
-  })
-
-  it('passes the script path to execSync via Start-Process -Verb RunAs', () => {
-    _cpMock.execSync.mockReturnValue(undefined)
-    runElevated(['echo test'])
-
-    const cmd = _cpMock.execSync.mock.calls[0][0]
-    expect(cmd).toContain('Start-Process')
-    expect(cmd).toContain('-Verb RunAs')
-    expect(cmd).toContain(`openclip-install-${FIXED_ID}.ps1`)
-  })
-})
-
-// ── Single-quote escaping ────────────────────────────────────────────────────
-
-describe("single-quote escaping in psLines", () => {
-  it("embeds psLines verbatim — callers are responsible for valid PowerShell", () => {
-    let content = null
-    _cpMock.execSync.mockImplementation(() => {
-      if (fs.existsSync(scriptPath)) content = fs.readFileSync(scriptPath, 'utf-8')
-    })
-
-    runElevated([`Copy-Item 'C:\\Folder\\plugin.dll' 'C:\\dest'`])
-
-    // psLines are NOT escaped by runElevated — they appear as-is in the script
-    expect(content).toContain(`Copy-Item 'C:\\Folder\\plugin.dll' 'C:\\dest'`)
-  })
-
-  it("doubles single quotes in the result file path embedded in the script", () => {
-    // The result path itself is embedded with esc() — if tmpdir had a quote it would be doubled.
-    // Normal paths won't have quotes, so just verify execSync was called (no crash).
-    _cpMock.execSync.mockReturnValue(undefined)
-    expect(() => runElevated(['echo test'])).not.toThrow()
-  })
-})
-
-// ── Script file cleanup ──────────────────────────────────────────────────────
-
-describe('temp file cleanup', () => {
-  it('always removes the .ps1 script after execSync succeeds', () => {
-    _cpMock.execSync.mockImplementation(() => {
-      fs.writeFileSync(resultPath, 'ok', 'utf-8')
-    })
-
-    runElevated(['echo hi'])
-
-    expect(fs.existsSync(scriptPath)).toBe(false)
-  })
-
-  it('always removes the .ps1 script after execSync throws', () => {
-    _cpMock.execSync.mockImplementation(() => { throw new Error('denied') })
-
-    runElevated(['echo hi'])
-
-    expect(fs.existsSync(scriptPath)).toBe(false)
+describe('multiple ops', () => {
+  it('passes multiple ops through unchanged', async () => {
+    _runElevatedOpsMock.mockResolvedValue({ success: true })
+    const ops = [
+      { type: 'mkdir', path: 'C:\\dir' },
+      { type: 'copy',  src: 'C:\\a.dll', dest: 'C:\\b.dll' },
+      { type: 'write', path: 'C:\\f.ini', content: '' },
+    ]
+    await runElevated(ops)
+    expect(_runElevatedOpsMock).toHaveBeenCalledWith(ops)
   })
 })

@@ -6,6 +6,7 @@ import ZoomTimeline from './ZoomTimeline'
 import { apiFetch, apiPost, getBase } from '../apiBase'
 import { formatTime } from '../utils'
 import api from '../../api'
+import { useOrganizeProgress } from '../../App'
 
 function VideoPlayer({ recording, onClipCreated, games = [], onOrganized, onOrganizeError, organizeRemux = true }) {
   const videoRef = useRef(null)
@@ -33,7 +34,10 @@ function VideoPlayer({ recording, onClipCreated, games = [], onOrganized, onOrga
   const [organizeMode, setOrganizeMode] = useState(false)
   const [organizeGame, setOrganizeGame] = useState('')
   const [isOrganizing, setIsOrganizing] = useState(false)
-  const [organizeProgress, setOrganizeProgress] = useState(null) // { stage, label } | null
+
+  // organizeProgress lives in OrganizeProgressContext so App can show the
+  // global popup when the user navigates away mid-organize.
+  const { setIsManualOrganizing, organizeProgress, setOrganizeProgress } = useOrganizeProgress()
 
   const isUnorganized = recording?.game_name === '(Unorganized)'
 
@@ -246,6 +250,7 @@ function VideoPlayer({ recording, onClipCreated, games = [], onOrganized, onOrga
   const handleOrganize = useCallback(async () => {
     if (!recording || !organizeGame || isOrganizing) return
     setIsOrganizing(true)
+    setIsManualOrganizing(true)
     setOrganizeProgress(null)
     try {
       const result = await api.organizeRecording(recording.path, organizeGame, organizeRemux)
@@ -259,9 +264,10 @@ function VideoPlayer({ recording, onClipCreated, games = [], onOrganized, onOrga
       if (onOrganizeError) onOrganizeError(err.message || 'Organize failed')
     } finally {
       setIsOrganizing(false)
+      setIsManualOrganizing(false)
       setOrganizeProgress(null)
     }
-  }, [recording, organizeGame, organizeRemux, isOrganizing, onOrganized, onOrganizeError])
+  }, [recording, organizeGame, organizeRemux, isOrganizing, setIsManualOrganizing, setOrganizeProgress, onOrganized, onOrganizeError])
 
   if (!recording) {
     return (
@@ -457,7 +463,7 @@ function VideoPlayer({ recording, onClipCreated, games = [], onOrganized, onOrga
               <div className="progress-bar-container organize-progress-bar">
                 <div
                   className="progress-bar-fill organize-progress-fill"
-                  style={{ width: `${organizeProgress?.stage === 'remuxing' || organizeProgress?.stage === 'moving' ? 65 : 20}%` }}
+                  style={{ width: `${organizeProgress?.stage === 'moving' ? 90 : organizeProgress?.stage === 'remuxing' ? 65 : 20}%` }}
                 />
               </div>
             </div>

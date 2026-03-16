@@ -44,6 +44,39 @@ function unmarkRemuxing(srcPath, destPath) {
   if (destPath) activeRemuxPaths.delete(path.normalize(destPath).toLowerCase());
 }
 
+// --- File operation helpers ---
+
+// Retry fs.renameSync on transient EPERM/EBUSY (video player or AV may hold file briefly).
+async function renameWithRetry(src, dest, maxAttempts = 3, delayMs = 500) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      fs.renameSync(src, dest);
+      return;
+    } catch (err) {
+      if (err.code !== 'EBUSY' && err.code !== 'EPERM') throw err;
+      if (attempt < maxAttempts - 1) await new Promise(r => setTimeout(r, delayMs * (attempt + 1)));
+    }
+  }
+  throw new Error(`Cannot rename file after ${maxAttempts} attempts — file may still be held open`);
+}
+
+// Remove characters invalid on Windows/macOS/Linux; mirrors fileManager.sanitizeGameName.
+function sanitizeGameName(name) {
+  return (name || '')
+    .replace(/[:/\\?*|"<>]/g, '-')
+    .replace(/\.{2,}/g, '.')
+    .replace(/^[\s.]+|[\s.]+$/g, '')
+    .slice(0, 80) || 'Unknown';
+}
+
+// Format a Date as YYYY-MM-DD using the local calendar (not UTC); mirrors fileManager.localDateStr.
+function localDateStr(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 // --- Helpers ---
 
 function parseRecordingInfo(filePath, gameName) {
@@ -252,13 +285,14 @@ function createClip(sourcePath, startTime, endTime, gameName = 'Unknown', audioT
     if (!clipsPath) return reject(new Error('No clips folder'));
     fs.mkdirSync(clipsPath, { recursive: true });
 
-    const dateStr = new Date().toISOString().slice(0, 10);
-    let clipNum = countClipsForDate(clipsPath, gameName, dateStr) + 1;
-    let outputFilename = `${gameName} Clip ${dateStr} #${clipNum}.mp4`;
+    const sanitizedName = sanitizeGameName(gameName);
+    const dateStr = localDateStr(new Date());
+    let clipNum = countClipsForDate(clipsPath, sanitizedName, dateStr) + 1;
+    let outputFilename = `${sanitizedName} Clip ${dateStr} #${clipNum}.mp4`;
     let outputPath = path.join(clipsPath, outputFilename);
     while (fs.existsSync(outputPath)) {
       clipNum++;
-      outputFilename = `${gameName} Clip ${dateStr} #${clipNum}.mp4`;
+      outputFilename = `${sanitizedName} Clip ${dateStr} #${clipNum}.mp4`;
       outputPath = path.join(clipsPath, outputFilename);
     }
     const duration = endTime - startTime;
@@ -293,7 +327,11 @@ function createClip(sourcePath, startTime, endTime, gameName = 'Unknown', audioT
     const proc = execFile(FFMPEG_PATH, args, { timeout: 120000 },
       (error, _stdout, stderr) => {
         activeFFmpeg.delete(proc);
-        if (error) return reject(new Error(`FFmpeg error: ${stderr || error.message}`));
+        if (error) {
+          // Remove partial output so a corrupt file isn't left in the clips folder
+          try { if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath); } catch {}
+          return reject(new Error(`FFmpeg error: ${stderr || error.message}`));
+        }
         invalidateClipsCache();
         const info = parseRecordingInfo(outputPath, gameName);
         resolve(info || { filename: outputFilename, path: outputPath });
@@ -341,8 +379,11 @@ function reencodeVideo(sourcePath, { codec = 'h265', crf = 23, preset = 'medium'
       '-c:a', 'copy', outPath,
     ];
 
-    const proc = execFile(FFMPEG_PATH, args, { timeout: 600000 },
-      (error, _stdout, stderr) => {
+    // 'let' instead of 'const' avoids TDZ if a synchronous mock calls the callback
+    // before the execFile call returns and proc is assigned.
+    let proc;
+    proc = execFile(FFMPEG_PATH, args, { timeout: 600000 },
+      async (error, _stdout, stderr) => {
         activeFFmpeg.delete(proc);
         if (error) {
           try { if (fs.existsSync(outPath)) fs.unlinkSync(outPath); } catch {}
@@ -353,21 +394,22 @@ function reencodeVideo(sourcePath, { codec = 'h265', crf = 23, preset = 'medium'
         if (replaceOriginal) {
           const bakPath = `${sourcePath}.bak`;
           try {
-            fs.renameSync(sourcePath, bakPath);
+            // Retry on EPERM/EBUSY: video player may briefly hold the file open
+            await renameWithRetry(sourcePath, bakPath);
           } catch (err) {
             // Clean up the temp encode; original is still intact at sourcePath
             try { fs.unlinkSync(outPath); } catch {}
             return reject(new Error(`Failed to back up original: ${err.message}`));
           }
           try {
-            fs.renameSync(outPath, sourcePath);
+            await renameWithRetry(outPath, sourcePath);
             finalPath = sourcePath;
             // Backup is no longer needed; ignore failure — it can be cleaned up later
             try { fs.unlinkSync(bakPath); } catch {}
           } catch (err) {
             // Restore the backup so the user does not lose their original file
             try {
-              fs.renameSync(bakPath, sourcePath);
+              await renameWithRetry(bakPath, sourcePath);
             } catch (restoreErr) {
               return reject(new Error(
                 `Failed to replace original: ${err.message}. ` +
