@@ -175,7 +175,7 @@ async function organizeRecordings(store, gameName, onProgress = () => {}) {
     fs.mkdirSync(targetDir, { recursive: true });
 
     const dateStr = localDateStr(now);
-    const existing = fs.readdirSync(targetDir).filter(f => f.includes(dateStr));
+    const existing = fs.readdirSync(targetDir).filter(f => isVideoFile(f) && f.includes(dateStr));
     const sessionNum = existing.length + 1;
     const ext = path.extname(file);
     const moveOnly = store.get('settings.organizeRemux') === false;
@@ -382,7 +382,7 @@ async function finalizeDirectRecording(store, gameName, recordingDir, onProgress
     }
 
     const dateStr = localDateStr(now);
-    const existing = fs.readdirSync(recordingDir).filter(f => f.includes(dateStr) && f !== file);
+    const existing = fs.readdirSync(recordingDir).filter(f => isVideoFile(f) && f.includes(dateStr) && f !== file);
     const sessionNum = existing.length + 1;
     const ext = path.extname(file);
     const newName = `${sanitizedName} Session ${dateStr} #${sessionNum}.mp4`;

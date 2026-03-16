@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { ZoomIn, ZoomOut } from 'lucide-react'
+import { ZoomIn, ZoomOut, ChevronUp, ChevronDown } from 'lucide-react'
 import {
   CELL_GAP, TOOLTIP_W, TOOLTIP_H, TOOLTIP_PAD,
   squarifiedTreemap, hexToRgba, drawRoundRect, buildHitIndex, hitTestIndex,
@@ -17,7 +17,14 @@ import {
  * @param {object} gameColors - Map of game name → hex color
  * @param {function} onNavigate - Called with (item) on double-click
  */
-export default function StorageTreemap({ items, selectedItems, onSelect, lockedRecordings, onLock, gameColors, onNavigate }) {
+const SORT_OPTIONS = [
+  { key: 'date', label: 'Date' },
+  { key: 'size', label: 'Size' },
+  { key: 'name', label: 'Name' },
+  { key: 'game', label: 'Game' },
+]
+
+export default function StorageTreemap({ items, selectedItems, onSelect, lockedRecordings, onLock, gameColors, onNavigate, sortBy, sortDir, onColumnSort }) {
   const [zoom, setZoom] = useState(1)
   const [isDragging, setIsDragging] = useState(false)
   const [baseSize, setBaseSize] = useState({ w: 0, h: 0 })
@@ -35,6 +42,7 @@ export default function StorageTreemap({ items, selectedItems, onSelect, lockedR
   const hitIndexRef = useRef(null)
   const tooltipItemRef = useRef(null)
   const tooltipRafRef = useRef(null)
+  const hoverItemRef = useRef(null)
   const zoomRef = useRef(1)
   const panRef = useRef({ x: 0, y: 0 })
   const dragRef = useRef(null)
@@ -168,7 +176,8 @@ export default function StorageTreemap({ items, selectedItems, onSelect, lockedR
 
       const color = colors[item.game_name] || '#888'
       const isSelected = selected.has(item.path)
-      const isLocked = locked.has(item.path)
+      const isLocked = locked.has(item.path.replace(/\\/g, '/'))
+      const isHovered = hoverItemRef.current === item.path
       const minDim = Math.min(w, h)
 
       ctx.fillStyle = isSelected ? hexToRgba(color, 0.14) : '#1e1e1e'
@@ -197,28 +206,27 @@ export default function StorageTreemap({ items, selectedItems, onSelect, lockedR
         fillTextTruncated(ctx, item.size_formatted, x + 5, y + 41, w - 10)
       }
 
-      if (isLocked && minDim >= 36) {
-        const lx = x + w - 12, ly = y + 5, lw = 7, lh = 6, lr = 1.5
-        ctx.fillStyle = '#f59e0b'
-        ctx.beginPath()
-        ctx.arc(lx + lw / 2, ly + 1, lw / 2 - 0.5, Math.PI, 0)
-        ctx.lineWidth = 1.5
-        ctx.strokeStyle = '#f59e0b'
-        ctx.stroke()
-        ctx.fillRect(lx, ly + lr, lw, lh)
-      }
-
-      if (isSelected) {
-        const br = 8, bcx = x + br + 3, bcy = y + br + 3
-        ctx.beginPath()
-        ctx.arc(bcx, bcy, br, 0, Math.PI * 2)
-        ctx.fillStyle = color
-        ctx.fill()
-        ctx.fillStyle = '#fff'
-        ctx.font = 'bold 9px system-ui, sans-serif'
-        ctx.textAlign = 'center'
-        ctx.textBaseline = 'middle'
-        ctx.fillText('✓', bcx, bcy)
+      if (minDim >= 36) {
+        const lx = x + w - 12, ly = y + barH + 3, lw = 7, lh = 6, lr = 1.5
+        if (isLocked) {
+          ctx.fillStyle = '#f59e0b'
+          ctx.strokeStyle = '#f59e0b'
+          ctx.lineWidth = 1.5
+          ctx.beginPath()
+          ctx.arc(lx + lw / 2, ly + 1, lw / 2 - 0.5, Math.PI, 0)
+          ctx.stroke()
+          ctx.fillRect(lx, ly + lr, lw, lh)
+        } else if (isHovered) {
+          ctx.globalAlpha = 0.35
+          ctx.fillStyle = '#ffffff'
+          ctx.strokeStyle = '#ffffff'
+          ctx.lineWidth = 1.5
+          ctx.beginPath()
+          ctx.arc(lx + lw / 2, ly + 1, lw / 2 - 0.5, Math.PI, 0)
+          ctx.stroke()
+          ctx.fillRect(lx, ly + lr, lw, lh)
+          ctx.globalAlpha = 1
+        }
       }
     }
     ctx.restore()
@@ -299,10 +307,14 @@ export default function StorageTreemap({ items, selectedItems, onSelect, lockedR
       const cy = e.clientY - rect.top
       const item = getItemAt(cx, cy)
       const newPath = item ? item.path : null
+      if (newPath !== hoverItemRef.current) {
+        hoverItemRef.current = newPath
+        flushRedraw()
+      }
       if (newPath === tooltipItemRef.current) return
       tooltipItemRef.current = newPath
       if (item) {
-        const isLocked = lockedRef.current.has(item.path)
+        const isLocked = lockedRef.current.has(item.path.replace(/\\/g, '/'))
         setTooltip({
           x: e.clientX, y: e.clientY,
           text: `${item.game_name} · ${item.filename}\n${item.size_formatted} · ${item.date}${isLocked ? ' · [Locked]' : ''}`
@@ -311,7 +323,7 @@ export default function StorageTreemap({ items, selectedItems, onSelect, lockedR
         setTooltip(null)
       }
     })
-  }, [getItemAt])
+  }, [getItemAt, flushRedraw])
 
   const tooltipPos = useMemo(() => {
     if (!tooltip) return null
@@ -382,9 +394,31 @@ export default function StorageTreemap({ items, selectedItems, onSelect, lockedR
         onMouseLeave={() => {
           if (tooltipRafRef.current) { cancelAnimationFrame(tooltipRafRef.current); tooltipRafRef.current = null }
           tooltipItemRef.current = null
+          hoverItemRef.current = null
           setTooltip(null)
+          flushRedraw()
         }}
       />
+      {onColumnSort && (
+        <div className="sv2-treemap-sort">
+          <span className="sv2-treemap-sort-label">Sort</span>
+          {SORT_OPTIONS.map(({ key, label }) => (
+            <button
+              key={key}
+              className={`sv2-treemap-sort-btn${sortBy === key ? ' active' : ''}`}
+              onClick={() => onColumnSort(key)}
+              title={`Sort by ${label}`}
+            >
+              {label}
+              {sortBy === key && (
+                <span className="sv2-treemap-sort-icon">
+                  {sortDir === 'asc' ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="sv2-zoom-ctrl">
         <button onClick={() => zoomBy(0.8)} title="Zoom out"><ZoomOut size={13} /></button>
         <button

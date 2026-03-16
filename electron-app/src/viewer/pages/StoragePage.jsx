@@ -1,13 +1,16 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, useTransition } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { HardDrive, Film, Scissors, Lock, Unlock, Trash2, Save, Info, Loader, Package, Check, X, Filter } from 'lucide-react'
+import { HardDrive, Film, Scissors, Trash2, Check, X } from 'lucide-react'
 import Modal from '../components/Modal'
 import { apiFetch, apiPost } from '../apiBase'
 import api from '../../api'
 import { buildGameColors } from '../utils/storageColors'
 import StorageTreemap from '../components/StorageTreemap'
+import StorageList from '../components/StorageList'
 import ReencodeModal from '../components/ReencodeModal'
 
+
+const DEFAULT_SORT_DIR = { date: 'desc', size: 'desc', name: 'asc', game: 'asc' }
 
 function normPath(p) {
   return p.replace(/\\/g, '/')
@@ -16,8 +19,6 @@ function normPath(p) {
 function StoragePage() {
   const navigate = useNavigate()
   const [stats, setStats] = useState(null)
-  const [settings, setSettings] = useState(null)
-  const [editedSettings, setEditedSettings] = useState(null)
   const [loading, setLoading] = useState(true)
   const [listView, setListView] = useState(true)
   const [selectedItems, setSelectedItems] = useState(new Set())
@@ -35,8 +36,9 @@ function StoragePage() {
   const [filterType, setFilterType] = useState('all')
   const [filterGame, setFilterGame] = useState('all')
   const [sortBy, setSortBy] = useState('date')
+  const [sortDir, setSortDir] = useState('desc')
   const [lockedRecordings, setLockedRecordings] = useState(new Set())
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [, startTransition] = useTransition()
   const toastTimerRef = useRef(null)
 
   useEffect(() => {
@@ -51,7 +53,7 @@ function StoragePage() {
       ])
       const data = await response.json()
       setStats(data)
-      setLockedRecordings(new Set(data.locked_recordings || []))
+      setLockedRecordings(new Set((data.locked_recordings || []).map(normPath)))
       if (s) setListView(s.listView ?? true)
     } catch (error) {
       console.error('Failed to fetch storage stats:', error)
@@ -60,21 +62,9 @@ function StoragePage() {
     }
   }, [])
 
-  const fetchSettings = useCallback(async () => {
-    try {
-      const response = await apiFetch('/api/storage/settings')
-      const data = await response.json()
-      setSettings(data)
-      setEditedSettings(data)
-    } catch (error) {
-      console.error('Failed to fetch storage settings:', error)
-    }
-  }, [])
-
   useEffect(() => {
     fetchStats()
-    fetchSettings()
-  }, [fetchStats, fetchSettings])
+  }, [fetchStats])
 
   const showToast = useCallback((type, message) => {
     setToast({ type, message })
@@ -130,32 +120,6 @@ function StoragePage() {
     }
   }, [selectedItems, fetchStats, showToast])
 
-  const updateSettings = useCallback(async (newSettings) => {
-    try {
-      const response = await apiPost('/api/storage/settings', { storage_settings: newSettings })
-      if (response.ok) {
-        setSettings(newSettings)
-        setEditedSettings(newSettings)
-        showToast('success', 'Settings saved')
-      }
-    } catch {
-      showToast('error', 'Failed to save settings')
-    }
-  }, [showToast])
-
-  const handleSaveSettings = useCallback(() => {
-    if (!editedSettings) return
-    updateSettings({
-      ...editedSettings,
-      max_storage_gb: Math.max(1, parseInt(editedSettings.max_storage_gb) || 100),
-      max_age_days: Math.max(1, parseInt(editedSettings.max_age_days) || 30)
-    })
-  }, [editedSettings, updateSettings])
-
-  const hasUnsavedChanges = useCallback(() => {
-    if (!settings || !editedSettings) return false
-    return JSON.stringify(settings) !== JSON.stringify(editedSettings)
-  }, [settings, editedSettings])
 
   const fetchReencodeTracks = useCallback(async () => {
     const paths = Array.from(selectedItems)
@@ -198,17 +162,18 @@ function StoragePage() {
       result = [...result, ...stats.clips.map(c => ({ ...c, type: 'clip' }))]
     if (filterGame !== 'all')
       result = result.filter(item => item.game_name === filterGame)
+    const dir = sortDir === 'asc' ? 1 : -1
     result.sort((a, b) => {
-      if (sortBy === 'date') return b.mtime - a.mtime
-      if (sortBy === 'size') return b.size_bytes - a.size_bytes
+      if (sortBy === 'date') return dir * (a.mtime - b.mtime)
+      if (sortBy === 'size') return dir * (a.size_bytes - b.size_bytes)
       if (sortBy === 'game') {
         const gc = a.game_name.localeCompare(b.game_name)
-        return gc !== 0 ? gc : b.mtime - a.mtime
+        return gc !== 0 ? dir * gc : b.mtime - a.mtime
       }
-      return a.filename.localeCompare(b.filename)
+      return dir * a.filename.localeCompare(b.filename)
     })
     return result
-  }, [stats, filterType, filterGame, sortBy])
+  }, [stats, filterType, filterGame, sortBy, sortDir])
 
   const formatBytes = (bytes) => {
     if (!bytes) return '0 B'
@@ -251,6 +216,15 @@ function StoragePage() {
     const savingsFormatted = totalSavings > 0 ? ` (saved ${formatBytes(totalSavings)})` : ''
     showToast('success', `${label} ${successCount} file(s)${savingsFormatted}${failCount > 0 ? `, ${failCount} failed` : ''}`)
   }, [items, selectedItems, reencodeSettings, reencodeAudioTracks, reencodeSelectedTracks, fetchStats, showToast])
+
+  const handleColumnSort = useCallback((col) => {
+    if (sortBy === col) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortBy(col)
+      setSortDir(DEFAULT_SORT_DIR[col] || 'asc')
+    }
+  }, [sortBy])
 
   const handleItemClick = useCallback((item) => {
     if (item.type === 'clip') navigate(`/clips?path=${encodeURIComponent(item.path)}`)
@@ -329,93 +303,80 @@ function StoragePage() {
 
         <div className="sv2-topbar-right">
           {selectedCount > 0 && (
-            <span className="sv2-sel-pill">{selectedCount} selected</span>
+            <>
+              <span className="sv2-sel-pill">{selectedCount} selected</span>
+              <button className="btn btn-secondary btn-sm" onClick={() => setSelectedItems(new Set())}>Clear</button>
+              <button className="btn btn-primary btn-sm" onClick={() => { setReencodeModal(true); fetchReencodeTracks() }}>
+                <Film size={12} /> Reencode
+              </button>
+              <button className="btn btn-danger btn-sm" onClick={() => setDeleteModal(true)}>
+                <Trash2 size={12} /> Delete
+              </button>
+            </>
           )}
-          <button className="sv2-options-btn" onClick={() => setSettingsOpen(true)}>
-            <Filter size={13} /> Options
-          </button>
         </div>
       </div>
 
-      {/* ── Game legend ── */}
-      {Object.keys(gameColors).length > 0 && (
-        <div className="sv2-legend">
-          <button
-            className={`sv2-legend-all ${filterGame === 'all' ? 'active' : ''}`}
-            onClick={() => setFilterGame('all')}
-          >All</button>
-          {Object.entries(gameColors).map(([game, color]) => (
+      {/* ── Game legend + view toggle ── */}
+      <div className="sv2-legend">
+        {Object.keys(gameColors).length > 0 && (
+          <>
             <button
-              key={game}
-              className={`sv2-legend-item ${filterGame === game ? 'active' : ''}`}
-              onClick={() => setFilterGame(filterGame === game ? 'all' : game)}
-            >
-              <span className="sv2-legend-dot" style={{ background: color }} />
-              {game}
-            </button>
-          ))}
+              className={`sv2-legend-all${filterGame === 'all' ? ' active' : ''}`}
+              onClick={() => setFilterGame('all')}
+            >All</button>
+            {Object.entries(gameColors).map(([game, color]) => (
+              <button
+                key={game}
+                className={`sv2-legend-item${filterGame === game ? ' active' : ''}`}
+                onClick={() => setFilterGame(filterGame === game ? 'all' : game)}
+              >
+                <span className="sv2-legend-dot" style={{ background: color }} />
+                {game}
+              </button>
+            ))}
+          </>
+        )}
+        <div className="sv2-legend-spacer" />
+        <div className="sv2-view-toggle">
+            {[
+              { value: 'all',        label: 'All' },
+              { value: 'recordings', label: 'Recordings' },
+              { value: 'clips',      label: 'Clips' },
+            ].map(({ value, label }) => (
+              <button
+                key={value}
+                className={`sv2-view-btn${filterType === value ? ' active' : ''}`}
+                onClick={() => setFilterType(value)}
+              >{label}</button>
+            ))}
+          </div>
+        <div className="sv2-view-toggle" style={{ marginLeft: 6 }}>
+          <button
+            className={`sv2-view-btn${listView ? ' active' : ''}`}
+            onClick={() => { startTransition(() => setListView(true)); api.setStore('settings.listView', true) }}
+          >List</button>
+          <button
+            className={`sv2-view-btn${!listView ? ' active' : ''}`}
+            onClick={() => { startTransition(() => setListView(false)); api.setStore('settings.listView', false) }}
+          >Treemap</button>
         </div>
-      )}
+      </div>
 
       {/* ── File list / Treemap ── */}
       {listView ? (
-        <div className="sv2-list-container">
-          {items.length === 0
-            ? <div className="sv2-empty">No files match the current filter</div>
-            : (
-              <table className="sv2-list-table">
-                <thead>
-                  <tr>
-                    <th></th>
-                    <th>Name</th>
-                    <th>Game</th>
-                    <th>Type</th>
-                    <th>Date</th>
-                    <th>Size</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map(item => {
-                    const isSelected = selectedItems.has(item.path)
-                    const isLocked = lockedRecordings.has(item.path.replace(/\//g, '\\'))
-                    const color = gameColors[item.game_name] || '#888'
-                    return (
-                      <tr
-                        key={item.path}
-                        className={`sv2-list-row${isSelected ? ' sel' : ''}${isLocked ? ' locked' : ''}`}
-                        onClick={() => toggleSelection(item.path)}
-                        onDoubleClick={() => handleItemClick(item)}
-                        title={isLocked ? '🔒 Locked' : undefined}
-                      >
-                        <td className="sv2-list-color-cell">
-                          <span className="sv2-list-color-dot" style={{ background: color }} />
-                        </td>
-                        <td className="sv2-list-name">{item.filename}</td>
-                        <td className="sv2-list-game" style={{ color }}>{item.game_name}</td>
-                        <td className="sv2-list-type">
-                          {item.type === 'clip' ? <><Scissors size={11} /> Clip</> : <><Film size={11} /> Recording</>}
-                        </td>
-                        <td className="sv2-list-date">{item.date}</td>
-                        <td className="sv2-list-size">{item.size_formatted}</td>
-                        <td className="sv2-list-actions">
-                          <button
-                            className="sv2-list-lockbtn"
-                            onClick={(e) => toggleLock(e, item.path)}
-                            title={isLocked ? 'Unlock' : 'Lock'}
-                          >
-                            {isLocked ? <Lock size={11} /> : <Unlock size={11} />}
-                          </button>
-                          {isSelected && <Check size={12} className="sv2-list-check" />}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            )
-          }
-        </div>
+        <StorageList
+          items={items}
+          selectedItems={selectedItems}
+          onSelect={toggleSelection}
+          lockedRecordings={lockedRecordings}
+          onLock={toggleLock}
+          gameColors={gameColors}
+          onNavigate={handleItemClick}
+          sortBy={sortBy}
+          sortDir={sortDir}
+          onColumnSort={handleColumnSort}
+        />
       ) : (
         <StorageTreemap
           items={items}
@@ -425,125 +386,10 @@ function StoragePage() {
           onLock={toggleLock}
           gameColors={gameColors}
           onNavigate={handleItemClick}
+          sortBy={sortBy}
+          sortDir={sortDir}
+          onColumnSort={handleColumnSort}
         />
-      )}
-
-      {/* ── Settings / Options Modal ── */}
-      {settingsOpen && (
-        <>
-          <div className="sv2-modal-bd" onClick={() => setSettingsOpen(false)} />
-          <div className="sv2-settings-modal">
-            <div className="ssm-head">
-              <span>Options</span>
-              <button className="ssm-close" onClick={() => setSettingsOpen(false)}><X size={14} /></button>
-            </div>
-
-            <div className="ssm-sect">
-              <div className="ssm-sect-label">Filter &amp; Sort</div>
-              <div className="ssm-row">
-                <label>Type</label>
-                <select value={filterType} onChange={e => setFilterType(e.target.value)}>
-                  <option value="all">All</option>
-                  <option value="recordings">Recordings</option>
-                  <option value="clips">Clips</option>
-                </select>
-              </div>
-              <div className="ssm-row">
-                <label>Sort by</label>
-                <select value={sortBy} onChange={e => setSortBy(e.target.value)}>
-                  <option value="date">Newest first</option>
-                  <option value="size">Largest first</option>
-                  <option value="name">Name</option>
-                  <option value="game">Game</option>
-                </select>
-              </div>
-              <div className="ssm-row">
-                <label>View</label>
-                <select value={listView ? 'list' : 'treemap'} onChange={e => { const v = e.target.value === 'list'; setListView(v); api.setStore('settings.listView', v); }}>
-                  <option value="list">List</option>
-                  <option value="treemap">Treemap</option>
-                </select>
-              </div>
-            </div>
-
-            {selectedCount > 0 && (
-              <div className="ssm-sect">
-                <div className="ssm-sect-label">{selectedCount} Selected</div>
-                <div className="ssm-action-row">
-                  <button className="btn btn-secondary btn-sm" onClick={() => setSelectedItems(new Set())}>Clear</button>
-                  <button className="btn btn-primary btn-sm" onClick={() => { setReencodeModal(true); fetchReencodeTracks(); setSettingsOpen(false) }}>
-                    <Film size={12} /> Reencode
-                  </button>
-                  <button className="btn btn-danger btn-sm" onClick={() => { setDeleteModal(true); setSettingsOpen(false) }}>
-                    <Trash2 size={12} /> Delete
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {editedSettings && (
-              <div className="ssm-sect">
-                <div className="ssm-sect-label">Auto-Delete</div>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={editedSettings.auto_delete_enabled || false}
-                    onChange={e => setEditedSettings({ ...editedSettings, auto_delete_enabled: e.target.checked })}
-                  />
-                  Enable automatic deletion
-                </label>
-                <div className="ssm-row">
-                  <label>Max storage (GB)</label>
-                  <input
-                    type="text"
-                    value={editedSettings.max_storage_gb ?? ''}
-                    onChange={e => setEditedSettings({ ...editedSettings, max_storage_gb: e.target.value.replace(/[^0-9]/g, '') })}
-                    disabled={!editedSettings.auto_delete_enabled}
-                    placeholder="100"
-                  />
-                </div>
-                <div className="ssm-row">
-                  <label>Max age (days)</label>
-                  <input
-                    type="text"
-                    value={editedSettings.max_age_days ?? ''}
-                    onChange={e => setEditedSettings({ ...editedSettings, max_age_days: e.target.value.replace(/[^0-9]/g, '') })}
-                    disabled={!editedSettings.auto_delete_enabled}
-                    placeholder="30"
-                  />
-                </div>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={editedSettings.exclude_clips !== false}
-                    onChange={e => setEditedSettings({ ...editedSettings, exclude_clips: e.target.checked })}
-                    disabled={!editedSettings.auto_delete_enabled}
-                  />
-                  Exclude clips from auto-delete
-                </label>
-                <p className="ssm-note"><Info size={11} /> Runs on watcher start. Locked files are never deleted.</p>
-                {hasUnsavedChanges() && (
-                  <button className="btn btn-primary btn-sm" onClick={handleSaveSettings} style={{ marginTop: 10 }}>
-                    <Save size={12} /> Save Settings
-                  </button>
-                )}
-              </div>
-            )}
-
-            {stats?.disk_usage && (
-              <div className="ssm-sect ssm-disk">
-                <div className="ssm-sect-label">Disk</div>
-                <div className="ssm-disk-row">
-                  <HardDrive size={12} />
-                  <span>{stats.disk_usage.used_formatted} used / {stats.disk_usage.total_formatted} total</span>
-                </div>
-                <div className="ssm-disk-row">
-                  <span className="ssm-free">{stats.disk_usage.free_formatted} free</span>
-                </div>
-              </div>
-            )}
-          </div>
-        </>
       )}
 
       {/* ── Reencode Modal ── */}
