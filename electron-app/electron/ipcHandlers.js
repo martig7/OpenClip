@@ -42,6 +42,7 @@ const {
   listRunningApps,
   listAudioDevices,
   extractProcessIcon,
+  findOBSInstallDir,
 } = require('./winUtils');
 
 function registerIpcHandlers(store, appState) {
@@ -345,31 +346,7 @@ function registerIpcHandlers(store, appState) {
   });
 
   // --- OBS installation detection ---
-  ipcMain.handle('obs:detect-install', async () => {
-    const { exec } = require('child_process');
-    const { promisify } = require('util');
-    const execAsync = promisify(exec);
-    const candidates = [
-      path.join(process.env.ProgramFiles  || 'C:\\Program Files',       'obs-studio'),
-      path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'obs-studio'),
-      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'obs-studio'),
-    ];
-    for (const dir of candidates) {
-      if (fs.existsSync(path.join(dir, 'bin', '64bit', 'obs64.exe'))) return dir;
-    }
-    try {
-      const { stdout: regOut } = await execAsync(
-        'reg query "HKLM\\SOFTWARE\\OBS Studio" /v "" 2>nul || reg query "HKLM\\SOFTWARE\\WOW6432Node\\OBS Studio" /v "" 2>nul',
-        { encoding: 'utf-8', timeout: 3000 }
-      );
-      const match = regOut.match(/\(Default\)\s+REG_SZ\s+(.+)/);
-      if (match) {
-        const dir = match[1].trim();
-        if (fs.existsSync(path.join(dir, 'bin', '64bit', 'obs64.exe'))) return dir;
-      }
-    } catch {}
-    return null;
-  });
+  ipcMain.handle('obs:detect-install', () => findOBSInstallDir());
 
   ipcMain.handle('obs:set-install-path', (_event, installPath) => {
     store._electron().obsInstallPath = installPath || '';

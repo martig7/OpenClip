@@ -9,12 +9,13 @@ const path = require('path');
 const os   = require('os');
 
 // ── Load DLLs (koffi caches handles) ─────────────────────────────────────────
-const koffi   = require('koffi');
-const kernel32 = koffi.load('kernel32.dll');
-const user32   = koffi.load('user32.dll');
-const shell32  = koffi.load('shell32.dll');
-const winmm    = koffi.load('winmm.dll');
-const gdi32    = koffi.load('gdi32.dll');
+const koffi    = require('koffi');
+const kernel32  = koffi.load('kernel32.dll');
+const user32    = koffi.load('user32.dll');
+const shell32   = koffi.load('shell32.dll');
+const winmm     = koffi.load('winmm.dll');
+const gdi32     = koffi.load('gdi32.dll');
+const advapi32  = koffi.load('advapi32.dll');
 
 // ── Struct definitions ────────────────────────────────────────────────────────
 // Unique prototype name to avoid collision with processDetector.js's WNDENUMPROC
@@ -120,6 +121,54 @@ const GetDIBits          = gdi32.func(
   'int __stdcall GetDIBits(void *hdc, void *hbm, uint32 start, uint32 cLines, void *lpvBits, void *lpbmi, uint32 usage)'
 );
 const DeleteObject = gdi32.func('bool __stdcall DeleteObject(void *ho)');
+
+// ── advapi32.dll (Registry) ───────────────────────────────────────────────────
+const HKEY_LOCAL_MACHINE   = 0x80000002;
+const KEY_READ             = 0x20019;
+const REG_SZ               = 1;
+const ERROR_SUCCESS        = 0;
+
+const RegOpenKeyExW = advapi32.func(
+  'int32 __stdcall RegOpenKeyExW(uint32 hKey, char16 *lpSubKey, uint32 ulOptions, uint32 samDesired, void **phkResult)'
+);
+const RegQueryValueExW = advapi32.func(
+  'int32 __stdcall RegQueryValueExW(void *hKey, char16 *lpValueName, void *lpReserved, void *lpType, void *lpData, void *lpcbData)'
+);
+const RegCloseKey = advapi32.func('int32 __stdcall RegCloseKey(void *hKey)');
+
+/**
+ * Read a REG_SZ value from HKLM. Returns the string or null on failure.
+ * Runs entirely in-process via advapi32 — no subprocess spawned.
+ */
+function regQueryStringHKLM(subKey, valueName) {
+  // koffi fills array[0] with the output handle for void** params
+  const hKeyOut = [null];
+  const rc = RegOpenKeyExW(HKEY_LOCAL_MACHINE, subKey, 0, KEY_READ, hKeyOut);
+  if (rc !== ERROR_SUCCESS) return null;
+
+  const hKey = hKeyOut[0];
+  try {
+    // First call: get required buffer size
+    const sizeBuf = Buffer.alloc(4);
+    const typeBuf = Buffer.alloc(4);
+    RegQueryValueExW(hKey, valueName, null, typeBuf, null, sizeBuf);
+    const size = sizeBuf.readUInt32LE(0);
+    if (!size) return null;
+
+    // Second call: read the actual data
+    const dataBuf = Buffer.alloc(size);
+    sizeBuf.writeUInt32LE(size, 0);
+    const rc2 = RegQueryValueExW(hKey, valueName, null, typeBuf, dataBuf, sizeBuf);
+    if (rc2 !== ERROR_SUCCESS) return null;
+    if (typeBuf.readUInt32LE(0) !== REG_SZ) return null;
+
+    // UTF-16LE string, strip null terminator
+    const charCount = sizeBuf.readUInt32LE(0) / 2;
+    return dataBuf.toString('utf16le', 0, charCount * 2).split('\0')[0];
+  } finally {
+    RegCloseKey(hKey);
+  }
+}
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
@@ -491,6 +540,32 @@ async function runElevatedOps(ops) {
   }
 }
 
+/**
+ * Detect the OBS Studio install directory without spawning a subprocess.
+ * Checks common install paths first, then falls back to the registry.
+ * Returns the install directory string or null.
+ */
+function findOBSInstallDir() {
+  const candidates = [
+    path.join(process.env.ProgramFiles         || 'C:\\Program Files',       'obs-studio'),
+    path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'obs-studio'),
+    path.join(process.env.LOCALAPPDATA         || '',                         'Programs', 'obs-studio'),
+  ];
+  for (const dir of candidates) {
+    if (fs.existsSync(path.join(dir, 'bin', '64bit', 'obs64.exe'))) return dir;
+  }
+
+  // Fall back to registry (HKLM\SOFTWARE\OBS Studio and WOW6432Node variant)
+  for (const key of ['SOFTWARE\\OBS Studio', 'SOFTWARE\\WOW6432Node\\OBS Studio']) {
+    const dir = regQueryStringHKLM(key, '');
+    if (dir) {
+      const trimmed = dir.trim();
+      if (fs.existsSync(path.join(trimmed, 'bin', '64bit', 'obs64.exe'))) return trimmed;
+    }
+  }
+  return null;
+}
+
 module.exports = {
   getDiskFreeSpace,
   listWindowsWithProcesses,
@@ -498,4 +573,5 @@ module.exports = {
   listAudioDevices,
   extractProcessIcon,
   runElevatedOps,
+  findOBSInstallDir,
 };
