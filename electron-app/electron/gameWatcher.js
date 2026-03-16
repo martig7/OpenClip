@@ -105,6 +105,7 @@ function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}) {
       writeGameState('IDLE');
       log(`Game stopped: ${stoppedGame}`);
       onStateChange({ currentGame: null, status: 'idle' });
+      onOrganizeProgress({ phase: 'recording', stage: 'waiting', label: 'Waiting for OBS to unlock…', gameName: stoppedGame });
       // Tell the OBS plugin to stop recording
       stopRecording().catch(err =>
         log(`Plugin stopRecording failed: ${err.message}`)
@@ -117,6 +118,7 @@ function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}) {
       writeGameState('IDLE');
       log(`Game switched: ${stoppedGame} → ${detected.name}`);
       onStateChange({ currentGame: null, status: 'idle' });
+      onOrganizeProgress({ phase: 'recording', stage: 'waiting', label: 'Waiting for OBS to unlock…', gameName: stoppedGame });
 
       // Stop recording for the old game, then start for the new one
       stopRecording()

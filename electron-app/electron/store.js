@@ -14,6 +14,7 @@ const electronConfigDefaults = {
   windowBounds: { width: 1200, height: 800 },
   obsRecordingPath: '',
   listView: true,
+  organizeRemux: true,
   onboardingComplete: false,
   obsInstallPath: '',
 };
@@ -57,6 +58,7 @@ function msToElectronSettings(ms, obsRecordingPath, electronData) {
     startWatcherOnStartup: ms.start_watcher_on_startup || false,
     clipMarkerHotkey: ms.clip_hotkey || 'F9',
     listView: electronData?.listView !== false,
+    organizeRemux: electronData?.organizeRemux !== false,
     autoClip: {
       enabled: ms.auto_clip_settings?.enabled || false,
       bufferBefore: ms.auto_clip_settings?.buffer_before_seconds ?? 30,
@@ -229,6 +231,10 @@ const store = {
         this._electron().listView = value.listView;
         this._saveElectron();
       }
+      if (value.organizeRemux !== undefined) {
+        this._electron().organizeRemux = value.organizeRemux;
+        this._saveElectron();
+      }
       this._msData = electronSettingsToMs(this._ms(), value);
       this._saveMs();
       if (value.destinationPath) {
@@ -247,6 +253,12 @@ const store = {
       // listView lives only in electron config
       if (subKey === 'listView') {
         this._electron().listView = value;
+        this._saveElectron();
+        return;
+      }
+      // organizeRemux lives only in electron config
+      if (subKey === 'organizeRemux') {
+        this._electron().organizeRemux = value;
         this._saveElectron();
         return;
       }
