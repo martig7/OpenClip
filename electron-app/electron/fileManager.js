@@ -8,17 +8,39 @@ const service = require('./recordingService');
 
 const execFileAsync = promisify(execFile);
 
-// Move a file safely across devices: try rename first, copy+delete on EXDEV
+// Move a file safely across devices or past transient system locks.
+// Strategy: rename with retry on EBUSY/EPERM (Windows indexer/AV/thumbnail gen hold files
+// briefly but don't block reads), then fall back to copy+delete for EXDEV or
+// persistent EBUSY/EPERM.
 async function moveFileSafe(src, dest) {
-  try {
-    fs.renameSync(src, dest);
-  } catch (err) {
-    if (err.code !== 'EXDEV') throw err;
-    await fs.promises.copyFile(src, dest);
+  // Try rename up to 3 times; back off on transient EBUSY or EPERM
+  let renameErr = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      fs.renameSync(src, dest);
+      return; // success
+    } catch (err) {
+      if (err.code !== 'EXDEV' && err.code !== 'EBUSY' && err.code !== 'EPERM') throw err;
+      renameErr = err;
+      if (err.code === 'EXDEV') break; // cross-device: go straight to copy
+      if (attempt < 2) await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+    }
+  }
+
+  // Rename failed (cross-device or persistent EBUSY) — copy then delete
+  await fs.promises.copyFile(src, dest);
+
+  // Retry unlink to handle transient system holds
+  for (let attempt = 0; attempt < 3; attempt++) {
     try {
       await fs.promises.unlink(src);
+      return; // success
     } catch (unlinkErr) {
-      // Best-effort cleanup of the just-copied dest before rethrowing
+      if (attempt < 2) {
+        await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+        continue;
+      }
+      // Unlink failed after retries — roll back the copy so no duplicate is left
       try { await fs.promises.unlink(dest); } catch {}
       throw unlinkErr;
     }
@@ -43,6 +65,36 @@ async function waitForUnlock(filePath, maxAttempts = 5, delayMs = 2000) {
     if (i < maxAttempts - 1) await new Promise(r => setTimeout(r, delayMs));
   }
   throw new Error(`File is still locked after ${maxAttempts} attempts — try again in a moment`);
+}
+
+// Retry fs.statSync until it succeeds or the file remains inaccessible after maxAttempts.
+// Returns the Stats object, or null if timed out (EPERM/EBUSY/EACCES from OBS still holding the file).
+async function waitForStat(filePath, maxAttempts = 10, delayMs = 1000) {
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      return fs.statSync(filePath);
+    } catch (err) {
+      if (err.code !== 'EPERM' && err.code !== 'EBUSY' && err.code !== 'EACCES') throw err;
+      if (i < maxAttempts - 1) await new Promise(r => setTimeout(r, delayMs));
+    }
+  }
+  return null; // timed out — caller should skip this file
+}
+
+// Retry fs.unlinkSync to handle transient EPERM/EBUSY (AV scanning newly created files,
+// Windows indexer, OBS briefly reopening the source after ffmpeg finishes).
+// Throws only if still locked after all attempts.
+async function unlinkWithRetry(filePath, maxAttempts = 4, delayMs = 750) {
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      fs.unlinkSync(filePath);
+      return;
+    } catch (err) {
+      if (err.code !== 'EPERM' && err.code !== 'EBUSY' && err.code !== 'EACCES') throw err;
+      if (i < maxAttempts - 1) await new Promise(r => setTimeout(r, delayMs));
+    }
+  }
+  throw new Error(`Cannot delete source file — it is still held open by another process`);
 }
 
 function getWeekFolder(date) {
@@ -84,9 +136,14 @@ async function organizeRecordings(store, gameName, onProgress = () => {}) {
   const weekFolder = `${sanitizedName} - ${getWeekFolder(now)}`;
   const targetDir = path.join(destPath, weekFolder);
 
+  const autoClipSettings = store.get('settings.autoClip');
+  const autoClipEnabled = autoClipSettings?.enabled;
+
   for (const file of files) {
     const src = path.join(obsPath, file);
-    const stat = fs.statSync(src);
+    // Wait for OBS to release its handle — EPERM on stat means the file isn't accessible yet
+    const stat = await waitForStat(src);
+    if (!stat) { console.warn(`[organize] Skipping ${file} — file inaccessible after retries`); continue; }
     // Only process files modified in the last 10 minutes
     if (now - stat.mtime > 10 * 60 * 1000) continue;
 
@@ -94,11 +151,24 @@ async function organizeRecordings(store, gameName, onProgress = () => {}) {
 
     // Wait for file to stabilize — OBS may still be writing/finalizing
     await new Promise(r => setTimeout(r, 2000));
-    let statCheck;
-    try { statCheck = fs.statSync(src); } catch { continue; }
+    const statCheck = await waitForStat(src);
+    if (!statCheck) { console.warn(`[organize] Skipping ${file} — file inaccessible after stabilization wait`); continue; }
     if (stat.size !== statCheck.size) {
       console.warn(`[organize] Skipping ${file} — file size changed, still being written`);
       continue;
+    }
+
+    try {
+      await waitForUnlock(src);
+    } catch {
+      console.warn(`[organize] Skipping ${file} — file is still held open after retries`);
+      continue;
+    }
+
+    // Create clips from the source file before renaming or moving it
+    let processedMarkers = [];
+    if (autoClipEnabled) {
+      processedMarkers = await processAutoClipsFromFile(store, gameName, src, statCheck, onProgress);
     }
 
     fs.mkdirSync(targetDir, { recursive: true });
@@ -110,10 +180,12 @@ async function organizeRecordings(store, gameName, onProgress = () => {}) {
     const newName = `${sanitizedName} Session ${dateStr} #${sessionNum}.mp4`;
     const dest = path.join(targetDir, newName);
 
+    let movedTo = null;
     if (ext.toLowerCase() !== '.mp4') {
       onProgress({ phase: 'recording', stage: 'remuxing', label: 'Remuxing to MP4…', gameName });
       // Mark both paths as in-progress so scans skip them during remux
       service.markRemuxing(src, dest);
+      let remuxDone = false;
       try {
         // Probe source for audio stream titles before remux (MKV titles don't survive MP4 remux)
         let trackNames = null;
@@ -129,22 +201,33 @@ async function organizeRecordings(store, gameName, onProgress = () => {}) {
         await execFileAsync(FFMPEG_PATH, [
           '-i', src, '-map', '0', '-c', 'copy', '-movflags', '+faststart', '-y', dest,
         ], { timeout: 10 * 60 * 1000 });
+        remuxDone = true;
 
         // Save track names in a sidecar file so they survive the container conversion
         if (trackNames) {
           fs.writeFileSync(dest + '.tracks.json', JSON.stringify(trackNames));
         }
 
-        fs.unlinkSync(src);
+        // Retry unlink: AV software may scan the new MP4 and briefly re-lock the source
+        await unlinkWithRetry(src);
+        movedTo = dest;
       } catch (remuxErr) {
-        // Remux failed — remove any partial output so no duplicate is left behind
-        try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch {}
-        // Fallback: just move the file
-        try {
-          onProgress({ phase: 'recording', stage: 'moving', label: 'Moving file…', gameName });
-          await moveFileSafe(src, path.join(targetDir, `${sanitizedName} Session ${dateStr} #${sessionNum}${ext}`));
-        } catch {
-          onProgress({ phase: 'error', gameName, error: `Could not process recording for ${gameName}: ${remuxErr.message}` });
+        if (remuxDone) {
+          // ffmpeg succeeded; only the source deletion failed — keep the output and log
+          console.warn(`[organize] Remux succeeded but source could not be deleted: ${remuxErr.message}`);
+          movedTo = dest;
+        } else {
+          // ffmpeg itself failed — remove any partial output so no duplicate is left behind
+          try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch {}
+          // Fallback: just move the file
+          const fallbackDest = path.join(targetDir, `${sanitizedName} Session ${dateStr} #${sessionNum}${ext}`);
+          try {
+            onProgress({ phase: 'recording', stage: 'moving', label: 'Moving file…', gameName });
+            await moveFileSafe(src, fallbackDest);
+            movedTo = fallbackDest;
+          } catch {
+            onProgress({ phase: 'error', gameName, error: `Could not process recording for ${gameName}: ${remuxErr.message}` });
+          }
         }
       } finally {
         service.unmarkRemuxing(src, dest);
@@ -154,16 +237,25 @@ async function organizeRecordings(store, gameName, onProgress = () => {}) {
       onProgress({ phase: 'recording', stage: 'moving', label: 'Moving file…', gameName });
       await moveFileSafe(src, dest);
       service.invalidateRecordingsCache();
+      movedTo = dest;
+    }
+
+    // Post-move: clean up processed markers and optionally delete the organized recording
+    if (autoClipEnabled && processedMarkers.length > 0) {
+      if (autoClipSettings.removeMarkers) {
+        const processedTimestamps = new Set(processedMarkers.map(m => m.timestamp));
+        const remaining = (store.get('clipMarkers') || []).filter(
+          m => !(m.game === gameName && processedTimestamps.has(m.timestamp))
+        );
+        store.set('clipMarkers', remaining);
+      }
+      if (autoClipSettings.deleteFullRecording && movedTo) {
+        try { fs.unlinkSync(movedTo); } catch {}
+      }
     }
   }
 
-  // Auto-clip from markers when auto-clip is enabled
-  const autoClipSettings = store.get('settings.autoClip');
-  if (autoClipSettings && autoClipSettings.enabled) {
-    await processAutoClips(store, gameName, targetDir, onProgress);
-  } else {
-    onProgress({ phase: 'complete', gameName });
-  }
+  onProgress({ phase: 'complete', gameName });
 }
 
 async function getVideoDuration(filePath) {
@@ -180,12 +272,12 @@ async function getVideoDuration(filePath) {
   }
 }
 
-async function processAutoClips(store, gameName, recordingDir, onProgress = () => {}) {
+// Create clips from a specific source file before it is renamed or moved.
+// Returns the array of markers that were successfully clipped.
+// Caller is responsible for marker removal, deleteFullRecording, and emitting 'complete'.
+async function processAutoClipsFromFile(store, gameName, srcPath, srcStat, onProgress = () => {}) {
   const markers = (store.get('clipMarkers') || []).filter(m => m.game === gameName);
-  if (markers.length === 0) {
-    onProgress({ phase: 'complete', gameName });
-    return;
-  }
+  if (markers.length === 0) return [];
 
   const destPath = store.get('settings.destinationPath');
   const clipsDir = path.join(destPath, 'Clips');
@@ -195,39 +287,11 @@ async function processAutoClips(store, gameName, recordingDir, onProgress = () =
   const bufferBefore = autoClip.bufferBefore || 15;
   const bufferAfter = autoClip.bufferAfter || 15;
 
-  // Find the most recent recording file
-  if (!fs.existsSync(recordingDir)) {
-    onProgress({ phase: 'complete', gameName });
-    return;
-  }
-  const names = fs.readdirSync(recordingDir, { withFileTypes: true })
-    .filter(f => f.isFile() && f.name.endsWith('.mp4'))
-    .map(f => f.name);
-  const settled = await Promise.allSettled(
-    names.map(async f => {
-      const fp = path.join(recordingDir, f);
-      const { mtime } = await fs.promises.stat(fp);
-      return { name: f, path: fp, mtime };
-    })
-  );
-  const recordings = settled
-    .filter(r => r.status === 'fulfilled')
-    .map(r => r.value)
-    .sort((a, b) => b.mtime - a.mtime);
+  const duration = await getVideoDuration(srcPath);
+  if (!duration) return [];
 
-  if (recordings.length === 0) {
-    onProgress({ phase: 'complete', gameName });
-    return;
-  }
-  const recording = recordings[0];
-
-  // Determine recording time window to convert absolute marker timestamps → video positions
-  const duration = await getVideoDuration(recording.path);
-  if (!duration) {
-    onProgress({ phase: 'complete', gameName });
-    return;
-  }
-  const recordingStartUnix = recording.mtime.getTime() / 1000 - duration;
+  // Use the file's mtime to determine when the recording started
+  const recordingStartUnix = srcStat.mtime.getTime() / 1000 - duration;
 
   const sanitizedName = sanitizeGameName(gameName);
   const dateStr = localDateStr(new Date());
@@ -252,7 +316,7 @@ async function processAutoClips(store, gameName, recordingDir, onProgress = () =
     try {
       await execFileAsync(FFMPEG_PATH, [
         '-ss', String(start),
-        '-i', recording.path,
+        '-i', srcPath,
         '-t', String(clipDuration),
         '-c', 'copy',
         '-avoid_negative_ts', 'make_zero',
@@ -267,19 +331,7 @@ async function processAutoClips(store, gameName, recordingDir, onProgress = () =
     }
   }
 
-  onProgress({ phase: 'complete', gameName });
-
-  if (autoClip.removeMarkers && processedMarkers.length > 0) {
-    const processedTimestamps = new Set(processedMarkers.map(m => m.timestamp));
-    const remaining = (store.get('clipMarkers') || []).filter(
-      m => !(m.game === gameName && processedTimestamps.has(m.timestamp))
-    );
-    store.set('clipMarkers', remaining);
-  }
-
-  if (autoClip.deleteFullRecording && processedMarkers.length > 0) {
-    try { fs.unlinkSync(recording.path); } catch {}
-  }
+  return processedMarkers;
 }
 
 async function finalizeDirectRecording(store, gameName, recordingDir, onProgress = () => {}) {
@@ -289,12 +341,17 @@ async function finalizeDirectRecording(store, gameName, recordingDir, onProgress
   const now = new Date();
   const sanitizedName = sanitizeGameName(gameName);
 
+  const autoClipSettings = store.get('settings.autoClip');
+  const autoClipEnabled = autoClipSettings?.enabled;
+
   for (const file of files) {
     // Skip files already in session format (from a previous finalize call)
     if (file.startsWith(`${sanitizedName} Session`)) continue;
 
     const src = path.join(recordingDir, file);
-    const stat = fs.statSync(src);
+    // Wait for OBS to release its handle — EPERM on stat means the file isn't accessible yet
+    const stat = await waitForStat(src);
+    if (!stat) { console.warn(`[finalize] Skipping ${file} — file inaccessible after retries`); continue; }
     // Only process files modified in the last 10 minutes
     if (now - stat.mtime > 10 * 60 * 1000) continue;
 
@@ -302,11 +359,24 @@ async function finalizeDirectRecording(store, gameName, recordingDir, onProgress
 
     // Wait for file to stabilize — OBS may still be writing/finalizing
     await new Promise(r => setTimeout(r, 2000));
-    let statCheck;
-    try { statCheck = fs.statSync(src); } catch { continue; }
+    const statCheck = await waitForStat(src);
+    if (!statCheck) { console.warn(`[finalize] Skipping ${file} — file inaccessible after stabilization wait`); continue; }
     if (stat.size !== statCheck.size) {
       console.warn(`[finalize] Skipping ${file} — file size changed, still being written`);
       continue;
+    }
+
+    try {
+      await waitForUnlock(src);
+    } catch {
+      console.warn(`[finalize] Skipping ${file} — file is still held open after retries`);
+      continue;
+    }
+
+    // Create clips from the source file before renaming or remuxing it
+    let processedMarkers = [];
+    if (autoClipEnabled) {
+      processedMarkers = await processAutoClipsFromFile(store, gameName, src, statCheck, onProgress);
     }
 
     const dateStr = localDateStr(now);
@@ -316,9 +386,11 @@ async function finalizeDirectRecording(store, gameName, recordingDir, onProgress
     const newName = `${sanitizedName} Session ${dateStr} #${sessionNum}.mp4`;
     const dest = path.join(recordingDir, newName);
 
+    let movedTo = null;
     if (ext.toLowerCase() !== '.mp4') {
       onProgress({ phase: 'recording', stage: 'remuxing', label: 'Remuxing to MP4…', gameName });
       service.markRemuxing(src, dest);
+      let remuxDone = false;
       try {
         let trackNames = null;
         try {
@@ -333,20 +405,31 @@ async function finalizeDirectRecording(store, gameName, recordingDir, onProgress
         await execFileAsync(FFMPEG_PATH, [
           '-i', src, '-map', '0', '-c', 'copy', '-movflags', '+faststart', '-y', dest,
         ], { timeout: 10 * 60 * 1000 });
+        remuxDone = true;
 
         if (trackNames) {
           fs.writeFileSync(dest + '.tracks.json', JSON.stringify(trackNames));
         }
 
-        fs.unlinkSync(src);
+        // Retry unlink: AV software may scan the new MP4 and briefly re-lock the source
+        await unlinkWithRetry(src);
+        movedTo = dest;
       } catch (remuxErr) {
-        // Remux failed — remove any partial output, keep original with session name
-        try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch {}
-        try {
-          onProgress({ phase: 'recording', stage: 'moving', label: 'Renaming file…', gameName });
-          await moveFileSafe(src, path.join(recordingDir, `${sanitizedName} Session ${dateStr} #${sessionNum}${ext}`));
-        } catch {
-          onProgress({ phase: 'error', gameName, error: `Could not process recording for ${gameName}: ${remuxErr.message}` });
+        if (remuxDone) {
+          // ffmpeg succeeded; only the source deletion failed — keep the output and log
+          console.warn(`[finalize] Remux succeeded but source could not be deleted: ${remuxErr.message}`);
+          movedTo = dest;
+        } else {
+          // ffmpeg itself failed — remove any partial output, keep original with session name
+          try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch {}
+          const fallbackDest = path.join(recordingDir, `${sanitizedName} Session ${dateStr} #${sessionNum}${ext}`);
+          try {
+            onProgress({ phase: 'recording', stage: 'moving', label: 'Renaming file…', gameName });
+            await moveFileSafe(src, fallbackDest);
+            movedTo = fallbackDest;
+          } catch {
+            onProgress({ phase: 'error', gameName, error: `Could not process recording for ${gameName}: ${remuxErr.message}` });
+          }
         }
       } finally {
         service.unmarkRemuxing(src, dest);
@@ -356,16 +439,25 @@ async function finalizeDirectRecording(store, gameName, recordingDir, onProgress
       onProgress({ phase: 'recording', stage: 'moving', label: 'Renaming file…', gameName });
       await moveFileSafe(src, dest);
       service.invalidateRecordingsCache();
+      movedTo = dest;
+    }
+
+    // Post-rename: clean up processed markers and optionally delete the organized recording
+    if (autoClipEnabled && processedMarkers.length > 0) {
+      if (autoClipSettings.removeMarkers) {
+        const processedTimestamps = new Set(processedMarkers.map(m => m.timestamp));
+        const remaining = (store.get('clipMarkers') || []).filter(
+          m => !(m.game === gameName && processedTimestamps.has(m.timestamp))
+        );
+        store.set('clipMarkers', remaining);
+      }
+      if (autoClipSettings.deleteFullRecording && movedTo) {
+        try { fs.unlinkSync(movedTo); } catch {}
+      }
     }
   }
 
-  // Auto-clip from markers when auto-clip is enabled
-  const autoClipSettings = store.get('settings.autoClip');
-  if (autoClipSettings && autoClipSettings.enabled) {
-    await processAutoClips(store, gameName, recordingDir, onProgress);
-  } else {
-    onProgress({ phase: 'complete', gameName });
-  }
+  onProgress({ phase: 'complete', gameName });
 }
 
 function setupFileManager(ipcMain, store) {
@@ -452,12 +544,14 @@ async function organizeSpecificRecording(store, filePath, gameName, opts = {}) {
     return { success: true, alreadyOrganized: true, path: filePath, filename: path.basename(filePath) };
   }
 
-  // Verify file is stable (size not changing) and not locked by OBS
+  // Verify file is stable (size not changing) and not locked by OBS.
+  // Use waitForStat so transient EPERM (OBS still finalizing) is retried gracefully.
   onProgress('checking', 'Verifying file…');
-  const stat1 = fs.statSync(filePath);
+  const stat1 = await waitForStat(filePath);
+  if (!stat1) throw new Error('File is not accessible — it may still be held open by another process');
   await new Promise(r => setTimeout(r, 1500));
-  let stat2;
-  try { stat2 = fs.statSync(filePath); } catch { throw new Error('Cannot access file'); }
+  const stat2 = await waitForStat(filePath);
+  if (!stat2) throw new Error('File is not accessible — it may still be held open by another process');
   if (stat1.size !== stat2.size) throw new Error('File is still being written — please wait a moment and try again');
   await waitForUnlock(filePath);
 
@@ -491,6 +585,7 @@ async function organizeSpecificRecording(store, filePath, gameName, opts = {}) {
     onProgress('remuxing', 'Remuxing to MP4…');
     service.markRemuxing(filePath, dest);
     let finalPath = dest;
+    let remuxDone = false;
     try {
       let trackNames = null;
       try {
@@ -505,19 +600,26 @@ async function organizeSpecificRecording(store, filePath, gameName, opts = {}) {
       await execFileAsync(FFMPEG_PATH, [
         '-i', filePath, '-map', '0', '-c', 'copy', '-movflags', '+faststart', '-y', dest,
       ], { timeout: 120000 });
+      remuxDone = true;
 
       if (trackNames) fs.writeFileSync(dest + '.tracks.json', JSON.stringify(trackNames));
-      fs.unlinkSync(filePath);
+      // Retry unlink: AV software may scan the new MP4 and briefly re-lock the source
+      await unlinkWithRetry(filePath);
     } catch (err) {
-      try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch {}
-      // Fallback: move with original extension (cross-device safe)
-      const fallbackName = `${sanitizedName} Session ${dateStr} #${sessionNum}${ext}`;
-      finalPath = path.join(targetDir, fallbackName);
-      try {
-        await moveFileSafe(filePath, finalPath);
-      } catch (renameErr) {
-        service.unmarkRemuxing(filePath, dest);
-        throw new Error(`Could not move file (it may still be open by OBS): ${renameErr.message}`);
+      if (remuxDone) {
+        // ffmpeg succeeded; only the source deletion failed — keep the output and log
+        console.warn(`[organize] Remux succeeded but source could not be deleted: ${err.message}`);
+      } else {
+        // ffmpeg itself failed — move with original extension as fallback
+        try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch {}
+        const fallbackName = `${sanitizedName} Session ${dateStr} #${sessionNum}${ext}`;
+        finalPath = path.join(targetDir, fallbackName);
+        try {
+          await moveFileSafe(filePath, finalPath);
+        } catch (renameErr) {
+          service.unmarkRemuxing(filePath, dest);
+          throw new Error(`Could not move file: ${renameErr.message}`);
+        }
       }
     } finally {
       service.unmarkRemuxing(filePath, dest);
@@ -532,7 +634,7 @@ async function organizeSpecificRecording(store, filePath, gameName, opts = {}) {
       if (err.code === 'ENOSPC') {
         throw new Error('Not enough disk space to move the recording.');
       }
-      throw new Error(`Could not move file (it may still be open by OBS): ${err.message}`);
+      throw new Error(`Could not move file: ${err.message}`);
     }
     service.invalidateRecordingsCache();
     return { success: true, path: dest, filename: destFilename };

@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeAll, afterAll, afterEach, useState } from 'vitest'
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
+import React from 'react'
 import '@testing-library/jest-dom'
 import { http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
 import { sampleRecording, sampleAudioTracks } from '../fixtures/data.js'
 import VideoPlayer from '../../src/viewer/components/VideoPlayer.jsx'
+import { OrganizeProgressContext } from '../../src/App.jsx'
 import api from '../../src/api.js'
 
 // Fixture: an unorganized recording (game_name === '(Unorganized)')
@@ -70,8 +72,26 @@ afterEach(() => {
 
 afterAll(() => server.close())
 
+// Wrapper that provides a real OrganizeProgressContext so state updates from
+// setOrganizeProgress / setIsManualOrganizing propagate correctly in tests.
+function WithOrganizeContext({ children }) {
+  const [organizeProgress, setOrganizeProgress] = React.useState(null)
+  const [isManualOrganizing, setIsManualOrganizing] = React.useState(false)
+  return (
+    <OrganizeProgressContext.Provider
+      value={{ organizeProgress, setOrganizeProgress, isManualOrganizing, setIsManualOrganizing }}
+    >
+      {children}
+    </OrganizeProgressContext.Provider>
+  )
+}
+
 function renderPlayer(recording = null, onClipCreated = vi.fn()) {
-  return render(<VideoPlayer recording={recording} onClipCreated={onClipCreated} />)
+  return render(
+    <WithOrganizeContext>
+      <VideoPlayer recording={recording} onClipCreated={onClipCreated} />
+    </WithOrganizeContext>
+  )
 }
 
 describe('VideoPlayer', () => {
@@ -221,14 +241,14 @@ describe('VideoPlayer — organize panel', () => {
 
   it('shows Unorganized badge for an unorganized recording', async () => {
     setupHandlers()
-    render(<VideoPlayer recording={unorganizedRecording} games={sampleGames} />)
+    render(<WithOrganizeContext><VideoPlayer recording={unorganizedRecording} games={sampleGames} /></WithOrganizeContext>)
     // Badge text is exactly 'Unorganized'; game_name in meta is '(Unorganized)'
     await waitFor(() => expect(screen.getByText('Unorganized')).toBeInTheDocument())
   })
 
   it('shows Organize button instead of Create Clip for unorganized recordings', async () => {
     setupHandlers()
-    render(<VideoPlayer recording={unorganizedRecording} games={sampleGames} />)
+    render(<WithOrganizeContext><VideoPlayer recording={unorganizedRecording} games={sampleGames} /></WithOrganizeContext>)
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /^Organize$/i })).toBeInTheDocument()
     )
@@ -237,7 +257,7 @@ describe('VideoPlayer — organize panel', () => {
 
   it('opens organize panel when Organize button is clicked', async () => {
     setupHandlers()
-    render(<VideoPlayer recording={unorganizedRecording} games={sampleGames} />)
+    render(<WithOrganizeContext><VideoPlayer recording={unorganizedRecording} games={sampleGames} /></WithOrganizeContext>)
     await waitFor(() => screen.getByRole('button', { name: /^Organize$/i }))
     fireEvent.click(screen.getByRole('button', { name: /^Organize$/i }))
     await waitFor(() => expect(screen.getByText(/Move to organized library/i)).toBeInTheDocument())
@@ -248,11 +268,13 @@ describe('VideoPlayer — organize panel', () => {
   it('preview shows "remuxed to MP4" when organizeRemux=true and file is non-mp4', async () => {
     setupHandlers()
     render(
-      <VideoPlayer
-        recording={unorganizedRecording}
-        games={sampleGames}
-        organizeRemux={true}
-      />
+      <WithOrganizeContext>
+        <VideoPlayer
+          recording={unorganizedRecording}
+          games={sampleGames}
+          organizeRemux={true}
+        />
+      </WithOrganizeContext>
     )
     await waitFor(() => screen.getByRole('button', { name: /^Organize$/i }))
     fireEvent.click(screen.getByRole('button', { name: /^Organize$/i }))
@@ -268,11 +290,13 @@ describe('VideoPlayer — organize panel', () => {
   it('preview shows "move only" when organizeRemux=false and file is non-mp4', async () => {
     setupHandlers()
     render(
-      <VideoPlayer
-        recording={unorganizedRecording}
-        games={sampleGames}
-        organizeRemux={false}
-      />
+      <WithOrganizeContext>
+        <VideoPlayer
+          recording={unorganizedRecording}
+          games={sampleGames}
+          organizeRemux={false}
+        />
+      </WithOrganizeContext>
     )
     await waitFor(() => screen.getByRole('button', { name: /^Organize$/i }))
     fireEvent.click(screen.getByRole('button', { name: /^Organize$/i }))
@@ -295,12 +319,14 @@ describe('VideoPlayer — organize panel', () => {
     )
 
     render(
-      <VideoPlayer
-        recording={unorganizedRecording}
-        games={sampleGames}
-        onOrganized={vi.fn()}
-        onOrganizeError={vi.fn()}
-      />
+      <WithOrganizeContext>
+        <VideoPlayer
+          recording={unorganizedRecording}
+          games={sampleGames}
+          onOrganized={vi.fn()}
+          onOrganizeError={vi.fn()}
+        />
+      </WithOrganizeContext>
     )
 
     await waitFor(() => screen.getByRole('button', { name: /^Organize$/i }))
@@ -339,12 +365,14 @@ describe('VideoPlayer — organize panel', () => {
     )
 
     render(
-      <VideoPlayer
-        recording={unorganizedRecording}
-        games={sampleGames}
-        onOrganized={vi.fn()}
-        onOrganizeError={vi.fn()}
-      />
+      <WithOrganizeContext>
+        <VideoPlayer
+          recording={unorganizedRecording}
+          games={sampleGames}
+          onOrganized={vi.fn()}
+          onOrganizeError={vi.fn()}
+        />
+      </WithOrganizeContext>
     )
 
     await waitFor(() => screen.getByRole('button', { name: /^Organize$/i }))
@@ -381,12 +409,14 @@ describe('VideoPlayer — organize panel', () => {
     })
 
     render(
-      <VideoPlayer
-        recording={unorganizedRecording}
-        games={sampleGames}
-        onOrganized={onOrganized}
-        onOrganizeError={vi.fn()}
-      />
+      <WithOrganizeContext>
+        <VideoPlayer
+          recording={unorganizedRecording}
+          games={sampleGames}
+          onOrganized={onOrganized}
+          onOrganizeError={vi.fn()}
+        />
+      </WithOrganizeContext>
     )
 
     await waitFor(() => screen.getByText(/^Organize$/i))

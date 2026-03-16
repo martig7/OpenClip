@@ -161,7 +161,7 @@ test.describe('Session Progress — Recordings Page', () => {
     await expect(page.locator('.session-progress-banner')).toContainText('Verifying recording…');
   });
 
-  test('banner does not appear for clipping-phase events', async ({ page }) => {
+  test('banner appears for clipping-phase events', async ({ page }) => {
     await page.route('**/api/recordings', route => route.fulfill({
       status: 200, contentType: 'application/json', body: '[]',
     }));
@@ -170,7 +170,8 @@ test.describe('Session Progress — Recordings Page', () => {
 
     await fireProgress(page, { phase: 'clipping', stage: 'clipping', label: 'Creating clip 1 of 3…', gameName: 'Halo', clipIndex: 1, clipTotal: 3 });
 
-    await expect(page.locator('.session-progress-banner')).not.toBeVisible();
+    await expect(page.locator('.session-progress-banner')).toBeVisible();
+    await expect(page.locator('.session-progress-banner')).toContainText('Creating clip 1 of 3…');
   });
 
   test('banner disappears and recordings list refreshes on complete', async ({ page }) => {
@@ -191,27 +192,27 @@ test.describe('Session Progress — Recordings Page', () => {
     await expect(page.locator('.session-progress-banner')).not.toBeVisible();
   });
 
-  test('progress fill is 20% for checking, 65% for remuxing, 90% for moving', async ({ page }) => {
+  test('progress fill is 10% for checking, 32% for remuxing, 45% for moving', async ({ page }) => {
     await page.route('**/api/recordings', route => route.fulfill({
       status: 200, contentType: 'application/json', body: '[]',
     }));
     await page.goto('/#/recordings');
     await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
 
-    // checking → 20%
+    // checking → 10%
     await fireProgress(page, { phase: 'recording', stage: 'checking', label: 'Verifying recording…', gameName: 'Halo' });
     let width = await page.locator('.session-progress-fill').evaluate(el => el.style.width);
-    expect(width).toBe('20%');
+    expect(width).toBe('10%');
 
-    // remuxing → 65%
+    // remuxing → 32%
     await fireProgress(page, { phase: 'recording', stage: 'remuxing', label: 'Remuxing to MP4…', gameName: 'Halo' });
     width = await page.locator('.session-progress-fill').evaluate(el => el.style.width);
-    expect(width).toBe('65%');
+    expect(width).toBe('32%');
 
-    // moving → 90%
+    // moving → 45%
     await fireProgress(page, { phase: 'recording', stage: 'moving', label: 'Moving file…', gameName: 'Halo' });
     width = await page.locator('.session-progress-fill').evaluate(el => el.style.width);
-    expect(width).toBe('90%');
+    expect(width).toBe('45%');
   });
 
   test('banner updates label as stages progress from checking to moving', async ({ page }) => {
@@ -471,6 +472,6 @@ test.describe('Session Progress — Mid-session Navigation', () => {
     await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
     await expect(page.locator('.session-progress-banner')).toContainText('Remuxing to MP4…');
     const width = await page.locator('.session-progress-fill').evaluate(el => el.style.width);
-    expect(width).toBe('65%');
+    expect(width).toBe('32%');
   });
 });
