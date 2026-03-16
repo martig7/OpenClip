@@ -14,6 +14,7 @@ const electronConfigDefaults = {
   windowBounds: { width: 1200, height: 800 },
   obsRecordingPath: '',
   listView: true,
+  organizeRemux: true,
   onboardingComplete: false,
   obsInstallPath: '',
 };
@@ -28,7 +29,7 @@ const managerSettingsDefaults = {
   locked_recordings: [],
   clip_hotkey: 'F9',
   auto_clip_settings: {
-    enabled: false, buffer_before_seconds: 15, buffer_after_seconds: 15,
+    enabled: false, buffer_before_seconds: 30, buffer_after_seconds: 5,
     remove_processed_markers: true, delete_recording_after_clips: false,
   },
   obs_websocket: { host: 'localhost', port: 4455, password: '' },
@@ -57,10 +58,11 @@ function msToElectronSettings(ms, obsRecordingPath, electronData) {
     startWatcherOnStartup: ms.start_watcher_on_startup || false,
     clipMarkerHotkey: ms.clip_hotkey || 'F9',
     listView: electronData?.listView !== false,
+    organizeRemux: electronData?.organizeRemux !== false,
     autoClip: {
       enabled: ms.auto_clip_settings?.enabled || false,
-      bufferBefore: ms.auto_clip_settings?.buffer_before_seconds ?? 15,
-      bufferAfter: ms.auto_clip_settings?.buffer_after_seconds ?? 15,
+      bufferBefore: ms.auto_clip_settings?.buffer_before_seconds ?? 30,
+      bufferAfter: ms.auto_clip_settings?.buffer_after_seconds ?? 5,
       removeMarkers: ms.auto_clip_settings?.remove_processed_markers !== false,
       deleteFullRecording: ms.auto_clip_settings?.delete_recording_after_clips || false,
     },
@@ -88,8 +90,8 @@ function electronSettingsToMs(ms, electronSettings) {
     updated.auto_clip_settings = {
       ...(ms.auto_clip_settings || {}),
       enabled: electronSettings.autoClip.enabled || false,
-      buffer_before_seconds: electronSettings.autoClip.bufferBefore ?? 15,
-      buffer_after_seconds: electronSettings.autoClip.bufferAfter ?? 15,
+      buffer_before_seconds: electronSettings.autoClip.bufferBefore ?? 30,
+      buffer_after_seconds: electronSettings.autoClip.bufferAfter ?? 5,
       remove_processed_markers: electronSettings.autoClip.removeMarkers !== false,
       delete_recording_after_clips: electronSettings.autoClip.deleteFullRecording || false,
     };
@@ -229,8 +231,15 @@ const store = {
         this._electron().listView = value.listView;
         this._saveElectron();
       }
+      if (value.organizeRemux !== undefined) {
+        this._electron().organizeRemux = value.organizeRemux;
+        this._saveElectron();
+      }
       this._msData = electronSettingsToMs(this._ms(), value);
       this._saveMs();
+      if (value.destinationPath) {
+        try { fs.mkdirSync(normalizePath(value.destinationPath), { recursive: true }); } catch {}
+      }
       return;
     }
     if (key.startsWith('settings.')) {
@@ -247,6 +256,12 @@ const store = {
         this._saveElectron();
         return;
       }
+      // organizeRemux lives only in electron config
+      if (subKey === 'organizeRemux') {
+        this._electron().organizeRemux = value;
+        this._saveElectron();
+        return;
+      }
       // Build a partial electron settings object for the changed key, then merge
       const current = msToElectronSettings(this._ms(), this._electron().obsRecordingPath, this._electron());
       const parts = subKey.split('.');
@@ -258,6 +273,9 @@ const store = {
       obj[parts[parts.length - 1]] = value;
       this._msData = electronSettingsToMs(this._ms(), current);
       this._saveMs();
+      if (subKey === 'destinationPath' && value) {
+        try { fs.mkdirSync(normalizePath(value), { recursive: true }); } catch {}
+      }
       return;
     }
   },

@@ -158,6 +158,7 @@ async function organizeRecordings(store, gameName, onProgress = () => {}) {
       continue;
     }
 
+    onProgress({ phase: 'recording', stage: 'waiting', label: 'Waiting for OBS to unlock…', gameName });
     try {
       await waitForUnlock(src);
     } catch {
@@ -174,14 +175,15 @@ async function organizeRecordings(store, gameName, onProgress = () => {}) {
     fs.mkdirSync(targetDir, { recursive: true });
 
     const dateStr = localDateStr(now);
-    const existing = fs.readdirSync(targetDir).filter(f => f.includes(dateStr));
+    const existing = fs.readdirSync(targetDir).filter(f => isVideoFile(f) && f.includes(dateStr));
     const sessionNum = existing.length + 1;
     const ext = path.extname(file);
-    const newName = `${sanitizedName} Session ${dateStr} #${sessionNum}.mp4`;
+    const moveOnly = store.get('settings.organizeRemux') === false;
+    const newName = `${sanitizedName} Session ${dateStr} #${sessionNum}${moveOnly ? ext : '.mp4'}`;
     const dest = path.join(targetDir, newName);
 
     let movedTo = null;
-    if (ext.toLowerCase() !== '.mp4') {
+    if (!moveOnly && ext.toLowerCase() !== '.mp4') {
       onProgress({ phase: 'recording', stage: 'remuxing', label: 'Remuxing to MP4…', gameName });
       // Mark both paths as in-progress so scans skip them during remux
       service.markRemuxing(src, dest);
@@ -380,7 +382,7 @@ async function finalizeDirectRecording(store, gameName, recordingDir, onProgress
     }
 
     const dateStr = localDateStr(now);
-    const existing = fs.readdirSync(recordingDir).filter(f => f.includes(dateStr) && f !== file);
+    const existing = fs.readdirSync(recordingDir).filter(f => isVideoFile(f) && f.includes(dateStr) && f !== file);
     const sessionNum = existing.length + 1;
     const ext = path.extname(file);
     const newName = `${sanitizedName} Session ${dateStr} #${sessionNum}.mp4`;

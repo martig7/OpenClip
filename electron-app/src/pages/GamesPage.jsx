@@ -18,6 +18,7 @@ import EditGameModal from './games/EditGameModal';
 import AddGameModal from './games/AddGameModal';
 import SceneAudioSourcesCard from './games/SceneAudioSourcesCard';
 import ConfirmDeleteDialog from '../components/ConfirmDeleteDialog';
+import OnboardingModal from '../components/OnboardingModal';
 
 
 export default function GamesPage() {
@@ -558,8 +559,9 @@ export default function GamesPage() {
     loadWatcherStatus();
   }, [watcherStatus.running, showToast]);
 
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const handleDismissWarning = useCallback(() => setScriptWarning(null), [setScriptWarning]);
-  const handleGoToSettings = useCallback(() => navigate('/settings'), [navigate]);
+  const handleGoToSettings = useCallback(() => setShowOnboarding(true), []);
   const handleOpenOBS = useCallback(() => api.launchOBS(), []);
 
   return (
@@ -715,6 +717,7 @@ export default function GamesPage() {
         onConfirm={doRemoveGame}
         onCancel={() => setConfirmDeleteGame(null)}
       />
+      <OnboardingModal open={showOnboarding} onClose={() => setShowOnboarding(false)} />
     </>
   );
 }

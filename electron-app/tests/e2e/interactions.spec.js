@@ -120,7 +120,11 @@ test.describe('Storage Page Interactions', () => {
     await setupApiRoutes(page);
     await page.goto('/#/storage');
     await expect(page.locator('.sv2-title:has-text("Storage")')).toBeVisible({ timeout: 10000 });
-    await page.locator('.sv2-list-row').first().click();
+    // List is canvas-rendered; click at first row coordinates (header=30px, row=33px)
+    const canvas = page.locator('.sv2-list-canvas-wrap');
+    await expect(canvas).toBeVisible();
+    const box = await canvas.boundingBox();
+    await page.mouse.click(box.x + box.width / 2, box.y + 46);
     await expect(page.locator('.sv2-sel-pill:has-text("1 selected")')).toBeVisible();
   });
 });

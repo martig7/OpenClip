@@ -68,16 +68,17 @@ const WatcherStatusCard = memo(function WatcherStatusCard({ status, onToggle, sc
           fontSize: 12, color: 'var(--warning, #f59e0b)',
         }}>
           <AlertTriangle size={14} style={{ flexShrink: 0 }} />
-          <span style={{ flex: 1 }}>
-            OBS plugin not detected. Make sure OBS is running with the OpenClip plugin installed.{' '}
+          <span style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span>OBS plugin not detected. Make sure OBS is running with the OpenClip plugin installed.</span>
             <button
               onClick={onGoToSettings}
               style={{
+                display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0,
                 background: 'none', border: 'none', color: 'var(--primary)',
                 textDecoration: 'underline', cursor: 'pointer', padding: 0, font: 'inherit',
               }}
             >
-              <Settings size={11} style={{ verticalAlign: 'middle', marginRight: 2 }} />
+              <Settings size={11} />
               Setup guide
             </button>
           </span>

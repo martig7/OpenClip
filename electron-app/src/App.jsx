@@ -44,6 +44,7 @@ function getProgressWidth(p, isManual = false) {
   if (phase === 'recording') {
     if (stage === 'moving') return 45;
     if (stage === 'remuxing') return 32;
+    if (stage === 'waiting') return 0;
     return 10;
   }
   if (phase === 'clipping') {

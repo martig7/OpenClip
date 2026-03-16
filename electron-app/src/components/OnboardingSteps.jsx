@@ -320,6 +320,11 @@ export function StepOrganizeDestination({ settings, onChange }) {
           Tip: pick a folder separate from your OBS recording folder
         </span>
       </div>
+
+      <hr className="onboarding-divider" />
+      <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
+        You're all set! Click <strong>Finish</strong> to save your settings and start using OpenClip.
+      </p>
     </div>
   );
 }
@@ -417,7 +422,7 @@ export function StepAutoClip({ settings, onChange }) {
                 type="number"
                 className="form-input"
                 min="0"
-                value={settings.autoClip?.bufferBefore ?? 15}
+                value={settings.autoClip?.bufferBefore ?? 30}
                 onChange={e => onChange('autoClip.bufferBefore', Math.max(0, parseInt(e.target.value) || 0))}
               />
             </div>
@@ -427,7 +432,7 @@ export function StepAutoClip({ settings, onChange }) {
                 type="number"
                 className="form-input"
                 min="0"
-                value={settings.autoClip?.bufferAfter ?? 15}
+                value={settings.autoClip?.bufferAfter ?? 5}
                 onChange={e => onChange('autoClip.bufferAfter', Math.max(0, parseInt(e.target.value) || 0))}
               />
             </div>
@@ -486,13 +491,9 @@ export function StepWatcherAutostart({ settings, onChange }) {
 
 export const STEP_TITLES = [
   'Welcome',
-  'OBS Recordings',
   'OBS Install',
+  'OBS Recordings',
   'OBS Plugin',
-  'Clip Hotkey',
   'Recordings Dest.',
-  'Storage',
-  'Auto-Clip',
-  'Watcher',
 ];
 export const TOTAL_STEPS = STEP_TITLES.length;
