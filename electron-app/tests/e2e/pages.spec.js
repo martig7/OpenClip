@@ -126,9 +126,10 @@ test.describe('Storage Page', () => {
     await setupApiRoutes(page);
     await page.goto('/#/storage');
     await expect(page.locator('.sv2-title:has-text("Storage")')).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('.sv2-list-name:has-text("Valorant_2024-01-15_20-30-45.mp4")')).toBeVisible();
-    await expect(page.locator('.sv2-list-name:has-text("CS2_2024-01-14_18-22-10.mp4")')).toBeVisible();
-    await expect(page.locator('.sv2-list-name:has-text("Valorant_highlight_001.mp4")')).toBeVisible();
+    // List is canvas-rendered; verify the canvas wrapper is visible and data loaded via pills
+    await expect(page.locator('.sv2-list-canvas-wrap')).toBeVisible();
+    await expect(page.locator('.sv2-pill:has-text("2 rec")')).toBeVisible();
+    await expect(page.locator('.sv2-pill:has-text("1 clips")')).toBeVisible();
   });
 
   test('filtering by game hides other games files', async ({ page }) => {
@@ -136,8 +137,9 @@ test.describe('Storage Page', () => {
     await page.goto('/#/storage');
     await expect(page.locator('.sv2-title:has-text("Storage")')).toBeVisible({ timeout: 10000 });
     await page.locator('.sv2-legend-item:has-text("Valorant")').click();
-    await expect(page.locator('.sv2-list-name:has-text("Valorant_2024-01-15_20-30-45.mp4")')).toBeVisible();
-    await expect(page.locator('.sv2-list-name:has-text("CS2_2024-01-14_18-22-10.mp4")')).not.toBeVisible();
+    // Legend button becomes active when filter is applied
+    await expect(page.locator('.sv2-legend-item:has-text("Valorant")')).toHaveClass(/active/);
+    await expect(page.locator('.sv2-list-canvas-wrap')).toBeVisible();
   });
 
   test('clicking all button shows all files', async ({ page }) => {
@@ -146,7 +148,9 @@ test.describe('Storage Page', () => {
     await expect(page.locator('.sv2-title:has-text("Storage")')).toBeVisible({ timeout: 10000 });
     await page.locator('.sv2-legend-item:has-text("Valorant")').click();
     await page.locator('.sv2-legend-all:has-text("All")').click();
-    await expect(page.locator('.sv2-list-name:has-text("CS2_2024-01-14_18-22-10.mp4")')).toBeVisible();
+    // All button becomes active after clearing the filter
+    await expect(page.locator('.sv2-legend-all:has-text("All")')).toHaveClass(/active/);
+    await expect(page.locator('.sv2-list-canvas-wrap')).toBeVisible();
   });
 });
 
@@ -281,8 +285,12 @@ test.describe('Storage Page - Edge Cases', () => {
     })}));
     await page.goto('/#/storage');
     await expect(page.locator('.sv2-title:has-text("Storage")')).toBeVisible({ timeout: 10000 });
-    await page.locator('.sv2-list-row').first().click();
-    await page.locator('.sv2-list-row').nth(1).click();
+    // List is canvas-rendered; click at row coordinates (header=30px, row=33px)
+    const canvas = page.locator('.sv2-list-canvas-wrap');
+    await expect(canvas).toBeVisible();
+    const box = await canvas.boundingBox();
+    await page.mouse.click(box.x + box.width / 2, box.y + 46);
+    await page.mouse.click(box.x + box.width / 2, box.y + 79);
     await expect(page.locator('.sv2-sel-pill:has-text("2 selected")')).toBeVisible();
   });
 
@@ -300,9 +308,13 @@ test.describe('Storage Page - Edge Cases', () => {
     })}));
     await page.goto('/#/storage');
     await expect(page.locator('.sv2-title:has-text("Storage")')).toBeVisible({ timeout: 10000 });
-    await page.locator('.sv2-list-row').first().click();
+    // List is canvas-rendered; click at first row coordinates (header=30px, row=33px)
+    const canvas = page.locator('.sv2-list-canvas-wrap');
+    await expect(canvas).toBeVisible();
+    const box = await canvas.boundingBox();
+    await page.mouse.click(box.x + box.width / 2, box.y + 46);
     await expect(page.locator('.sv2-sel-pill:has-text("1 selected")')).toBeVisible();
-    await page.locator('.sv2-list-row').first().click();
+    await page.mouse.click(box.x + box.width / 2, box.y + 46);
     await expect(page.locator('.sv2-sel-pill')).not.toBeVisible();
   });
 });
