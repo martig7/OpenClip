@@ -298,7 +298,7 @@ export default function SettingsPage() {
                 <input
                   type="number"
                   className="form-input"
-                  value={settings.autoClip?.bufferBefore ?? 15}
+                  value={settings.autoClip?.bufferBefore ?? 30}
                   onChange={e => updateSetting('autoClip.bufferBefore', parseInt(e.target.value) || 0)}
                   style={{ width: 100 }}
                 />
@@ -308,7 +308,7 @@ export default function SettingsPage() {
                 <input
                   type="number"
                   className="form-input"
-                  value={settings.autoClip?.bufferAfter ?? 15}
+                  value={settings.autoClip?.bufferAfter ?? 5}
                   onChange={e => updateSetting('autoClip.bufferAfter', parseInt(e.target.value) || 0)}
                   style={{ width: 100 }}
                 />

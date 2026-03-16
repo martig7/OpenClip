@@ -459,7 +459,7 @@ function StoragePage() {
               </div>
               <div className="ssm-row">
                 <label>View</label>
-                <select value={listView ? 'list' : 'treemap'} onChange={e => setListView(e.target.value === 'list')}>
+                <select value={listView ? 'list' : 'treemap'} onChange={e => { const v = e.target.value === 'list'; setListView(v); api.setStore('settings.listView', v); }}>
                   <option value="list">List</option>
                   <option value="treemap">Treemap</option>
                 </select>
