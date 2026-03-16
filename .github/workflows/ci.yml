@@ -8,7 +8,7 @@ on:
 jobs:
   test:
     name: Unit & Component Tests
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     permissions:
       contents: read
 
@@ -28,24 +28,20 @@ jobs:
       - name: Get Playwright version
         id: pw-version
         working-directory: electron-app
+        shell: bash
         run: echo "version=$(node -e "console.log(require('./package-lock.json').packages['node_modules/@playwright/test'].version)")" >> $GITHUB_OUTPUT
 
       - name: Cache Playwright browsers
         id: pw-cache
         uses: actions/cache@v4
         with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ steps.pw-version.outputs.version }}-ubuntu
+          path: ${{ env.LOCALAPPDATA }}\ms-playwright
+          key: playwright-${{ steps.pw-version.outputs.version }}-windows-chromium
 
       - name: Install Playwright browsers
         working-directory: electron-app
-        run: npx playwright install --with-deps
+        run: npx playwright install --with-deps chromium
         if: steps.pw-cache.outputs.cache-hit != 'true'
-
-      - name: Install Playwright system dependencies
-        working-directory: electron-app
-        run: npx playwright install-deps
-        if: steps.pw-cache.outputs.cache-hit == 'true'
 
       - name: Run unit and component tests
         working-directory: electron-app
