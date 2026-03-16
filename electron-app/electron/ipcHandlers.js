@@ -31,30 +31,18 @@ const {
 const { setupAutoUpdater, setupDevAutoUpdater, registerUpdateHandlers } = require('./autoUpdater');
 const { RUNTIME_DIR, STATE_FILE, ICONS_DIR, PLUGIN_DLL_NAME } = require('./constants');
 
-// Concurrency guard: limit simultaneous PowerShell spawns to avoid thundering-herd
-const PS_MAX_CONCURRENT = 3;
-let _psActive = 0;
-const _psQueue = [];
-function runWithPsLimit(fn) {
-  return new Promise((resolve, reject) => {
-    const run = () => {
-      _psActive++;
-      Promise.resolve().then(fn).then(resolve, reject).finally(() => {
-        _psActive--;
-        if (_psQueue.length) _psQueue.shift()();
-      });
-    };
-    if (_psActive < PS_MAX_CONCURRENT) run();
-    else _psQueue.push(run);
-  });
-}
-
-// Short-lived caches for expensive PowerShell queries.
-const _windowsListCache = { data: null, ts: 0, inflight: null };
-const _audioDevicesCache = { data: null, ts: 0, inflight: null };
-const _runningAppsCache  = { data: null, ts: 0, inflight: null };
+// Short-lived caches for native Win32 queries.
+const _windowsListCache  = { data: null, ts: 0 };
+const _audioDevicesCache = { data: null, ts: 0 };
+const _runningAppsCache  = { data: null, ts: 0 };
 
 const { runElevated } = require('./runElevated');
+const {
+  listWindowsWithProcesses,
+  listRunningApps,
+  listAudioDevices,
+  extractProcessIcon,
+} = require('./winUtils');
 
 function registerIpcHandlers(store, appState) {
   // appState: { watcher, watcherStartedAt, currentGame, mainWindow, apiPort, apiPortReady }
@@ -136,163 +124,58 @@ function registerIpcHandlers(store, appState) {
 
   // Extract the icon for a running process and save it as a PNG.
   ipcMain.handle('windows:extractIcon', async (_event, processName) => {
-    const { exec } = require('child_process');
-    // Allow only safe filename characters to prevent injection and path traversal
     if (!processName || !/^[\w\-. ]+$/.test(processName)) return null;
     fs.mkdirSync(ICONS_DIR, { recursive: true });
     const outPath = path.join(ICONS_DIR, `${path.basename(processName)}.png`);
-
-    // Use PowerShell + System.Drawing to extract the exe's associated icon
-    const escaped = outPath.replace(/\\/g, '\\\\').replace(/'/g, "''");
-    const cmd = `powershell -NoProfile -Command `
-      + `"$p = Get-Process -Name '${processName}' -ErrorAction SilentlyContinue | `
-      + `Where-Object {$_.Path} | Select-Object -First 1; `
-      + `if ($p) { `
-      + `Add-Type -AssemblyName System.Drawing; `
-      + `$icon = [System.Drawing.Icon]::ExtractAssociatedIcon($p.Path); `
-      + `$bmp = $icon.ToBitmap(); `
-      + `$bmp.Save('${escaped}', [System.Drawing.Imaging.ImageFormat]::Png); `
-      + `Write-Output $p.Path `
-      + `} else { Write-Output '' }"`;
-
-    return new Promise((resolve) => {
-      exec(cmd, { encoding: 'utf-8', timeout: 8000 }, (error, stdout) => {
-        if (error || !stdout.trim()) return resolve(null);
-        resolve(fs.existsSync(outPath) ? outPath : null);
-      });
-    });
+    try {
+      return await extractProcessIcon(processName, outPath);
+    } catch (err) {
+      console.error('[ipcHandlers] windows:extractIcon:', err.message);
+      return null;
+    }
   });
 
   // --- Windows ---
   ipcMain.handle('windows:list', async () => {
     const now = Date.now();
     if (_windowsListCache.data !== null && now - _windowsListCache.ts < 5000) return _windowsListCache.data;
-    if (_windowsListCache.inflight) return _windowsListCache.inflight;
-
-    _windowsListCache.inflight = runWithPsLimit(() => {
-      const { exec } = require('child_process');
-      return new Promise((resolve) => {
-        const cmd = `powershell -NoProfile -Command `
-          + `"Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; using System.Text; public class Win32 { [DllImport(\\"user32.dll\\")] public static extern int GetWindowThreadProcessId(IntPtr hWnd, out int lpdwProcessId); [DllImport(\\"user32.dll\\", SetLastError = true, CharSet=CharSet.Auto)] public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount); }'; `
-          + `Get-Process | Where-Object { $_.MainWindowTitle -ne '' -and $_.MainWindowHandle -ne 0 } | Select-Object ProcessName, MainWindowTitle, `
-          + `@{Name='Executable';Expression={ try { $_.MainModule.FileName } catch { $_.Path } }}, `
-          + `@{Name='Class';Expression={ $sb = New-Object System.Text.StringBuilder(256); [Win32]::GetClassName($_.MainWindowHandle, $sb, $sb.Capacity) | Out-Null; $sb.ToString() }} | ConvertTo-Json"`;
-
-        exec(cmd, { encoding: 'utf-8', timeout: 5000 }, (error, stdout) => {
-          if (error) return resolve([]);
-          try {
-            const parsed = JSON.parse(stdout);
-            const items = Array.isArray(parsed) ? parsed : [parsed];
-            const systemProcs = ['explorer', 'searchhost', 'textinputhost', 'shellexperiencehost', 'applicationframehost', 'systemsettings', 'mmc'];
-            resolve(items
-              .filter(p => p.MainWindowTitle && !systemProcs.includes(p.ProcessName.toLowerCase()))
-              .map(p => ({
-                title: p.MainWindowTitle,
-                process: p.ProcessName,
-                exe: p.Executable ? require('path').basename(p.Executable) : `${p.ProcessName}.exe`,
-                windowClass: p.Class || p.ProcessName,
-              }))
-            );
-          } catch {
-            resolve([]);
-          }
-        });
-      });
-    }).then((result) => {
+    try {
+      const result = listWindowsWithProcesses();
       _windowsListCache.data = result;
       _windowsListCache.ts = Date.now();
-      _windowsListCache.inflight = null;
       return result;
-    });
-
-    return _windowsListCache.inflight;
+    } catch (err) {
+      console.error('[ipcHandlers] windows:list:', err.message);
+      return [];
+    }
   });
 
   ipcMain.handle('windows:list-audio-devices', async () => {
     const now = Date.now();
     if (_audioDevicesCache.data !== null && now - _audioDevicesCache.ts < 10000) return _audioDevicesCache.data;
-    if (_audioDevicesCache.inflight) return _audioDevicesCache.inflight;
-
-    _audioDevicesCache.inflight = runWithPsLimit(() => {
-      const { exec } = require('child_process');
-      const cmd = `powershell -NoProfile -Command "
     try {
-      $devices = @();
-      Get-WmiObject Win32_SoundDevice | ForEach-Object {
-        $devices += [PSCustomObject]@{ name=$_.Name; type='output'; id=$_.DeviceID }
-      };
-      Get-WmiObject Win32_PnPEntity | Where-Object { $_.PNPClass -eq 'AudioEndpoint' -and $_.Name -match 'Microphone|mic|input' } | ForEach-Object {
-        $devices += [PSCustomObject]@{ name=$_.Name; type='input'; id=$_.DeviceID }
-      };
-      $devices | ConvertTo-Json -Compress
-    } catch { '[]' }
-  "`;
-      return new Promise((resolve) => {
-        exec(cmd, { encoding: 'utf-8', timeout: 8000 }, (error, stdout) => {
-          if (error) return resolve([]);
-          try {
-            const raw = stdout.trim();
-            if (!raw || raw === '[]') return resolve([]);
-            const parsed = JSON.parse(raw);
-            const items = Array.isArray(parsed) ? parsed : [parsed];
-            resolve(items
-              .filter(d => d && d.name)
-              .map(d => ({ name: d.name, type: d.type || 'output', id: d.id || d.name }))
-            );
-          } catch {
-            resolve([]);
-          }
-        });
-      });
-    }).then((result) => {
+      const result = listAudioDevices();
       _audioDevicesCache.data = result;
       _audioDevicesCache.ts = Date.now();
-      _audioDevicesCache.inflight = null;
       return result;
-    });
-
-    return _audioDevicesCache.inflight;
+    } catch (err) {
+      console.error('[ipcHandlers] windows:list-audio-devices:', err.message);
+      return [];
+    }
   });
 
   ipcMain.handle('windows:list-running-apps', async () => {
     const now = Date.now();
     if (_runningAppsCache.data !== null && now - _runningAppsCache.ts < 5000) return _runningAppsCache.data;
-    if (_runningAppsCache.inflight) return _runningAppsCache.inflight;
-
-    _runningAppsCache.inflight = runWithPsLimit(() => {
-      const { exec } = require('child_process');
-      const skipList = ['svchost','conhost','csrss','dwm','smss','lsass','wininit','services','Registry','Idle','System','audiodg','RuntimeBroker','SearchHost','TextInputHost','ShellExperienceHost','ApplicationFrameHost','StartMenuExperienceHost','SystemSettings','taskhostw','sihost','fontdrvhost','NisSrv','MsMpEng'];
-      const skipStr = skipList.map(s => `'${s}'`).join(',');
-      const cmd = `powershell -NoProfile -Command "$skip = @(${skipStr}); Get-Process | Where-Object { $skip -notcontains $_.Name -and $_.Id -ne $PID } | Select-Object -Unique Name, @{N='HasWindow';E={$_.MainWindowTitle -ne ''}} | ConvertTo-Json -Compress"`;
-      return new Promise((resolve) => {
-        exec(cmd, { encoding: 'utf-8', timeout: 8000 }, (error, stdout) => {
-          if (error) return resolve([]);
-          try {
-            const raw = stdout.trim();
-            if (!raw || raw === '[]' || raw === 'null') return resolve([]);
-            const parsed = JSON.parse(raw);
-            const items = Array.isArray(parsed) ? parsed : [parsed];
-            const seen = new Map();
-            for (const p of items) {
-              if (!p || !p.Name) continue;
-              if (!seen.has(p.Name) || p.HasWindow) {
-                seen.set(p.Name, { name: p.Name, exe: `${p.Name}.exe`, hasWindow: !!p.HasWindow });
-              }
-            }
-            resolve([...seen.values()].sort((a, b) => a.name.localeCompare(b.name)));
-          } catch {
-            resolve([]);
-          }
-        });
-      });
-    }).then((result) => {
+    try {
+      const result = listRunningApps();
       _runningAppsCache.data = result;
       _runningAppsCache.ts = Date.now();
-      _runningAppsCache.inflight = null;
       return result;
-    });
-
-    return _runningAppsCache.inflight;
+    } catch (err) {
+      console.error('[ipcHandlers] windows:list-running-apps:', err.message);
+      return [];
+    }
   });
 
   // --- Dialogs ---
@@ -543,12 +426,11 @@ function registerIpcHandlers(store, appState) {
       }
 
       if (needsElevation) {
-        const esc = p => p.replace(/'/g, "''");
-        const elevResult = runElevated([
-          `New-Item -ItemType Directory -Force -Path '${esc(sysPluginDir)}' | Out-Null`,
-          `Copy-Item -Path '${esc(dllSrc)}' -Destination '${esc(sysDest)}' -Force`,
-          `New-Item -ItemType Directory -Force -Path '${esc(sysLocaleDir)}' | Out-Null`,
-          `if (-not (Test-Path '${esc(sysLocale)}')) { New-Item -ItemType File -Path '${esc(sysLocale)}' | Out-Null }`,
+        const elevResult = await runElevated([
+          { type: 'mkdir', path: sysPluginDir },
+          { type: 'copy',  src: dllSrc, dest: sysDest },
+          { type: 'mkdir', path: sysLocaleDir },
+          { type: 'write', path: sysLocale, content: '' },
         ]);
         if (!elevResult.success) return elevResult;
         console.log(`[main] Plugin installed (system, elevated) to ${sysDest}`);
@@ -632,10 +514,9 @@ function registerIpcHandlers(store, appState) {
             if (fsErr.code === 'EPERM' || fsErr.code === 'EACCES' || fsErr.code === 'EBUSY') needsElevation = true;
           }
           if (needsElevation) {
-            const esc = p => p.replace(/'/g, "''");
-            const removeResult = runElevated([
-              `Remove-Item -Path '${esc(sysDest)}' -Force -ErrorAction SilentlyContinue`,
-              `Remove-Item -Path '${esc(sysLocale)}' -Recurse -Force -ErrorAction SilentlyContinue`,
+            const removeResult = await runElevated([
+              { type: 'delete', path: sysDest },
+              { type: 'delete', path: sysLocale, recursive: true },
             ]);
             if (!removeResult.success) {
               console.error('[main] Elevated removal failed:', removeResult.message);

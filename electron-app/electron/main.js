@@ -1,3 +1,8 @@
+// Elevated helper mode: perform file-system ops and exit immediately (no window).
+if (process.argv.includes('--elevated-helper')) {
+  require('./elevatedHelper').run();
+}
+
 const { app, BrowserWindow, ipcMain, globalShortcut, protocol, net } = require('electron');
 
 const isTestMode = process.env.OPENCLIP_TEST_MODE === 'true' || process.argv.includes('--test-mode');

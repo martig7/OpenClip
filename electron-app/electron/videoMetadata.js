@@ -1,10 +1,11 @@
 /**
- * Video metadata helpers: ffprobe-backed duration cache and disk usage via PowerShell.
+ * Video metadata helpers: ffprobe-backed duration cache and disk usage via Win32 API.
  */
 const fs = require('fs');
-const { execFile, exec } = require('child_process');
+const { execFile } = require('child_process');
 const path = require('path');
 const { FFPROBE_PATH, formatFileSize } = require('./constants');
+const { getDiskFreeSpace } = require('./winUtils');
 
 // Cache for getVideoDuration keyed by "filePath:mtime"; bounded to prevent unbounded memory growth
 const _videoDurationCache = new Map();
@@ -47,32 +48,23 @@ function getDiskUsage(dirPath) {
   const cached = _diskUsageCache.get(driveKey);
   if (cached && now - cached.ts < DISK_USAGE_TTL_MS) return Promise.resolve(cached.data);
 
-  return new Promise((resolve) => {
-    exec(
-      `powershell -Command "(Get-PSDrive -Name (Split-Path '${dirPath.replace(/'/g, "''")}' -Qualifier).TrimEnd(':')) | Select-Object Used, Free | ConvertTo-Json"`,
-      { encoding: 'utf-8', timeout: 5000 },
-      (error, stdout) => {
-        if (error) return resolve(null);
-        try {
-          const d = JSON.parse(stdout);
-          if (typeof d !== 'object' || d === null || !Number.isFinite(d.Used) || !Number.isFinite(d.Free)) {
-            console.error('[videoMetadata] Invalid disk usage data:', d);
-            return resolve(null);
-          }
-          const total = d.Used + d.Free;
-          const result = {
-            total, used: d.Used, free: d.Free,
-            total_formatted: formatFileSize(total),
-            used_formatted: formatFileSize(d.Used),
-            free_formatted: formatFileSize(d.Free),
-            percent_used: total > 0 ? (d.Used / total * 100) : 0,
-          };
-          _diskUsageCache.set(driveKey, { data: result, ts: Date.now() });
-          resolve(result);
-        } catch { resolve(null); }
-      }
-    );
-  });
+  try {
+    const d = getDiskFreeSpace(dirPath);
+    if (!d) return Promise.resolve(null);
+    const { total, used, free } = d;
+    const result = {
+      total, used, free,
+      total_formatted:  formatFileSize(total),
+      used_formatted:   formatFileSize(used),
+      free_formatted:   formatFileSize(free),
+      percent_used:     total > 0 ? (used / total * 100) : 0,
+    };
+    _diskUsageCache.set(driveKey, { data: result, ts: Date.now() });
+    return Promise.resolve(result);
+  } catch (err) {
+    console.error('[videoMetadata] getDiskUsage:', err.message);
+    return Promise.resolve(null);
+  }
 }
 
 module.exports = { getVideoDuration, getDiskUsage };
