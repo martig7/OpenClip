@@ -45,9 +45,9 @@ test.describe('Navigation - Edge Cases', () => {
     await page.goto('/');
     await expect(page.locator('h1:has-text("Games")')).toBeVisible({ timeout: 5000 });
     await page.goto('/#/recordings');
-    await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
     await page.goto('/#/clips');
-    await expect(page.locator('.sidebar h2:has-text("Clips")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Clips")')).toBeVisible({ timeout: 5000 });
     await page.goto('/#/storage');
     await expect(page.locator('.sv2-title:has-text("Storage")')).toBeVisible({ timeout: 5000 });
   });

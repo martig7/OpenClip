@@ -117,6 +117,9 @@ async function injectProgressApi(page) {
       getOBSInstallPath: asyncNoop,
       isOBSPluginRegistered: async () => false,
 
+      // Test mode — enables DOM list rendering in MediaList
+      testMode: true,
+
       // API server port
       getApiPort: asyncNoop,
 
@@ -153,7 +156,7 @@ test.describe('Session Progress — Recordings Page', () => {
       status: 200, contentType: 'application/json', body: '[]',
     }));
     await page.goto('/#/recordings');
-    await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
 
     await fireProgress(page, { phase: 'recording', stage: 'checking', label: 'Verifying recording…', gameName: 'Halo' });
 
@@ -166,7 +169,7 @@ test.describe('Session Progress — Recordings Page', () => {
       status: 200, contentType: 'application/json', body: '[]',
     }));
     await page.goto('/#/recordings');
-    await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
 
     await fireProgress(page, { phase: 'clipping', stage: 'clipping', label: 'Creating clip 1 of 3…', gameName: 'Halo', clipIndex: 1, clipTotal: 3 });
 
@@ -179,7 +182,7 @@ test.describe('Session Progress — Recordings Page', () => {
       status: 200, contentType: 'application/json', body: '[]',
     }));
     await page.goto('/#/recordings');
-    await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
 
     await fireProgress(page, { phase: 'recording', stage: 'remuxing', label: 'Remuxing to MP4…', gameName: 'Halo' });
     await expect(page.locator('.session-progress-banner')).toBeVisible();
@@ -197,7 +200,7 @@ test.describe('Session Progress — Recordings Page', () => {
       status: 200, contentType: 'application/json', body: '[]',
     }));
     await page.goto('/#/recordings');
-    await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
 
     // checking → 10%
     await fireProgress(page, { phase: 'recording', stage: 'checking', label: 'Verifying recording…', gameName: 'Halo' });
@@ -220,7 +223,7 @@ test.describe('Session Progress — Recordings Page', () => {
       status: 200, contentType: 'application/json', body: '[]',
     }));
     await page.goto('/#/recordings');
-    await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
 
     await fireProgress(page, { phase: 'recording', stage: 'checking', label: 'Verifying recording…', gameName: 'Halo' });
     await expect(page.locator('.session-progress-banner')).toContainText('Verifying recording…');
@@ -245,7 +248,7 @@ test.describe('Session Progress — Recordings Page', () => {
       status: 200, contentType: 'application/json', body: '[]',
     }));
     await page.goto('/#/recordings');
-    await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
     await expect(page.locator('.item-card')).not.toBeVisible();
 
     // Before complete fires, override the route to return the new recording
@@ -276,7 +279,7 @@ test.describe('Session Progress — Clips Page', () => {
       status: 200, contentType: 'application/json', body: '[]',
     }));
     await page.goto('/#/clips');
-    await expect(page.locator('.sidebar h2:has-text("Clips")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Clips")')).toBeVisible({ timeout: 5000 });
 
     await fireProgress(page, { phase: 'recording', stage: 'checking', label: 'Verifying recording…', gameName: 'Halo' });
 
@@ -290,7 +293,7 @@ test.describe('Session Progress — Clips Page', () => {
       status: 200, contentType: 'application/json', body: '[]',
     }));
     await page.goto('/#/clips');
-    await expect(page.locator('.sidebar h2:has-text("Clips")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Clips")')).toBeVisible({ timeout: 5000 });
 
     await fireProgress(page, { phase: 'clipping', stage: 'clipping', label: 'Creating clip 2 of 5…', gameName: 'Halo', clipIndex: 2, clipTotal: 5 });
 
@@ -303,7 +306,7 @@ test.describe('Session Progress — Clips Page', () => {
       status: 200, contentType: 'application/json', body: '[]',
     }));
     await page.goto('/#/clips');
-    await expect(page.locator('.sidebar h2:has-text("Clips")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Clips")')).toBeVisible({ timeout: 5000 });
 
     await fireProgress(page, { phase: 'clipping', stage: 'clipping', label: 'Creating clip 1 of 1…', gameName: 'Halo', clipIndex: 1, clipTotal: 1 });
     await expect(page.locator('.session-progress-banner')).toBeVisible();
@@ -320,7 +323,7 @@ test.describe('Session Progress — Clips Page', () => {
       status: 200, contentType: 'application/json', body: '[]',
     }));
     await page.goto('/#/clips');
-    await expect(page.locator('.sidebar h2:has-text("Clips")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Clips")')).toBeVisible({ timeout: 5000 });
 
     await fireProgress(page, { phase: 'recording', stage: 'checking', label: 'Verifying recording…', gameName: 'Halo' });
     const checkingWidth = parseFloat(
@@ -340,7 +343,7 @@ test.describe('Session Progress — Clips Page', () => {
       status: 200, contentType: 'application/json', body: '[]',
     }));
     await page.goto('/#/clips');
-    await expect(page.locator('.sidebar h2:has-text("Clips")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Clips")')).toBeVisible({ timeout: 5000 });
 
     await fireProgress(page, { phase: 'clipping', stage: 'clipping', label: 'Creating clip 1 of 5…', gameName: 'Halo', clipIndex: 1, clipTotal: 5 });
     const width1 = parseFloat(
@@ -360,7 +363,7 @@ test.describe('Session Progress — Clips Page', () => {
       status: 200, contentType: 'application/json', body: '[]',
     }));
     await page.goto('/#/clips');
-    await expect(page.locator('.sidebar h2:has-text("Clips")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Clips")')).toBeVisible({ timeout: 5000 });
 
     // Recording phase
     await fireProgress(page, { phase: 'recording', stage: 'moving', label: 'Moving file…', gameName: 'Halo' });
@@ -389,7 +392,7 @@ test.describe('Session Progress — Clips Page', () => {
       status: 200, contentType: 'application/json', body: '[]',
     }));
     await page.goto('/#/clips');
-    await expect(page.locator('.sidebar h2:has-text("Clips")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Clips")')).toBeVisible({ timeout: 5000 });
     await expect(page.locator('.item-card')).not.toBeVisible();
 
     // Override route before complete fires to return the new clip
@@ -424,12 +427,12 @@ test.describe('Session Progress — Mid-session Navigation', () => {
   test('recordings banner appears when navigating to page mid-session', async ({ page }) => {
     // Start on Clips page and fire a recording-phase event
     await page.goto('/#/clips');
-    await expect(page.locator('.sidebar h2:has-text("Clips")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Clips")')).toBeVisible({ timeout: 5000 });
     await fireProgress(page, { phase: 'recording', stage: 'remuxing', label: 'Remuxing to MP4…', gameName: 'Halo' });
 
     // Navigate to Recordings — banner should appear immediately on mount
     await page.goto('/#/recordings');
-    await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
     await expect(page.locator('.session-progress-banner')).toBeVisible();
     await expect(page.locator('.session-progress-banner')).toContainText('Remuxing to MP4…');
   });
@@ -437,12 +440,12 @@ test.describe('Session Progress — Mid-session Navigation', () => {
   test('clips banner appears when navigating to page mid-session', async ({ page }) => {
     // Start on Recordings page and fire a clipping-phase event
     await page.goto('/#/recordings');
-    await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
     await fireProgress(page, { phase: 'clipping', stage: 'clipping', label: 'Creating clip 1 of 3…', gameName: 'Halo', clipIndex: 1, clipTotal: 3 });
 
     // Navigate to Clips — banner should appear immediately on mount
     await page.goto('/#/clips');
-    await expect(page.locator('.sidebar h2:has-text("Clips")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Clips")')).toBeVisible({ timeout: 5000 });
     await expect(page.locator('.session-progress-banner')).toBeVisible();
     await expect(page.locator('.session-progress-banner')).toContainText('Creating clip 1 of 3…');
   });
@@ -450,26 +453,26 @@ test.describe('Session Progress — Mid-session Navigation', () => {
   test('banner is absent when navigating to recordings after session completes', async ({ page }) => {
     // Fire progress then complete while on Clips page
     await page.goto('/#/clips');
-    await expect(page.locator('.sidebar h2:has-text("Clips")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Clips")')).toBeVisible({ timeout: 5000 });
     await fireProgress(page, { phase: 'recording', stage: 'checking', label: 'Verifying recording…', gameName: 'Halo' });
     await fireProgress(page, { phase: 'complete', gameName: 'Halo' });
 
     // Navigate to Recordings — no banner should appear
     await page.goto('/#/recordings');
-    await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
     await expect(page.locator('.session-progress-banner')).not.toBeVisible();
   });
 
   test('recordings banner reflects latest stage when navigating mid-session', async ({ page }) => {
     // Fire multiple stage updates while on another page
     await page.goto('/#/clips');
-    await expect(page.locator('.sidebar h2:has-text("Clips")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Clips")')).toBeVisible({ timeout: 5000 });
     await fireProgress(page, { phase: 'recording', stage: 'checking', label: 'Verifying recording…', gameName: 'Halo' });
     await fireProgress(page, { phase: 'recording', stage: 'remuxing', label: 'Remuxing to MP4…', gameName: 'Halo' });
 
     // Navigate to Recordings — should show the latest stage (remuxing), not the first (checking)
     await page.goto('/#/recordings');
-    await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
     await expect(page.locator('.session-progress-banner')).toContainText('Remuxing to MP4…');
     const width = await page.locator('.session-progress-fill').evaluate(el => el.style.width);
     expect(width).toBe('32%');

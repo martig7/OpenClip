@@ -4,47 +4,46 @@ import { setupApiRoutes } from './fixtures/routes.js';
 // RecordingsPage, ClipsPage, and StoragePage fetch from /api/* via apiFetch().
 // We use page.route() to intercept these requests and return test data,
 // so tests run without needing a real API server.
+//
+// MediaList renders a plain DOM list in test mode (window.api.testMode === true),
+// so all tests can use text/class selectors instead of canvas coordinates.
 
 test.describe('Recordings Page', () => {
   test('recordings page loads', async ({ page }) => {
     await setupApiRoutes(page);
     await page.goto('/#/recordings');
-    await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
   });
 
-  test('displays recording game groups from mock data', async ({ page }) => {
+  test('displays game filter pills from mock data', async ({ page }) => {
     await setupApiRoutes(page);
     await page.goto('/#/recordings');
-    await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
-    // Switch to name sort so items are grouped by game name
-    await page.locator('#sidebar-sort').selectOption('name-asc');
-    await expect(page.locator('.group-header:has-text("Valorant")')).toBeVisible();
-    await expect(page.locator('.group-header:has-text("Counter-Strike 2")')).toBeVisible();
+    await expect(page.locator('.msb-title:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-game-pill:has-text("Valorant")')).toBeVisible();
+    await expect(page.locator('.msb-game-pill:has-text("Counter-Strike 2")')).toBeVisible();
   });
 
   test('displays recording filenames from mock data', async ({ page }) => {
     await setupApiRoutes(page);
     await page.goto('/#/recordings');
-    await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
     await expect(page.locator('.item-name:has-text("Valorant_2024-01-15_20-30-45.mp4")')).toBeVisible();
     await expect(page.locator('.item-name:has-text("CS2_2024-01-14_18-22-10.mp4")')).toBeVisible();
   });
 
-  test('shows correct recording count in group header', async ({ page }) => {
+  test('footer shows correct recording count', async ({ page }) => {
     await setupApiRoutes(page);
     await page.goto('/#/recordings');
-    await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
-    // Switch to name sort so items are grouped by game name
-    await page.locator('#sidebar-sort').selectOption('name-asc');
-    // Each game has 1 recording, shown as "Valorant (1)"
-    await expect(page.locator('.group-header:has-text("Valorant (1)")')).toBeVisible();
-    await expect(page.locator('.group-header:has-text("Counter-Strike 2 (1)")')).toBeVisible();
+    await expect(page.locator('.msb-title:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-footer')).toContainText('2 items');
   });
 
   test('selecting a recording highlights it', async ({ page }) => {
     await setupApiRoutes(page);
+    await page.route('**/api/video**', route => route.fulfill({ status: 200, contentType: 'video/mp4', body: Buffer.alloc(0) }));
+    await page.route('**/api/markers**', route => route.fulfill({ status: 200, contentType: 'application/json', body: '{"markers":[]}' }));
     await page.goto('/#/recordings');
-    await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
     const card = page.locator('.item-card').first();
     await card.click();
     await expect(card).toHaveClass(/active/);
@@ -53,8 +52,8 @@ test.describe('Recordings Page', () => {
   test('search filters recordings by filename', async ({ page }) => {
     await setupApiRoutes(page);
     await page.goto('/#/recordings');
-    await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
-    await page.locator('.search-box input').fill('CS2');
+    await expect(page.locator('.msb-title:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
+    await page.locator('.msb-search input').fill('CS2');
     await expect(page.locator('.item-name:has-text("CS2_2024-01-14_18-22-10.mp4")')).toBeVisible();
     await expect(page.locator('.item-name:has-text("Valorant_2024-01-15_20-30-45.mp4")')).not.toBeVisible();
   });
@@ -64,30 +63,28 @@ test.describe('Clips Page', () => {
   test('clips page loads', async ({ page }) => {
     await setupApiRoutes(page);
     await page.goto('/#/clips');
-    await expect(page.locator('.sidebar h2:has-text("Clips")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Clips")')).toBeVisible({ timeout: 5000 });
   });
 
-  test('displays clip game group from mock data', async ({ page }) => {
+  test('displays game filter pills from mock data', async ({ page }) => {
     await setupApiRoutes(page);
     await page.goto('/#/clips');
-    await expect(page.locator('.sidebar h2:has-text("Clips")')).toBeVisible({ timeout: 5000 });
-    // Switch to name sort so items are grouped by game name
-    await page.locator('#sidebar-sort').selectOption('name-asc');
-    await expect(page.locator('.group-header:has-text("Valorant")')).toBeVisible();
+    await expect(page.locator('.msb-title:has-text("Clips")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-game-pill:has-text("Valorant")')).toBeVisible();
   });
 
   test('displays clip filename from mock data', async ({ page }) => {
     await setupApiRoutes(page);
     await page.goto('/#/clips');
-    await expect(page.locator('.sidebar h2:has-text("Clips")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Clips")')).toBeVisible({ timeout: 5000 });
     await expect(page.locator('.item-name:has-text("Valorant_highlight_001.mp4")')).toBeVisible();
   });
 
   test('search filters clips by filename', async ({ page }) => {
     await setupApiRoutes(page);
     await page.goto('/#/clips');
-    await expect(page.locator('.sidebar h2:has-text("Clips")')).toBeVisible({ timeout: 5000 });
-    await page.locator('.search-box input').fill('highlight');
+    await expect(page.locator('.msb-title:has-text("Clips")')).toBeVisible({ timeout: 5000 });
+    await page.locator('.msb-search input').fill('highlight');
     await expect(page.locator('.item-name:has-text("Valorant_highlight_001.mp4")')).toBeVisible();
   });
 });
@@ -126,7 +123,7 @@ test.describe('Storage Page', () => {
     await setupApiRoutes(page);
     await page.goto('/#/storage');
     await expect(page.locator('.sv2-title:has-text("Storage")')).toBeVisible({ timeout: 10000 });
-    // List is canvas-rendered; verify the canvas wrapper is visible and data loaded via pills
+    // Storage list is always canvas-rendered; verify wrapper is visible and data loaded via pills
     await expect(page.locator('.sv2-list-canvas-wrap')).toBeVisible();
     await expect(page.locator('.sv2-pill:has-text("2 rec")')).toBeVisible();
     await expect(page.locator('.sv2-pill:has-text("1 clips")')).toBeVisible();
@@ -137,7 +134,6 @@ test.describe('Storage Page', () => {
     await page.goto('/#/storage');
     await expect(page.locator('.sv2-title:has-text("Storage")')).toBeVisible({ timeout: 10000 });
     await page.locator('.sv2-legend-item:has-text("Valorant")').click();
-    // Legend button becomes active when filter is applied
     await expect(page.locator('.sv2-legend-item:has-text("Valorant")')).toHaveClass(/active/);
     await expect(page.locator('.sv2-list-canvas-wrap')).toBeVisible();
   });
@@ -148,7 +144,6 @@ test.describe('Storage Page', () => {
     await expect(page.locator('.sv2-title:has-text("Storage")')).toBeVisible({ timeout: 10000 });
     await page.locator('.sv2-legend-item:has-text("Valorant")').click();
     await page.locator('.sv2-legend-all:has-text("All")').click();
-    // All button becomes active after clearing the filter
     await expect(page.locator('.sv2-legend-all:has-text("All")')).toHaveClass(/active/);
     await expect(page.locator('.sv2-list-canvas-wrap')).toBeVisible();
   });
@@ -170,7 +165,7 @@ test.describe('Recordings Page - Edge Cases', () => {
   test('handles empty API response', async ({ page }) => {
     await page.route('**/api/recordings', route => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
     await page.goto('/#/recordings');
-    await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
   });
 
   test('handles network error gracefully', async ({ page }) => {
@@ -184,8 +179,8 @@ test.describe('Recordings Page - Edge Cases', () => {
       { filename: 'Valorant_2024-01-15_20-30-45.mp4', path: 'test.mp4', game_name: 'Valorant', date: '2024-01-15', size_formatted: '1.40 GB', size_bytes: 1500000000, mtime: 1705349445000 },
     ])}));
     await page.goto('/#/recordings');
-    await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
-    await page.locator('.search-box input').fill('NonExistentGame123');
+    await expect(page.locator('.msb-title:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
+    await page.locator('.msb-search input').fill('NonExistentGame123');
     await expect(page.locator('.item-card')).not.toBeVisible();
   });
 
@@ -194,29 +189,33 @@ test.describe('Recordings Page - Edge Cases', () => {
       { filename: 'Valorant_2024-01-15_20-30-45.mp4', path: 'test.mp4', game_name: 'Valorant', date: '2024-01-15', size_formatted: '1.40 GB', size_bytes: 1500000000, mtime: 1705349445000 },
     ])}));
     await page.goto('/#/recordings');
-    await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
-    await page.locator('.search-box input').fill("'; DROP TABLE users;--");
+    await expect(page.locator('.msb-title:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
+    await page.locator('.msb-search input').fill("'; DROP TABLE users;--");
     await expect(page.locator('.sidebar')).toBeVisible();
   });
 
   test('search with empty string shows all results', async ({ page }) => {
+    await page.addInitScript(() => { window.__OPENCLIP_TEST_MODE__ = true; });
     await page.route('**/api/recordings', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([
       { filename: 'Valorant_2024-01-15_20-30-45.mp4', path: 'test.mp4', game_name: 'Valorant', date: '2024-01-15', size_formatted: '1.40 GB', size_bytes: 1500000000, mtime: 1705349445000 },
       { filename: 'CS2_2024-01-14_18-22-10.mp4', path: 'test2.mp4', game_name: 'Counter-Strike 2', date: '2024-01-14', size_formatted: '2.98 GB', size_bytes: 3200000000, mtime: 1705256530000 },
     ])}));
     await page.goto('/#/recordings');
-    await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
-    await page.locator('.search-box input').fill('');
+    await expect(page.locator('.msb-title:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
+    await page.locator('.msb-search input').fill('');
     await expect(page.locator('.item-card')).toHaveCount(2);
   });
 
   test('can select different recordings sequentially', async ({ page }) => {
+    await page.addInitScript(() => { window.__OPENCLIP_TEST_MODE__ = true; });
     await page.route('**/api/recordings', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([
       { filename: 'Valorant_2024-01-15_20-30-45.mp4', path: 'test.mp4', game_name: 'Valorant', date: '2024-01-15', size_formatted: '1.40 GB', size_bytes: 1500000000, mtime: 1705349445000 },
       { filename: 'CS2_2024-01-14_18-22-10.mp4', path: 'test2.mp4', game_name: 'Counter-Strike 2', date: '2024-01-14', size_formatted: '2.98 GB', size_bytes: 3200000000, mtime: 1705256530000 },
     ])}));
+    await page.route('**/api/video**', route => route.fulfill({ status: 200, contentType: 'video/mp4', body: Buffer.alloc(0) }));
+    await page.route('**/api/markers**', route => route.fulfill({ status: 200, contentType: 'application/json', body: '{"markers":[]}' }));
     await page.goto('/#/recordings');
-    await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
     const firstCard = page.locator('.item-card').first();
     await firstCard.click();
     await expect(firstCard).toHaveClass(/active/);
@@ -230,7 +229,7 @@ test.describe('Clips Page - Edge Cases', () => {
   test('handles empty API response', async ({ page }) => {
     await page.route('**/api/clips', route => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
     await page.goto('/#/clips');
-    await expect(page.locator('.sidebar h2:has-text("Clips")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Clips")')).toBeVisible({ timeout: 5000 });
   });
 
   test('handles network error gracefully', async ({ page }) => {
@@ -244,8 +243,8 @@ test.describe('Clips Page - Edge Cases', () => {
       { filename: 'Valorant_highlight_001.mp4', path: 'test.mp4', game_name: 'Valorant', date: '2024-01-15', size_formatted: '47.68 MB', size_bytes: 50000000, mtime: 1705350300000 },
     ])}));
     await page.goto('/#/clips');
-    await expect(page.locator('.sidebar h2:has-text("Clips")')).toBeVisible({ timeout: 5000 });
-    await page.locator('.search-box input').fill('NonExistentClip');
+    await expect(page.locator('.msb-title:has-text("Clips")')).toBeVisible({ timeout: 5000 });
+    await page.locator('.msb-search input').fill('NonExistentClip');
     await expect(page.locator('.item-card')).not.toBeVisible();
   });
 });
@@ -285,7 +284,7 @@ test.describe('Storage Page - Edge Cases', () => {
     })}));
     await page.goto('/#/storage');
     await expect(page.locator('.sv2-title:has-text("Storage")')).toBeVisible({ timeout: 10000 });
-    // List is canvas-rendered; click at row coordinates (header=30px, row=33px)
+    // Storage list is always canvas-rendered; click at row coordinates (header=30px, row=33px)
     const canvas = page.locator('.sv2-list-canvas-wrap');
     await expect(canvas).toBeVisible();
     const box = await canvas.boundingBox();
@@ -308,7 +307,6 @@ test.describe('Storage Page - Edge Cases', () => {
     })}));
     await page.goto('/#/storage');
     await expect(page.locator('.sv2-title:has-text("Storage")')).toBeVisible({ timeout: 10000 });
-    // List is canvas-rendered; click at first row coordinates (header=30px, row=33px)
     const canvas = page.locator('.sv2-list-canvas-wrap');
     await expect(canvas).toBeVisible();
     const box = await canvas.boundingBox();

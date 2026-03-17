@@ -5,6 +5,9 @@ const { contextBridge, ipcRenderer } = require('electron');
 let _lastSessionProgress = null;
 
 contextBridge.exposeInMainWorld('api', {
+  // Test-mode flag — true when Electron is started with --test-mode
+  testMode: process.argv.includes('--test-mode') || process.env.OPENCLIP_TEST_MODE === 'true',
+
   // Store
   getStore: (key) => ipcRenderer.invoke('store:get', key),
   setStore: (key, value) => ipcRenderer.invoke('store:set', key, value),

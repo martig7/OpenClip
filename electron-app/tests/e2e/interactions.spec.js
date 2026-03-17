@@ -86,14 +86,14 @@ test.describe('Recordings Page Interactions', () => {
   test('recordings page loads with mock data', async ({ page }) => {
     await setupApiRoutes(page);
     await page.goto('/#/recordings');
-    await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
     await expect(page.locator('.item-name:has-text("Valorant_2024-01-15_20-30-45.mp4")')).toBeVisible();
   });
 
   test('clicking a recording selects it', async ({ page }) => {
     await setupApiRoutes(page);
     await page.goto('/#/recordings');
-    await expect(page.locator('.sidebar h2:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Recordings")')).toBeVisible({ timeout: 5000 });
     await page.locator('.item-card').first().click();
     await expect(page.locator('.item-card.active')).toBeVisible();
   });
@@ -103,7 +103,7 @@ test.describe('Clips Page Interactions', () => {
   test('clips page loads with mock data', async ({ page }) => {
     await setupApiRoutes(page);
     await page.goto('/#/clips');
-    await expect(page.locator('.sidebar h2:has-text("Clips")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.msb-title:has-text("Clips")')).toBeVisible({ timeout: 5000 });
     await expect(page.locator('.item-name:has-text("Valorant_highlight_001.mp4")')).toBeVisible();
   });
 });

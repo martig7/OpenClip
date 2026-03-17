@@ -318,6 +318,29 @@ export default function MediaList({
     scheduleDraw()
   }, [scheduleDraw])
 
+  // In test mode, render a plain DOM list so e2e tests can query by text/class.
+  // Triggered by window.api.testMode (Electron --test-mode) or window.__OPENCLIP_TEST_MODE__
+  // (injected by Playwright addInitScript when running against the Vite dev server).
+  if (typeof window !== 'undefined' && (window.api?.testMode || window.__OPENCLIP_TEST_MODE__)) {
+    return (
+      <ul className="media-list-test">
+        {items.map(item => (
+          <li
+            key={item.path}
+            className={`item-card${item.path === selectedItem?.path ? ' active' : ''}`}
+            data-path={item.path}
+            onClick={() => onSelect(item)}
+          >
+            <span className="item-name">{item.filename}</span>
+            <span className="item-game">{item.game_name}</span>
+            <span className="item-date">{item.date}</span>
+            <span className="item-size">{item.size_formatted}</span>
+          </li>
+        ))}
+      </ul>
+    )
+  }
+
   return (
     <div
       ref={containerRef}
