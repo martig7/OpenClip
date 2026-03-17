@@ -304,6 +304,7 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
   if (!media) {
     return (
       <div className="main-content">
+        <div className="h-[36px] w-full shrink-0 border-b border-[var(--border)]" style={{ WebkitAppRegion: "drag", backgroundColor: "var(--bg-primary)" }} />
         <div className="player-container">
           <div className="player-placeholder">
             <div className="icon"><Film size={40} /></div>
@@ -316,6 +317,7 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
 
   return (
     <div className="main-content">
+      <div className="h-[36px] w-full shrink-0 border-b border-[var(--border)] relative z-50" style={{ WebkitAppRegion: "drag", backgroundColor: "var(--bg-primary)" }} />
       <div 
         className="player-container"
         onMouseEnter={handleVideoMouseEnter}
@@ -422,20 +424,21 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
         </div>
       )}
 
-      <div className="video-info-bar">
-        <div className="video-info-top">
-          <div>
-            <h2 className="video-title">{media.filename}</h2>
-            <div className="video-meta">
-              <span><Folder size={13} /> {media.game_name}</span>
-              <span><Calendar size={13} /> {media.date}</span>
-              <span><HardDrive size={13} /> {media.size_formatted}</span>
+      <div className="flex-1 flex flex-col bg-[var(--bg-secondary)] w-full">
+        <div className="video-info-bar border-t-0">
+          <div className="video-info-top">
+            <div>
+              <h2 className="video-title">{media.filename}</h2>
+              <div className="video-meta">
+                <span><Folder size={13} /> {media.game_name}</span>
+                <span><Calendar size={13} /> {media.date}</span>
+                <span><HardDrive size={13} /> {media.size_formatted}</span>
+              </div>
             </div>
+            {isUnorganized && !isClipMode && (
+              <span className="unorganized-badge">Unorganized</span>
+            )}
           </div>
-          {isUnorganized && !isClipMode && (
-            <span className="unorganized-badge">Unorganized</span>
-          )}
-        </div>
         <div className="action-buttons">
           {isUnorganized && !isClipMode && (
             <button
@@ -538,6 +541,7 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
           )}
         </div>
       )}
+      </div>
     </div>
   )
 }

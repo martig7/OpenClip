@@ -110,12 +110,15 @@ function ClipsPage() {
         {selectedClip ? (
           <VideoPlayer clip={selectedClip} onDelete={() => setDeleteModal(true)} />
         ) : (
-          <div className="player-container">
-            <div className="player-placeholder">
-              <div className="icon"><Film size={40} /></div>
-              <p>Select a clip to play</p>
+          <>
+            <div className="h-[36px] w-full shrink-0 border-b border-[var(--border)] relative z-50" style={{ WebkitAppRegion: "drag", backgroundColor: "var(--bg-primary)" }} />
+            <div className="player-container">
+              <div className="player-placeholder">
+                <div className="icon"><Film size={40} /></div>
+                <p>Select a clip to play</p>
+              </div>
             </div>
-          </div>
+          </>
         )}
       </div>
 

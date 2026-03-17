@@ -89,12 +89,12 @@ body {
 .sidebar-footer { @apply px-5 py-[15px] border-t border-[var(--border)] text-[0.8rem] text-[var(--text-muted)]; }
 
 /* Main Content */
-.main-content { @apply flex-1 flex flex-col bg-[var(--bg-primary)] min-w-0; }
+.main-content { @apply flex-1 flex flex-col bg-[var(--bg-primary)] min-w-0 overflow-y-auto; }
 
 /* Player Container */
-.player-container { @apply flex-1 flex items-center justify-center bg-black relative min-h-0; }
-.player-container video { @apply max-w-full max-h-full w-full h-full object-contain; }
-.player-placeholder { @apply flex flex-col items-center justify-center text-[var(--text-muted)] gap-[15px]; }
+.player-container { @apply flex flex-col w-full bg-black relative flex-shrink-0; }
+.player-container video { @apply w-full h-auto block; }
+.player-placeholder { @apply flex flex-col items-center justify-center text-[var(--text-muted)] gap-[15px] w-full aspect-video; }
 .player-placeholder .icon { @apply text-[4rem] opacity-50; }
 .player-placeholder p { @apply text-[1.1rem]; }
 
