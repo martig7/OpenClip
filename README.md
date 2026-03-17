@@ -1,4 +1,4 @@
-# Open Clip
+# OpenClip
 
 Automatic recording manager for OBS Studio. Detects when your configured games are running, starts and stops OBS recording automatically, organizes recordings into dated folders, and lets you create clips with a hotkey.
 
@@ -11,7 +11,7 @@ Automatic recording manager for OBS Studio. Detects when your configured games a
 
 1. Download the latest installer (`Open Clip Setup x.x.x.exe`) from [Releases](https://github.com/martig7/OpenClip/releases).
 2. Run the installer. Open Clip will be added to your Start Menu and Desktop.
-3. Launch **Open Clip** — the setup wizard runs automatically on first launch and walks you through:
+3. Launch **OpenClip** — the setup wizard runs automatically on first launch and walks you through:
    - Detecting your OBS install location
    - Setting your OBS recording folder
    - Installing the OBS plugin (one click — no manual file copying)
