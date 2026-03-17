@@ -10,7 +10,8 @@ function Timeline({
   onClipStartChange,
   onClipEndChange,
   markers = [],
-  onMarkerClick
+  onMarkerClick,
+  onHoverChange
 }) {
   const timelineRef = useRef(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -86,6 +87,8 @@ function Timeline({
       ref={timelineRef}
       className="timeline-container"
       onMouseDown={(e) => handleMouseDown(e, 'seek')}
+      onMouseEnter={() => onHoverChange?.(true)}
+      onMouseLeave={() => onHoverChange?.(false)}
     >
       {/* Progress bar */}
       <div

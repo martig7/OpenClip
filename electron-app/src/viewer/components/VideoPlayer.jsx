@@ -16,6 +16,12 @@ function VideoPlayer({ recording, onClipCreated, games = [], onOrganized, onOrga
   const [volume, setVolume] = useState(1)
   const [isMuted, setIsMuted] = useState(false)
 
+  // Hover controls state
+  const [showControls, setShowControls] = useState(false)
+  const [isTimelineHovered, setIsTimelineHovered] = useState(false)
+  const controlsTimeoutRef = useRef(null)
+  const mouseMoveTimeoutRef = useRef(null)
+
   // Clip mode state
   const [clipMode, setClipMode] = useState(false)
   const [clipStart, setClipStart] = useState(0)
@@ -176,6 +182,59 @@ function VideoPlayer({ recording, onClipCreated, games = [], onOrganized, onOrga
     }
   }, [currentTime, duration])
 
+  // Hover controls handlers
+  const handleVideoMouseEnter = useCallback(() => {
+    setShowControls(true)
+    if (controlsTimeoutRef.current) {
+      clearTimeout(controlsTimeoutRef.current)
+    }
+  }, [])
+
+  const handleVideoMouseLeave = useCallback(() => {
+    if (isPlaying && !isTimelineHovered) {
+      controlsTimeoutRef.current = setTimeout(() => {
+        setShowControls(false)
+      }, 2000)
+    }
+  }, [isPlaying, isTimelineHovered])
+
+  const handleVideoMouseMove = useCallback(() => {
+    if (!showControls) {
+      setShowControls(true)
+    }
+    if (controlsTimeoutRef.current) {
+      clearTimeout(controlsTimeoutRef.current)
+    }
+    if (isPlaying && !isTimelineHovered) {
+      controlsTimeoutRef.current = setTimeout(() => {
+        setShowControls(false)
+      }, 2000)
+    }
+  }, [showControls, isPlaying, isTimelineHovered])
+
+  // Keep controls visible when timeline is being hovered
+  const handleTimelineHover = useCallback((hovering) => {
+    setIsTimelineHovered(hovering)
+    if (hovering) {
+      if (controlsTimeoutRef.current) {
+        clearTimeout(controlsTimeoutRef.current)
+      }
+      setShowControls(true)
+    } else if (isPlaying) {
+      controlsTimeoutRef.current = setTimeout(() => {
+        setShowControls(false)
+      }, 2000)
+    }
+  }, [isPlaying])
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current)
+      if (mouseMoveTimeoutRef.current) clearTimeout(mouseMoveTimeoutRef.current)
+    }
+  }, [])
+
   const handleMarkerClick = useCallback((position) => {
     handleSeek(position)
     if (videoRef.current && !isPlaying) {
@@ -284,7 +343,12 @@ function VideoPlayer({ recording, onClipCreated, games = [], onOrganized, onOrga
 
   return (
     <div className="main-content">
-      <div className="player-container">
+      <div 
+        className="player-container"
+        onMouseEnter={handleVideoMouseEnter}
+        onMouseLeave={handleVideoMouseLeave}
+        onMouseMove={handleVideoMouseMove}
+      >
         <video
           ref={videoRef}
           src={`${getBase()}/api/video?path=${encodeURIComponent(recording.path)}`}
@@ -294,85 +358,96 @@ function VideoPlayer({ recording, onClipCreated, games = [], onOrganized, onOrga
           onPause={handlePause}
           onClick={togglePlay}
         />
-      </div>
 
-      <div className="video-controls">
-        <Timeline
-          currentTime={currentTime}
-          duration={duration}
-          onSeek={handleSeek}
-          clipMode={clipMode}
-          clipStart={clipStart}
-          clipEnd={clipEnd}
-          onClipStartChange={setClipStart}
-          onClipEndChange={setClipEnd}
-          markers={markers}
-          onMarkerClick={handleMarkerClick}
-        />
+        <div className={`video-controls-overlay ${showControls || clipMode ? 'visible' : ''}`}>
+          <Timeline
+            currentTime={currentTime}
+            duration={duration}
+            onSeek={handleSeek}
+            clipMode={clipMode}
+            clipStart={clipStart}
+            clipEnd={clipEnd}
+            onClipStartChange={setClipStart}
+            onClipEndChange={setClipEnd}
+            markers={markers}
+            onMarkerClick={handleMarkerClick}
+            onHoverChange={handleTimelineHover}
+          />
 
-        <div className="controls-row">
-          <button className="control-btn" onClick={() => skip(-10)} title="Rewind 10s">
-            <SkipBack size={16} />
-          </button>
-          <button className="control-btn" onClick={togglePlay} title={isPlaying ? 'Pause' : 'Play'}>
-            {isPlaying ? <Pause size={16} /> : <Play size={16} />}
-          </button>
-          <button className="control-btn" onClick={() => skip(10)} title="Forward 10s">
-            <SkipForward size={16} />
-          </button>
-
-          <span className="time-display">
-            {formatTime(currentTime)} / {formatTime(duration)}
-          </span>
-
-          <div className="volume-control">
-            <button className="control-btn" onClick={toggleMute} title={isMuted ? 'Unmute' : 'Mute'}>
-              {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+          <div className="controls-row">
+            
+            <button className="control-btn control-btn--play" onClick={togglePlay} title={isPlaying ? 'Pause' : 'Play'}>
+              {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}
             </button>
-            <input
-              type="range"
-              className="volume-slider"
-              min="0"
-              max="1"
-              step="0.1"
-              value={isMuted ? 0 : volume}
-              onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
-            />
+            <button className="control-btn control-btn--icon" onClick={() => skip(-10)} title="Rewind 10s">
+              <SkipBack size={18} fill="currentColor" />
+            </button>
+            <button className="control-btn control-btn--icon" onClick={() => skip(10)} title="Forward 10s">
+              <SkipForward size={18} fill="currentColor" />
+            </button>
+            <span className="time-display">
+              {formatTime(currentTime)} / {formatTime(duration)}
+            </span>
+
+            <div className="volume-control">
+              <button className="control-btn control-btn--icon" onClick={toggleMute} title={isMuted ? 'Unmute' : 'Mute'}>
+                {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+              </button>
+              <div className="volume-slider-container">
+                <input
+                  type="range"
+                  className="volume-slider"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={isMuted ? 0 : volume}
+                  onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+                />
+                <div 
+                  className="volume-slider-fill" 
+                  style={{ width: `${(isMuted ? 0 : volume) * 100}%` }}
+                />
+                <div 
+                  className="volume-slider-thumb"
+                  style={{ left: `${(isMuted ? 0 : volume) * 100}%` }}
+                />
+              </div>
+            </div>
           </div>
         </div>
-
-        {clipMode && (
-          <>
-            <ZoomTimeline
-              currentTime={currentTime}
-              duration={duration}
-              onSeek={handleSeek}
-              clipStart={clipStart}
-              clipEnd={clipEnd}
-              onClipStartChange={setClipStart}
-              onClipEndChange={setClipEnd}
-              markers={markers}
-              onMarkerClick={handleMarkerClick}
-              audioTracks={audioTracks}
-              selectedTracks={selectedTracks}
-              waveforms={waveforms}
-              onTrackToggle={toggleTrack}
-              isCreatingClip={isCreatingClip}
-            />
-
-            <ClipControls
-              clipStart={clipStart}
-              clipEnd={clipEnd}
-              duration={duration}
-              onClipStartChange={setClipStart}
-              onClipEndChange={setClipEnd}
-              onCancel={exitClipMode}
-              onCreate={handleCreateClip}
-              isCreating={isCreatingClip}
-            />
-          </>
-        )}
       </div>
+
+      {clipMode && (
+        <div className="video-controls">
+          <ZoomTimeline
+            currentTime={currentTime}
+            duration={duration}
+            onSeek={handleSeek}
+            clipStart={clipStart}
+            clipEnd={clipEnd}
+            onClipStartChange={setClipStart}
+            onClipEndChange={setClipEnd}
+            markers={markers}
+            onMarkerClick={handleMarkerClick}
+            audioTracks={audioTracks}
+            selectedTracks={selectedTracks}
+            waveforms={waveforms}
+            onTrackToggle={toggleTrack}
+            isCreatingClip={isCreatingClip}
+          />
+
+          <ClipControls
+            clipStart={clipStart}
+            clipEnd={clipEnd}
+            duration={duration}
+            onClipStartChange={setClipStart}
+            onClipEndChange={setClipEnd}
+            onCancel={exitClipMode}
+            onCreate={handleCreateClip}
+            isCreating={isCreatingClip}
+          />
+        </div>
+      )}
 
       <div className="video-info-bar">
         <div className="video-info-top">

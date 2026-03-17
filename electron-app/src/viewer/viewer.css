@@ -100,19 +100,104 @@ body {
 
 /* Custom Video Controls */
 .video-controls { @apply bg-[var(--bg-secondary)] px-5 py-[15px] border-t border-[var(--border)]; }
+.video-controls-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(transparent, rgba(0,0,0,0.9));
+  padding: 50px 20px 20px;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+.video-controls-overlay.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
 .controls-row { @apply flex items-center gap-[15px] mb-3; }
 .control-btn { @apply bg-transparent border-none text-[var(--text-primary)] text-[1.2rem] cursor-pointer p-[5px] rounded transition-colors duration-150; }
 .control-btn:hover { background: var(--bg-hover); }
 .control-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; background: var(--bg-hover); }
+.control-btn--play {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  background-color: var(--accent);
+  border: none;
+  border-radius: 50%;
+  color: #fff;
+  box-shadow: 0 0 12px rgba(124, 58, 237, 0.3), 0 0 25px rgba(124, 58, 237, 0.15);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.control-btn--play:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 18px rgba(124, 58, 237, 0.4), 0 0 30px rgba(124, 58, 237, 0.2);
+}
+.control-btn--icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  color: #fff;
+  opacity: 0.8;
+}
+.control-btn--icon:hover {
+  opacity: 1;
+}
 .time-display { @apply text-[0.85rem] text-[var(--text-secondary)] font-mono min-w-[100px]; }
 .volume-control { @apply flex items-center gap-2 ml-auto; }
-.volume-slider { width: 80px; height: 4px; -webkit-appearance: none; background: var(--bg-tertiary); border-radius: 2px; cursor: pointer; }
+.volume-slider-container {
+  position: relative;
+  width: 100px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+}
+.volume-slider {
+  position: absolute;
+  width: 100%;
+  height: 8px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0;
+  z-index: 2;
+}
+.volume-slider-fill {
+  position: absolute;
+  height: 8px;
+  background: linear-gradient(90deg, var(--accent) 0%, var(--accent-light) 50%, #a78bfa 100%);
+  border-radius: 4px;
+  box-shadow: 0 0 5px rgba(124, 58, 237, 0.35);
+  pointer-events: none;
+  transition: width 0.1s ease;
+}
+.volume-slider-thumb {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  background-color: #fff;
+  border: 3px solid var(--accent-light);
+  border-radius: 50%;
+  transform: translateX(-50%);
+  box-shadow: 0 0 6px rgba(124, 58, 237, 0.4), 0 0 12px rgba(124, 58, 237, 0.2);
+  pointer-events: none;
+  transition: left 0.1s ease;
+}
 .volume-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; background: var(--accent); border-radius: 50%; cursor: pointer; }
 
 /* Timeline */
 .timeline-container { @apply relative h-2 bg-[var(--bg-tertiary)] rounded cursor-pointer mb-3; }
-.timeline-progress { @apply h-full bg-[var(--accent)] rounded pointer-events-none; }
-.timeline-handle { @apply absolute top-1/2 -translate-x-1/2 -translate-y-1/2 w-[14px] h-[14px] bg-[var(--accent)] rounded-full cursor-pointer z-20; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3); }
+.timeline-progress { @apply h-full bg-[var(--accent)] rounded pointer-events-none; background: linear-gradient(90deg, var(--accent) 0%, var(--accent-light) 50%, #a78bfa 100%); box-shadow: 0 0 5px rgba(124, 58, 237, 0.35), 0 0 10px rgba(124, 58, 237, 0.2); }
+.timeline-handle { @apply absolute top-1/2 -translate-x-1/2 -translate-y-1/2 w-[18px] h-[18px] bg-white border-[3px] border-[var(--accent-light)] rounded-full cursor-pointer z-20; box-shadow: 0 0 6px rgba(124, 58, 237, 0.4), 0 0 12px rgba(124, 58, 237, 0.25); }
 .timeline-marker { position: absolute; bottom: 100%; transform: translateX(-50%); width: 10px; height: 18px; background: var(--amber-light); border: 2px solid var(--amber); border-radius: 2px 2px 0 0; cursor: pointer; transition: all 0.2s ease; z-index: 3; pointer-events: auto; }
 .timeline-marker::after { content: ''; position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid var(--amber); }
 .timeline-marker:hover { background: var(--amber); transform: translateX(-50%) scale(1.15); box-shadow: 0 2px 8px rgba(245, 158, 11, 0.5); }
