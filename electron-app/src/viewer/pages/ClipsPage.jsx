@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Folder, Calendar, HardDrive, Play, FolderOpen, Trash2, Film, Check, X } from 'lucide-react'
+import { Folder, Calendar, HardDrive, FolderOpen, Trash2, Film, Check, X, Play } from 'lucide-react'
 import MediaSidebar from '../components/MediaSidebar'
 import Modal from '../components/Modal'
+import VideoPlayer from '../components/VideoPlayer'
 import { apiFetch, apiPost, getBase } from '../apiBase'
 import api from '../../api'
 
@@ -107,44 +108,7 @@ function ClipsPage() {
 
       <div className="main-content">
         {selectedClip ? (
-          <>
-            <div className="player-container">
-              <video
-                key={selectedClip.path}
-                src={`${getBase()}/api/video?path=${encodeURIComponent(selectedClip.path)}`}
-                controls
-              />
-            </div>
-
-            <div className="video-info-bar">
-              <h2 className="video-title">{selectedClip.filename}</h2>
-              <div className="video-meta">
-                <span><Folder size={13} /> {selectedClip.game_name}</span>
-                <span><Calendar size={13} /> {selectedClip.date}</span>
-                <span><HardDrive size={13} /> {selectedClip.size_formatted}</span>
-              </div>
-              <div className="action-buttons">
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => apiPost('/api/open-external', { path: selectedClip.path })}
-                >
-                  <Play size={13} /> Open in Player
-                </button>
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => apiPost('/api/show-in-explorer', { path: selectedClip.path })}
-                >
-                  <FolderOpen size={13} /> Show in Explorer
-                </button>
-                <button
-                  className="btn btn-danger"
-                  onClick={() => setDeleteModal(true)}
-                >
-                  <Trash2 size={13} /> Delete
-                </button>
-              </div>
-            </div>
-          </>
+          <VideoPlayer clip={selectedClip} onDelete={() => setDeleteModal(true)} />
         ) : (
           <div className="player-container">
             <div className="player-placeholder">

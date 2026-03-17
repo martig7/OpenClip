@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
-import { Film, SkipBack, SkipForward, Play, Pause, Volume2, VolumeX, Folder, Calendar, HardDrive, Scissors, FolderOpen, MoveRight } from 'lucide-react'
+import { Film, SkipBack, SkipForward, Play, Pause, Volume2, VolumeX, Folder, Calendar, HardDrive, Scissors, FolderOpen, MoveRight, Trash2 } from 'lucide-react'
 import Timeline from './Timeline'
 import ClipControls from './ClipControls'
 import ZoomTimeline from './ZoomTimeline'
@@ -8,13 +8,19 @@ import { formatTime } from '../utils'
 import api from '../../api'
 import { useOrganizeProgress } from '../../App'
 
-function VideoPlayer({ recording, onClipCreated, games = [], onOrganized, onOrganizeError, organizeRemux = true }) {
+function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onOrganized, onOrganizeError, organizeRemux = true }) {
+  // Use recording if provided, otherwise fall back to clip (for clips page)
+  const media = recording || clip
+  
   const videoRef = useRef(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [volume, setVolume] = useState(1)
   const [isMuted, setIsMuted] = useState(false)
+
+  // Determine if this is clip mode (clips don't have clip creation/organize features)
+  const isClipMode = !!clip
 
   // Hover controls state
   const [showControls, setShowControls] = useState(false)
@@ -45,9 +51,9 @@ function VideoPlayer({ recording, onClipCreated, games = [], onOrganized, onOrga
   // global popup when the user navigates away mid-organize.
   const { setIsManualOrganizing, organizeProgress, setOrganizeProgress } = useOrganizeProgress()
 
-  const isUnorganized = recording?.game_name === '(Unorganized)'
+  const isUnorganized = media?.game_name === '(Unorganized)'
 
-  // Reset state when recording changes
+  // Reset state when media changes
   useEffect(() => {
     setIsPlaying(false)
     setCurrentTime(0)
@@ -59,18 +65,18 @@ function VideoPlayer({ recording, onClipCreated, games = [], onOrganized, onOrga
     setWaveforms({})
     setOrganizeMode(false)
     setOrganizeGame('')
-  }, [recording])
+  }, [media])
 
-  // Fetch audio tracks when recording changes
+  // Fetch audio tracks when media changes
   useEffect(() => {
-    if (!recording) return
+    if (!media) return
 
     let cancelled = false
 
     const fetchTracks = async () => {
       try {
         const response = await apiFetch(
-          `/api/video/tracks?path=${encodeURIComponent(recording.path)}`
+          `/api/video/tracks?path=${encodeURIComponent(media.path)}`
         )
         const data = await response.json()
         if (cancelled) return
@@ -82,7 +88,7 @@ function VideoPlayer({ recording, onClipCreated, games = [], onOrganized, onOrga
             if (cancelled) break
             try {
               const waveRes = await apiFetch(
-                `/api/video/waveform?path=${encodeURIComponent(recording.path)}&track=${i}`
+                `/api/video/waveform?path=${encodeURIComponent(media.path)}&track=${i}`
               )
               const waveData = await waveRes.json()
               if (cancelled) break
@@ -101,14 +107,14 @@ function VideoPlayer({ recording, onClipCreated, games = [], onOrganized, onOrga
     return () => { cancelled = true }
   }, [recording])
 
-  // Fetch markers when recording changes and duration is known
+  // Fetch markers when media changes and duration is known
   useEffect(() => {
-    if (!recording || !duration) return
+    if (!media || !duration) return
 
     const fetchMarkers = async () => {
       try {
         const response = await apiFetch(
-          `/api/markers?path=${encodeURIComponent(recording.path)}&game_name=${encodeURIComponent(recording.game_name)}`
+          `/api/markers?path=${encodeURIComponent(media.path)}&game_name=${encodeURIComponent(media.game_name)}`
         )
         const data = await response.json()
         if (response.ok && data.markers) {
@@ -120,7 +126,7 @@ function VideoPlayer({ recording, onClipCreated, games = [], onOrganized, onOrga
     }
 
     fetchMarkers()
-  }, [recording, duration])
+  }, [media, duration])
 
   const handleTimeUpdate = useCallback(() => {
     if (videoRef.current) {
@@ -269,15 +275,15 @@ function VideoPlayer({ recording, onClipCreated, games = [], onOrganized, onOrga
   }, [])
 
   const handleCreateClip = useCallback(async () => {
-    if (!recording || isCreatingClip) return
+    if (!media || isCreatingClip) return
 
     setIsCreatingClip(true)
     try {
       const response = await apiPost('/api/clips/create', {
-        source_path: recording.path,
+        source_path: media.path,
         start_time: clipStart,
         end_time: clipEnd,
-        game_name: recording.game_name,
+        game_name: media.game_name,
         audio_tracks: audioTracks.length > 1 && selectedTracks.length > 0 && selectedTracks.length < audioTracks.length
           ? selectedTracks : null
       })
@@ -307,12 +313,12 @@ function VideoPlayer({ recording, onClipCreated, games = [], onOrganized, onOrga
   }, [])
 
   const handleOrganize = useCallback(async () => {
-    if (!recording || !organizeGame || isOrganizing) return
+    if (!media || !organizeGame || isOrganizing) return
     setIsOrganizing(true)
     setIsManualOrganizing(true)
     setOrganizeProgress(null)
     try {
-      const result = await api.organizeRecording(recording.path, organizeGame, organizeRemux)
+      const result = await api.organizeRecording(media.path, organizeGame, organizeRemux)
       if (result && result.success) {
         setOrganizeMode(false)
         if (onOrganized) onOrganized(result)
@@ -328,7 +334,7 @@ function VideoPlayer({ recording, onClipCreated, games = [], onOrganized, onOrga
     }
   }, [recording, organizeGame, organizeRemux, isOrganizing, setIsManualOrganizing, setOrganizeProgress, onOrganized, onOrganizeError])
 
-  if (!recording) {
+  if (!media) {
     return (
       <div className="main-content">
         <div className="player-container">
@@ -351,7 +357,7 @@ function VideoPlayer({ recording, onClipCreated, games = [], onOrganized, onOrga
       >
         <video
           ref={videoRef}
-          src={`${getBase()}/api/video?path=${encodeURIComponent(recording.path)}`}
+          src={`${getBase()}/api/video?path=${encodeURIComponent(media.path)}`}
           onTimeUpdate={handleTimeUpdate}
           onLoadedMetadata={handleLoadedMetadata}
           onPlay={handlePlay}
@@ -452,19 +458,19 @@ function VideoPlayer({ recording, onClipCreated, games = [], onOrganized, onOrga
       <div className="video-info-bar">
         <div className="video-info-top">
           <div>
-            <h2 className="video-title">{recording.filename}</h2>
+            <h2 className="video-title">{media.filename}</h2>
             <div className="video-meta">
-              <span><Folder size={13} /> {recording.game_name}</span>
-              <span><Calendar size={13} /> {recording.date}</span>
-              <span><HardDrive size={13} /> {recording.size_formatted}</span>
+              <span><Folder size={13} /> {media.game_name}</span>
+              <span><Calendar size={13} /> {media.date}</span>
+              <span><HardDrive size={13} /> {media.size_formatted}</span>
             </div>
           </div>
-          {isUnorganized && (
+          {isUnorganized && !isClipMode && (
             <span className="unorganized-badge">Unorganized</span>
           )}
         </div>
         <div className="action-buttons">
-          {isUnorganized && !clipMode && (
+          {isUnorganized && !isClipMode && (
             <button
               className={`btn btn-organize${organizeMode ? ' active' : ''}`}
               onClick={() => setOrganizeMode(o => !o)}
@@ -473,27 +479,35 @@ function VideoPlayer({ recording, onClipCreated, games = [], onOrganized, onOrga
               <MoveRight size={13} /> Organize
             </button>
           )}
-          {!clipMode && !isUnorganized && (
+          {!isClipMode && !isUnorganized && (
             <button className="btn btn-primary" onClick={enterClipMode}>
               <Scissors size={13} /> Create Clip
             </button>
           )}
           <button
             className="btn btn-secondary"
-            onClick={() => apiPost('/api/open-external', { path: recording.path })}
+            onClick={() => apiPost('/api/open-external', { path: media.path })}
           >
             <Play size={13} /> Open in Player
           </button>
           <button
             className="btn btn-secondary"
-            onClick={() => apiPost('/api/show-in-explorer', { path: recording.path })}
+            onClick={() => apiPost('/api/show-in-explorer', { path: media.path })}
           >
             <FolderOpen size={13} /> Show in Explorer
           </button>
+          {isClipMode && onDelete && (
+            <button
+              className="btn btn-danger"
+              onClick={onDelete}
+            >
+              <Trash2 size={13} /> Delete
+            </button>
+          )}
         </div>
       </div>
 
-      {isUnorganized && organizeMode && (
+      {isUnorganized && organizeMode && !isClipMode && (
         <div className="organize-panel">
           <div className="organize-header">
             <MoveRight size={13} />
@@ -546,7 +560,7 @@ function VideoPlayer({ recording, onClipCreated, games = [], onOrganized, onOrga
           {organizeGame && !isOrganizing && (
             <div className="organize-preview">
               {(() => {
-                const ext = recording?.path ? recording.path.split('.').pop().toLowerCase() : ''
+                const ext = media?.path ? media.path.split('.').pop().toLowerCase() : ''
                 const willRemux = organizeRemux && ext !== 'mp4'
                 return <>
                   Will be saved as: <strong>{organizeGame}</strong> Session &gt; Week folder
