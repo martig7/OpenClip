@@ -26,7 +26,6 @@ Automatic recording manager for OBS Studio. Detects when your configured games a
 - **Re-encoder** — batch re-encode recordings with H.264, H.265, or AV1
 - **Recordings viewer** — browse, preview, and manage all recordings and clips in-app
 - **Storage management** — auto-delete old recordings by age or total size limit
-- **OBS WebSocket** — connect via host/port/password or scan the QR code from OBS
 
 ## Building from Source
 
