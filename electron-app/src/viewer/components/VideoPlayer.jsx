@@ -24,9 +24,6 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
 
   // Hover controls state
   const [showControls, setShowControls] = useState(false)
-  const [isTimelineHovered, setIsTimelineHovered] = useState(false)
-  const controlsTimeoutRef = useRef(null)
-  const mouseMoveTimeoutRef = useRef(null)
 
   // Clip mode state
   const [clipMode, setClipMode] = useState(false)
@@ -191,54 +188,24 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
   // Hover controls handlers
   const handleVideoMouseEnter = useCallback(() => {
     setShowControls(true)
-    if (controlsTimeoutRef.current) {
-      clearTimeout(controlsTimeoutRef.current)
-    }
   }, [])
 
   const handleVideoMouseLeave = useCallback(() => {
-    if (isPlaying && !isTimelineHovered) {
-      controlsTimeoutRef.current = setTimeout(() => {
-        setShowControls(false)
-      }, 2000)
-    }
-  }, [isPlaying, isTimelineHovered])
+    setShowControls(false)
+  }, [])
 
   const handleVideoMouseMove = useCallback(() => {
-    if (!showControls) {
-      setShowControls(true)
-    }
-    if (controlsTimeoutRef.current) {
-      clearTimeout(controlsTimeoutRef.current)
-    }
-    if (isPlaying && !isTimelineHovered) {
-      controlsTimeoutRef.current = setTimeout(() => {
-        setShowControls(false)
-      }, 2000)
-    }
-  }, [showControls, isPlaying, isTimelineHovered])
+    setShowControls(true)
+  }, [])
 
   // Keep controls visible when timeline is being hovered
-  const handleTimelineHover = useCallback((hovering) => {
-    setIsTimelineHovered(hovering)
-    if (hovering) {
-      if (controlsTimeoutRef.current) {
-        clearTimeout(controlsTimeoutRef.current)
-      }
-      setShowControls(true)
-    } else if (isPlaying) {
-      controlsTimeoutRef.current = setTimeout(() => {
-        setShowControls(false)
-      }, 2000)
-    }
-  }, [isPlaying])
+  const handleTimelineHover = useCallback(() => {
+    setShowControls(true)
+  }, [])
 
-  // Cleanup timeouts on unmount
+  // Cleanup on unmount
   useEffect(() => {
-    return () => {
-      if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current)
-      if (mouseMoveTimeoutRef.current) clearTimeout(mouseMoveTimeoutRef.current)
-    }
+    return () => {}
   }, [])
 
   const handleMarkerClick = useCallback((position) => {
