@@ -47,3 +47,5 @@ playwright-report/
 playwright-report-integration/
 test-results/
 coverage/
+electron-app/.superpowers/
+superpowers/

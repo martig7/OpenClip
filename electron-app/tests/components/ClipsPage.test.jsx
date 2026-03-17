@@ -9,6 +9,17 @@ import { sampleClip } from '../fixtures/data.js'
 import ClipsPage from '../../src/viewer/pages/ClipsPage.jsx'
 import api from '../../src/api.js'
 
+// MediaList uses canvas which jsdom doesn't support — replace with a simple DOM list
+vi.mock('../../src/viewer/components/MediaList.jsx', () => ({
+  default: ({ items, onSelect }) => (
+    <ul>
+      {items.map(item => (
+        <li key={item.path} onClick={() => onSelect(item)}>{item.filename}</li>
+      ))}
+    </ul>
+  ),
+}))
+
 // Mock apiBase so it resolves immediately with relative paths (no Electron port lookup)
 vi.mock('../../src/viewer/apiBase.js', () => ({
   apiFetch: (path, opts) => fetch(path, opts),

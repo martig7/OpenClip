@@ -9,6 +9,17 @@ import { sampleRecording, sampleAudioTracks } from '../fixtures/data.js'
 import RecordingsPage from '../../src/viewer/pages/RecordingsPage.jsx'
 import api from '../../src/api.js'
 
+// MediaList uses canvas which jsdom doesn't support — replace with a simple DOM list
+vi.mock('../../src/viewer/components/MediaList.jsx', () => ({
+  default: ({ items, onSelect }) => (
+    <ul>
+      {items.map(item => (
+        <li key={item.path} onClick={() => onSelect(item)}>{item.filename}</li>
+      ))}
+    </ul>
+  ),
+}))
+
 vi.mock('../../src/viewer/apiBase.js', () => ({
   apiFetch: (path, opts) => fetch(path, opts),
   apiPost: (path, data) => fetch(path, {

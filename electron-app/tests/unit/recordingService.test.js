@@ -377,7 +377,8 @@ describe('createClip', () => {
 
   it('increments clip number when existing clips present', async () => {
     const src = path.join(obsDir, 'rec.mp4'); makeFile(src)
-    const today = new Date().toISOString().slice(0, 10)
+    const now = new Date()
+    const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
     makeFile(path.join(clipsDir, `Halo Clip ${today} #1.mp4`))
     const result = await service.createClip(src, 0, 10, 'Halo', null)
     expect(result.filename).toContain('#2')
@@ -385,7 +386,8 @@ describe('createClip', () => {
 
   it('skips already-existing candidate filename to avoid overwrite under concurrency', async () => {
     const src = path.join(obsDir, 'rec.mp4'); makeFile(src)
-    const today = new Date().toISOString().slice(0, 10)
+    const now = new Date()
+    const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
     // Simulate a concurrent request having already claimed #1 (count=0+1) before writing it
     makeFile(path.join(clipsDir, `Halo Clip ${today} #1.mp4`))
     const result = await service.createClip(src, 0, 10, 'Halo', null)
