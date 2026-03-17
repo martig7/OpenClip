@@ -509,3 +509,44 @@ body {
 .track-item { @apply flex items-center gap-2 py-[6px] px-2 rounded cursor-pointer text-[0.875rem] text-[var(--text-secondary)]; }
 .track-item:hover { background: var(--bg-hover); }
 .track-item input[type="checkbox"] { @apply w-4 h-4 cursor-pointer flex-shrink-0; }
+
+/* ======================== */
+/* MediaSidebar             */
+/* ======================== */
+.msb-header      { padding: 8px 10px; border-bottom: 1px solid var(--border);
+                   display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+.msb-row1        { display: flex; align-items: center; gap: 8px; }
+.msb-title       { font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+                   letter-spacing: 0.06em; color: var(--text-muted); flex-shrink: 0; }
+.msb-search      { position: relative; flex: 1; min-width: 0; }
+.msb-search input { width: 100%; height: 26px; padding: 0 8px 0 26px;
+                    background: #212121; border: 1px solid #2e2e2e; border-radius: 5px;
+                    color: var(--text-primary); font-size: 0.78rem; outline: none; }
+.msb-search input:focus { border-color: var(--accent); }
+.msb-search input::placeholder { color: var(--text-muted); }
+.msb-search-icon { position: absolute; left: 7px; top: 50%; transform: translateY(-50%);
+                   color: #444; pointer-events: none; display: flex; align-items: center; }
+.msb-game-filter { display: flex; align-items: center; gap: 3px; flex-wrap: nowrap;
+                   overflow: hidden; }
+.msb-game-pill   { display: flex; align-items: center; gap: 4px; padding: 2px 7px;
+                   border-radius: 20px; border: 1px solid transparent;
+                   background: transparent; color: #555; font-size: 0.68rem;
+                   cursor: pointer; white-space: nowrap;
+                   transition: background 0.1s, color 0.1s, border-color 0.1s; }
+.msb-game-pill:hover        { background: var(--bg-hover); color: var(--text-primary); }
+.msb-game-pill.active       { background: #212121; border-color: #3a3a3a; color: #fff; }
+.msb-game-dot               { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.msb-sort-row               { display: flex; align-items: center; gap: 4px; }
+.msb-sort-label             { font-size: 0.65rem; color: var(--text-muted);
+                              text-transform: uppercase; letter-spacing: 0.04em; }
+.msb-dir-btn                { padding: 3px 6px; border-left: 1px solid var(--border);
+                              display: flex; align-items: center; cursor: pointer;
+                              background: transparent; border-top: none; border-right: none;
+                              border-bottom: none; color: var(--text-muted); }
+.msb-dir-btn:hover          { color: var(--text-primary); background: var(--bg-hover); }
+.msb-list-area   { flex: 1; overflow: hidden; position: relative; }
+.msb-empty       { position: absolute; inset: 0; display: flex; flex-direction: column;
+                   align-items: center; justify-content: center; gap: 10px;
+                   color: var(--text-muted); font-size: 0.85rem; pointer-events: none; }
+.msb-footer      { padding: 5px 10px; border-top: 1px solid var(--border);
+                   font-size: 0.68rem; color: var(--text-muted); flex-shrink: 0; }
