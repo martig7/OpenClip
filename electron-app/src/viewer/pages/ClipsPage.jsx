@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Folder, Calendar, HardDrive, Play, FolderOpen, Trash2, Film, Check, X } from 'lucide-react'
-import Sidebar from '../components/Sidebar'
+import MediaSidebar from '../components/MediaSidebar'
 import Modal from '../components/Modal'
 import { apiFetch, apiPost, getBase } from '../apiBase'
 import api from '../../api'
@@ -97,7 +97,7 @@ function ClipsPage() {
 
   return (
     <div className="page-content">
-      <Sidebar
+      <MediaSidebar
         items={clips}
         selectedItem={selectedClip}
         onSelect={setSelectedClip}

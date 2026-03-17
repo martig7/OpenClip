@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { AlertTriangle, Check, X } from 'lucide-react'
-import Sidebar from '../components/Sidebar'
+import MediaSidebar from '../components/MediaSidebar'
 import VideoPlayer from '../components/VideoPlayer'
 import { apiFetch } from '../apiBase'
 import api from '../../api'
@@ -96,7 +96,7 @@ function RecordingsPage() {
 
   return (
     <div className="page-content">
-      <Sidebar
+      <MediaSidebar
         items={recordings}
         selectedItem={selectedRecording}
         onSelect={setSelectedRecording}
