@@ -61,8 +61,23 @@ body {
 .page-content { @apply flex flex-1 overflow-hidden; }
 
 /* Sidebar */
-.sidebar { @apply w-[320px] min-w-[320px] bg-[var(--bg-secondary)] border-r border-[var(--border)] flex flex-col h-full; }
-@media (max-width: 900px) { .sidebar { width: 280px; min-width: 280px; } }
+.sidebar { @apply relative bg-[var(--bg-secondary)] border-r border-[var(--border)] flex flex-col h-full; width: var(--sidebar-width, 320px); min-width: var(--sidebar-width, 320px); z-index: 10; }
+@media (max-width: 900px) { .sidebar { width: 280px !important; min-width: 280px !important; } }
+
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  bottom: 0;
+  width: 4px;
+  cursor: col-resize;
+  z-index: 50;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+.sidebar-resizer:hover, .sidebar-resizer:active {
+  background: var(--accent);
+}
 .sidebar-header { @apply p-5 border-b border-[var(--border)]; }
 .sidebar-header h2 { @apply text-[1.25rem] font-semibold mb-[15px]; }
 .search-box { position: relative; }

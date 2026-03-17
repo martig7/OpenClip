@@ -15,6 +15,45 @@ function MediaSidebar({ items, selectedItem, onSelect, title, emptyMessage }) {
   const [canScrollRight, setCanScrollRight] = useState(false)
   const filterScrollRef = useRef(null)
 
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem('sidebarWidth')
+    return saved ? parseInt(saved, 10) : 320
+  })
+  const isDraggingRef = useRef(false)
+  const startXRef = useRef(0)
+  const prevWidthRef = useRef(sidebarWidth)
+
+  const handleMouseMove = useCallback((e) => {
+    if (!isDraggingRef.current) return
+    const delta = e.clientX - startXRef.current
+    const newWidth = Math.max(240, Math.min(800, prevWidthRef.current + delta))
+    setSidebarWidth(newWidth)
+  }, [])
+
+  const handleMouseUp = useCallback(() => {
+    if (isDraggingRef.current) {
+      isDraggingRef.current = false
+      document.body.style.cursor = ''
+      localStorage.setItem('sidebarWidth', sidebarWidth.toString())
+    }
+  }, [sidebarWidth])
+
+  useEffect(() => {
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [handleMouseMove, handleMouseUp])
+
+  const handleMouseDown = useCallback((e) => {
+    isDraggingRef.current = true
+    startXRef.current = e.clientX
+    prevWidthRef.current = sidebarWidth
+    document.body.style.cursor = 'col-resize'
+  }, [sidebarWidth])
+
   const updateScrollState = useCallback(() => {
     const el = filterScrollRef.current
     if (!el) return
@@ -84,7 +123,7 @@ function MediaSidebar({ items, selectedItem, onSelect, title, emptyMessage }) {
   }
 
   return (
-    <aside className="sidebar">
+    <aside className="sidebar" style={{ '--sidebar-width': `${sidebarWidth}px` }}>
       {/* ── Header ── */}
       <div className="msb-header">
 
@@ -184,6 +223,7 @@ function MediaSidebar({ items, selectedItem, onSelect, title, emptyMessage }) {
       <div className="msb-footer">
         {filteredItems.length} item{filteredItems.length !== 1 ? 's' : ''}
       </div>
+      <div className="sidebar-resizer" onMouseDown={handleMouseDown} />
     </aside>
   )
 }
