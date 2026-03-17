@@ -526,8 +526,20 @@ body {
 .msb-search input::placeholder { color: var(--text-muted); }
 .msb-search-icon { position: absolute; left: 7px; top: 50%; transform: translateY(-50%);
                    color: #444; pointer-events: none; display: flex; align-items: center; }
-.msb-game-filter { display: flex; align-items: center; gap: 3px; flex-wrap: nowrap;
-                   overflow: hidden; }
+.msb-game-filter-wrap { position: relative; display: flex; align-items: center; overflow: hidden; }
+.msb-game-filter      { display: flex; align-items: center; gap: 3px; flex-wrap: nowrap;
+                         overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0; }
+.msb-game-filter::-webkit-scrollbar { display: none; }
+.msb-game-scroll-btn  { position: absolute; top: 0; bottom: 0; z-index: 2;
+                         display: flex; align-items: center; justify-content: center;
+                         width: 22px; border: none; cursor: pointer;
+                         color: var(--text-secondary);
+                         background: transparent; padding: 0; flex-shrink: 0; }
+.msb-game-scroll-left  { left: 0;
+                          background: linear-gradient(to right, rgba(24,24,24,0.85) 60%, transparent); }
+.msb-game-scroll-right { right: 0;
+                          background: linear-gradient(to left, rgba(24,24,24,0.85) 60%, transparent); }
+.msb-game-scroll-btn:hover { color: var(--text-primary); }
 .msb-game-pill   { display: flex; align-items: center; gap: 4px; padding: 2px 7px;
                    border-radius: 20px; border: 1px solid transparent;
                    background: transparent; color: #555; font-size: 0.68rem;

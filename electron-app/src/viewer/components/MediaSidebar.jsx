@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from 'react'
-import { Search, ChevronUp, ChevronDown, FileVideo } from 'lucide-react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
+import { Search, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, FileVideo } from 'lucide-react'
 import MediaList from './MediaList'
 import { buildGameColors } from '../utils/storageColors'
 
@@ -11,6 +11,21 @@ function MediaSidebar({ items, selectedItem, onSelect, title, emptyMessage }) {
   const [filterGame, setFilterGame]   = useState('all')
   const [sortBy, setSortBy]           = useState('date')
   const [sortDir, setSortDir]         = useState('desc')
+  const [canScrollLeft, setCanScrollLeft]   = useState(false)
+  const [canScrollRight, setCanScrollRight] = useState(false)
+  const filterScrollRef = useRef(null)
+
+  const updateScrollState = useCallback(() => {
+    const el = filterScrollRef.current
+    if (!el) return
+    setCanScrollLeft(el.scrollLeft > 0)
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1)
+  }, [])
+
+  const scrollFilter = (dir) => {
+    const el = filterScrollRef.current
+    if (el) el.scrollBy({ left: dir * 80, behavior: 'smooth' })
+  }
 
   // Reset filterGame if the selected game disappears from the item list
   useEffect(() => {
@@ -23,6 +38,9 @@ function MediaSidebar({ items, selectedItem, onSelect, title, emptyMessage }) {
     () => buildGameColors({ recordings: items, clips: [] }),
     [items]
   )
+
+  // Re-check scroll overflow when game list changes
+  useEffect(() => { updateScrollState() }, [gameColors, updateScrollState])
 
   const filteredItems = useMemo(() => {
     let result = items
@@ -86,21 +104,37 @@ function MediaSidebar({ items, selectedItem, onSelect, title, emptyMessage }) {
 
         {/* Row 2: game filter pills (only when multiple games present) */}
         {Object.keys(gameColors).length > 0 && (
-          <div className="msb-game-filter">
-            <button
-              className={`msb-game-pill${filterGame === 'all' ? ' active' : ''}`}
-              onClick={() => setFilterGame('all')}
-            >All</button>
-            {Object.entries(gameColors).map(([game, color]) => (
-              <button
-                key={game}
-                className={`msb-game-pill${filterGame === game ? ' active' : ''}`}
-                onClick={() => setFilterGame(filterGame === game ? 'all' : game)}
-              >
-                <span className="msb-game-dot" style={{ background: color }} />
-                {game}
+          <div className="msb-game-filter-wrap">
+            {canScrollLeft && (
+              <button className="msb-game-scroll-btn msb-game-scroll-left" onClick={() => scrollFilter(-1)}>
+                <ChevronLeft size={12} />
               </button>
-            ))}
+            )}
+            <div
+              className="msb-game-filter"
+              ref={filterScrollRef}
+              onScroll={updateScrollState}
+            >
+              <button
+                className={`msb-game-pill${filterGame === 'all' ? ' active' : ''}`}
+                onClick={() => setFilterGame('all')}
+              >All</button>
+              {Object.entries(gameColors).map(([game, color]) => (
+                <button
+                  key={game}
+                  className={`msb-game-pill${filterGame === game ? ' active' : ''}`}
+                  onClick={() => setFilterGame(filterGame === game ? 'all' : game)}
+                >
+                  <span className="msb-game-dot" style={{ background: color }} />
+                  {game}
+                </button>
+              ))}
+            </div>
+            {canScrollRight && (
+              <button className="msb-game-scroll-btn msb-game-scroll-right" onClick={() => scrollFilter(1)}>
+                <ChevronRight size={12} />
+              </button>
+            )}
           </div>
         )}
 
