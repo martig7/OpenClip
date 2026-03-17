@@ -199,11 +199,11 @@ export default function MediaList({
       const isHov = i === hover
 
       // Row background — no globalAlpha changes, always full opacity
-      if (isSel)      { ctx.fillStyle = 'rgba(99,102,241,0.12)'; ctx.fillRect(0, y, w, ROW_H) }
-      else if (isHov) { ctx.fillStyle = '#1f1f1f';               ctx.fillRect(0, y, w, ROW_H) }
+      if (isSel)      { ctx.fillStyle = 'rgba(99,102,241,0.1)'; ctx.fillRect(0, y, w, ROW_H) }
+      else if (isHov) { ctx.fillStyle = '#2a2a2a';               ctx.fillRect(0, y, w, ROW_H) }
 
       // Row border
-      ctx.fillStyle = '#232323'
+      ctx.fillStyle = '#333333'
       ctx.fillRect(0, y + ROW_H - 1, w, 1)
 
       // Dot / selected indicator (center: xDot+11, y+ROW_H/2)

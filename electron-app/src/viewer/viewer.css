@@ -656,7 +656,7 @@ body {
                               background: transparent; border-top: none; border-right: none;
                               border-bottom: none; color: var(--text-muted); }
 .msb-dir-btn:hover          { color: var(--text-primary); background: var(--bg-hover); }
-.msb-list-area   { flex: 1; overflow: hidden; position: relative; }
+.msb-list-area   { flex: 1; overflow: hidden; position: relative; background: var(--bg-primary); }
 .msb-empty       { position: absolute; inset: 0; display: flex; flex-direction: column;
                    align-items: center; justify-content: center; gap: 10px;
                    color: var(--text-muted); font-size: 0.85rem; pointer-events: none; }
