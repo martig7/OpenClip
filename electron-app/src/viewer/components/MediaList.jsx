@@ -5,17 +5,26 @@ const ROW_H    = 33
 const SB_W     = 8
 
 const COL_DOT  = 22
-const COL_DATE = 70
-const COL_SIZE = 52
 
 function getLayout(cssW) {
-  const nameW = Math.max(60, cssW - COL_DOT - COL_DATE - COL_SIZE - SB_W)
+  const MIN_DATE = 70
+  const MIN_SIZE = 52
+  const MAX_DATE = 140
+  const MAX_SIZE = 80
+
+  const extra = Math.max(0, cssW - 280)
+  const colDate = Math.min(MAX_DATE, MIN_DATE + extra * 0.45)
+  const colSize = Math.min(MAX_SIZE, MIN_SIZE + extra * 0.15)
+
+  const nameW = Math.max(60, cssW - COL_DOT - colDate - colSize - SB_W)
   return {
     xDot:  0,
     xName: COL_DOT,
     nameW,
     xDate: COL_DOT + nameW,
-    xSize: COL_DOT + nameW + COL_DATE,
+    colDate,
+    xSize: COL_DOT + nameW + colDate,
+    colSize,
   }
 }
 
@@ -222,11 +231,11 @@ export default function MediaList({
 
       // Date
       ctx.fillStyle = '#555555'; ctx.font = '11px system-ui, sans-serif'
-      truncText(ctx, item.date || '', L.xDate + 8, y + ROW_H / 2, COL_DATE - 12)
+      truncText(ctx, item.date || '', L.xDate + 8, y + ROW_H / 2, L.colDate - 12)
 
       // Size
       ctx.fillStyle = '#555555'; ctx.font = '11px "Courier New", monospace'
-      truncText(ctx, item.size_formatted || '', L.xSize + 8, y + ROW_H / 2, COL_SIZE - 8)
+      truncText(ctx, item.size_formatted || '', L.xSize + 8, y + ROW_H / 2, L.colSize - 8)
     }
     ctx.restore()
 
