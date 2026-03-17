@@ -6,23 +6,23 @@ This folder contains the C source code for the OpenClip OBS Studio plugin.
 
 | File | Lines | Description |
 |------|------:|-------------|
-| `plugin-main.c` | — | Plugin entry point, OBS hooks |
+| `plugin-main.c` | 155 | Plugin entry point, OBS hooks |
 | `http-server.c` | 498 | HTTP server, JSON-RPC dispatcher |
-| `http-server.h` | — | HTTP server declarations |
+| `http-server.h` | 46 | HTTP server declarations |
 | `api-handlers.c` | 136 | Main API dispatch, method routing |
 | `api-handlers.h` | 24 | Public API dispatch declaration |
-| `api-utils.c` | 113 | Shared utilities (JSON helpers, OBS helpers) |
-| `api-utils.h` | 26 | Utility declarations |
-| `recording-handlers.c` | 89 | Recording control (start/stop/status) |
-| `recording-handlers.h` | 16 | Recording handler declarations |
-| `scene-handlers.c` | 362 | Scene management (create/delete/switch/duplicate) |
-| `scene-handlers.h` | 21 | Scene handler declarations |
+| `api-utils.c` | 122 | Shared utilities (JSON helpers, OBS helpers) |
+| `api-utils.h` | 30 | Utility declarations |
+| `recording-handlers.c` | 69 | Recording control (start/stop/status) |
+| `recording-handlers.h` | 18 | Recording handler declarations |
+| `scene-handlers.c` | 366 | Scene management (create/delete/switch/duplicate) |
+| `scene-handlers.h` | 23 | Scene handler declarations |
 | `source-handlers.c` | 173 | Source management (add/remove/transform) |
-| `source-handlers.h` | 11 | Source handler declarations |
-| `audio-handlers.c` | 191 | Audio routing and track names |
-| `audio-handlers.h` | 13 | Audio handler declarations |
-| `video-handlers.c` | 25 | Video settings (resolution/FPS) |
-| `video-handlers.h` | 9 | Video handler declarations |
+| `source-handlers.h` | 17 | Source handler declarations |
+| `audio-handlers.c` | 194 | Audio routing and track names |
+| `audio-handlers.h` | 21 | Audio handler declarations |
+| `video-handlers.c` | 27 | Video settings (resolution/FPS) |
+| `video-handlers.h` | 15 | Video handler declarations |
 
 ## Architecture
 

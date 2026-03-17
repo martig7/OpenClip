@@ -11,18 +11,11 @@ Automatic recording manager for OBS Studio. Detects when your configured games a
 
 1. Download the latest installer (`Open Clip Setup x.x.x.exe`) from [Releases](https://github.com/martig7/OpenClip/releases).
 2. Run the installer. Open Clip will be added to your Start Menu and Desktop.
-3. Launch **Open Clip** and complete the one-time setup:
-   - Set your OBS recording folder and organized destination folder under **Settings → Recording Paths**.
-   - Add your games under the **Games** tab (pick the process name or window title).
-   - Add the OBS Lua script to OBS (see below).
-
-## OBS Lua Script Setup (one-time)
-
-The app communicates with OBS via a small Lua script that auto-starts/stops recording when a game is detected.
-
-1. In the app, go to **Settings → OBS Script Setup** and copy the script path shown there.
-2. Open OBS → **Tools → Scripts → "+"** and select that file.
-3. The path is pre-filled automatically — click **Close**. Done.
+3. Launch **Open Clip** — the setup wizard runs automatically on first launch and walks you through:
+   - Detecting your OBS install location
+   - Setting your OBS recording folder
+   - Installing the OBS plugin (one click — no manual file copying)
+   - Setting the organized destination folder
 
 ## Features
 
