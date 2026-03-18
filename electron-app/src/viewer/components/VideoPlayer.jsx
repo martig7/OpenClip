@@ -322,6 +322,13 @@ function VideoPlayer({
     const end = Math.min(duration, currentTime + half)
     setClipStart(start)
     setClipEnd(end)
+    
+    // Zoom to fit region after component mounts
+    setTimeout(() => {
+      if (zoomTimelineRef.current) {
+        zoomTimelineRef.current.zoomFit()
+      }
+    }, 50)
   }, [currentTime, duration])
 
   const exitClipMode = useCallback(() => {
@@ -549,13 +556,15 @@ function VideoPlayer({
 
       {clipMode && (
     <div className="clip-creation-container w-full flex flex-col z-50 shrink-0 border-t border-[var(--border)] relative">
-      <button 
-        className="zoom-timeline-toggle-btn"
-        onClick={() => setIsZoomTimelineExpanded(!isZoomTimelineExpanded)}
-      >
-        <span className="text-xs font-semibold">Zoom Timeline</span>
-        {isZoomTimelineExpanded ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-      </button>
+      {audioTracks.length > 0 && (
+        <button 
+          className="zoom-timeline-toggle-btn"
+          onClick={() => setIsZoomTimelineExpanded(!isZoomTimelineExpanded)}
+        >
+          <span className="text-xs font-semibold">Tracks</span>
+          {isZoomTimelineExpanded ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+        </button>
+      )}
       <ZoomTimeline
         ref={zoomTimelineRef}
         currentTime={currentTime}

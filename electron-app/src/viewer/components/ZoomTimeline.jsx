@@ -249,7 +249,7 @@ const ZoomTimeline = forwardRef(function ZoomTimeline({
   const miniMapViewWidth = (visibleDuration / duration) * 100
 
   return (
-    <div className={`zoom-timeline-wrapper ${isExpanded ? 'expanded' : 'collapsed'}`}>
+    <div className="zoom-timeline-wrapper">
       {/* Time ruler */}
       <div className="zoom-ruler">
         {ticks.map((tick, i) => (
@@ -355,24 +355,26 @@ const ZoomTimeline = forwardRef(function ZoomTimeline({
 
       {/* Audio waveform tracks */}
       {audioTracks.length > 0 && (
-        <div className="audio-waveform-panel">
-          {audioTracks.map((track, i) => (
-            <AudioWaveformTrack
-              key={i}
-              peaks={waveforms[i] || null}
-              duration={duration}
-              viewStart={actualViewStart}
-              visibleDuration={visibleDuration}
-              isSelected={selectedTracks.includes(i)}
-              onClick={() => {
-                if (!isCreatingClip) {
-                  onTrackToggle?.(i)
-                }
-              }}
-              label={track.title || `Track ${i + 1}`}
-              detail={`${track.codec_name} · ${track.channels}ch`}
-            />
-          ))}
+        <div className={`audio-waveform-panel-wrapper ${isExpanded ? 'expanded' : 'collapsed'}`}>
+          <div className="audio-waveform-panel flex-1 min-h-0 pt-2 flex flex-col gap-[6px] overflow-y-auto">
+            {audioTracks.map((track, i) => (
+              <AudioWaveformTrack
+                key={i}
+                peaks={waveforms[i] || null}
+                duration={duration}
+                viewStart={actualViewStart}
+                visibleDuration={visibleDuration}
+                isSelected={selectedTracks.includes(i)}
+                onClick={() => {
+                  if (!isCreatingClip) {
+                    onTrackToggle?.(i)
+                  }
+                }}
+                label={track.title || `Track ${i + 1}`}
+                detail={`${track.codec_name} · ${track.channels}ch`}
+              />
+            ))}
+          </div>
         </div>
       )}
     </div>

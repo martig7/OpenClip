@@ -138,13 +138,13 @@ export default function VideoPlayerInfoBar({
               
               <div className="video-info-title-col">
                 <div className="video-info-title-row gap-2">
-                  <button className="btn-action-more !w-[36px] !h-[36px] font-medium shrink-0" onClick={() => { if (!isZoomTimelineExpanded) setIsZoomTimelineExpanded(true); onZoomOut(); }}>
+                  <button className="btn-action-more !w-[36px] !h-[36px] font-medium shrink-0" onClick={() => { onZoomOut(); }}>
                     <Minus size={20} />
                   </button>
-                  <button className="btn-action-more !w-[36px] !h-[36px] font-medium shrink-0" onClick={() => { if (!isZoomTimelineExpanded) setIsZoomTimelineExpanded(true); onZoomIn(); }}>
+                  <button className="btn-action-more !w-[36px] !h-[36px] font-medium shrink-0" onClick={() => { onZoomIn(); }}>
                     <Plus size={20} />
                   </button>
-                  <button className="btn-action-more !w-[36px] !h-[36px] font-medium shrink-0" title="Fit Region" onClick={() => { if (!isZoomTimelineExpanded) setIsZoomTimelineExpanded(true); onZoomFit(); }}>
+                  <button className="btn-action-more !w-[36px] !h-[36px] font-medium shrink-0" title="Fit Region" onClick={() => { onZoomFit(); }}>
                     <Maximize size={18} />
                   </button>
                 </div>

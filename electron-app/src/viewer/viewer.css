@@ -1129,18 +1129,18 @@ body {
 /* Zoom Timeline            */
 /* ======================== */
 .zoom-timeline-wrapper {
-  @apply bg-[#111] overflow-hidden transition-all duration-300 relative border-b border-[#333] flex flex-col;
+  @apply bg-[#111] relative border-b border-[#333] flex flex-col flex-shrink-0;
 }
-.zoom-timeline-wrapper.expanded {
+.audio-waveform-panel-wrapper {
+  @apply overflow-hidden transition-all duration-300 flex flex-col;
+}
+.audio-waveform-panel-wrapper.expanded {
   max-height: 60vh;
   opacity: 1;
 }
-.zoom-timeline-wrapper.collapsed {
+.audio-waveform-panel-wrapper.collapsed {
   max-height: 0;
   opacity: 0;
-  border-bottom: none;
-  padding-top: 0;
-  padding-bottom: 0;
 }
 
 /* Mini-map */
