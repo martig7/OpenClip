@@ -248,15 +248,22 @@ describe('organizeRecordings', () => {
   })
 
   it('all onProgress events carry the correct gameName', async () => {
-    const { organizeRecordings } = await import('../../electron/fileManager.js')
-    const src = path.join(obsDir, 'video.mp4')
-    fs.writeFileSync(src, Buffer.alloc(1024))
+    vi.useFakeTimers()
+    try {
+      const { organizeRecordings } = await import('../../electron/fileManager.js')
+      const src = path.join(obsDir, 'video.mp4')
+      fs.writeFileSync(src, Buffer.alloc(1024))
 
-    const events = []
-    await organizeRecordings(store, 'SpecificGame', (p) => events.push(p))
+      const events = []
+      const promise = organizeRecordings(store, 'SpecificGame', (p) => events.push(p))
+      await vi.runAllTimersAsync()
+      await promise
 
-    expect(events.length).toBeGreaterThan(0)
-    expect(events.every((e) => e.gameName === 'SpecificGame')).toBe(true)
+      expect(events.length).toBeGreaterThan(0)
+      expect(events.every((e) => e.gameName === 'SpecificGame')).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('emits complete even when no files are found in obsDir', async () => {
