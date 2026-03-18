@@ -188,6 +188,8 @@ const ZoomTimeline = forwardRef(function ZoomTimeline({
     duration,
   ])
 
+  const [timelineWidth, setTimelineWidth] = useState(0)
+
   // Scroll to zoom
   const handleWheel = useCallback(
     (e) => {
@@ -216,8 +218,15 @@ const ZoomTimeline = forwardRef(function ZoomTimeline({
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
+    const ro = new ResizeObserver((entries) => {
+      setTimelineWidth(entries[0].contentRect.width)
+    })
+    ro.observe(el)
     el.addEventListener('wheel', handleWheel, { passive: false })
-    return () => el.removeEventListener('wheel', handleWheel)
+    return () => {
+      el.removeEventListener('wheel', handleWheel)
+      ro.disconnect()
+    }
   }, [handleWheel])
 
   // Zoom controls
@@ -250,6 +259,23 @@ const ZoomTimeline = forwardRef(function ZoomTimeline({
 
   return (
     <div className="zoom-timeline-wrapper">
+      {/* Background grid lines stretching across everything */}
+      <div className="absolute inset-x-0 top-[28px] bottom-0 pointer-events-none z-[8] overflow-hidden">
+        {ticks
+          .filter((t) => t.isMajor)
+          .map((tick, i) => (
+            <div key={i} className="absolute top-0 w-px h-full" style={{ left: `${tick.x}%`, background: 'rgba(255, 255, 255, 0.04)' }} />
+          ))}
+
+        {/* Playhead */}
+        {playheadX >= -1 && playheadX <= 101 && (
+          <div className="zoom-playhead" style={{ left: `${playheadX}%` }}>
+            <div className="playhead-head" />
+            <div className="playhead-line" />
+          </div>
+        )}
+      </div>
+
       {/* Time ruler */}
       <div className="zoom-ruler">
         {ticks.map((tick, i) => (
@@ -278,13 +304,6 @@ const ZoomTimeline = forwardRef(function ZoomTimeline({
         }}
         onContextMenu={(e) => e.preventDefault()}
       >
-        {/* Background grid lines */}
-        {ticks
-          .filter((t) => t.isMajor)
-          .map((tick, i) => (
-            <div key={i} className="zoom-grid-line" style={{ left: `${tick.x}%` }} />
-          ))}
-
         {/* Clip region */}
         <div
           className="zoom-clip-region"
@@ -343,14 +362,6 @@ const ZoomTimeline = forwardRef(function ZoomTimeline({
             />
           )
         })}
-
-        {/* Playhead */}
-        {playheadX >= -1 && playheadX <= 101 && (
-          <div className="zoom-playhead" style={{ left: `${playheadX}%` }}>
-            <div className="playhead-head" />
-            <div className="playhead-line" />
-          </div>
-        )}
       </div>
 
       {/* Audio waveform tracks */}
@@ -364,6 +375,9 @@ const ZoomTimeline = forwardRef(function ZoomTimeline({
                 duration={duration}
                 viewStart={actualViewStart}
                 visibleDuration={visibleDuration}
+                masterWidth={timelineWidth}
+                clipStart={clipStart}
+                clipEnd={clipEnd}
                 isSelected={selectedTracks.includes(i)}
                 onClick={() => {
                   if (!isCreatingClip) {

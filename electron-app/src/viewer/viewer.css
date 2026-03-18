@@ -463,20 +463,17 @@ body {
   border-radius: 4px;
 }
 .audio-waveform-track {
-  @apply flex items-center gap-[10px] px-[10px] py-[6px] rounded-lg bg-[var(--bg-secondary)] border-2 border-transparent cursor-pointer overflow-hidden flex-shrink-0;
+  @apply relative flex items-center justify-start rounded-lg bg-[var(--bg-secondary)] cursor-pointer overflow-hidden flex-shrink-0;
+  height: 52px;
   transition:
-    border-color 0.15s,
     background 0.12s;
 }
 .audio-waveform-track:hover {
   background: var(--bg-hover);
 }
-.audio-waveform-track.selected {
-  border-color: var(--accent);
-  background: var(--accent-dim);
-}
 .audio-waveform-info {
-  @apply flex flex-col gap-[2px] min-w-[90px] max-w-[120px] flex-shrink-0;
+  @apply flex flex-col gap-[1px] z-10 px-[10px] pointer-events-none;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.8), -1px -1px 2px rgba(0,0,0,0.8);
 }
 .track-name {
   @apply text-[var(--text-primary)] flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap;
@@ -494,7 +491,7 @@ body {
   @apply text-[0.7rem];
 }
 .audio-waveform-canvas {
-  @apply flex-1 min-w-0 h-12 block rounded;
+  @apply absolute top-0 left-0 h-[52px] pointer-events-none z-0 block;
 }
 
 /* Video Info Bar */
@@ -1221,13 +1218,14 @@ body {
   @apply absolute top-0 w-[14px] h-full cursor-ew-resize z-10 flex items-center justify-center;
 }
 .zoom-clip-handle.start {
+  transform: translateX(0);
+  background: var(--accent);
+  border-radius: 0 4px 4px 0;
+}
+.zoom-clip-handle.end {
   transform: translateX(-100%);
   background: var(--accent);
   border-radius: 4px 0 0 4px;
-}
-.zoom-clip-handle.end {
-  background: var(--accent);
-  border-radius: 0 4px 4px 0;
 }
 .zoom-clip-handle:hover {
   background: var(--accent-hover);
