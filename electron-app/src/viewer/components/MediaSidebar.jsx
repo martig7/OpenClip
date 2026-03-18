@@ -26,7 +26,7 @@ function MediaSidebar({ items, selectedItem, onSelect, title, emptyMessage }) {
   const handleMouseMove = useCallback((e) => {
     if (!isDraggingRef.current) return
     const delta = e.clientX - startXRef.current
-    const newWidth = Math.max(240, Math.min(800, prevWidthRef.current + delta))
+    const newWidth = Math.max(280, Math.min(800, prevWidthRef.current + delta))
     setSidebarWidth(newWidth)
   }, [])
 
