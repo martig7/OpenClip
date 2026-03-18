@@ -93,6 +93,10 @@
         "to": "ffmpeg/ffprobe.exe"
       },
       {
+        "from": "resources/audiowaveform",
+        "to": "audiowaveform"
+      },
+      {
         "from": "resources/defaults",
         "to": "defaults",
         "filter": [

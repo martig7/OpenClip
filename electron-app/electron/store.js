@@ -41,6 +41,10 @@ const managerSettingsDefaults = {
     delete_recording_after_clips: false,
   },
   obs_websocket: { host: 'localhost', port: 4455, password: '' },
+  waveform_settings: {
+    enabled: true,
+    resolution: 'medium',
+  },
 }
 
 function readJson(filePath, defaults) {
@@ -88,6 +92,10 @@ function msToElectronSettings(ms, obsRecordingPath, electronData) {
       port: ms.obs_websocket?.port ?? 4455,
       password: ms.obs_websocket?.password || '',
     },
+    waveform: {
+      enabled: ms.waveform_settings?.enabled !== false,
+      resolution: ms.waveform_settings?.resolution || 'medium',
+    },
   }
 }
 
@@ -125,6 +133,13 @@ function electronSettingsToMs(ms, electronSettings) {
       host: electronSettings.obsWebSocket.host || 'localhost',
       port: electronSettings.obsWebSocket.port ?? 4455,
       password: electronSettings.obsWebSocket.password || '',
+    }
+  }
+  if (electronSettings.waveform !== undefined) {
+    updated.waveform_settings = {
+      ...(ms.waveform_settings || {}),
+      enabled: electronSettings.waveform.enabled !== false,
+      resolution: electronSettings.waveform.resolution || 'medium',
     }
   }
   return updated

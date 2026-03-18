@@ -13,6 +13,8 @@ const { MIME_TYPES, formatFileSize, FFMPEG_PATH, FFPROBE_PATH, CODEC_MAP } = req
 const service = require('./recordingService')
 const { loadMarkers, saveMarkers } = require('./markerService')
 const { getVideoDuration, getDiskUsage } = require('./videoMetadata')
+const waveformCache = require('./waveformCache')
+const waveformQueue = require('./waveformQueue')
 
 let store // set in startApiServer
 
@@ -53,6 +55,59 @@ function readBody(req) {
 function json(res, data, status = 200) {
   res.writeHead(status, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
   res.end(JSON.stringify(data))
+}
+
+async function readWaveformFromCache(datFilePath, trackIndex = 0) {
+  const buffer = fs.readFileSync(datFilePath)
+
+  const version = buffer.readInt32LE(0)
+
+  let offset = 4
+  let flags, sampleRate, samplesPerPixel, length, channels
+
+  if (version === 1) {
+    flags = buffer.readUInt32LE(4)
+    sampleRate = buffer.readInt32LE(8)
+    samplesPerPixel = buffer.readInt32LE(12)
+    length = buffer.readUInt32LE(16)
+    channels = 1
+    offset = 20
+  } else if (version === 2) {
+    flags = buffer.readUInt32LE(4)
+    sampleRate = buffer.readInt32LE(8)
+    samplesPerPixel = buffer.readInt32LE(12)
+    length = buffer.readUInt32LE(16)
+    channels = buffer.readInt32LE(20)
+    offset = 24
+  } else {
+    throw new Error(`Unsupported waveform format version: ${version}`)
+  }
+
+  const is8Bit = (flags & 1) === 1
+
+  const peaks = []
+  for (let i = 0; i < length; i++) {
+    if (trackIndex < channels) {
+      const channelOffset = trackIndex * (is8Bit ? 1 : 2)
+      let minVal, maxVal
+
+      if (is8Bit) {
+        minVal = buffer.readInt8(offset + i * 2 * channels + channelOffset)
+        maxVal = buffer.readInt8(offset + i * 2 * channels + channelOffset + 1)
+      } else {
+        minVal = buffer.readInt16LE(offset + i * 2 * channels * 2 + channelOffset * 2)
+        maxVal = buffer.readInt16LE(
+          offset + i * 2 * channels * 2 + channelOffset * 2 + (is8Bit ? 1 : 2)
+        )
+      }
+
+      const amplitude = Math.max(Math.abs(minVal), Math.abs(maxVal))
+      const normalized = is8Bit ? (amplitude + 128) / 255 : (amplitude + 32768) / 65535
+      peaks.push(Math.min(1, Math.max(0, normalized)))
+    }
+  }
+
+  return peaks
 }
 
 function startApiServer(appStore) {
@@ -410,10 +465,22 @@ function startApiServer(appStore) {
       if (pathname === '/api/video/waveform' && req.method === 'GET') {
         const filePath = query.path
         const rawTrack = parseInt(query.track, 10)
+        const zoomLevel = parseInt(query.zoom, 10) || waveformCache.ZOOM_LEVEL_DEFAULT
         if (isNaN(rawTrack) || rawTrack < 0) return json(res, { error: 'Invalid track index' }, 400)
         const trackIndex = rawTrack
         if (!filePath || !isAllowedPath(filePath)) return json(res, { error: 'Forbidden' }, 403)
         if (!fs.existsSync(filePath)) return json(res, { error: 'File not found' }, 404)
+
+        const cachedWaveformPath = waveformCache.getWaveformPath(filePath, zoomLevel)
+        if (fs.existsSync(cachedWaveformPath)) {
+          try {
+            const peaks = await readWaveformFromCache(cachedWaveformPath, trackIndex)
+            const duration = await getVideoDuration(filePath)
+            return json(res, { peaks, duration, fromCache: true })
+          } catch {
+            // Fall through to ffmpeg if cache read fails
+          }
+        }
 
         return new Promise((resolve) => {
           getVideoDuration(filePath).then((duration) => {
@@ -452,7 +519,7 @@ function startApiServer(appStore) {
             const clearKillTimer = () => clearTimeout(killTimer)
             ffmpegProc.on('close', clearKillTimer)
             ffmpegProc.on('error', clearKillTimer)
-            ffmpegProc.stderr.resume() // drain stderr so the pipe buffer never fills
+            ffmpegProc.stderr.resume()
 
             const chunks = []
             ffmpegProc.stdout.on('data', (chunk) => chunks.push(chunk))
@@ -488,6 +555,82 @@ function startApiServer(appStore) {
             ffmpegProc.on('error', () => resolve(json(res, { peaks: [] })))
           })
         })
+      }
+
+      // GET /api/waveform/status?path=...&resolution=medium
+      if (pathname === '/api/waveform/status' && req.method === 'GET') {
+        const filePath = query.path
+        const resolution = query.resolution || 'medium'
+        if (!filePath) return json(res, { error: 'Missing path' }, 400)
+        if (!isAllowedPath(filePath)) return json(res, { error: 'Forbidden' }, 403)
+
+        const status = waveformCache.getWaveformStatus(filePath, resolution)
+        const queueStatus = waveformQueue.getStatus()
+        const queueJob = queueStatus.jobs.find(
+          (j) => j.videoPath.toLowerCase() === filePath.toLowerCase()
+        )
+
+        return json(res, {
+          ...status,
+          queueJob: queueJob || null,
+        })
+      }
+
+      // GET /api/waveform/cache-size
+      if (pathname === '/api/waveform/cache-size' && req.method === 'GET') {
+        const size = await waveformCache.getCacheSize()
+        return json(res, {
+          size,
+          formatted: waveformCache.formatBytes(size),
+        })
+      }
+
+      // POST /api/waveform/clear-cache
+      if (pathname === '/api/waveform/clear-cache' && req.method === 'POST') {
+        waveformCache.clearCache()
+        return json(res, { success: true })
+      }
+
+      // GET /api/waveform/queue-status
+      if (pathname === '/api/waveform/queue-status' && req.method === 'GET') {
+        return json(res, waveformQueue.getStatus())
+      }
+
+      // POST /api/waveform/generate?path=...&resolution=medium
+      if (pathname === '/api/waveform/generate' && req.method === 'POST') {
+        const filePath = query.path
+        const resolution = query.resolution || 'medium'
+        if (!filePath) return json(res, { error: 'Missing path' }, 400)
+        if (!isAllowedPath(filePath)) return json(res, { error: 'Forbidden' }, 403)
+
+        const status = waveformCache.getWaveformStatus(filePath, resolution)
+        if (status.isComplete) {
+          return json(res, {
+            success: true,
+            alreadyComplete: true,
+            status,
+          })
+        }
+
+        const result = waveformQueue.enqueue(filePath, { resolution })
+        return json(res, {
+          success: result.success,
+          reason: result.reason,
+          jobId: result.jobId,
+        })
+      }
+
+      // POST /api/waveform/cancel?jobId=...
+      if (pathname === '/api/waveform/cancel' && req.method === 'POST') {
+        const jobId = query.jobId
+        if (!jobId) return json(res, { error: 'Missing jobId' }, 400)
+        return json(res, waveformQueue.cancel(jobId))
+      }
+
+      // GET /api/audiowaveform-check
+      if (pathname === '/api/audiowaveform-check' && req.method === 'GET') {
+        const available = await waveformCache.checkAudiowaveformAvailable()
+        return json(res, { available })
       }
 
       // GET /api/ffmpeg-check

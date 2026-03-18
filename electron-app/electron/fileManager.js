@@ -5,6 +5,7 @@ const { promisify } = require('util')
 const { isVideoFile, CODEC_MAP, FFMPEG_PATH, FFPROBE_PATH } = require('./constants')
 const { pathToFileURL } = require('url')
 const service = require('./recordingService')
+const waveformQueue = require('./waveformQueue')
 
 const execFileAsync = promisify(execFile)
 
@@ -298,6 +299,15 @@ async function organizeRecordings(store, gameName, onProgress = () => {}) {
         try {
           fs.unlinkSync(movedTo)
         } catch {}
+      }
+    }
+
+    // Post-move: generate waveforms if enabled
+    if (movedTo && autoClipSettings?.deleteFullRecording !== true) {
+      const waveformSettings = store.get('settings')?.waveform
+      if (waveformSettings?.enabled !== false) {
+        const resolution = waveformSettings?.resolution || 'medium'
+        waveformQueue.enqueue(movedTo, { resolution })
       }
     }
   }

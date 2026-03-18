@@ -43,4 +43,45 @@ export const handlers = {
 
   reencode: (result = {}) =>
     http.post('/api/reencode', () => HttpResponse.json({ success: true, ...result })),
+
+  waveformStatus: (data = {}) =>
+    http.get('/api/waveform/status', ({ request }) => {
+      const url = new URL(request.url)
+      const path = url.searchParams.get('path')
+      return HttpResponse.json({
+        videoPath: path,
+        resolution: url.searchParams.get('resolution') || 'medium',
+        zoomLevels: [256, 512],
+        existing: [],
+        missing: [256, 512],
+        isComplete: false,
+        queueJob: null,
+        ...data,
+      })
+    }),
+
+  waveformGenerate: (result = {}) =>
+    http.post('/api/waveform/generate', () =>
+      HttpResponse.json({
+        success: true,
+        jobId: 'wf_test_123',
+        ...result,
+      })
+    ),
+
+  waveformQueueStatus: (data = {}) =>
+    http.get('/api/waveform/queue-status', () =>
+      HttpResponse.json({
+        queueLength: 0,
+        activeJobs: 0,
+        isProcessing: false,
+        jobs: [],
+        ...data,
+      })
+    ),
+
+  waveformCacheSize: (size = 0) =>
+    http.get('/api/waveform/cache-size', () =>
+      HttpResponse.json({ size, formatted: `${(size / 1024 / 1024).toFixed(1)} MB` })
+    ),
 }

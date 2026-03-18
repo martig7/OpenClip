@@ -10,10 +10,12 @@ import {
   CheckCircle,
   AlertCircle,
   Loader,
+  HardDrive,
 } from 'lucide-react'
 import api from '../api'
 import OnboardingModal from '../components/OnboardingModal'
 import { HotkeyCapture } from '../components/OnboardingSteps'
+import { apiFetch } from '../viewer/apiBase'
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState(null)
@@ -27,11 +29,14 @@ export default function SettingsPage() {
   const [pluginBusy, setPluginBusy] = useState(false)
   const [pluginMsg, setPluginMsg] = useState(null) // { ok: bool, text: string }
   const [obsInstallPath, setObsInstallPath] = useState('')
+  const [waveformCacheSize, setWaveformCacheSize] = useState(null)
+  const [clearingCache, setClearingCache] = useState(false)
 
   useEffect(() => {
     loadSettings()
     api.isOBSPluginRegistered().then(setPluginInstalled)
     api.getOBSInstallPath().then((p) => setObsInstallPath(p || ''))
+    loadWaveformCacheSize()
   }, [])
 
   useEffect(() => {
@@ -143,6 +148,28 @@ export default function SettingsPage() {
 
   async function installUpdate() {
     await api.installUpdate?.()
+  }
+
+  async function loadWaveformCacheSize() {
+    try {
+      const response = await apiFetch('/api/waveform/cache-size')
+      const data = await response.json()
+      setWaveformCacheSize(data.size)
+    } catch {
+      setWaveformCacheSize(null)
+    }
+  }
+
+  async function clearWaveformCache() {
+    setClearingCache(true)
+    try {
+      await apiFetch('/api/waveform/clear-cache', { method: 'POST' })
+      setWaveformCacheSize(0)
+      showToast('Waveform cache cleared')
+    } catch {
+      showToast('Failed to clear cache')
+    }
+    setClearingCache(false)
   }
 
   if (isLoading) {
@@ -270,6 +297,67 @@ export default function SettingsPage() {
               className={`toggle ${settings.organizeRemux !== false ? 'on' : ''}`}
               onClick={() => updateSetting('organizeRemux', settings.organizeRemux === false)}
             />
+          </div>
+        </div>
+
+        {/* Waveform Cache */}
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-title">Waveform Cache</div>
+
+          <div className="toggle-row" style={{ marginTop: 8 }}>
+            <div>
+              <div className="toggle-label">Generate Waveforms on Processing</div>
+              <div className="toggle-desc">
+                Pre-compute audio waveforms when organizing recordings
+              </div>
+            </div>
+            <button
+              className={`toggle ${settings.waveform?.enabled !== false ? 'on' : ''}`}
+              onClick={() => updateSetting('waveform.enabled', settings.waveform?.enabled === false)}
+            />
+          </div>
+
+          {settings.waveform?.enabled !== false && (
+            <>
+              <div className="form-group" style={{ marginTop: 12 }}>
+                <label className="form-label">Resolution</label>
+                <div className="toggle-desc" style={{ marginBottom: 6 }}>
+                  Higher resolution uses more storage but provides crisper waveforms when zoomed
+                </div>
+                <select
+                  className="form-input"
+                  value={settings.waveform?.resolution || 'medium'}
+                  onChange={(e) => updateSetting('waveform.resolution', e.target.value)}
+                >
+                  <option value="low">Low (256 zoom) — ~0.2 MB per recording</option>
+                  <option value="medium">Medium (256 + 512 zoom) — ~0.4 MB per recording</option>
+                  <option value="high">High (256 + 512 + 1024 zoom) — ~0.5 MB per recording</option>
+                </select>
+              </div>
+            </>
+          )}
+
+          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={loadWaveformCacheSize}
+              title="Refresh cache size"
+            >
+              <HardDrive size={13} />
+              {waveformCacheSize !== null
+                ? `Cache: ${formatBytes(waveformCacheSize)}`
+                : 'Loading…'}
+            </button>
+            {waveformCacheSize > 0 && (
+              <button
+                className="btn btn-danger btn-sm"
+                onClick={clearWaveformCache}
+                disabled={clearingCache}
+              >
+                <Trash2 size={13} />
+                {clearingCache ? 'Clearing…' : 'Clear Cache'}
+              </button>
+            )}
           </div>
         </div>
 
@@ -602,4 +690,13 @@ export default function SettingsPage() {
       />
     </>
   )
+}
+
+function formatBytes(bytes) {
+  if (bytes === 0) return '0 B'
+  for (const unit of ['B', 'KB', 'MB', 'GB']) {
+    if (bytes < 1024) return `${bytes.toFixed(1)} ${unit}`
+    bytes /= 1024
+  }
+  return `${bytes.toFixed(1)} TB`
 }
