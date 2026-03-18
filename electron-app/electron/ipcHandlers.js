@@ -36,6 +36,7 @@ const {
 } = require('./obsPlugin')
 const { setupAutoUpdater, setupDevAutoUpdater, registerUpdateHandlers } = require('./autoUpdater')
 const { RUNTIME_DIR, STATE_FILE, ICONS_DIR, PLUGIN_DLL_NAME } = require('./constants')
+const { setWaveformResolution } = require('./waveformPreCache')
 
 // Short-lived caches for native Win32 queries.
 const _windowsListCache = { data: null, ts: 0 }
@@ -98,7 +99,16 @@ function registerIpcHandlers(store, appState) {
 
   // --- Settings ---
   ipcMain.handle('store:get', (_event, key) => store.get(key))
-  ipcMain.handle('store:set', (_event, key, value) => store.set(key, value))
+  ipcMain.handle('store:set', (_event, key, value) => {
+    const result = store.set(key, value)
+    // Update waveform resolution when settings change
+    if (key === 'settings' && value?.waveformResolution) {
+      setWaveformResolution(value.waveformResolution)
+    } else if (key === 'settings.waveformResolution') {
+      setWaveformResolution(value)
+    }
+    return result
+  })
 
   // --- Games ---
   ipcMain.handle('games:list', () => store.get('games'))
@@ -638,7 +648,7 @@ function registerIpcHandlers(store, appState) {
         event.sender.send('recordings:organize-progress', { stage, label })
       } catch {}
     }
-    return organizeSpecificRecording(store, filePath, gameName, { moveOnly, onProgress })
+    return organizeSpecificRecording(store, filePath, gameName, { moveOnly, onProgress, forceReorganize: true })
   })
 
   // --- Auto-updater IPC handlers ---

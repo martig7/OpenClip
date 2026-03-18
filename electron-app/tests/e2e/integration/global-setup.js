@@ -49,6 +49,7 @@ module.exports = async function globalSetup() {
   process.env.OBS_PORT = String(obs.wsSettings.port)
   process.env.OBS_RECORDING_PATH = obsRecordingsDir
   process.env.OPENCLIP_DEST_PATH = openclipDestDir
+  process.env.OPENCLIP_INTEGRATION_TEST = 'true'
 
   console.log(
     `\n[integration] OBS WebSocket → ws://${obs.wsSettings.host}:${obs.wsSettings.port}` +

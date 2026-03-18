@@ -5,6 +5,7 @@ const { promisify } = require('util')
 const { isVideoFile, CODEC_MAP, FFMPEG_PATH, FFPROBE_PATH } = require('./constants')
 const { pathToFileURL } = require('url')
 const service = require('./recordingService')
+const { preCacheWaveform, setWaveformResolution } = require('./waveformPreCache')
 
 const execFileAsync = promisify(execFile)
 
@@ -211,6 +212,7 @@ async function organizeRecordings(store, gameName, onProgress = () => {}) {
     const dest = path.join(targetDir, newName)
 
     let movedTo = null
+    let preCachePromise = null
     if (!moveOnly && ext.toLowerCase() !== '.mp4') {
       onProgress({ phase: 'recording', stage: 'remuxing', label: 'Remuxing to MP4…', gameName })
       // Mark both paths as in-progress so scans skip them during remux
@@ -277,12 +279,20 @@ async function organizeRecordings(store, gameName, onProgress = () => {}) {
       } finally {
         service.unmarkRemuxing(src, dest)
         service.invalidateRecordingsCache()
+        // Pre-cache waveform for the moved file
+        if (movedTo) {
+          preCachePromise = preCacheWaveform(movedTo)
+          preCachePromise.catch(console.error)
+        }
       }
     } else {
       onProgress({ phase: 'recording', stage: 'moving', label: 'Moving file…', gameName })
       await moveFileSafe(src, dest)
       service.invalidateRecordingsCache()
       movedTo = dest
+      // Pre-cache waveform for the moved file
+      preCachePromise = preCacheWaveform(dest)
+      preCachePromise.catch(console.error)
     }
 
     // Post-move: clean up processed markers and optionally delete the organized recording
@@ -295,6 +305,12 @@ async function organizeRecordings(store, gameName, onProgress = () => {}) {
         store.set('clipMarkers', remaining)
       }
       if (autoClipSettings.deleteFullRecording && movedTo) {
+        // Await the in-progress waveform pre-cache (started above) before deleting the file
+        try {
+          await (preCachePromise || preCacheWaveform(movedTo))
+        } catch (error) {
+          console.error('Waveform pre-caching failed before delete:', error)
+        }
         try {
           fs.unlinkSync(movedTo)
         } catch {}
@@ -465,6 +481,7 @@ async function finalizeDirectRecording(store, gameName, recordingDir, onProgress
     const dest = path.join(recordingDir, newName)
 
     let movedTo = null
+    let preCachePromise = null
     if (ext.toLowerCase() !== '.mp4') {
       onProgress({ phase: 'recording', stage: 'remuxing', label: 'Remuxing to MP4…', gameName })
       service.markRemuxing(src, dest)
@@ -527,12 +544,20 @@ async function finalizeDirectRecording(store, gameName, recordingDir, onProgress
       } finally {
         service.unmarkRemuxing(src, dest)
         service.invalidateRecordingsCache()
+        // Pre-cache waveform for the finalized file
+        if (movedTo) {
+          preCachePromise = preCacheWaveform(movedTo)
+          preCachePromise.catch(console.error)
+        }
       }
     } else {
       onProgress({ phase: 'recording', stage: 'moving', label: 'Renaming file…', gameName })
       await moveFileSafe(src, dest)
       service.invalidateRecordingsCache()
       movedTo = dest
+      // Pre-cache waveform for the finalized file
+      preCachePromise = preCacheWaveform(dest)
+      preCachePromise.catch(console.error)
     }
 
     // Post-rename: clean up processed markers and optionally delete the organized recording
@@ -545,6 +570,12 @@ async function finalizeDirectRecording(store, gameName, recordingDir, onProgress
         store.set('clipMarkers', remaining)
       }
       if (autoClipSettings.deleteFullRecording && movedTo) {
+        // Await the in-progress waveform pre-cache (started above) before deleting the file
+        try {
+          await (preCachePromise || preCacheWaveform(movedTo))
+        } catch (error) {
+          console.error('Waveform pre-caching failed before delete:', error)
+        }
         try {
           fs.unlinkSync(movedTo)
         } catch {}
@@ -557,6 +588,14 @@ async function finalizeDirectRecording(store, gameName, recordingDir, onProgress
 
 function setupFileManager(ipcMain, store) {
   service.init(store)
+  
+  // Initialize waveform resolution from settings
+  const settings = store.get('settings')
+  if (settings?.waveformResolution) {
+    setWaveformResolution(settings.waveformResolution)
+  }
+  
+
 
   ipcMain.handle('recordings:list', () => {
     return service.scanRecordings()
@@ -628,7 +667,7 @@ function setupFileManager(ipcMain, store) {
 }
 
 async function organizeSpecificRecording(store, filePath, gameName, opts = {}) {
-  const { moveOnly = false, onProgress = () => {} } = opts
+  const { moveOnly = false, onProgress = () => {}, forceReorganize = false } = opts
 
   const destPath = store.get('settings.destinationPath')
   if (!destPath) throw new Error('No destination path configured')
@@ -637,7 +676,7 @@ async function organizeSpecificRecording(store, filePath, gameName, opts = {}) {
   // Skip files already inside the organized destination (no double-move)
   const resolvedFile = path.resolve(filePath)
   const resolvedDest = path.resolve(destPath)
-  if (resolvedFile.startsWith(resolvedDest + path.sep)) {
+  if (!forceReorganize && resolvedFile.startsWith(resolvedDest + path.sep)) {
     return {
       success: true,
       alreadyOrganized: true,

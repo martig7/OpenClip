@@ -10,23 +10,23 @@ Two applications: `electron-app/` (Electron + React desktop app) and `obs-plugin
 
 | File | Lines |
 |------|------:|
-| `fileManager.js` | 646 |
-| `ipcHandlers.js` | 548 |
-| `recordingService.js` | 520 |
-| `obsWebSocket.js` | 452 |
-| `apiServer.js` | 427 |
+| `fileManager.js` | 784 |
+| `ipcHandlers.js` | 659 |
+| `recordingService.js` | 597 |
+| `obsWebSocket.js` | 490 |
+| `apiServer.js` | 473 |
 | `obsPlugin.js` | 365 |
 | `obsWsAudio.js` | 349 |
 | `store.js` | 284 |
 | `autoUpdater.js` | 280 |
-| `main.js` | 262 |
+| `main.js` | 299 |
 | `obsEncoding.js` | 199 |
 | `gameWatcher.js` | 172 |
 | `preload.js` | 165 |
 | `qrCodeReader.js` | 124 |
 | `processDetector.js` | 84 |
 | `constants.js` | 83 |
-| `winUtils.js` | 577 |
+| `winUtils.js` | 619 |
 | `elevatedHelper.js` | 69 |
 | `videoMetadata.js` | 70 |
 | `obsIntegration.js` | 59 |
@@ -38,6 +38,7 @@ Testing stubs (required by Jest module mapping — not imported by production co
 
 | File | Lines |
 |------|------:|
+| `tests/e2e/integration/global-setup.js` | 66 |
 | `store-testing.js` | 247 |
 | `obsPlugin-testing.js` | 288 |
 | `ipcHandlers-testing.js` | 213 |
@@ -52,16 +53,19 @@ Testing stubs (required by Jest module mapping — not imported by production co
 
 | File | Lines |
 |------|------:|
-| `pages/GamesPage.jsx` | 723 |
-| `pages/games/EditGameModal.jsx` | 579 |
-| `pages/SettingsPage.jsx` | 515 |
-| `viewer/components/VideoPlayer.jsx` | 489 |
-| `pages/games/AddGameModal.jsx` | 487 |
-| `viewer/components/StorageTreemap.jsx` | 440 |
-| `viewer/pages/StoragePage.jsx` | 431 |
-| `viewer/components/StorageList.jsx` | 418 |
+| `pages/GamesPage.jsx` | 790 |
+| `pages/games/GameList.jsx` | 59 |
+| `pages/games/GamesPageBody.jsx` | 92 |
+| `pages/games/EditGameModal.jsx` | 327 |
+| `pages/games/SceneAudioSourcesSection.jsx` | 602 |
+| `pages/SettingsPage.jsx` | 621 |
+| `viewer/components/VideoPlayer.jsx` | 727 |
+| `pages/games/AddGameModal.jsx` | 619 |
+| `viewer/components/StorageTreemap.jsx` | 520 |
+| `viewer/pages/StoragePage.jsx` | 501 |
+| `viewer/components/StorageList.jsx` | 480 |
 | `viewer/components/ZoomTimeline.jsx` | 398 |
-| `pages/games/SceneAudioSourcesCard.jsx` | 347 |
+| `pages/games/SceneAudioSourcesCard.jsx` | 656 |
 | `pages/EncodingPage.jsx` | 331 |
 | `viewer/components/Sidebar.jsx` | 191 |
 | `viewer/pages/ClipsPage.jsx` | 177 |
@@ -120,8 +124,24 @@ See [`obs-plugin/README.md`](obs-plugin/README.md) for the full API reference.
 
 | File | Lines |
 |------|------:|
-| `unit/obsWebSocket.test.js` | 999 |
-| `unit/fileManager.test.js` | 844 |
+| `unit/obsWebSocket.testHelper.js` | 127 |
+| `unit/obsWebSocket.createSceneFromScratch.test.js` | 358 |
+| `unit/obsWebSocket.addAudioSourceToScenes.test.js` | 106 |
+| `unit/obsWebSocket.getOBSScenes.test.js` | 25 |
+| `unit/obsWebSocket.createSceneFromTemplate.test.js` | 107 |
+| `unit/obsWebSocket.testOBSConnection.test.js` | 22 |
+| `unit/obsWebSocket.getOBSAudioInputs.test.js` | 41 |
+| `unit/obsWebSocket.getSceneAudioSources.test.js` | 68 |
+| `unit/obsWebSocket.getInputAudioTracks.test.js` | 33 |
+| `unit/obsWebSocket.setInputAudioTracks.test.js` | 33 |
+| `unit/obsWebSocket.getTrackNames.test.js` | 41 |
+| `unit/obsWebSocket.setTrackNames.test.js` | 35 |
+| `unit/obsWebSocket.removeAudioSourceFromScenes.test.js` | 49 |
+| `unit/obsWebSocket.deleteOBSScene.test.js` | 36 |
+| `unit/fileManager.getWeekFolder.test.js` | 54 |
+| `unit/fileManager.organizeRecordings.test.js` | 376 |
+| `unit/fileManager.organizeSpecificRecording.test.js` | 412 |
+| `unit/fileManager.setupFileManager.test.js` | 87 |
 | `unit/recordingService.test.js` | 544 |
 | `unit/elevatedHelper.test.js` | 300 |
 | `unit/moveFileSafe.test.js` | 283 |

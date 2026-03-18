@@ -112,3 +112,35 @@ describe('GET /api/recordings', () => {
     expect(res.body[0].mtime).toBeGreaterThan(res.body[1].mtime)
   })
 })
+
+describe('POST /api/recordings/delete', () => {
+  it('returns 404 when path is missing from body', async () => {
+    const res = await request(server).post('/api/recordings/delete').send({})
+    expect(res.status).toBe(404)
+  })
+
+  it('returns 403 when path is outside allowed roots', async () => {
+    const res = await request(server)
+      .post('/api/recordings/delete')
+      .send({ path: 'C:\\Windows\\System32\\evil.exe' })
+    expect(res.status).toBe(403)
+  })
+
+  it('returns 403 when path traversal ../ is used', async () => {
+    const res = await request(server)
+      .post('/api/recordings/delete')
+      .send({ path: path.join(destDir, '..', '..', 'Windows', 'System32', 'evil.exe') })
+    expect(res.status).toBe(403)
+  })
+
+  it('returns 200 when deleting an existing allowed file', async () => {
+    const gameDir = path.join(destDir, 'Halo - Week of Jan 13 2025')
+    fs.mkdirSync(gameDir, { recursive: true })
+    const fp = path.join(gameDir, 'Halo Session 2025-01-15 #1.mp4')
+    fs.writeFileSync(fp, Buffer.alloc(1024))
+    const res = await request(server).post('/api/recordings/delete').send({ path: fp })
+    expect(res.status).toBe(200)
+    expect(res.body.success).toBe(true)
+    expect(fs.existsSync(fp)).toBe(false)
+  })
+})

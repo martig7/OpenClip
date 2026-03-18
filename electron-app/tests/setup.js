@@ -56,3 +56,19 @@ Module._load = function (request, parent, isMain) {
 
 // Also register for ESM imports
 vi.mock('child_process', () => ({ default: _cpMock, ..._cpMock }))
+
+// ─── Mock waveformUtils module ───────────────────────────────────────────────────
+// Mock the waveformUtils module for tests
+vi.mock('../electron/waveformUtils.js', () => ({
+  createWaveformFFmpegProcess: vi.fn(),
+  calculatePeaks: vi.fn((samples, numPeaks) => []),
+  getNumPeaks: vi.fn((resolution = 'default') => {
+    switch (resolution) {
+      case 'low': return 1000
+      case 'high': return 4000
+      default: return 2000
+    }
+  }),
+  setupProcessTimeout: vi.fn(),
+  bufferToSamples: vi.fn((buffer) => new Float32Array()),
+}))

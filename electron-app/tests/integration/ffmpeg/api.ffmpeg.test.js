@@ -276,6 +276,34 @@ describe('GET /api/video/waveform — real ffmpeg', () => {
     expect(Array.isArray(res.body.peaks)).toBe(true)
     expect(res.body.peaks).toHaveLength(0)
   })
+
+  it('returns different peak counts for different resolutions', async () => {
+    const src = path.join(obsDir, 'waveform-audio.mp4')
+    fs.copyFileSync(fixtureAudioMp4, src)
+
+    const lowRes = await request(server).get(
+      `/api/video/waveform?path=${encodeURIComponent(src)}&track=0&resolution=low`
+    )
+    const defaultRes = await request(server).get(
+      `/api/video/waveform?path=${encodeURIComponent(src)}&track=0&resolution=default`
+    )
+    const highRes = await request(server).get(
+      `/api/video/waveform?path=${encodeURIComponent(src)}&track=0&resolution=high`
+    )
+
+    expect(lowRes.status).toBe(200)
+    expect(defaultRes.status).toBe(200)
+    expect(highRes.status).toBe(200)
+
+    // Different resolutions should produce different peak counts
+    expect(lowRes.body.peaks.length).toBeLessThan(defaultRes.body.peaks.length)
+    expect(defaultRes.body.peaks.length).toBeLessThan(highRes.body.peaks.length)
+
+    // Verify approximate peak counts
+    expect(lowRes.body.peaks.length).toBeGreaterThan(500)  // ~1000 for 3 sec video
+    expect(defaultRes.body.peaks.length).toBeGreaterThan(1000) // ~2000 for 3 sec video
+    expect(highRes.body.peaks.length).toBeGreaterThan(2000) // ~4000 for 3 sec video
+  })
 })
 
 // ── GET /api/video/tracks ─────────────────────────────────────────────────────

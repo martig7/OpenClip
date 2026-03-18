@@ -41,8 +41,8 @@ function VideoPlayer({
   const [volume, setVolume] = useState(1)
   const [isMuted, setIsMuted] = useState(false)
 
-  // Determine if this is clip mode (clips don't have clip creation/organize features)
-  const isClipMode = !!clip
+  // Whether the media was passed as a clip (vs a recording)
+  const isClip = !!clip
 
   // Hover controls state
   const [showControls, setShowControls] = useState(false)
@@ -62,6 +62,10 @@ function VideoPlayer({
   const [audioTracks, setAudioTracks] = useState([])
   const [selectedTracks, setSelectedTracks] = useState([])
   const [waveforms, setWaveforms] = useState({})
+  const [waveformResolution, setWaveformResolution] = useState('default')
+
+  // In-memory waveform cache (cleared when media changes)
+  const waveformCacheRef = useRef(new Map())
 
   // Organize state
   const [organizeMode, setOrganizeMode] = useState(false)
@@ -89,49 +93,92 @@ function VideoPlayer({
     setWaveforms({})
     setOrganizeMode(false)
     setOrganizeGame('')
+    waveformCacheRef.current.clear()
   }, [media])
+
+  // Fetch waveform resolution setting
+  useEffect(() => {
+    const loadWaveformResolution = async () => {
+      const s = await api.getStore('settings')
+      if (s?.waveformResolution) {
+        setWaveformResolution(s.waveformResolution)
+      }
+    }
+    loadWaveformResolution()
+  }, [])
 
   // Fetch audio tracks when media changes
   useEffect(() => {
     if (!media) return
 
     let cancelled = false
+    let abortController = new AbortController()
 
     const fetchTracks = async () => {
       try {
-        const response = await apiFetch(`/api/video/tracks?path=${encodeURIComponent(media.path)}`)
+        const response = await apiFetch(`/api/video/tracks?path=${encodeURIComponent(media.path)}`, {
+          signal: abortController.signal
+        })
+        if (cancelled) return
         const data = await response.json()
         if (cancelled) return
         if (response.ok && data.tracks) {
           setAudioTracks(data.tracks)
           setSelectedTracks(data.tracks.map((_, i) => i))
-          // Fetch waveforms sequentially to avoid CPU/IO spikes
-          for (let i = 0; i < data.tracks.length; i++) {
-            if (cancelled) break
+
+          // Fetch waveforms in parallel with concurrent requests
+          const waveformPromises = data.tracks.map(async (track, trackIndex) => {
+            if (cancelled) return null
+
+            // Check in-memory cache first
+            const cacheKey = `${media.path}:${trackIndex}:${waveformResolution}`
+            const cached = waveformCacheRef.current.get(cacheKey)
+            if (cached) {
+              setWaveforms((prev) => ({ ...prev, [trackIndex]: cached.peaks }))
+              return { trackIndex, peaks: cached.peaks }
+            }
+
             try {
               const waveRes = await apiFetch(
-                `/api/video/waveform?path=${encodeURIComponent(media.path)}&track=${i}`
+                `/api/video/waveform?path=${encodeURIComponent(media.path)}&track=${trackIndex}&resolution=${waveformResolution}`,
+                {
+                  signal: abortController.signal
+                }
               )
+              if (cancelled) return null
               const waveData = await waveRes.json()
-              if (cancelled) break
+              if (cancelled) return null
               if (waveRes.ok && waveData.peaks?.length) {
-                setWaveforms((prev) => ({ ...prev, [i]: waveData.peaks }))
+                // Cache in memory
+                waveformCacheRef.current.set(cacheKey, { peaks: waveData.peaks })
+                setWaveforms((prev) => ({ ...prev, [trackIndex]: waveData.peaks }))
+                return { trackIndex, peaks: waveData.peaks }
               }
             } catch (e) {
-              console.error('Failed to fetch waveform:', e)
+              // Ignore abort errors
+              if (e.name !== 'AbortError') {
+                console.error(`Failed to fetch waveform for track ${trackIndex}:`, e)
+              }
             }
-          }
+            return null
+          })
+
+          await Promise.allSettled(waveformPromises)
         }
       } catch (error) {
-        console.error('Failed to fetch audio tracks:', error)
+        // Ignore abort errors
+        if (!cancelled && error.name !== 'AbortError') {
+          console.error('Failed to fetch audio tracks:', error)
+        }
       }
     }
 
     fetchTracks()
     return () => {
       cancelled = true
+      abortController.abort()
     }
-  }, [recording])
+  }, [media, waveformResolution])
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -406,7 +453,7 @@ function VideoPlayer({
       setOrganizeProgress(null)
     }
   }, [
-    recording,
+    media,
     organizeGame,
     organizeRemux,
     isOrganizing,
@@ -596,7 +643,8 @@ function VideoPlayer({
           onZoomIn={() => zoomTimelineRef.current?.zoomIn()}
           onZoomOut={() => zoomTimelineRef.current?.zoomOut()}
           onZoomFit={() => zoomTimelineRef.current?.zoomFit()}
-          enterClipMode={enterClipMode}
+          isClip={isClip}
+          enterClipMode={isClip ? undefined : enterClipMode}
           exitClipMode={exitClipMode}
           handleCreateClip={handleCreateClip}
           isCreatingClip={isCreatingClip}
@@ -605,11 +653,11 @@ function VideoPlayer({
           handleShowInExplorer={handleShowInExplorer}
         />
 
-        {isUnorganized && organizeMode && !isClipMode && (
+        {organizeMode && !clipMode && (
           <div className="organize-panel">
             <div className="organize-header">
               <MoveRight size={13} />
-              Move to organized library
+              Move to another game
             </div>
             <div className="organize-row">
               <select

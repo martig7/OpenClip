@@ -88,6 +88,7 @@ function msToElectronSettings(ms, obsRecordingPath, electronData) {
       port: ms.obs_websocket?.port ?? 4455,
       password: ms.obs_websocket?.password || '',
     },
+    waveformResolution: ms.waveform_resolution || 'default',
   }
 }
 
@@ -126,6 +127,9 @@ function electronSettingsToMs(ms, electronSettings) {
       port: electronSettings.obsWebSocket.port ?? 4455,
       password: electronSettings.obsWebSocket.password || '',
     }
+  }
+  if (electronSettings.waveformResolution !== undefined) {
+    updated.waveform_resolution = electronSettings.waveformResolution
   }
   return updated
 }

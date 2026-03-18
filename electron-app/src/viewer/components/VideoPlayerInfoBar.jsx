@@ -17,11 +17,12 @@ import { formatTime } from '../utils'
 export default function VideoPlayerInfoBar({
   media,
   isUnorganized,
+  isClip,
   isClipMode,
   organizeMode,
   setOrganizeMode,
   isOrganizing,
-  
+
   clipStart,
   clipEnd,
   _isZoomTimelineExpanded,
@@ -29,12 +30,12 @@ export default function VideoPlayerInfoBar({
   onZoomIn,
   onZoomOut,
   onZoomFit,
-  
+
   enterClipMode,
   exitClipMode,
   handleCreateClip,
   isCreatingClip,
-  
+
   onDelete,
   handleOpenInPlayer,
   handleShowInExplorer,
@@ -42,7 +43,7 @@ export default function VideoPlayerInfoBar({
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRefTitle = useRef(null)
   const dropdownRefClip = useRef(null)
-  
+
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (
@@ -62,7 +63,7 @@ export default function VideoPlayerInfoBar({
   return (
     <div className="video-info-bar-compact">
       {/* View 1: Title Bar */}
-      <div 
+      <div
         className={`video-info-fade-layer transition-opacity duration-300 ${isClipMode ? 'opacity-0 pointer-events-none' : 'opacity-100 pointer-events-auto'}`}
       >
         <div className="video-info-left">
@@ -86,17 +87,9 @@ export default function VideoPlayerInfoBar({
             </div>
           </div>
         </div>
-        
+
         <div className="video-info-actions">
-          {isUnorganized ? (
-            <button
-              className={`btn-action-organize${organizeMode ? ' active' : ''}`}
-              onClick={() => setOrganizeMode((o) => !o)}
-              disabled={isOrganizing}
-            >
-              <MoveRight size={21} /> Organize
-            </button>
-          ) : (
+          {!isClip && (
             <button data-testid="enter-clip-btn" className="btn-action-primary shrink-0" onClick={enterClipMode}>
               <Scissors size={21} /> Create Clip
             </button>
@@ -104,6 +97,7 @@ export default function VideoPlayerInfoBar({
 
           <div className="action-dropdown" ref={dropdownRefTitle}>
             <button
+              data-testid="title-bar-dropdown-btn"
               className={`btn-action-more ${dropdownOpen ? 'active' : ''}`}
               onClick={() => setDropdownOpen(!dropdownOpen)}
             >
@@ -111,6 +105,9 @@ export default function VideoPlayerInfoBar({
             </button>
             {dropdownOpen && (
               <div className="dropdown-menu">
+                <button onClick={() => { setDropdownOpen(false); setOrganizeMode(true); }} disabled={isOrganizing}>
+                  <MoveRight size={21} /> Organize
+                </button>
                 <button onClick={() => { setDropdownOpen(false); handleOpenInPlayer(); }}>
                   <Play size={21} /> Open in Player
                 </button>
@@ -129,13 +126,13 @@ export default function VideoPlayerInfoBar({
       </div>
 
       {/* View 2: Clip Creation Controls */}
-      <div 
+      <div
         className={`video-info-fade-layer transition-opacity duration-300 ${!isClipMode ? 'opacity-0 pointer-events-none' : 'opacity-100 pointer-events-auto'}`}
       >
         <div className="video-info-left">
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-8">
-              
+
               <div className="video-info-title-col">
                 <div className="video-info-title-row gap-2">
                   <button className="btn-action-more !w-[36px] !h-[36px] font-medium shrink-0" onClick={() => { onZoomOut(); }}>
@@ -172,17 +169,17 @@ export default function VideoPlayerInfoBar({
             </div>
           </div>
         </div>
-        
+
         <div className="video-info-actions flex items-center gap-3">
-          <button 
+          <button
             data-testid="exit-clip-btn"
             className="btn-action-more !w-auto !px-[18px] !text-[18px] font-medium shrink-0"
-            onClick={exitClipMode} 
+            onClick={exitClipMode}
             disabled={isCreatingClip}
           >
             Cancel
           </button>
-          
+
           <button className="btn-action-primary shrink-0" onClick={handleCreateClip} disabled={isCreatingClip || (clipEnd - clipStart) <= 0}>
             {isCreatingClip ? (
               <><div className="spinner-sm" /> Creating…</>

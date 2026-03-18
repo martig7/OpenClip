@@ -291,6 +291,22 @@ export default function SettingsPage() {
               <option value="grid">Grid</option>
             </select>
           </div>
+
+          <div className="form-group" style={{ marginTop: 16 }}>
+            <label className="form-label">Waveform Resolution</label>
+            <div className="toggle-desc" style={{ marginBottom: 6 }}>
+              Higher resolution shows more detail in audio waveforms but may take longer to load
+            </div>
+            <select
+              className="form-input"
+              value={settings.waveformResolution || 'default'}
+              onChange={(e) => updateSetting('waveformResolution', e.target.value)}
+            >
+              <option value="low">Low (faster loading)</option>
+              <option value="default">Standard (balanced)</option>
+              <option value="high">High (more detail)</option>
+            </select>
+          </div>
         </div>
 
         {/* Clip Marker */}

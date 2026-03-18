@@ -3,9 +3,10 @@ import { useSearchParams } from 'react-router-dom'
 import { AlertTriangle, Check, X } from 'lucide-react'
 import MediaSidebar from '../components/MediaSidebar'
 import VideoPlayer from '../components/VideoPlayer'
-import { apiFetch } from '../apiBase'
+import { apiFetch, apiPost } from '../apiBase'
 import api from '../../api'
 import { useOrganizeError } from '../../App'
+import Modal from '../components/Modal'
 
 function RecordingsPage() {
   const [recordings, setRecordings] = useState([])
@@ -15,6 +16,7 @@ function RecordingsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [games, setGames] = useState([])
   const [organizeRemux, setOrganizeRemux] = useState(true)
+  const [deleteModal, setDeleteModal] = useState(false)
   const toastTimerRef = useRef(null)
   const { organizeError, clearOrganizeError } = useOrganizeError()
 
@@ -85,6 +87,30 @@ function RecordingsPage() {
     toastTimerRef.current = setTimeout(() => setToast(null), 5000)
   }, [])
 
+  const handleDeleteRecording = useCallback(async () => {
+    if (!selectedRecording) return
+    try {
+      const response = await apiPost('/api/recordings/delete', { path: selectedRecording.path })
+      if (response.ok) {
+        setSelectedRecording(null)
+        fetchRecordings()
+        setToast({ type: 'success', message: 'Recording deleted' })
+        clearTimeout(toastTimerRef.current)
+        toastTimerRef.current = setTimeout(() => setToast(null), 3000)
+      } else {
+        const data = await response.json()
+        setToast({ type: 'error', message: `Failed to delete: ${data.error}` })
+        clearTimeout(toastTimerRef.current)
+        toastTimerRef.current = setTimeout(() => setToast(null), 3000)
+      }
+    } catch (error) {
+      setToast({ type: 'error', message: `Error: ${error.message}` })
+      clearTimeout(toastTimerRef.current)
+      toastTimerRef.current = setTimeout(() => setToast(null), 3000)
+    }
+    setDeleteModal(false)
+  }, [selectedRecording, fetchRecordings])
+
   // Refresh the list when auto-organize completes (progress display is handled globally in App).
   useEffect(() => {
     const unsub = api.onSessionProgress?.((p) => {
@@ -119,6 +145,7 @@ function RecordingsPage() {
         onOrganized={handleOrganized}
         onOrganizeError={handleOrganizeError}
         organizeRemux={organizeRemux}
+        onDelete={() => setDeleteModal(true)}
       />
 
       {organizeError && (
@@ -143,6 +170,16 @@ function RecordingsPage() {
           {toast.type === 'success' ? <Check size={14} /> : <X size={14} />} {toast.message}
         </div>
       )}
+
+      <Modal
+        isOpen={deleteModal}
+        title="Delete Recording?"
+        message={`Are you sure you want to delete "${selectedRecording?.filename}"? This cannot be undone.`}
+        onConfirm={handleDeleteRecording}
+        onCancel={() => setDeleteModal(false)}
+        confirmText="Delete"
+        danger
+      />
     </div>
   )
 }
