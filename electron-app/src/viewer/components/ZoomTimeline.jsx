@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useEffect, useMemo } from 'react'
+import { useRef, useState, useCallback, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react'
 import AudioWaveformTrack from './AudioWaveformTrack'
 
 const MIN_ZOOM = 1
@@ -6,7 +6,7 @@ const MAX_ZOOM = 40
 const TIMELINE_HEIGHT = 64
 const TIMELINE_TRACK_STYLE = { height: TIMELINE_HEIGHT }
 
-function ZoomTimeline({
+const ZoomTimeline = forwardRef(function ZoomTimeline({
   currentTime,
   duration,
   onSeek,
@@ -21,7 +21,8 @@ function ZoomTimeline({
   waveforms = {},
   onTrackToggle,
   isCreatingClip = false,
-}) {
+  isExpanded = false,
+}, ref) {
   const containerRef = useRef(null)
   const [zoom, setZoom] = useState(4) // how many times zoomed in (1 = full, higher = more zoomed)
   const [viewCenter, setViewCenter] = useState(0) // center of visible range in seconds
@@ -232,6 +233,12 @@ function ZoomTimeline({
     setViewCenter((clipStart + clipEnd) / 2)
   }
 
+  useImperativeHandle(ref, () => ({
+    zoomIn,
+    zoomOut,
+    zoomFit
+  }));
+
   // Clip percentages in visible range
   const clipStartX = ((clipStart - actualViewStart) / visibleDuration) * 100
   const clipEndX = ((clipEnd - actualViewStart) / visibleDuration) * 100
@@ -242,70 +249,7 @@ function ZoomTimeline({
   const miniMapViewWidth = (visibleDuration / duration) * 100
 
   return (
-    <div className="zoom-timeline-wrapper">
-      {/* Zoom controls row */}
-      <div className="zoom-controls-row">
-        <div className="zoom-controls-left">
-          <span className="zoom-label">Timeline Zoom</span>
-          <button className="zoom-btn" onClick={zoomOut} title="Zoom out">
-            -
-          </button>
-          <div className="zoom-level-bar">
-            <input
-              type="range"
-              min={Math.log(MIN_ZOOM)}
-              max={Math.log(MAX_ZOOM)}
-              step="0.01"
-              value={Math.log(zoom)}
-              onChange={(e) => setZoom(Math.exp(parseFloat(e.target.value)))}
-            />
-          </div>
-          <button className="zoom-btn" onClick={zoomIn} title="Zoom in">
-            +
-          </button>
-          <span className="zoom-value">{zoom.toFixed(1)}x</span>
-          <button className="zoom-btn zoom-fit-btn" onClick={zoomFit} title="Fit clip in view">
-            Fit Clip
-          </button>
-        </div>
-
-        {/* Mini-map */}
-        <div
-          className="zoom-minimap"
-          onMouseDown={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect()
-            const ratio = (e.clientX - rect.left) / rect.width
-            setViewCenter(
-              Math.max(
-                visibleDuration / 2,
-                Math.min(duration - visibleDuration / 2, ratio * duration)
-              )
-            )
-          }}
-        >
-          <div
-            className="minimap-clip"
-            style={{
-              left: `${(clipStart / duration) * 100}%`,
-              width: `${((clipEnd - clipStart) / duration) * 100}%`,
-            }}
-          />
-          <div
-            className="minimap-playhead"
-            style={{
-              left: `${(currentTime / duration) * 100}%`,
-            }}
-          />
-          <div
-            className="minimap-viewport"
-            style={{
-              left: `${miniMapViewStart}%`,
-              width: `${Math.max(2, miniMapViewWidth)}%`,
-            }}
-          />
-        </div>
-      </div>
-
+    <div className={`zoom-timeline-wrapper ${isExpanded ? 'expanded' : 'collapsed'}`}>
       {/* Time ruler */}
       <div className="zoom-ruler">
         {ticks.map((tick, i) => (
@@ -433,6 +377,6 @@ function ZoomTimeline({
       )}
     </div>
   )
-}
+})
 
 export default ZoomTimeline

@@ -17,10 +17,12 @@ import {
   Maximize,
   Minimize,
   MoreHorizontal,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react'
 import Timeline from './Timeline'
-import ClipControls from './ClipControls'
 import ZoomTimeline from './ZoomTimeline'
+import VideoPlayerInfoBar from './VideoPlayerInfoBar'
 import { apiFetch, apiPost, getBase } from '../apiBase'
 import { formatTime } from '../utils'
 import api from '../../api'
@@ -57,6 +59,8 @@ function VideoPlayer({
   const [clipStart, setClipStart] = useState(0)
   const [clipEnd, setClipEnd] = useState(30)
   const [isCreatingClip, setIsCreatingClip] = useState(false)
+  const [isZoomTimelineExpanded, setIsZoomTimelineExpanded] = useState(false)
+  const zoomTimelineRef = useRef(null)
 
   // Markers state
   const [markers, setMarkers] = useState([])
@@ -72,8 +76,6 @@ function VideoPlayer({
   const [isOrganizing, setIsOrganizing] = useState(false)
 
   const [isFullscreen, setIsFullscreen] = useState(false)
-  const [dropdownOpen, setDropdownOpen] = useState(false)
-  const dropdownRef = useRef(null)
 
   // organizeProgress lives in OrganizeProgressContext so App can show the
   // global popup when the user navigates away mid-organize.
@@ -87,6 +89,7 @@ function VideoPlayer({
     setCurrentTime(0)
     setDuration(0)
     setClipMode(false)
+    setIsZoomTimelineExpanded(false)
     setMarkers([])
     setAudioTracks([])
     setSelectedTracks([])
@@ -135,7 +138,6 @@ function VideoPlayer({
     }
   }, [recording])
 
-  // Fullscreen listener
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement)
@@ -143,19 +145,6 @@ function VideoPlayer({
     document.addEventListener('fullscreenchange', handleFullscreenChange)
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
   }, [])
-
-  // Click outside to close dropdown
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-        setDropdownOpen(false)
-      }
-    }
-    if (dropdownOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-      return () => document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [dropdownOpen])
 
   const toggleFullscreen = useCallback(() => {
     const container = videoRef.current?.closest('.player-container')
@@ -327,6 +316,7 @@ function VideoPlayer({
 
   const enterClipMode = useCallback(() => {
     setClipMode(true)
+    setIsZoomTimelineExpanded(false)
     const half = 15
     const start = Math.max(0, currentTime - half)
     const end = Math.min(duration, currentTime + half)
@@ -425,18 +415,16 @@ function VideoPlayer({
   ])
 
   const handleOpenInPlayer = useCallback(() => {
-    setDropdownOpen(false)
     apiPost('/api/open-external', { path: media.path })
   }, [media])
 
   const handleShowInExplorer = useCallback(() => {
-    setDropdownOpen(false)
     apiPost('/api/show-in-explorer', { path: media.path })
   }, [media])
 
   if (!media) {
     return (
-      <div className="main-content">
+      <div className="flex-1 flex flex-col bg-[var(--bg-primary)] w-full h-full overflow-hidden">
         <div
           className="h-[36px] w-full shrink-0 border-b border-[var(--border)]"
           style={{ WebkitAppRegion: 'drag', backgroundColor: 'var(--bg-primary)' }}
@@ -454,7 +442,7 @@ function VideoPlayer({
   }
 
   return (
-    <div className="main-content">
+    <div className="flex-1 flex flex-col bg-[var(--bg-primary)] w-full h-full overflow-hidden">
       <div
         className="h-[36px] w-full shrink-0 border-b border-[var(--border)] relative z-50"
         style={{ WebkitAppRegion: 'drag', backgroundColor: 'var(--bg-primary)' }}
@@ -560,105 +548,58 @@ function VideoPlayer({
       </div>
 
       {clipMode && (
-        <div className="video-controls">
-          <ZoomTimeline
-            currentTime={currentTime}
-            duration={duration}
-            onSeek={handleSeek}
-            clipStart={clipStart}
-            clipEnd={clipEnd}
-            onClipStartChange={setClipStart}
-            onClipEndChange={setClipEnd}
-            markers={markers}
-            onMarkerClick={handleMarkerClick}
-            audioTracks={audioTracks}
-            selectedTracks={selectedTracks}
-            waveforms={waveforms}
-            onTrackToggle={toggleTrack}
-            isCreatingClip={isCreatingClip}
-          />
-
-          <ClipControls
-            clipStart={clipStart}
-            clipEnd={clipEnd}
-            duration={duration}
-            onClipStartChange={setClipStart}
-            onClipEndChange={setClipEnd}
-            onCancel={exitClipMode}
-            onCreate={handleCreateClip}
-            isCreating={isCreatingClip}
-          />
-        </div>
+    <div className="clip-creation-container w-full flex flex-col z-50 shrink-0 border-t border-[var(--border)] relative">
+      <button 
+        className="zoom-timeline-toggle-btn"
+        onClick={() => setIsZoomTimelineExpanded(!isZoomTimelineExpanded)}
+      >
+        <span className="text-xs font-semibold">Zoom Timeline</span>
+        {isZoomTimelineExpanded ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+      </button>
+      <ZoomTimeline
+        ref={zoomTimelineRef}
+        currentTime={currentTime}
+        duration={duration}
+        onSeek={handleSeek}
+        clipStart={clipStart}
+        clipEnd={clipEnd}
+        onClipStartChange={setClipStart}
+        onClipEndChange={setClipEnd}
+        markers={markers}
+        onMarkerClick={handleMarkerClick}
+        audioTracks={audioTracks}
+        selectedTracks={selectedTracks}
+        waveforms={waveforms}
+        onTrackToggle={toggleTrack}
+        isCreatingClip={isCreatingClip}
+        isExpanded={isZoomTimelineExpanded}
+      />
+    </div>
       )}
 
-      <div className="flex-1 flex flex-col bg-[var(--bg-primary)] w-full">
-        <div className="video-info-bar-compact">
-          <div className="video-info-left">
-            <div className="video-info-title-col">
-              <div className="video-info-title-row">
-                <span className="video-info-filename">{media.filename}</span>
-                {isUnorganized && !isClipMode && (
-                  <span className="unorganized-badge-compact">Unorganized</span>
-                )}
-              </div>
-              <div className="video-info-meta">
-                <span>
-                  <FolderOpen size={18} /> {media.game_name}
-                </span>
-                <span>
-                  <Calendar size={18} /> {media.date}
-                </span>
-                <span>
-                  <HardDrive size={18} /> {media.size_formatted}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="video-info-actions">
-            {isClipMode && onDelete ? (
-              <button className="btn-action-danger" onClick={() => onDelete && onDelete()}>
-                <Trash2 size={21} /> Delete
-              </button>
-            ) : isUnorganized ? (
-              <button
-                className={`btn-action-organize${organizeMode ? ' active' : ''}`}
-                onClick={() => setOrganizeMode((o) => !o)}
-                disabled={isOrganizing}
-              >
-                <MoveRight size={21} /> Organize
-              </button>
-            ) : (
-              <button className="btn-action-primary" onClick={enterClipMode}>
-                <Scissors size={21} /> Create Clip
-              </button>
-            )}
-
-            <div className="action-dropdown" ref={dropdownRef}>
-              <button
-                className={`btn-action-more ${dropdownOpen ? 'active' : ''}`}
-                onClick={() => setDropdownOpen(!dropdownOpen)}
-              >
-                <MoreHorizontal size={21} />
-              </button>
-              {dropdownOpen && (
-                <div className="dropdown-menu">
-                  <button onClick={handleOpenInPlayer}>
-                    <Play size={21} /> Open in Player
-                  </button>
-                  <button onClick={handleShowInExplorer}>
-                    <FolderOpen size={21} /> Show in Explorer
-                  </button>
-                  {!isClipMode && onDelete && (
-                    <button className="danger" onClick={onDelete}>
-                      <Trash2 size={21} /> Delete
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+      <div className="flex flex-col bg-[var(--bg-primary)] w-full shrink-0">
+        <VideoPlayerInfoBar
+          media={media}
+          isUnorganized={isUnorganized}
+          isClipMode={clipMode}
+          organizeMode={organizeMode}
+          setOrganizeMode={setOrganizeMode}
+          isOrganizing={isOrganizing}
+          clipStart={clipStart}
+          clipEnd={clipEnd}
+          isZoomTimelineExpanded={isZoomTimelineExpanded}
+          setIsZoomTimelineExpanded={setIsZoomTimelineExpanded}
+          onZoomIn={() => zoomTimelineRef.current?.zoomIn()}
+          onZoomOut={() => zoomTimelineRef.current?.zoomOut()}
+          onZoomFit={() => zoomTimelineRef.current?.zoomFit()}
+          enterClipMode={enterClipMode}
+          exitClipMode={exitClipMode}
+          handleCreateClip={handleCreateClip}
+          isCreatingClip={isCreatingClip}
+          onDelete={onDelete}
+          handleOpenInPlayer={handleOpenInPlayer}
+          handleShowInExplorer={handleShowInExplorer}
+        />
 
         {isUnorganized && organizeMode && !isClipMode && (
           <div className="organize-panel">
