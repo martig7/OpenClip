@@ -14,6 +14,7 @@ const service = require('./recordingService')
 const { loadMarkers, saveMarkers } = require('./markerService')
 const { getVideoDuration, getDiskUsage } = require('./videoMetadata')
 const { getWaveform, setWaveform } = require('./waveformCache')
+const { getNumPeaks, generateWaveform } = require('./waveformUtils')
 
 let store // set in startApiServer
 
@@ -417,93 +418,22 @@ function startApiServer(appStore) {
         if (!filePath || !isAllowedPath(filePath)) return json(res, { error: 'Forbidden' }, 403)
         if (!fs.existsSync(filePath)) return json(res, { error: 'File not found' }, 404)
 
-        // Map resolution to NUM_PEAKS
-        const NUM_PEAKS = resolution === 'low' ? 1000 : resolution === 'high' ? 4000 : 2000
+        const NUM_PEAKS = getNumPeaks(resolution)
 
-        return new Promise((resolve) => {
-          getVideoDuration(filePath).then((duration) => {
-            if (!duration) {
-              resolve(json(res, { peaks: [] }))
-              return
-            }
+        // Check cache first
+        const cached = getWaveform(filePath, trackIndex, NUM_PEAKS)
+        if (cached && cached.peaks?.length) {
+          return json(res, { peaks: cached.peaks, duration: cached.duration })
+        }
 
-            // Check cache first
-            const cached = getWaveform(filePath, trackIndex, NUM_PEAKS)
-            if (cached && cached.peaks?.length) {
-              resolve(json(res, { peaks: cached.peaks, duration: cached.duration }))
-              return
-            }
+        const result = await generateWaveform(filePath, trackIndex, NUM_PEAKS, getVideoDuration)
+        if (!result) {
+          return json(res, { peaks: [] })
+        }
 
-            const sampleRate = Math.max(2, Math.round(NUM_PEAKS / duration))
-
-            const ffmpegProc = spawn(FFMPEG_PATH, [
-              '-hide_banner',
-              '-loglevel',
-              'error',
-              '-i',
-              filePath,
-              '-map',
-              `0:a:${trackIndex}`,
-              '-ac',
-              '1',
-              '-ar',
-              String(sampleRate),
-              '-f',
-              'f32le',
-              'pipe:1',
-            ])
-
-            req.on('close', () => ffmpegProc.kill())
-            const killTimer = setTimeout(() => {
-              try {
-                ffmpegProc.kill('SIGKILL')
-              } catch {}
-            }, 30_000)
-            if (typeof killTimer.unref === 'function') killTimer.unref()
-            const clearKillTimer = () => clearTimeout(killTimer)
-            ffmpegProc.on('close', clearKillTimer)
-            ffmpegProc.on('error', clearKillTimer)
-            ffmpegProc.stderr.resume() // drain stderr so the pipe buffer never fills
-
-            const chunks = []
-            ffmpegProc.stdout.on('data', (chunk) => chunks.push(chunk))
-            ffmpegProc.on('close', () => {
-              try {
-                const buffer = Buffer.concat(chunks)
-                const samples = new Float32Array(
-                  buffer.buffer,
-                  buffer.byteOffset,
-                  Math.floor(buffer.length / 4)
-                )
-                if (!samples.length) {
-                  resolve(json(res, { peaks: [] }))
-                  return
-                }
-
-                const chunkSize = Math.max(1, Math.ceil(samples.length / NUM_PEAKS))
-                const peaks = []
-                for (let i = 0; i < samples.length && peaks.length < NUM_PEAKS; i += chunkSize) {
-                  let max = 0
-                  for (let j = i; j < Math.min(i + chunkSize, samples.length); j++) {
-                    const v = Math.abs(samples[j])
-                    if (v > max) max = v
-                  }
-                  peaks.push(max)
-                }
-                const maxPeak = peaks.reduce((m, p) => (p > m ? p : m), 0.001)
-                const normalizedPeaks = peaks.map((p) => p / maxPeak)
-
-                // Store in cache
-                setWaveform(filePath, trackIndex, NUM_PEAKS, normalizedPeaks, duration)
-
-                resolve(json(res, { peaks: normalizedPeaks, duration }))
-              } catch {
-                resolve(json(res, { peaks: [] }))
-              }
-            })
-            ffmpegProc.on('error', () => resolve(json(res, { peaks: [] })))
-          })
-        })
+        // Store in cache
+        setWaveform(filePath, trackIndex, NUM_PEAKS, result.peaks, result.duration)
+        return json(res, { peaks: result.peaks, duration: result.duration })
       }
 
       // GET /api/ffmpeg-check

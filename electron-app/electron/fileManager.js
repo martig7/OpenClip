@@ -5,6 +5,7 @@ const { promisify } = require('util')
 const { isVideoFile, CODEC_MAP, FFMPEG_PATH, FFPROBE_PATH } = require('./constants')
 const { pathToFileURL } = require('url')
 const service = require('./recordingService')
+const { preCacheWaveform, setWaveformResolution } = require('./waveformPreCache')
 
 const execFileAsync = promisify(execFile)
 
@@ -277,12 +278,18 @@ async function organizeRecordings(store, gameName, onProgress = () => {}) {
       } finally {
         service.unmarkRemuxing(src, dest)
         service.invalidateRecordingsCache()
+        // Pre-cache waveform for the moved file
+        if (movedTo) {
+          preCacheWaveform(movedTo).catch(console.error)
+        }
       }
     } else {
       onProgress({ phase: 'recording', stage: 'moving', label: 'Moving file…', gameName })
       await moveFileSafe(src, dest)
       service.invalidateRecordingsCache()
       movedTo = dest
+      // Pre-cache waveform for the moved file
+      preCacheWaveform(dest).catch(console.error)
     }
 
     // Post-move: clean up processed markers and optionally delete the organized recording
@@ -527,12 +534,18 @@ async function finalizeDirectRecording(store, gameName, recordingDir, onProgress
       } finally {
         service.unmarkRemuxing(src, dest)
         service.invalidateRecordingsCache()
+        // Pre-cache waveform for the finalized file
+        if (movedTo) {
+          preCacheWaveform(movedTo).catch(console.error)
+        }
       }
     } else {
       onProgress({ phase: 'recording', stage: 'moving', label: 'Renaming file…', gameName })
       await moveFileSafe(src, dest)
       service.invalidateRecordingsCache()
       movedTo = dest
+      // Pre-cache waveform for the finalized file
+      preCacheWaveform(dest).catch(console.error)
     }
 
     // Post-rename: clean up processed markers and optionally delete the organized recording
@@ -557,6 +570,25 @@ async function finalizeDirectRecording(store, gameName, recordingDir, onProgress
 
 function setupFileManager(ipcMain, store) {
   service.init(store)
+  
+  // Initialize waveform resolution from settings
+  const settings = store.get('settings')
+  if (settings?.waveformResolution) {
+    setWaveformResolution(settings.waveformResolution)
+  }
+  
+  // Listen for store.set calls to update waveform resolution when changed
+  const originalSet = ipcMain.handle.bind(ipcMain, 'store:set')
+  ipcMain.handle('store:set', (_event, key, value) => {
+    const result = store.set(key, value)
+    // Update waveform resolution when settings change
+    if (key === 'settings' && value?.waveformResolution) {
+      setWaveformResolution(value.waveformResolution)
+    } else if (key === 'settings.waveformResolution') {
+      setWaveformResolution(value)
+    }
+    return result
+  })
 
   ipcMain.handle('recordings:list', () => {
     return service.scanRecordings()
