@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
-import { Film, SkipBack, SkipForward, Play, Pause, Volume2, VolumeX, Folder, Calendar, HardDrive, Scissors, FolderOpen, MoveRight, Trash2 } from 'lucide-react'
+import { Film, SkipBack, SkipForward, Play, Pause, Volume2, VolumeX, Folder, Calendar, HardDrive, Scissors, FolderOpen, MoveRight, Trash2, Maximize, Minimize } from 'lucide-react'
 import Timeline from './Timeline'
 import ClipControls from './ClipControls'
 import ZoomTimeline from './ZoomTimeline'
@@ -43,6 +43,8 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
   const [organizeMode, setOrganizeMode] = useState(false)
   const [organizeGame, setOrganizeGame] = useState('')
   const [isOrganizing, setIsOrganizing] = useState(false)
+  
+  const [isFullscreen, setIsFullscreen] = useState(false)
 
   // organizeProgress lives in OrganizeProgressContext so App can show the
   // global popup when the user navigates away mid-organize.
@@ -103,6 +105,28 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
     fetchTracks()
     return () => { cancelled = true }
   }, [recording])
+
+  // Fullscreen listener
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement)
+    }
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
+  }, [])
+
+  const toggleFullscreen = useCallback(() => {
+    const container = videoRef.current?.closest('.player-container')
+    if (!container) return
+    
+    if (!document.fullscreenElement) {
+      container.requestFullscreen().catch(err => {
+        console.error(`Error attempting to enable fullscreen: ${err.message}`)
+      })
+    } else {
+      document.exitFullscreen()
+    }
+  }, [])
 
   // Fetch markers when media changes and duration is known
   useEffect(() => {
@@ -184,6 +208,41 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
       videoRef.current.currentTime = newTime
     }
   }, [currentTime, duration])
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Ignore if typing in an input
+      if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return
+      
+      switch(e.key) {
+        case 'ArrowLeft':
+          e.preventDefault()
+          if (videoRef.current) {
+            videoRef.current.currentTime = Math.max(0, videoRef.current.currentTime - 10)
+          }
+          break
+        case 'ArrowRight':
+          e.preventDefault()
+          if (videoRef.current) {
+            videoRef.current.currentTime = Math.min(videoRef.current.duration || 0, videoRef.current.currentTime + 10)
+          }
+          break
+        case ' ':
+          e.preventDefault()
+          togglePlay()
+          break
+        case 'm':
+        case 'M':
+          e.preventDefault()
+          toggleMute()
+          break
+      }
+    }
+    
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [togglePlay, toggleMute])
 
   // Hover controls handlers
   const handleVideoMouseEnter = useCallback(() => {
@@ -387,6 +446,9 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
                   style={{ left: `${(isMuted ? 0 : volume) * 100}%` }}
                 />
               </div>
+              <button className="control-btn control-btn--icon ml-2" onClick={toggleFullscreen} title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}>
+                {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
+              </button>
             </div>
           </div>
         </div>
