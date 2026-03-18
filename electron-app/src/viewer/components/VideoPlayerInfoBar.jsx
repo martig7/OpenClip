@@ -153,19 +153,19 @@ export default function VideoPlayerInfoBar({
                 </div>
               </div>
 
-              <div className="flex items-center gap-6 bg-[#0f0f0f] px-4 py-1.5 rounded-full border border-[#333]">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-gray-500 uppercase font-semibold">Start</span>
+              <div className="flex items-center gap-6 bg-[#0f0f0f] px-4 py-1.5 rounded-lg border border-[#333]">
+                <div className="flex items-center justify-center gap-2">
+                  <span className="text-[10px] text-gray-500 uppercase font-semibold text-center">Start</span>
                   <span className="text-sm font-mono text-gray-300">{formatTime(clipStart)}</span>
                 </div>
                 <div className="w-px h-4 bg-[#333]"></div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-gray-500 uppercase font-semibold">Dur</span>
+                <div className="flex items-center justify-center gap-2">
+                  <span className="text-[10px] text-gray-500 uppercase font-semibold text-center">Dur</span>
                   <span className="text-sm font-mono text-[#a78bfa]">{formatTime(clipEnd - clipStart)}</span>
                 </div>
                 <div className="w-px h-4 bg-[#333]"></div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-gray-500 uppercase font-semibold">End</span>
+                <div className="flex items-center justify-center gap-2">
+                  <span className="text-[10px] text-gray-500 uppercase font-semibold text-center">End</span>
                   <span className="text-sm font-mono text-gray-300">{formatTime(clipEnd)}</span>
                 </div>
               </div>
