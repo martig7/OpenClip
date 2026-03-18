@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
-import { Film, SkipBack, SkipForward, Play, Pause, Volume2, VolumeX, Folder, Calendar, HardDrive, Scissors, FolderOpen, MoveRight, Trash2, Maximize, Minimize } from 'lucide-react'
+import { Film, SkipBack, SkipForward, Play, Pause, Volume2, VolumeX, Folder, Calendar, HardDrive, Scissors, FolderOpen, MoveRight, Trash2, Maximize, Minimize, MoreHorizontal } from 'lucide-react'
 import Timeline from './Timeline'
 import ClipControls from './ClipControls'
 import ZoomTimeline from './ZoomTimeline'
@@ -45,6 +45,8 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
   const [isOrganizing, setIsOrganizing] = useState(false)
   
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const dropdownRef = useRef(null)
 
   // organizeProgress lives in OrganizeProgressContext so App can show the
   // global popup when the user navigates away mid-organize.
@@ -114,6 +116,19 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
     document.addEventListener('fullscreenchange', handleFullscreenChange)
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
   }, [])
+
+  // Click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setDropdownOpen(false)
+      }
+    }
+    if (dropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [dropdownOpen])
 
   const toggleFullscreen = useCallback(() => {
     const container = videoRef.current?.closest('.player-container')
@@ -360,6 +375,16 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
     }
   }, [recording, organizeGame, organizeRemux, isOrganizing, setIsManualOrganizing, setOrganizeProgress, onOrganized, onOrganizeError])
 
+  const handleOpenInPlayer = useCallback(() => {
+    setDropdownOpen(false)
+    apiPost('/api/open-external', { path: media.path })
+  }, [media])
+
+  const handleShowInExplorer = useCallback(() => {
+    setDropdownOpen(false)
+    apiPost('/api/show-in-explorer', { path: media.path })
+  }, [media])
+
   if (!media) {
     return (
       <div className="main-content">
@@ -486,123 +511,133 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
         </div>
       )}
 
-      <div className="flex-1 flex flex-col bg-[var(--bg-secondary)] w-full">
-        <div className="video-info-bar border-t-0">
-          <div className="video-info-top">
-            <div>
-              <h2 className="video-title">{media.filename}</h2>
-              <div className="video-meta">
-                <span><Folder size={13} /> {media.game_name}</span>
-                <span><Calendar size={13} /> {media.date}</span>
-                <span><HardDrive size={13} /> {media.size_formatted}</span>
+      <div className="flex-1 flex flex-col bg-[var(--bg-primary)] w-full">
+        <div className="video-info-bar-compact">
+          <div className="video-info-left">
+            <div className="video-info-title-col">
+              <div className="video-info-title-row">
+                <span className="video-info-filename">{media.filename}</span>
+                {isUnorganized && !isClipMode && (
+                  <span className="unorganized-badge-compact">Unorganized</span>
+                )}
+              </div>
+              <div className="video-info-meta">
+                <span><FolderOpen size={18} /> {media.game_name}</span>
+                <span><Calendar size={18} /> {media.date}</span>
+                <span><HardDrive size={18} /> {media.size_formatted}</span>
               </div>
             </div>
-            {isUnorganized && !isClipMode && (
-              <span className="unorganized-badge">Unorganized</span>
+          </div>
+          
+          <div className="video-info-actions">
+            {isClipMode && onDelete ? (
+              <button className="btn-action-danger" onClick={() => onDelete && onDelete()}>
+                <Trash2 size={21} /> Delete
+              </button>
+            ) : isUnorganized ? (
+              <button 
+                className={`btn-action-organize${organizeMode ? ' active' : ''}`}
+                onClick={() => setOrganizeMode(o => !o)}
+                disabled={isOrganizing}
+              >
+                <MoveRight size={21} /> Organize
+              </button>
+            ) : (
+              <button className="btn-action-primary" onClick={enterClipMode}>
+                <Scissors size={21} /> Create Clip
+              </button>
+            )}
+            
+            <div className="action-dropdown" ref={dropdownRef}>
+              <button 
+                className={`btn-action-more ${dropdownOpen ? 'active' : ''}`}
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+              >
+                <MoreHorizontal size={21} />
+              </button>
+              {dropdownOpen && (
+                <div className="dropdown-menu">
+                  <button onClick={handleOpenInPlayer}>
+                    <Play size={21} /> Open in Player
+                  </button>
+                  <button onClick={handleShowInExplorer}>
+                    <FolderOpen size={21} /> Show in Explorer
+                  </button>
+                  {!isClipMode && onDelete && (
+                    <button className="danger" onClick={onDelete}>
+                      <Trash2 size={21} /> Delete
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {isUnorganized && organizeMode && !isClipMode && (
+          <div className="organize-panel">
+            <div className="organize-header">
+              <MoveRight size={13} />
+              Move to organized library
+            </div>
+            <div className="organize-row">
+              <select
+                className="organize-select"
+                value={organizeGame}
+                onChange={e => setOrganizeGame(e.target.value)}
+                disabled={isOrganizing}
+              >
+                <option value="">— Select game —</option>
+                {games.map(g => (
+                  <option key={g.id} value={g.name}>{g.name}</option>
+                ))}
+              </select>
+              <button
+                className="btn btn-organize"
+                onClick={handleOrganize}
+                disabled={!organizeGame || isOrganizing}
+              >
+                {isOrganizing
+                  ? <><div className="spinner-sm" /> Organizing…</>
+                  : <><MoveRight size={13} /> Organize</>
+                }
+              </button>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setOrganizeMode(false)}
+                disabled={isOrganizing}
+              >
+                Cancel
+              </button>
+            </div>
+            {isOrganizing && (
+              <div className="organize-progress">
+                <div className="organize-progress-label">
+                  <div className="spinner-sm" style={{ borderColor: 'rgba(245,158,11,0.25)', borderTopColor: 'var(--amber)' }} />
+                  {organizeProgress?.label ?? 'Starting…'}
+                </div>
+                <div className="progress-bar-container organize-progress-bar">
+                  <div
+                    className="progress-bar-fill organize-progress-fill"
+                    style={{ width: `${organizeProgress?.stage === 'moving' ? 90 : organizeProgress?.stage === 'remuxing' ? 65 : 20}%` }}
+                  />
+                </div>
+              </div>
+            )}
+            {organizeGame && !isOrganizing && (
+              <div className="organize-preview">
+                {(() => {
+                  const ext = media?.path ? media.path.split('.').pop().toLowerCase() : ''
+                  const willRemux = organizeRemux && ext !== 'mp4'
+                  return <>
+                    Will be saved as: <strong>{organizeGame}</strong> Session &gt; Week folder
+                    {willRemux ? ' › remuxed to MP4' : ext ? ` › ${ext.toUpperCase()} (move only)` : ' › MP4'}
+                  </>
+                })()}
+              </div>
             )}
           </div>
-        <div className="action-buttons">
-          {isUnorganized && !isClipMode && (
-            <button
-              className={`btn btn-organize${organizeMode ? ' active' : ''}`}
-              onClick={() => setOrganizeMode(o => !o)}
-              disabled={isOrganizing}
-            >
-              <MoveRight size={13} /> Organize
-            </button>
-          )}
-          {!isClipMode && !isUnorganized && (
-            <button className="btn btn-primary" onClick={enterClipMode}>
-              <Scissors size={13} /> Create Clip
-            </button>
-          )}
-          <button
-            className="btn btn-secondary"
-            onClick={() => apiPost('/api/open-external', { path: media.path })}
-          >
-            <Play size={13} /> Open in Player
-          </button>
-          <button
-            className="btn btn-secondary"
-            onClick={() => apiPost('/api/show-in-explorer', { path: media.path })}
-          >
-            <FolderOpen size={13} /> Show in Explorer
-          </button>
-          {isClipMode && onDelete && (
-            <button
-              className="btn btn-danger"
-              onClick={onDelete}
-            >
-              <Trash2 size={13} /> Delete
-            </button>
-          )}
-        </div>
-      </div>
-
-      {isUnorganized && organizeMode && !isClipMode && (
-        <div className="organize-panel">
-          <div className="organize-header">
-            <MoveRight size={13} />
-            Move to organized library
-          </div>
-          <div className="organize-row">
-            <select
-              className="organize-select"
-              value={organizeGame}
-              onChange={e => setOrganizeGame(e.target.value)}
-              disabled={isOrganizing}
-            >
-              <option value="">— Select game —</option>
-              {games.map(g => (
-                <option key={g.id} value={g.name}>{g.name}</option>
-              ))}
-            </select>
-            <button
-              className="btn btn-organize"
-              onClick={handleOrganize}
-              disabled={!organizeGame || isOrganizing}
-            >
-              {isOrganizing
-                ? <><div className="spinner-sm" /> Organizing…</>
-                : <><MoveRight size={13} /> Organize</>
-              }
-            </button>
-            <button
-              className="btn btn-secondary"
-              onClick={() => setOrganizeMode(false)}
-              disabled={isOrganizing}
-            >
-              Cancel
-            </button>
-          </div>
-          {isOrganizing && (
-            <div className="organize-progress">
-              <div className="organize-progress-label">
-                <div className="spinner-sm" style={{ borderColor: 'rgba(245,158,11,0.25)', borderTopColor: 'var(--amber)' }} />
-                {organizeProgress?.label ?? 'Starting…'}
-              </div>
-              <div className="progress-bar-container organize-progress-bar">
-                <div
-                  className="progress-bar-fill organize-progress-fill"
-                  style={{ width: `${organizeProgress?.stage === 'moving' ? 90 : organizeProgress?.stage === 'remuxing' ? 65 : 20}%` }}
-                />
-              </div>
-            </div>
-          )}
-          {organizeGame && !isOrganizing && (
-            <div className="organize-preview">
-              {(() => {
-                const ext = media?.path ? media.path.split('.').pop().toLowerCase() : ''
-                const willRemux = organizeRemux && ext !== 'mp4'
-                return <>
-                  Will be saved as: <strong>{organizeGame}</strong> Session &gt; Week folder
-                  {willRemux ? ' › remuxed to MP4' : ext ? ` › ${ext.toUpperCase()} (move only)` : ' › MP4'}
-                </>
-              })()}
-            </div>
-          )}
-        </div>
-      )}
+        )}
       </div>
     </div>
   )
