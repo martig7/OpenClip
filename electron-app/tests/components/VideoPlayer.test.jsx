@@ -252,29 +252,35 @@ describe('VideoPlayer — organize panel', () => {
     await waitFor(() => expect(screen.getByText('Unorganized')).toBeInTheDocument())
   })
 
-  it('shows Organize button instead of Create Clip for unorganized recordings', async () => {
+  it('shows Create Clip for unorganized recordings and Organize in the dropdown', async () => {
     setupHandlers()
     render(
       <WithOrganizeContext>
         <VideoPlayer recording={unorganizedRecording} games={sampleGames} />
       </WithOrganizeContext>
     )
+    // Create Clip is the primary action for all recordings (including unorganized)
+    await waitFor(() =>
+      expect(screen.getByTestId('enter-clip-btn')).toBeInTheDocument()
+    )
+    // Organize lives in the dropdown
+    fireEvent.click(screen.getByTestId('title-bar-dropdown-btn'))
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /^Organize$/i })).toBeInTheDocument()
     )
-    expect(screen.queryByTestId('enter-clip-btn')).not.toBeInTheDocument()
   })
 
-  it('opens organize panel when Organize button is clicked', async () => {
+  it('opens organize panel when Organize is clicked from the dropdown', async () => {
     setupHandlers()
     render(
       <WithOrganizeContext>
         <VideoPlayer recording={unorganizedRecording} games={sampleGames} />
       </WithOrganizeContext>
     )
+    fireEvent.click(screen.getByTestId('title-bar-dropdown-btn'))
     await waitFor(() => screen.getByRole('button', { name: /^Organize$/i }))
     fireEvent.click(screen.getByRole('button', { name: /^Organize$/i }))
-    await waitFor(() => expect(screen.getByText(/Move to organized library/i)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText(/Move to another game/i)).toBeInTheDocument())
     expect(screen.getByText('Minecraft')).toBeInTheDocument()
     expect(screen.getByText('Overwatch')).toBeInTheDocument()
   })
@@ -286,9 +292,10 @@ describe('VideoPlayer — organize panel', () => {
         <VideoPlayer recording={unorganizedRecording} games={sampleGames} organizeRemux={true} />
       </WithOrganizeContext>
     )
+    fireEvent.click(screen.getByTestId('title-bar-dropdown-btn'))
     await waitFor(() => screen.getByRole('button', { name: /^Organize$/i }))
     fireEvent.click(screen.getByRole('button', { name: /^Organize$/i }))
-    await waitFor(() => screen.getByText(/Move to organized library/i))
+    await waitFor(() => screen.getByText(/Move to another game/i))
 
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Minecraft' } })
 
@@ -302,9 +309,10 @@ describe('VideoPlayer — organize panel', () => {
         <VideoPlayer recording={unorganizedRecording} games={sampleGames} organizeRemux={false} />
       </WithOrganizeContext>
     )
+    fireEvent.click(screen.getByTestId('title-bar-dropdown-btn'))
     await waitFor(() => screen.getByRole('button', { name: /^Organize$/i }))
     fireEvent.click(screen.getByRole('button', { name: /^Organize$/i }))
-    await waitFor(() => screen.getByText(/Move to organized library/i))
+    await waitFor(() => screen.getByText(/Move to another game/i))
 
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Minecraft' } })
 
@@ -334,14 +342,14 @@ describe('VideoPlayer — organize panel', () => {
       </WithOrganizeContext>
     )
 
+    fireEvent.click(screen.getByTestId('title-bar-dropdown-btn'))
     await waitFor(() => screen.getByRole('button', { name: /^Organize$/i }))
     fireEvent.click(screen.getByRole('button', { name: /^Organize$/i }))
     await waitFor(() => screen.getByRole('combobox'))
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Minecraft' } })
 
-    // There are now two "Organize" buttons (toggle + panel submit); click the one in the panel row
-    const [, panelOrganizeBtn] = screen.getAllByRole('button', { name: /^Organize$/i })
-    fireEvent.click(panelOrganizeBtn)
+    // After dropdown closes, only the panel submit button has name "Organize"
+    fireEvent.click(screen.getByRole('button', { name: /^Organize$/i }))
 
     await waitFor(() => expect(screen.getByText(/Starting…/i)).toBeInTheDocument())
 
@@ -381,13 +389,13 @@ describe('VideoPlayer — organize panel', () => {
       </WithOrganizeContext>
     )
 
+    fireEvent.click(screen.getByTestId('title-bar-dropdown-btn'))
     await waitFor(() => screen.getByRole('button', { name: /^Organize$/i }))
     fireEvent.click(screen.getByRole('button', { name: /^Organize$/i }))
     await waitFor(() => screen.getByRole('combobox'))
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Minecraft' } })
 
-    const [, panelSubmitBtn] = screen.getAllByRole('button', { name: /^Organize$/i })
-    fireEvent.click(panelSubmitBtn)
+    fireEvent.click(screen.getByRole('button', { name: /^Organize$/i }))
 
     // Simulate backend emitting a progress stage event
     await act(async () => {
@@ -423,13 +431,13 @@ describe('VideoPlayer — organize panel', () => {
       </WithOrganizeContext>
     )
 
-    await waitFor(() => screen.getByText(/^Organize$/i))
+    fireEvent.click(screen.getByTestId('title-bar-dropdown-btn'))
+    await waitFor(() => screen.getByRole('button', { name: /^Organize$/i }))
     fireEvent.click(screen.getByRole('button', { name: /^Organize$/i }))
     await waitFor(() => screen.getByRole('combobox'))
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Minecraft' } })
 
-    const [, panelOrganizeBtn] = screen.getAllByRole('button', { name: /^Organize$/i })
-    fireEvent.click(panelOrganizeBtn)
+    fireEvent.click(screen.getByRole('button', { name: /^Organize$/i }))
 
     await waitFor(() => expect(onOrganized).toHaveBeenCalled())
     // Progress bar must be gone

@@ -97,6 +97,7 @@ export default function VideoPlayerInfoBar({
 
           <div className="action-dropdown" ref={dropdownRefTitle}>
             <button
+              data-testid="title-bar-dropdown-btn"
               className={`btn-action-more ${dropdownOpen ? 'active' : ''}`}
               onClick={() => setDropdownOpen(!dropdownOpen)}
             >
