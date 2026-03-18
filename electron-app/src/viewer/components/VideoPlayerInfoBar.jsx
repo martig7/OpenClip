@@ -24,8 +24,8 @@ export default function VideoPlayerInfoBar({
   
   clipStart,
   clipEnd,
-  isZoomTimelineExpanded,
-  setIsZoomTimelineExpanded,
+  _isZoomTimelineExpanded,
+  _setIsZoomTimelineExpanded,
   onZoomIn,
   onZoomOut,
   onZoomFit,
@@ -97,7 +97,7 @@ export default function VideoPlayerInfoBar({
               <MoveRight size={21} /> Organize
             </button>
           ) : (
-            <button className="btn-action-primary shrink-0" onClick={enterClipMode}>
+            <button data-testid="enter-clip-btn" className="btn-action-primary shrink-0" onClick={enterClipMode}>
               <Scissors size={21} /> Create Clip
             </button>
           )}
@@ -175,6 +175,7 @@ export default function VideoPlayerInfoBar({
         
         <div className="video-info-actions flex items-center gap-3">
           <button 
+            data-testid="exit-clip-btn"
             className="btn-action-more !w-auto !px-[18px] !text-[18px] font-medium shrink-0"
             onClick={exitClipMode} 
             disabled={isCreatingClip}

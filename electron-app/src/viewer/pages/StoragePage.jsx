@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef, useTransition } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { HardDrive, Film, Scissors, Trash2, Check, X } from 'lucide-react'
+import { HardDrive, Film, Trash2, Check, X } from 'lucide-react'
 import Modal from '../components/Modal'
 import { apiFetch, apiPost } from '../apiBase'
 import api from '../../api'

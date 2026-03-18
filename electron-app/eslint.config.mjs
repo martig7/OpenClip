@@ -1,6 +1,5 @@
 import js from '@eslint/js'
-import reactPlugin from 'eslint-plugin-react'
-import reactHooksPlugin from 'eslint-plugin-react-hooks'
+import eslintReact from '@eslint-react/eslint-plugin'
 import reactRefreshPlugin from 'eslint-plugin-react-refresh'
 import globals from 'globals'
 
@@ -9,8 +8,7 @@ export default [
   {
     files: ['**/*.{js,jsx}'],
     plugins: {
-      react: reactPlugin,
-      'react-hooks': reactHooksPlugin,
+      '@eslint-react': eslintReact,
       'react-refresh': reactRefreshPlugin,
     },
     languageOptions: {
@@ -34,7 +32,7 @@ export default [
     rules: {
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
       'react/prop-types': 'off',
-      'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
     },
   },
   {

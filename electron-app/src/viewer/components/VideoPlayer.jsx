@@ -7,16 +7,9 @@ import {
   Pause,
   Volume2,
   VolumeX,
-  Folder,
-  Calendar,
-  HardDrive,
-  Scissors,
-  FolderOpen,
   MoveRight,
-  Trash2,
   Maximize,
   Minimize,
-  MoreHorizontal,
   ChevronUp,
   ChevronDown,
 } from 'lucide-react'
@@ -124,7 +117,9 @@ function VideoPlayer({
               if (waveRes.ok && waveData.peaks?.length) {
                 setWaveforms((prev) => ({ ...prev, [i]: waveData.peaks }))
               }
-            } catch {}
+            } catch (e) {
+              console.error('Failed to fetch waveform:', e)
+            }
           }
         }
       } catch (error) {

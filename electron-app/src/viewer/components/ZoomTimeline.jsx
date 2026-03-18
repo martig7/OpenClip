@@ -254,8 +254,8 @@ const ZoomTimeline = forwardRef(function ZoomTimeline({
   const playheadX = ((currentTime - actualViewStart) / visibleDuration) * 100
 
   // Mini-map: shows the full timeline with a viewport indicator
-  const miniMapViewStart = (actualViewStart / duration) * 100
-  const miniMapViewWidth = (visibleDuration / duration) * 100
+  const _miniMapViewStart = (actualViewStart / duration) * 100
+  const _miniMapViewWidth = (visibleDuration / duration) * 100
 
   return (
     <div className="zoom-timeline-wrapper">

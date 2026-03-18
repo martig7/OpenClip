@@ -131,7 +131,7 @@ export default function SceneAudioSourcesCard({
                         </div>
                         {availableAudioInputs
                           .filter((a) => a.source === 'obs')
-                          .map((entry, i) => {
+                          .map((entry, _i) => {
                             const alreadyAdded = masterAudioSources.some(
                               (s) => s.name === entry.name
                             )
@@ -214,7 +214,7 @@ export default function SceneAudioSourcesCard({
                         </div>
                         {availableAudioInputs
                           .filter((a) => a.source === 'windows')
-                          .map((entry, i) => {
+                          .map((entry, _i) => {
                             const alreadyAdded = masterAudioSources.some(
                               (s) => s.name === entry.name
                             )
@@ -302,7 +302,7 @@ export default function SceneAudioSourcesCard({
                         </div>
                         {availableAudioInputs
                           .filter((a) => a.source === 'app')
-                          .map((entry, i) => {
+                          .map((entry, _i) => {
                             const alreadyAdded = masterAudioSources.some(
                               (s) => s.name === entry.name
                             )

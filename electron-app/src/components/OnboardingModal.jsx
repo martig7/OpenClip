@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { ChevronRight, ChevronLeft } from 'lucide-react'
 import api from '../api'
 import {
-  Status,
   StepWelcome,
   StepOBSPath,
   StepOBSInstall,

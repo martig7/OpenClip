@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react'
 import { Film, Loader, Package } from 'lucide-react'
 
 export default function ReencodeModal({

@@ -38,7 +38,7 @@ const WatcherStatusCard = memo(function WatcherStatusCard({
   onGoToSettings,
   onOpenOBS,
 }) {
-  const [tick, setTick] = useState(0)
+  const [, setTick] = useState(0)
   const state = parseGameState(status.gameState)
 
   useEffect(() => {

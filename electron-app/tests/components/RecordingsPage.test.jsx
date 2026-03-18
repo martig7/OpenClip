@@ -133,15 +133,15 @@ describe('RecordingsPage', () => {
     })
 
     // Enter clip mode by clicking the "Create Clip" action button
-    const createClipBtn = screen.getByRole('button', { name: /Create Clip/i })
-    fireEvent.click(createClipBtn)
+    await waitFor(() => screen.getByTestId('enter-clip-btn'))
+    fireEvent.click(screen.getByTestId('enter-clip-btn'))
 
     // Now ClipControls is shown – click its "Create Clip" button to submit the clip
-    const clipControlsBtn = await waitFor(() =>
-      screen.getAllByRole('button', { name: /Create Clip/i }).find((b) => !b.disabled)
-    )
+    await waitFor(() => screen.getByText(/Cancel/i))
+    const clipBtns = screen.getAllByRole('button', { name: /Create Clip/i })
+    const clipCreateBtn = clipBtns[clipBtns.length - 1] // The second button is the clip creation button
     await act(async () => {
-      fireEvent.click(clipControlsBtn)
+      fireEvent.click(clipCreateBtn)
     })
 
     // Verify the success toast appears with the clip filename

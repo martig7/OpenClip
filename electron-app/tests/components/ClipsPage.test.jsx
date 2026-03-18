@@ -22,6 +22,16 @@ vi.mock('../../src/viewer/components/MediaList.jsx', () => ({
   ),
 }))
 
+// VideoPlayer makes async /api/video/tracks fetches that interfere with tests — mock it
+vi.mock('../../src/viewer/components/VideoPlayer.jsx', () => ({
+  default: ({ clip, onDelete }) => (
+    <div data-testid="video-player">
+      <button className="btn-danger" onClick={onDelete}>Delete</button>
+      <span>Playing: {clip?.filename}</span>
+    </div>
+  ),
+}))
+
 // Mock apiBase so it resolves immediately with relative paths (no Electron port lookup)
 vi.mock('../../src/viewer/apiBase.js', () => ({
   apiFetch: (path, opts) => fetch(path, opts),

@@ -39,8 +39,8 @@ beforeAll(async () => {
   await new Promise((resolve) => server.on('listening', resolve))
 })
 
-afterAll((done) => {
-  server.close(done)
+afterAll(() => {
+  server.close()
   fs.rmSync(tmpDir, { recursive: true, force: true })
 })
 

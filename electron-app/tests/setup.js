@@ -1,6 +1,13 @@
 import { vi } from 'vitest'
 import { createRequire } from 'module'
 
+// ─── ResizeObserver polyfill ───────────────────────────────────────────────────
+global.ResizeObserver = class ResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
 // ─── Electron mock ──────────────────────────────────────────────────────────
 // Inject directly into Node's CJS require cache so that CJS backend files
 // that call require('electron') at module-load time get our mock.

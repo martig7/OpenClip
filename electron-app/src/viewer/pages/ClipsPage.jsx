@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Folder, Calendar, HardDrive, FolderOpen, Trash2, Film, Check, X, Play } from 'lucide-react'
+import { Film, Check, X } from 'lucide-react'
 import MediaSidebar from '../components/MediaSidebar'
 import Modal from '../components/Modal'
 import VideoPlayer from '../components/VideoPlayer'
-import { apiFetch, apiPost, getBase } from '../apiBase'
+import { apiFetch, apiPost } from '../apiBase'
 import api from '../../api'
 
 function ClipsPage() {

@@ -3,7 +3,6 @@ import {
   Plus,
   Trash2,
   RefreshCw,
-  ChevronDown,
   Gamepad2,
   AlertTriangle,
   Music,
@@ -18,7 +17,6 @@ import {
   isAppAudioKind,
 } from './audioSourceUtils'
 import WindowPicker from './WindowPicker'
-import AudioSourceDropdown from './AudioSourceDropdown'
 
 /**
  * EditGameModal — allows editing game name, selector, OBS scene, and per-scene audio sources.
@@ -41,7 +39,7 @@ export default function EditGameModal({
   trackLoading,
   toggleTrack,
   trackLabels,
-  setTrackLabels,
+  setTrackLabels: _setTrackLabels,
 }) {
   const { game, sceneAudioSources, loading } = modal
   const masterNames = new Set(masterAudioSources.map((s) => s.name))
@@ -77,7 +75,6 @@ export default function EditGameModal({
     if (game.scene) {
       loadModalAudioInputs()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Close modal audio dropdown on outside click

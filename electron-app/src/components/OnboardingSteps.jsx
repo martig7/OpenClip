@@ -1,7 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
-  ChevronRight,
-  ChevronLeft,
   FolderOpen,
   RefreshCw,
   Download,

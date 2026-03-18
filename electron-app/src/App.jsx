@@ -257,7 +257,9 @@ export default function App() {
         gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15)
         osc.start(audioCtx.currentTime)
         osc.stop(audioCtx.currentTime + 0.15)
-      } catch {}
+      } catch (e) {
+        console.error('Failed to play beep:', e)
+      }
     })
 
     return () => {
