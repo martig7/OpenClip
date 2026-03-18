@@ -667,7 +667,7 @@ function setupFileManager(ipcMain, store) {
 }
 
 async function organizeSpecificRecording(store, filePath, gameName, opts = {}) {
-  const { moveOnly = false, onProgress = () => {} } = opts
+  const { moveOnly = false, onProgress = () => {}, forceReorganize = false } = opts
 
   const destPath = store.get('settings.destinationPath')
   if (!destPath) throw new Error('No destination path configured')
@@ -676,7 +676,7 @@ async function organizeSpecificRecording(store, filePath, gameName, opts = {}) {
   // Skip files already inside the organized destination (no double-move)
   const resolvedFile = path.resolve(filePath)
   const resolvedDest = path.resolve(destPath)
-  if (resolvedFile.startsWith(resolvedDest + path.sep)) {
+  if (!forceReorganize && resolvedFile.startsWith(resolvedDest + path.sep)) {
     return {
       success: true,
       alreadyOrganized: true,

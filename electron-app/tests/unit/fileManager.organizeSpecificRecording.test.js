@@ -409,4 +409,41 @@ describe('organizeSpecificRecording', () => {
     )
     expect(remuxCalls).toHaveLength(1)
   })
+
+  it('returns alreadyOrganized=true for a file already under destPath (default behavior)', async () => {
+    // Place file inside destDir (already "organized")
+    const subDir = path.join(destDir, 'Halo - Week of Jan 8 2024')
+    fs.mkdirSync(subDir, { recursive: true })
+    const filePath = path.join(subDir, 'session.mp4')
+    fs.writeFileSync(filePath, Buffer.alloc(1024))
+
+    const { organizeSpecificRecording } = await import('../../electron/fileManager.js')
+    const result = await organizeSpecificRecording(store, filePath, 'AnotherGame')
+
+    expect(result.success).toBe(true)
+    expect(result.alreadyOrganized).toBe(true)
+    // File should NOT have moved
+    expect(fs.existsSync(filePath)).toBe(true)
+  })
+
+  it('moves a file already under destPath when forceReorganize=true', async () => {
+    const subDir = path.join(destDir, 'Halo - Week of Jan 8 2024')
+    fs.mkdirSync(subDir, { recursive: true })
+    const filePath = path.join(subDir, 'session.mp4')
+    fs.writeFileSync(filePath, Buffer.alloc(1024))
+
+    const { organizeSpecificRecording } = await import('../../electron/fileManager.js')
+
+    vi.useFakeTimers()
+    const organizePromise = organizeSpecificRecording(store, filePath, 'AnotherGame', { forceReorganize: true })
+    await vi.runAllTimersAsync()
+    const result = await organizePromise
+    vi.useRealTimers()
+
+    expect(result.success).toBe(true)
+    expect(result.alreadyOrganized).toBeUndefined()
+    // A new folder for AnotherGame should exist under destDir
+    const entries = fs.readdirSync(destDir)
+    expect(entries.some((e) => e.startsWith('AnotherGame'))).toBe(true)
+  })
 })
