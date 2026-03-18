@@ -14,6 +14,8 @@ function ClipsPage() {
   const [deleteModal, setDeleteModal] = useState(false)
   const [toast, setToast] = useState(null)
   const [searchParams, setSearchParams] = useSearchParams()
+  const [games, setGames] = useState([])
+  const [organizeRemux, setOrganizeRemux] = useState(true)
   const toastTimerRef = useRef(null)
 
   useEffect(() => {
@@ -50,6 +52,8 @@ function ClipsPage() {
         }
       }
     })
+    api.getGames().then((g) => setGames(g || [])).catch(() => {})
+    api.getStore('settings').then((s) => setOrganizeRemux(s?.organizeRemux !== false)).catch(() => {})
   }, [fetchClips, setSearchParams])
 
   useEffect(() => {
@@ -58,6 +62,20 @@ function ClipsPage() {
     })
     return () => unsub?.()
   }, [fetchClips])
+
+  const handleOrganized = useCallback((result) => {
+    setToast({ type: 'success', message: `Organized: ${result.filename}` })
+    clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = setTimeout(() => setToast(null), 4000)
+    setSelectedClip(null)
+    fetchClips()
+  }, [fetchClips])
+
+  const handleOrganizeError = useCallback((msg) => {
+    setToast({ type: 'error', message: msg })
+    clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = setTimeout(() => setToast(null), 5000)
+  }, [])
 
   const handleDelete = useCallback(async () => {
     if (!selectedClip) return
@@ -108,7 +126,14 @@ function ClipsPage() {
 
       <div className="main-content">
         {selectedClip ? (
-          <VideoPlayer clip={selectedClip} onDelete={() => setDeleteModal(true)} />
+          <VideoPlayer
+            clip={selectedClip}
+            onDelete={() => setDeleteModal(true)}
+            games={games}
+            onOrganized={handleOrganized}
+            onOrganizeError={handleOrganizeError}
+            organizeRemux={organizeRemux}
+          />
         ) : (
           <>
             <div
