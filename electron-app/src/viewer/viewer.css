@@ -263,7 +263,7 @@ body {
   height: 44px;
   background-color: var(--accent);
   border: none;
-  border-radius: 50%;
+  border-radius: 6px;
   color: #fff;
   box-shadow:
     0 0 12px rgba(124, 58, 237, 0.3),
@@ -711,9 +711,9 @@ body {
 
 .dropdown-menu {
   position: absolute;
-  top: 100%;
+  bottom: 100%;
   right: 0;
-  margin-top: 6px;
+  margin-bottom: 6px;
   background: var(--bg-tertiary);
   border: 1.5px solid var(--border);
   border-radius: 9px;
