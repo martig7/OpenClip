@@ -212,6 +212,7 @@ async function organizeRecordings(store, gameName, onProgress = () => {}) {
     const dest = path.join(targetDir, newName)
 
     let movedTo = null
+    let preCachePromise = null
     if (!moveOnly && ext.toLowerCase() !== '.mp4') {
       onProgress({ phase: 'recording', stage: 'remuxing', label: 'Remuxing to MP4…', gameName })
       // Mark both paths as in-progress so scans skip them during remux
@@ -280,7 +281,8 @@ async function organizeRecordings(store, gameName, onProgress = () => {}) {
         service.invalidateRecordingsCache()
         // Pre-cache waveform for the moved file
         if (movedTo) {
-          preCacheWaveform(movedTo).catch(console.error)
+          preCachePromise = preCacheWaveform(movedTo)
+          preCachePromise.catch(console.error)
         }
       }
     } else {
@@ -289,7 +291,8 @@ async function organizeRecordings(store, gameName, onProgress = () => {}) {
       service.invalidateRecordingsCache()
       movedTo = dest
       // Pre-cache waveform for the moved file
-      preCacheWaveform(dest).catch(console.error)
+      preCachePromise = preCacheWaveform(dest)
+      preCachePromise.catch(console.error)
     }
 
     // Post-move: clean up processed markers and optionally delete the organized recording
@@ -302,6 +305,12 @@ async function organizeRecordings(store, gameName, onProgress = () => {}) {
         store.set('clipMarkers', remaining)
       }
       if (autoClipSettings.deleteFullRecording && movedTo) {
+        // Await the in-progress waveform pre-cache (started above) before deleting the file
+        try {
+          await (preCachePromise || preCacheWaveform(movedTo))
+        } catch (error) {
+          console.error('Waveform pre-caching failed before delete:', error)
+        }
         try {
           fs.unlinkSync(movedTo)
         } catch {}
@@ -472,6 +481,7 @@ async function finalizeDirectRecording(store, gameName, recordingDir, onProgress
     const dest = path.join(recordingDir, newName)
 
     let movedTo = null
+    let preCachePromise = null
     if (ext.toLowerCase() !== '.mp4') {
       onProgress({ phase: 'recording', stage: 'remuxing', label: 'Remuxing to MP4…', gameName })
       service.markRemuxing(src, dest)
@@ -536,7 +546,8 @@ async function finalizeDirectRecording(store, gameName, recordingDir, onProgress
         service.invalidateRecordingsCache()
         // Pre-cache waveform for the finalized file
         if (movedTo) {
-          preCacheWaveform(movedTo).catch(console.error)
+          preCachePromise = preCacheWaveform(movedTo)
+          preCachePromise.catch(console.error)
         }
       }
     } else {
@@ -545,7 +556,8 @@ async function finalizeDirectRecording(store, gameName, recordingDir, onProgress
       service.invalidateRecordingsCache()
       movedTo = dest
       // Pre-cache waveform for the finalized file
-      preCacheWaveform(dest).catch(console.error)
+      preCachePromise = preCacheWaveform(dest)
+      preCachePromise.catch(console.error)
     }
 
     // Post-rename: clean up processed markers and optionally delete the organized recording
@@ -558,6 +570,12 @@ async function finalizeDirectRecording(store, gameName, recordingDir, onProgress
         store.set('clipMarkers', remaining)
       }
       if (autoClipSettings.deleteFullRecording && movedTo) {
+        // Await the in-progress waveform pre-cache (started above) before deleting the file
+        try {
+          await (preCachePromise || preCacheWaveform(movedTo))
+        } catch (error) {
+          console.error('Waveform pre-caching failed before delete:', error)
+        }
         try {
           fs.unlinkSync(movedTo)
         } catch {}
@@ -577,18 +595,7 @@ function setupFileManager(ipcMain, store) {
     setWaveformResolution(settings.waveformResolution)
   }
   
-  // Listen for store.set calls to update waveform resolution when changed
-  const originalSet = ipcMain.handle.bind(ipcMain, 'store:set')
-  ipcMain.handle('store:set', (_event, key, value) => {
-    const result = store.set(key, value)
-    // Update waveform resolution when settings change
-    if (key === 'settings' && value?.waveformResolution) {
-      setWaveformResolution(value.waveformResolution)
-    } else if (key === 'settings.waveformResolution') {
-      setWaveformResolution(value)
-    }
-    return result
-  })
+
 
   ipcMain.handle('recordings:list', () => {
     return service.scanRecordings()

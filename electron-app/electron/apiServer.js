@@ -456,7 +456,11 @@ function startApiServer(appStore) {
   })
 
   // In dev mode use a fixed port so vite proxy can reach us; otherwise random
-  const isDev = process.env.NODE_ENV === 'development' || process.argv.includes('--dev')
+  // Also check for --integration-mode since those tests also need the fixed port
+  const isDev =
+    process.env.NODE_ENV === 'development' ||
+    process.argv.includes('--dev') ||
+    process.argv.includes('--integration-mode')
   const listenPort = isDev ? 47531 : 0
   server.listen(listenPort, '127.0.0.1', () => {
     const port = server.address().port

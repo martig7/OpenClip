@@ -157,7 +157,10 @@ function createWindow() {
     },
   })
 
-  const isDev = process.env.NODE_ENV === 'development' || process.argv.includes('--dev')
+  const isDev =
+    process.env.NODE_ENV === 'development' ||
+    process.argv.includes('--dev') ||
+    process.argv.includes('--integration-mode')
 
   if (isDev) {
     appState.mainWindow.loadURL('http://localhost:5173')

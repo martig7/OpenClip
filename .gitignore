@@ -16,9 +16,6 @@ clip_markers.json
 # Claude Code
 /.claude
 
-# Project documentation (created by Claude)
-/CLAUDE.md
-
 # Game icons (user-specific)
 /icons/
 

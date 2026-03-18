@@ -28,6 +28,9 @@ function setWaveform(filePath, trackIndex, numPeaks, peaks, duration) {
   try {
     const mtime = fs.statSync(filePath).mtimeMs
     const key = getCacheKey(filePath, mtime, trackIndex, numPeaks)
+    
+    // Delete first to ensure key is moved to end (most recently used)
+    cache.delete(key)
     cache.set(key, { peaks, duration })
 
     // Evict oldest entries if over limit

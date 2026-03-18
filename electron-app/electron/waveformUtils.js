@@ -102,11 +102,10 @@ function setupProcessTimeout(process, timeoutMs = 30000) {
  * @returns {Float32Array} - Audio samples
  */
 function bufferToSamples(buffer) {
-  return new Float32Array(
-    buffer.buffer,
-    buffer.byteOffset,
-    Math.floor(buffer.length / 4)
-  )
+  // Slice to handle pooled Node Buffers with byteOffset != 0,
+  // then wrap as Float32Array (f32le — matches FFmpeg -f f32le output on all supported platforms)
+  const ab = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
+  return new Float32Array(ab)
 }
 
 /**
@@ -132,7 +131,11 @@ async function generateWaveform(filePath, trackIndex, numPeaks, getDuration) {
     ffmpegProc.stdout.on('data', (chunk) => chunks.push(chunk))
 
     return new Promise((resolve) => {
-      ffmpegProc.on('close', () => {
+      ffmpegProc.on('close', (code) => {
+        if (code !== 0) {
+          resolve(null)
+          return
+        }
         try {
           const buffer = Buffer.concat(chunks)
           const samples = bufferToSamples(buffer)

@@ -112,10 +112,14 @@ function VideoPlayer({
     if (!media) return
 
     let cancelled = false
+    let abortController = new AbortController()
 
     const fetchTracks = async () => {
       try {
-        const response = await apiFetch(`/api/video/tracks?path=${encodeURIComponent(media.path)}`)
+        const response = await apiFetch(`/api/video/tracks?path=${encodeURIComponent(media.path)}`, {
+          signal: abortController.signal
+        })
+        if (cancelled) return
         const data = await response.json()
         if (cancelled) return
         if (response.ok && data.tracks) {
@@ -136,8 +140,12 @@ function VideoPlayer({
 
             try {
               const waveRes = await apiFetch(
-                `/api/video/waveform?path=${encodeURIComponent(media.path)}&track=${trackIndex}&resolution=${waveformResolution}`
+                `/api/video/waveform?path=${encodeURIComponent(media.path)}&track=${trackIndex}&resolution=${waveformResolution}`,
+                {
+                  signal: abortController.signal
+                }
               )
+              if (cancelled) return null
               const waveData = await waveRes.json()
               if (cancelled) return null
               if (waveRes.ok && waveData.peaks?.length) {
@@ -147,7 +155,10 @@ function VideoPlayer({
                 return { trackIndex, peaks: waveData.peaks }
               }
             } catch (e) {
-              console.error(`Failed to fetch waveform for track ${trackIndex}:`, e)
+              // Ignore abort errors
+              if (e.name !== 'AbortError') {
+                console.error(`Failed to fetch waveform for track ${trackIndex}:`, e)
+              }
             }
             return null
           })
@@ -155,15 +166,19 @@ function VideoPlayer({
           await Promise.allSettled(waveformPromises)
         }
       } catch (error) {
-        console.error('Failed to fetch audio tracks:', error)
+        // Ignore abort errors
+        if (!cancelled && error.name !== 'AbortError') {
+          console.error('Failed to fetch audio tracks:', error)
+        }
       }
     }
 
     fetchTracks()
     return () => {
       cancelled = true
+      abortController.abort()
     }
-  }, [recording, waveformResolution])
+  }, [media, waveformResolution])
 
   useEffect(() => {
     const handleFullscreenChange = () => {

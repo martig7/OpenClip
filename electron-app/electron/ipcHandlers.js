@@ -98,7 +98,18 @@ function registerIpcHandlers(store, appState) {
 
   // --- Settings ---
   ipcMain.handle('store:get', (_event, key) => store.get(key))
-  ipcMain.handle('store:set', (_event, key, value) => store.set(key, value))
+  ipcMain.handle('store:set', (_event, key, value) => {
+    const result = store.set(key, value)
+    // Update waveform resolution when settings change
+    if (key === 'settings' && value?.waveformResolution) {
+      const { setWaveformResolution } = require('./waveformPreCache')
+      setWaveformResolution(value.waveformResolution)
+    } else if (key === 'settings.waveformResolution') {
+      const { setWaveformResolution } = require('./waveformPreCache')
+      setWaveformResolution(value)
+    }
+    return result
+  })
 
   // --- Games ---
   ipcMain.handle('games:list', () => store.get('games'))

@@ -17,6 +17,8 @@ import WatcherStatusCard from './games/WatcherStatusCard'
 import EditGameModal from './games/EditGameModal'
 import AddGameModal from './games/AddGameModal'
 import SceneAudioSourcesCard from './games/SceneAudioSourcesCard'
+import { GameList } from './games/GameList'
+import { GamesPageBody } from './games/GamesPageBody'
 import ConfirmDeleteDialog from '../components/ConfirmDeleteDialog'
 import OnboardingModal from '../components/OnboardingModal'
 
@@ -674,107 +676,36 @@ export default function GamesPage() {
         <p>Manage games to automatically record with OBS</p>
       </div>
 
-      <div className="page-body">
-        {/* Watcher Status Card */}
-        <WatcherStatusCard
-          status={watcherStatus}
-          onToggle={toggleWatcher}
-          scriptWarning={scriptWarning}
-          onDismissWarning={handleDismissWarning}
-          onGoToSettings={handleGoToSettings}
-          onOpenOBS={handleOpenOBS}
-        />
-
-        <div className="card" style={{ marginTop: 16 }}>
-          <div className="card-header">
-            <span className="card-title">Game Library ({games.length})</span>
-            <button className="btn btn-primary btn-sm" onClick={openAddModal}>
-              <Plus size={14} /> Add Game
-            </button>
-          </div>
-
-          {games.length === 0 ? (
-            <div className="empty-state">
-              <Gamepad2 size={40} />
-              <p>No games added yet. Click "Add Game" to get started.</p>
-            </div>
-          ) : (
-            <div>
-              {games.map((game) => (
-                <div key={game.id} className="list-item">
-                  <button
-                    className={`toggle ${game.enabled ? 'on' : ''}`}
-                    onClick={() => toggleGame(game.id)}
-                    title={game.enabled ? 'Enabled' : 'Disabled'}
-                  />
-                  {game.icon_path && (
-                    <img
-                      src={`localfile:///${game.icon_path.replace(/\\/g, '/')}`}
-                      alt=""
-                      style={{
-                        width: 24,
-                        height: 24,
-                        objectFit: 'contain',
-                        borderRadius: 4,
-                        flexShrink: 0,
-                      }}
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none'
-                      }}
-                    />
-                  )}
-                  <div className="list-item-info">
-                    <div className="list-item-title">{game.name}</div>
-                    <div className="list-item-subtitle">
-                      {game.selector}
-                      {game.scene && (
-                        <span style={{ marginLeft: 6, color: 'var(--text-muted)' }}>
-                          · Scene: {game.scene}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <button
-                    className="btn-icon"
-                    onClick={() => openEditModal(game)}
-                    title="Edit game"
-                  >
-                    <Edit2 size={14} />
-                  </button>
-                  <button
-                    className="btn-icon"
-                    onClick={() => removeGame(game.id)}
-                    title="Remove game"
-                    style={{ color: 'var(--danger)' }}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <SceneAudioSourcesCard
-          masterAudioSources={masterAudioSources}
-          applyingSource={applyingSource}
-          showAudioDropdown={showAudioDropdown}
-          setShowAudioDropdown={setShowAudioDropdown}
-          audioDropdownRef={audioDropdownRef}
-          availableAudioInputs={availableAudioInputs}
-          loadingAudioInputs={loadingAudioInputs}
-          audioDropdownError={audioDropdownError}
-          trackLabels={trackLabels}
-          setTrackLabels={setTrackLabels}
-          trackData={trackData}
-          trackLoading={trackLoading}
-          onLoadAudioInputs={loadAudioInputsForDropdown}
-          onAddSource={addMasterSource}
-          onRemoveSource={removeMasterSource}
-          onToggleTrack={toggleTrack}
-          showToast={showToast}
-        />
-      </div>
+      <GamesPageBody
+        watcherStatus={watcherStatus}
+        toggleWatcher={toggleWatcher}
+        scriptWarning={scriptWarning}
+        handleDismissWarning={handleDismissWarning}
+        handleGoToSettings={handleGoToSettings}
+        handleOpenOBS={handleOpenOBS}
+        games={games}
+        openAddModal={openAddModal}
+        toggleGame={toggleGame}
+        openEditModal={openEditModal}
+        removeGame={removeGame}
+        masterAudioSources={masterAudioSources}
+        applyingSource={applyingSource}
+        showAudioDropdown={showAudioDropdown}
+        setShowAudioDropdown={setShowAudioDropdown}
+        audioDropdownRef={audioDropdownRef}
+        availableAudioInputs={availableAudioInputs}
+        loadingAudioInputs={loadingAudioInputs}
+        audioDropdownError={audioDropdownError}
+        trackLabels={trackLabels}
+        setTrackLabels={setTrackLabels}
+        trackData={trackData}
+        trackLoading={trackLoading}
+        loadAudioInputsForDropdown={loadAudioInputsForDropdown}
+        addMasterSource={addMasterSource}
+        removeMasterSource={removeMasterSource}
+        toggleTrack={toggleTrack}
+        showToast={showToast}
+      />
 
       {showAddModal && (
         <AddGameModal
