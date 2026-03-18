@@ -41,8 +41,8 @@ function VideoPlayer({
   const [volume, setVolume] = useState(1)
   const [isMuted, setIsMuted] = useState(false)
 
-  // Determine if this is clip mode (clips don't have clip creation/organize features)
-  const isClipMode = !!clip
+  // Whether the media was passed as a clip (vs a recording)
+  const isClip = !!clip
 
   // Hover controls state
   const [showControls, setShowControls] = useState(false)
@@ -453,7 +453,7 @@ function VideoPlayer({
       setOrganizeProgress(null)
     }
   }, [
-    recording,
+    media,
     organizeGame,
     organizeRemux,
     isOrganizing,
@@ -643,7 +643,8 @@ function VideoPlayer({
           onZoomIn={() => zoomTimelineRef.current?.zoomIn()}
           onZoomOut={() => zoomTimelineRef.current?.zoomOut()}
           onZoomFit={() => zoomTimelineRef.current?.zoomFit()}
-          enterClipMode={enterClipMode}
+          isClip={isClip}
+          enterClipMode={isClip ? undefined : enterClipMode}
           exitClipMode={exitClipMode}
           handleCreateClip={handleCreateClip}
           isCreatingClip={isCreatingClip}
@@ -652,11 +653,11 @@ function VideoPlayer({
           handleShowInExplorer={handleShowInExplorer}
         />
 
-        {isUnorganized && organizeMode && !isClipMode && (
+        {organizeMode && !clipMode && (
           <div className="organize-panel">
             <div className="organize-header">
               <MoveRight size={13} />
-              Move to organized library
+              Move to another game
             </div>
             <div className="organize-row">
               <select
