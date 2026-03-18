@@ -62,6 +62,10 @@ function VideoPlayer({
   const [audioTracks, setAudioTracks] = useState([])
   const [selectedTracks, setSelectedTracks] = useState([])
   const [waveforms, setWaveforms] = useState({})
+  const [waveformResolution, setWaveformResolution] = useState('default')
+
+  // In-memory waveform cache (cleared when media changes)
+  const waveformCacheRef = useRef(new Map())
 
   // Organize state
   const [organizeMode, setOrganizeMode] = useState(false)
@@ -89,7 +93,19 @@ function VideoPlayer({
     setWaveforms({})
     setOrganizeMode(false)
     setOrganizeGame('')
+    waveformCacheRef.current.clear()
   }, [media])
+
+  // Fetch waveform resolution setting
+  useEffect(() => {
+    const loadWaveformResolution = async () => {
+      const s = await api.getStore('settings')
+      if (s?.waveformResolution) {
+        setWaveformResolution(s.waveformResolution)
+      }
+    }
+    loadWaveformResolution()
+  }, [])
 
   // Fetch audio tracks when media changes
   useEffect(() => {
@@ -105,22 +121,38 @@ function VideoPlayer({
         if (response.ok && data.tracks) {
           setAudioTracks(data.tracks)
           setSelectedTracks(data.tracks.map((_, i) => i))
-          // Fetch waveforms sequentially to avoid CPU/IO spikes
-          for (let i = 0; i < data.tracks.length; i++) {
-            if (cancelled) break
+
+          // Fetch waveforms in parallel with concurrent requests
+          const waveformPromises = data.tracks.map(async (track, trackIndex) => {
+            if (cancelled) return null
+
+            // Check in-memory cache first
+            const cacheKey = `${media.path}:${trackIndex}:${waveformResolution}`
+            const cached = waveformCacheRef.current.get(cacheKey)
+            if (cached) {
+              setWaveforms((prev) => ({ ...prev, [trackIndex]: cached.peaks }))
+              return { trackIndex, peaks: cached.peaks }
+            }
+
             try {
               const waveRes = await apiFetch(
-                `/api/video/waveform?path=${encodeURIComponent(media.path)}&track=${i}`
+                `/api/video/waveform?path=${encodeURIComponent(media.path)}&track=${trackIndex}&resolution=${waveformResolution}`
               )
               const waveData = await waveRes.json()
-              if (cancelled) break
+              if (cancelled) return null
               if (waveRes.ok && waveData.peaks?.length) {
-                setWaveforms((prev) => ({ ...prev, [i]: waveData.peaks }))
+                // Cache in memory
+                waveformCacheRef.current.set(cacheKey, { peaks: waveData.peaks })
+                setWaveforms((prev) => ({ ...prev, [trackIndex]: waveData.peaks }))
+                return { trackIndex, peaks: waveData.peaks }
               }
             } catch (e) {
-              console.error('Failed to fetch waveform:', e)
+              console.error(`Failed to fetch waveform for track ${trackIndex}:`, e)
             }
-          }
+            return null
+          })
+
+          await Promise.allSettled(waveformPromises)
         }
       } catch (error) {
         console.error('Failed to fetch audio tracks:', error)
@@ -131,7 +163,7 @@ function VideoPlayer({
     return () => {
       cancelled = true
     }
-  }, [recording])
+  }, [recording, waveformResolution])
 
   useEffect(() => {
     const handleFullscreenChange = () => {

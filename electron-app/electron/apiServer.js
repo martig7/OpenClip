@@ -13,6 +13,7 @@ const { MIME_TYPES, formatFileSize, FFMPEG_PATH, FFPROBE_PATH, CODEC_MAP } = req
 const service = require('./recordingService')
 const { loadMarkers, saveMarkers } = require('./markerService')
 const { getVideoDuration, getDiskUsage } = require('./videoMetadata')
+const { getWaveform, setWaveform } = require('./waveformCache')
 
 let store // set in startApiServer
 
@@ -406,14 +407,18 @@ function startApiServer(appStore) {
         })
       }
 
-      // GET /api/video/waveform?path=...&track=0
+      // GET /api/video/waveform?path=...&track=0&resolution=default
       if (pathname === '/api/video/waveform' && req.method === 'GET') {
         const filePath = query.path
         const rawTrack = parseInt(query.track, 10)
+        const resolution = query.resolution || 'default'
         if (isNaN(rawTrack) || rawTrack < 0) return json(res, { error: 'Invalid track index' }, 400)
         const trackIndex = rawTrack
         if (!filePath || !isAllowedPath(filePath)) return json(res, { error: 'Forbidden' }, 403)
         if (!fs.existsSync(filePath)) return json(res, { error: 'File not found' }, 404)
+
+        // Map resolution to NUM_PEAKS
+        const NUM_PEAKS = resolution === 'low' ? 1000 : resolution === 'high' ? 4000 : 2000
 
         return new Promise((resolve) => {
           getVideoDuration(filePath).then((duration) => {
@@ -422,7 +427,13 @@ function startApiServer(appStore) {
               return
             }
 
-            const NUM_PEAKS = 2000
+            // Check cache first
+            const cached = getWaveform(filePath, trackIndex, NUM_PEAKS)
+            if (cached && cached.peaks?.length) {
+              resolve(json(res, { peaks: cached.peaks, duration: cached.duration }))
+              return
+            }
+
             const sampleRate = Math.max(2, Math.round(NUM_PEAKS / duration))
 
             const ffmpegProc = spawn(FFMPEG_PATH, [
@@ -480,7 +491,12 @@ function startApiServer(appStore) {
                   peaks.push(max)
                 }
                 const maxPeak = peaks.reduce((m, p) => (p > m ? p : m), 0.001)
-                resolve(json(res, { peaks: peaks.map((p) => p / maxPeak), duration }))
+                const normalizedPeaks = peaks.map((p) => p / maxPeak)
+
+                // Store in cache
+                setWaveform(filePath, trackIndex, NUM_PEAKS, normalizedPeaks, duration)
+
+                resolve(json(res, { peaks: normalizedPeaks, duration }))
               } catch {
                 resolve(json(res, { peaks: [] }))
               }

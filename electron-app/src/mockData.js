@@ -17,6 +17,7 @@ export const defaultSettings = {
     maxAgeDays: 30,
     excludeClips: true,
   },
+  waveformResolution: 'default',
 }
 
 export const mockGames = [
