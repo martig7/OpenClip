@@ -1,8 +1,8 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer } = require('electron')
 
 // Cache the last in-flight session progress so components that mount mid-session
 // (e.g. user switches to Recordings page while organize is running) can catch up.
-let _lastSessionProgress = null;
+let _lastSessionProgress = null
 
 contextBridge.exposeInMainWorld('api', {
   // Test-mode flag — true when Electron is started with --test-mode
@@ -28,36 +28,51 @@ contextBridge.exposeInMainWorld('api', {
   stopWatcher: () => ipcRenderer.invoke('watcher:stop'),
   getWatcherStatus: () => ipcRenderer.invoke('watcher:status'),
   onWatcherState: (callback) => {
-    const handler = (_event, state) => callback(state);
-    ipcRenderer.on('watcher:state', handler);
-    return () => ipcRenderer.removeListener('watcher:state', handler);
+    const handler = (_event, state) => callback(state)
+    ipcRenderer.on('watcher:state', handler)
+    return () => ipcRenderer.removeListener('watcher:state', handler)
   },
   onWatcherStatusPush: (callback) => {
-    const handler = (_event, status) => callback(status);
-    ipcRenderer.on('watcher:status-push', handler);
-    return () => ipcRenderer.removeListener('watcher:status-push', handler);
+    const handler = (_event, status) => callback(status)
+    ipcRenderer.on('watcher:status-push', handler)
+    return () => ipcRenderer.removeListener('watcher:status-push', handler)
   },
 
   // OBS
   detectOBSPath: () => ipcRenderer.invoke('obs:detect-path'),
   getOBSProfiles: () => ipcRenderer.invoke('obs:profiles'),
   getEncodingSettings: (profileDir) => ipcRenderer.invoke('obs:encoding:get', profileDir),
-  setEncodingSettings: (profileDir, settings) => ipcRenderer.invoke('obs:encoding:set', profileDir, settings),
+  setEncodingSettings: (profileDir, settings) =>
+    ipcRenderer.invoke('obs:encoding:set', profileDir, settings),
   isOBSRunning: () => ipcRenderer.invoke('obs:running'),
   launchOBS: () => ipcRenderer.invoke('obs:launch'),
 
   // OBS Plugin (scene/audio control via native plugin HTTP API)
   isOBSScriptLoaded: () => ipcRenderer.invoke('obs:ws:script-loaded'),
   getOBSWSScenes: () => ipcRenderer.invoke('obs:ws:scenes'),
-  createOBSScene: (newSceneName, templateSceneName) => ipcRenderer.invoke('obs:ws:create-scene', newSceneName, templateSceneName),
-  createOBSSceneFromScratch: (sceneName, options) => ipcRenderer.invoke('obs:ws:create-scene-scratch', sceneName, options),
+  createOBSScene: (newSceneName, templateSceneName) =>
+    ipcRenderer.invoke('obs:ws:create-scene', newSceneName, templateSceneName),
+  createOBSSceneFromScratch: (sceneName, options) =>
+    ipcRenderer.invoke('obs:ws:create-scene-scratch', sceneName, options),
   deleteOBSScene: (sceneName) => ipcRenderer.invoke('obs:ws:delete-scene', sceneName),
-  addAudioSourceToScenes: (sceneNames, inputKind, inputName, inputSettings, options) => ipcRenderer.invoke('obs:ws:add-audio-source', sceneNames, inputKind, inputName, inputSettings, options),
-  removeAudioSourceFromScenes: (sceneNames, inputName) => ipcRenderer.invoke('obs:ws:remove-audio-source', sceneNames, inputName),
+  addAudioSourceToScenes: (sceneNames, inputKind, inputName, inputSettings, options) =>
+    ipcRenderer.invoke(
+      'obs:ws:add-audio-source',
+      sceneNames,
+      inputKind,
+      inputName,
+      inputSettings,
+      options
+    ),
+  removeAudioSourceFromScenes: (sceneNames, inputName) =>
+    ipcRenderer.invoke('obs:ws:remove-audio-source', sceneNames, inputName),
   getOBSAudioInputs: () => ipcRenderer.invoke('obs:ws:get-audio-inputs'),
-  getSceneAudioSources: (sceneName) => ipcRenderer.invoke('obs:ws:get-scene-audio-sources', sceneName),
-  getInputAudioTracks: (inputName) => ipcRenderer.invoke('obs:ws:get-input-audio-tracks', inputName),
-  setInputAudioTracks: (inputName, tracks) => ipcRenderer.invoke('obs:ws:set-input-audio-tracks', inputName, tracks),
+  getSceneAudioSources: (sceneName) =>
+    ipcRenderer.invoke('obs:ws:get-scene-audio-sources', sceneName),
+  getInputAudioTracks: (inputName) =>
+    ipcRenderer.invoke('obs:ws:get-input-audio-tracks', inputName),
+  setInputAudioTracks: (inputName, tracks) =>
+    ipcRenderer.invoke('obs:ws:set-input-audio-tracks', inputName, tracks),
   getTrackNames: () => ipcRenderer.invoke('obs:ws:get-track-names'),
   setTrackNames: (names) => ipcRenderer.invoke('obs:ws:set-track-names', names),
   listWindowsAudioDevices: () => ipcRenderer.invoke('windows:list-audio-devices'),
@@ -75,35 +90,36 @@ contextBridge.exposeInMainWorld('api', {
   getRecordings: () => ipcRenderer.invoke('recordings:list'),
   deleteRecording: (path) => ipcRenderer.invoke('recordings:delete', path),
   getVideoURL: (filePath) => ipcRenderer.invoke('video:getURL', filePath),
-  organizeRecording: (filePath, gameName, remux) => ipcRenderer.invoke('recordings:organize', { filePath, gameName, remux }),
+  organizeRecording: (filePath, gameName, remux) =>
+    ipcRenderer.invoke('recordings:organize', { filePath, gameName, remux }),
   onOrganizeProgress: (callback) => {
-    const handler = (_event, progress) => callback(progress);
-    ipcRenderer.on('recordings:organize-progress', handler);
-    return () => ipcRenderer.removeListener('recordings:organize-progress', handler);
+    const handler = (_event, progress) => callback(progress)
+    ipcRenderer.on('recordings:organize-progress', handler)
+    return () => ipcRenderer.removeListener('recordings:organize-progress', handler)
   },
   onSessionProgress: (callback) => {
     // Replay last known state so components that mount mid-session see the banner immediately.
     // Capture a snapshot and cancelled flag to avoid calling back after unsubscribe.
-    const snapshot = _lastSessionProgress;
-    let cancelled = false;
+    const snapshot = _lastSessionProgress
+    let cancelled = false
     if (snapshot) {
       Promise.resolve().then(() => {
-        if (!cancelled && snapshot) callback(snapshot);
-      });
+        if (!cancelled && snapshot) callback(snapshot)
+      })
     }
     const handler = (_event, progress) => {
-      if (!progress) return;
-      _lastSessionProgress = progress.phase === 'complete' ? null : progress;
-      callback(progress);
-    };
-    ipcRenderer.on('session:process-progress', handler);
+      if (!progress) return
+      _lastSessionProgress = progress.phase === 'complete' ? null : progress
+      callback(progress)
+    }
+    ipcRenderer.on('session:process-progress', handler)
     return () => {
-      cancelled = true;
-      ipcRenderer.removeListener('session:process-progress', handler);
-    };
+      cancelled = true
+      ipcRenderer.removeListener('session:process-progress', handler)
+    }
   },
   clearSessionProgress: () => {
-    _lastSessionProgress = null;
+    _lastSessionProgress = null
   },
 
   // Clips
@@ -115,9 +131,9 @@ contextBridge.exposeInMainWorld('api', {
   getMarkers: () => ipcRenderer.invoke('markers:list'),
   deleteMarker: (index) => ipcRenderer.invoke('markers:delete', index),
   onMarkerAdded: (callback) => {
-    const handler = (_event, count) => callback(count);
-    ipcRenderer.on('clip:marker-added', handler);
-    return () => ipcRenderer.removeListener('clip:marker-added', handler);
+    const handler = (_event, count) => callback(count)
+    ipcRenderer.on('clip:marker-added', handler)
+    return () => ipcRenderer.removeListener('clip:marker-added', handler)
   },
 
   // Storage
@@ -146,23 +162,23 @@ contextBridge.exposeInMainWorld('api', {
   checkForUpdate: () => ipcRenderer.invoke('update:check'),
   installUpdate: () => ipcRenderer.invoke('update:install'),
   onUpdateAvailable: (callback) => {
-    const handler = (_event, info) => callback(info);
-    ipcRenderer.on('update:available', handler);
-    return () => ipcRenderer.removeListener('update:available', handler);
+    const handler = (_event, info) => callback(info)
+    ipcRenderer.on('update:available', handler)
+    return () => ipcRenderer.removeListener('update:available', handler)
   },
   onUpdateProgress: (callback) => {
-    const handler = (_event, progress) => callback(progress);
-    ipcRenderer.on('update:progress', handler);
-    return () => ipcRenderer.removeListener('update:progress', handler);
+    const handler = (_event, progress) => callback(progress)
+    ipcRenderer.on('update:progress', handler)
+    return () => ipcRenderer.removeListener('update:progress', handler)
   },
   onUpdateDownloaded: (callback) => {
-    const handler = () => callback();
-    ipcRenderer.on('update:downloaded', handler);
-    return () => ipcRenderer.removeListener('update:downloaded', handler);
+    const handler = () => callback()
+    ipcRenderer.on('update:downloaded', handler)
+    return () => ipcRenderer.removeListener('update:downloaded', handler)
   },
   onUpdateError: (callback) => {
-    const handler = (_event, info) => callback(info);
-    ipcRenderer.on('update:error', handler);
-    return () => ipcRenderer.removeListener('update:error', handler);
+    const handler = (_event, info) => callback(info)
+    ipcRenderer.on('update:error', handler)
+    return () => ipcRenderer.removeListener('update:error', handler)
   },
-});
+})

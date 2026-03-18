@@ -1,10 +1,10 @@
 import { useEffect, useCallback, useRef } from 'react'
 
 const HEADER_H = 26
-const ROW_H    = 33
-const SB_W     = 8
+const ROW_H = 33
+const SB_W = 8
 
-const COL_DOT  = 22
+const COL_DOT = 22
 
 function getLayout(cssW) {
   const MIN_DATE = 70
@@ -18,7 +18,7 @@ function getLayout(cssW) {
 
   const nameW = Math.max(60, cssW - COL_DOT - colDate - colSize - SB_W)
   return {
-    xDot:  0,
+    xDot: 0,
     xName: COL_DOT,
     nameW,
     xDate: COL_DOT + nameW,
@@ -30,8 +30,12 @@ function getLayout(cssW) {
 
 function truncText(ctx, text, x, y, maxW) {
   if (maxW <= 4 || !text) return
-  if (ctx.measureText(text).width <= maxW) { ctx.fillText(text, x, y); return }
-  let lo = 0, hi = text.length
+  if (ctx.measureText(text).width <= maxW) {
+    ctx.fillText(text, x, y)
+    return
+  }
+  let lo = 0,
+    hi = text.length
   while (lo < hi) {
     const mid = Math.ceil((lo + hi) / 2)
     ctx.measureText(text.slice(0, mid) + '…').width <= maxW ? (lo = mid) : (hi = mid - 1)
@@ -42,35 +46,33 @@ function truncText(ctx, text, x, y, maxW) {
 function chevron(ctx, cx, cy, sz, up) {
   ctx.beginPath()
   ctx.moveTo(cx - sz / 2, up ? cy + sz / 3 : cy - sz / 3)
-  ctx.lineTo(cx,           up ? cy - sz / 3 : cy + sz / 3)
+  ctx.lineTo(cx, up ? cy - sz / 3 : cy + sz / 3)
   ctx.lineTo(cx + sz / 2, up ? cy + sz / 3 : cy - sz / 3)
   ctx.stroke()
 }
 
-export default function MediaList({
-  items, selectedItem, onSelect, gameColors, sortBy, sortDir,
-}) {
+export default function MediaList({ items, selectedItem, onSelect, gameColors, sortBy, sortDir }) {
   const containerRef = useRef(null)
-  const canvasRef    = useRef(null)
-  const rafRef       = useRef(null)
-  const drawRef      = useRef(null)
-  const scrollRef    = useRef(0)
-  const hoverRef     = useRef(-1)
-  const sizeRef      = useRef({ w: 0, h: 0 })
-  const dragSbRef    = useRef(null)
-  const moveRafRef   = useRef(null)
+  const canvasRef = useRef(null)
+  const rafRef = useRef(null)
+  const drawRef = useRef(null)
+  const scrollRef = useRef(0)
+  const hoverRef = useRef(-1)
+  const sizeRef = useRef({ w: 0, h: 0 })
+  const dragSbRef = useRef(null)
+  const moveRafRef = useRef(null)
 
   // Mirror props to refs — prevents stale closures in draw/event handlers
-  const itemsRef   = useRef(items)
-  const selRef     = useRef(selectedItem)   // holds full item Object, not a Set
-  const colorsRef  = useRef(gameColors)
-  const sortByRef  = useRef(sortBy)
+  const itemsRef = useRef(items)
+  const selRef = useRef(selectedItem) // holds full item Object, not a Set
+  const colorsRef = useRef(gameColors)
+  const sortByRef = useRef(sortBy)
   const sortDirRef = useRef(sortDir)
 
-  itemsRef.current   = items
-  selRef.current     = selectedItem
-  colorsRef.current  = gameColors
-  sortByRef.current  = sortBy
+  itemsRef.current = items
+  selRef.current = selectedItem
+  colorsRef.current = gameColors
+  sortByRef.current = sortBy
   sortDirRef.current = sortDir
 
   const clamp = useCallback((v) => {
@@ -80,12 +82,18 @@ export default function MediaList({
 
   const scheduleDraw = useCallback(() => {
     if (rafRef.current) return
-    rafRef.current = requestAnimationFrame(() => { rafRef.current = null; drawRef.current?.() })
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null
+      drawRef.current?.()
+    })
   }, [])
 
   const flushDraw = useCallback(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current)
-    rafRef.current = requestAnimationFrame(() => { rafRef.current = null; drawRef.current?.() })
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null
+      drawRef.current?.()
+    })
   }, [])
 
   // ── Resize observer ──────────────────────────────────────────────────────────
@@ -96,7 +104,7 @@ export default function MediaList({
       const canvas = canvasRef.current
       if (!canvas) return
       const dpr = window.devicePixelRatio || 1
-      canvas.width  = Math.round(w * dpr)
+      canvas.width = Math.round(w * dpr)
       canvas.height = Math.round(h * dpr)
       sizeRef.current = { w, h }
       scheduleDraw()
@@ -139,12 +147,12 @@ export default function MediaList({
     const { w, h } = sizeRef.current
     if (!w || !h) return
 
-    const items  = itemsRef.current
-    const sel    = selRef.current
-    const gc     = colorsRef.current
-    const st     = scrollRef.current
-    const hover  = hoverRef.current
-    const L      = getLayout(w)
+    const items = itemsRef.current
+    const sel = selRef.current
+    const gc = colorsRef.current
+    const st = scrollRef.current
+    const hover = hoverRef.current
+    const L = getLayout(w)
 
     ctx.save()
     ctx.scale(dpr, dpr)
@@ -157,9 +165,9 @@ export default function MediaList({
     ctx.fillRect(0, HEADER_H - 1, w, 1)
 
     ctx.textBaseline = 'middle'
-    ctx.textAlign    = 'left'
-    ctx.lineCap      = 'round'
-    ctx.lineJoin     = 'round'
+    ctx.textAlign = 'left'
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
 
     const hCols = [
       { key: 'name', label: 'NAME', x: L.xName },
@@ -192,15 +200,20 @@ export default function MediaList({
     const r1 = Math.min(items.length, Math.ceil((st + rowsH) / ROW_H))
 
     for (let i = r0; i < r1; i++) {
-      const item  = items[i]
-      const y     = HEADER_H + i * ROW_H - st
+      const item = items[i]
+      const y = HEADER_H + i * ROW_H - st
       const isSel = item.path === sel?.path
       const color = gc[item.game_name] || '#888888'
       const isHov = i === hover
 
       // Row background — no globalAlpha changes, always full opacity
-      if (isSel)      { ctx.fillStyle = 'rgba(99,102,241,0.1)'; ctx.fillRect(0, y, w, ROW_H) }
-      else if (isHov) { ctx.fillStyle = '#2a2a2a';               ctx.fillRect(0, y, w, ROW_H) }
+      if (isSel) {
+        ctx.fillStyle = 'rgba(99,102,241,0.1)'
+        ctx.fillRect(0, y, w, ROW_H)
+      } else if (isHov) {
+        ctx.fillStyle = '#2a2a2a'
+        ctx.fillRect(0, y, w, ROW_H)
+      }
 
       // Row border
       ctx.fillStyle = '#333333'
@@ -211,44 +224,57 @@ export default function MediaList({
       const dotCy = y + ROW_H / 2
       if (isSel) {
         ctx.fillStyle = '#7c3aed'
-        ctx.beginPath(); ctx.arc(dotCx, dotCy, 7, 0, Math.PI * 2); ctx.fill()
-        ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round'
         ctx.beginPath()
-        ctx.moveTo(dotCx - 3,   dotCy)
+        ctx.arc(dotCx, dotCy, 7, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.strokeStyle = '#fff'
+        ctx.lineWidth = 1.5
+        ctx.lineCap = 'round'
+        ctx.lineJoin = 'round'
+        ctx.beginPath()
+        ctx.moveTo(dotCx - 3, dotCy)
         ctx.lineTo(dotCx - 0.5, dotCy + 2.5)
-        ctx.lineTo(dotCx + 4,   dotCy - 3)
+        ctx.lineTo(dotCx + 4, dotCy - 3)
         ctx.stroke()
       } else {
         ctx.fillStyle = color
-        ctx.beginPath(); ctx.arc(dotCx, dotCy, 3.5, 0, Math.PI * 2); ctx.fill()
+        ctx.beginPath()
+        ctx.arc(dotCx, dotCy, 3.5, 0, Math.PI * 2)
+        ctx.fill()
       }
 
-      ctx.textBaseline = 'middle'; ctx.textAlign = 'left'
+      ctx.textBaseline = 'middle'
+      ctx.textAlign = 'left'
 
       // Name
-      ctx.fillStyle = '#ffffff'; ctx.font = '12px system-ui, sans-serif'
+      ctx.fillStyle = '#ffffff'
+      ctx.font = '12px system-ui, sans-serif'
       truncText(ctx, item.filename, L.xName + 8, y + ROW_H / 2, L.nameW - 16)
 
       // Date
-      ctx.fillStyle = '#555555'; ctx.font = '11px system-ui, sans-serif'
+      ctx.fillStyle = '#555555'
+      ctx.font = '11px system-ui, sans-serif'
       truncText(ctx, item.date || '', L.xDate + 8, y + ROW_H / 2, L.colDate - 12)
 
       // Size
-      ctx.fillStyle = '#555555'; ctx.font = '11px "Courier New", monospace'
+      ctx.fillStyle = '#555555'
+      ctx.font = '11px "Courier New", monospace'
       truncText(ctx, item.size_formatted || '', L.xSize + 8, y + ROW_H / 2, L.colSize - 8)
     }
     ctx.restore()
 
     // ── Scrollbar ────────────────────────────────────────────────────────────
-    const totalH  = items.length * ROW_H
+    const totalH = items.length * ROW_H
     const rowsVis = h - HEADER_H
     if (totalH > rowsVis) {
-      const thumbH = Math.max(24, rowsVis * rowsVis / totalH)
+      const thumbH = Math.max(24, (rowsVis * rowsVis) / totalH)
       const thumbY = HEADER_H + (st / (totalH - rowsVis)) * (rowsVis - thumbH)
       ctx.fillStyle = 'rgba(255,255,255,0.04)'
       ctx.fillRect(w - SB_W, HEADER_H, SB_W, rowsVis)
       ctx.fillStyle = 'rgba(255,255,255,0.22)'
-      ctx.beginPath(); ctx.roundRect(w - SB_W + 1, thumbY, SB_W - 2, thumbH, 2); ctx.fill()
+      ctx.beginPath()
+      ctx.roundRect(w - SB_W + 1, thumbY, SB_W - 2, thumbH, 2)
+      ctx.fill()
     }
 
     ctx.restore()
@@ -270,58 +296,70 @@ export default function MediaList({
   }, [])
 
   // ── Scrollbar drag ───────────────────────────────────────────────────────────
-  const handleMouseDown = useCallback((e) => {
-    if (e.button !== 0 || !hitScrollbar(e.clientX)) return
-    const { h } = sizeRef.current
-    const rowsH  = h - HEADER_H
-    const totalH = itemsRef.current.length * ROW_H
-    if (totalH <= rowsH) return
-    e.preventDefault()
-    dragSbRef.current = { startY: e.clientY, startScroll: scrollRef.current, rowsH, totalH }
-    const onMove = (me) => {
-      if (!dragSbRef.current) return
-      const { startY, startScroll, rowsH, totalH } = dragSbRef.current
-      const thumbH  = Math.max(24, rowsH * rowsH / totalH)
-      const trackH  = rowsH - thumbH
-      const ratio   = trackH > 0 ? (me.clientY - startY) / trackH : 0
-      scrollRef.current = clamp(startScroll + ratio * (totalH - rowsH))
-      flushDraw()
-    }
-    const onUp = () => {
-      dragSbRef.current = null
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-    }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-  }, [clamp, flushDraw, hitScrollbar])
+  const handleMouseDown = useCallback(
+    (e) => {
+      if (e.button !== 0 || !hitScrollbar(e.clientX)) return
+      const { h } = sizeRef.current
+      const rowsH = h - HEADER_H
+      const totalH = itemsRef.current.length * ROW_H
+      if (totalH <= rowsH) return
+      e.preventDefault()
+      dragSbRef.current = { startY: e.clientY, startScroll: scrollRef.current, rowsH, totalH }
+      const onMove = (me) => {
+        if (!dragSbRef.current) return
+        const { startY, startScroll, rowsH, totalH } = dragSbRef.current
+        const thumbH = Math.max(24, (rowsH * rowsH) / totalH)
+        const trackH = rowsH - thumbH
+        const ratio = trackH > 0 ? (me.clientY - startY) / trackH : 0
+        scrollRef.current = clamp(startScroll + ratio * (totalH - rowsH))
+        flushDraw()
+      }
+      const onUp = () => {
+        dragSbRef.current = null
+        window.removeEventListener('mousemove', onMove)
+        window.removeEventListener('mouseup', onUp)
+      }
+      window.addEventListener('mousemove', onMove)
+      window.addEventListener('mouseup', onUp)
+    },
+    [clamp, flushDraw, hitScrollbar]
+  )
 
   // ── Click ─────────────────────────────────────────────────────────────────────
-  const handleClick = useCallback((e) => {
-    if (dragSbRef.current) return
-    const row = hitRow(e.clientY)
-    if (row < 0) return
-    onSelect(itemsRef.current[row])
-  }, [hitRow, onSelect])
+  const handleClick = useCallback(
+    (e) => {
+      if (dragSbRef.current) return
+      const row = hitRow(e.clientY)
+      if (row < 0) return
+      onSelect(itemsRef.current[row])
+    },
+    [hitRow, onSelect]
+  )
 
   // ── Mouse move / leave ───────────────────────────────────────────────────────
-  const handleMouseMove = useCallback((e) => {
-    if (moveRafRef.current) return
-    moveRafRef.current = requestAnimationFrame(() => {
-      moveRafRef.current = null
-      const row = hitRow(e.clientY)
-      if (containerRef.current) {
-        containerRef.current.style.cursor = row >= 0 ? 'pointer' : 'default'
-      }
-      if (row !== hoverRef.current) {
-        hoverRef.current = row
-        scheduleDraw()
-      }
-    })
-  }, [hitRow, scheduleDraw])
+  const handleMouseMove = useCallback(
+    (e) => {
+      if (moveRafRef.current) return
+      moveRafRef.current = requestAnimationFrame(() => {
+        moveRafRef.current = null
+        const row = hitRow(e.clientY)
+        if (containerRef.current) {
+          containerRef.current.style.cursor = row >= 0 ? 'pointer' : 'default'
+        }
+        if (row !== hoverRef.current) {
+          hoverRef.current = row
+          scheduleDraw()
+        }
+      })
+    },
+    [hitRow, scheduleDraw]
+  )
 
   const handleMouseLeave = useCallback(() => {
-    if (moveRafRef.current) { cancelAnimationFrame(moveRafRef.current); moveRafRef.current = null }
+    if (moveRafRef.current) {
+      cancelAnimationFrame(moveRafRef.current)
+      moveRafRef.current = null
+    }
     hoverRef.current = -1
     if (containerRef.current) containerRef.current.style.cursor = 'default'
     scheduleDraw()
@@ -333,7 +371,7 @@ export default function MediaList({
   if (typeof window !== 'undefined' && (window.api?.testMode || window.__OPENCLIP_TEST_MODE__)) {
     return (
       <ul className="media-list-test">
-        {items.map(item => (
+        {items.map((item) => (
           <li
             key={item.path}
             className={`item-card${item.path === selectedItem?.path ? ' active' : ''}`}

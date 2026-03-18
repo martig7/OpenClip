@@ -40,11 +40,11 @@ function RecordingsPage() {
   const initialPathParamRef = useRef(searchParams.get('path'))
 
   useEffect(() => {
-    fetchRecordings().then(data => {
+    fetchRecordings().then((data) => {
       if (!data) return
       const param = initialPathParamRef.current
       if (param) {
-        const recording = data.find(r => r.path === param)
+        const recording = data.find((r) => r.path === param)
         if (recording) {
           initialPathParamRef.current = null
           setSelectedRecording(recording)
@@ -52,8 +52,14 @@ function RecordingsPage() {
         }
       }
     })
-    api.getGames().then(g => setGames(g || [])).catch(() => {})
-    api.getStore('settings').then(s => setOrganizeRemux(s?.organizeRemux !== false)).catch(() => {})
+    api
+      .getGames()
+      .then((g) => setGames(g || []))
+      .catch(() => {})
+    api
+      .getStore('settings')
+      .then((s) => setOrganizeRemux(s?.organizeRemux !== false))
+      .catch(() => {})
   }, [fetchRecordings, setSearchParams])
 
   const handleClipCreated = useCallback((clip) => {
@@ -62,13 +68,16 @@ function RecordingsPage() {
     toastTimerRef.current = setTimeout(() => setToast(null), 3000)
   }, [])
 
-  const handleOrganized = useCallback((result) => {
-    setToast({ type: 'success', message: `Organized: ${result.filename}` })
-    clearTimeout(toastTimerRef.current)
-    toastTimerRef.current = setTimeout(() => setToast(null), 4000)
-    setSelectedRecording(null)
-    fetchRecordings()
-  }, [fetchRecordings])
+  const handleOrganized = useCallback(
+    (result) => {
+      setToast({ type: 'success', message: `Organized: ${result.filename}` })
+      clearTimeout(toastTimerRef.current)
+      toastTimerRef.current = setTimeout(() => setToast(null), 4000)
+      setSelectedRecording(null)
+      fetchRecordings()
+    },
+    [fetchRecordings]
+  )
 
   const handleOrganizeError = useCallback((msg) => {
     setToast({ type: 'error', message: msg })
@@ -119,7 +128,11 @@ function RecordingsPage() {
             <strong>Organize failed</strong>
             <span>{organizeError}</span>
           </div>
-          <button className="organize-error-alert-close" onClick={clearOrganizeError} title="Dismiss">
+          <button
+            className="organize-error-alert-close"
+            onClick={clearOrganizeError}
+            title="Dismiss"
+          >
             <X size={14} />
           </button>
         </div>

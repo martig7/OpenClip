@@ -43,22 +43,23 @@
  * skipped in environments without OBS (e.g. local developer machines).
  */
 
-import { spawnSync, spawn } from 'child_process';
-import { existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs';
-import { tmpdir } from 'os';
-import path, { join } from 'path';
-import { fileURLToPath } from 'url';
-import net from 'net';
+import { spawnSync, spawn } from 'child_process'
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs'
+import { tmpdir } from 'os'
+import path, { join } from 'path'
+import { fileURLToPath } from 'url'
+import net from 'net'
 
-const isWindows = process.platform === 'win32';
+const isWindows = process.platform === 'win32'
 
 // On Windows, auto-detect the repo-local OBS install (obs-studio/ in the repo
 // root, four directories above this file: <repo>/electron-app/tests/integration/obs/).
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const _repoLocalObs = path.resolve(__dirname, '../../../../obs-studio/bin/64bit/obs64.exe');
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const _repoLocalObs = path.resolve(__dirname, '../../../../obs-studio/bin/64bit/obs64.exe')
 
-const OBS_BINARY = process.env.OBS_BINARY
-  || (isWindows && existsSync(_repoLocalObs) ? _repoLocalObs : isWindows ? 'obs64' : 'obs');
+const OBS_BINARY =
+  process.env.OBS_BINARY ||
+  (isWindows && existsSync(_repoLocalObs) ? _repoLocalObs : isWindows ? 'obs64' : 'obs')
 
 // ------------------------------------------------------------------
 // Public helpers
@@ -69,10 +70,10 @@ const OBS_BINARY = process.env.OBS_BINARY
  */
 export function isOBSAvailable() {
   try {
-    const result = spawnSync(OBS_BINARY, ['--version'], { stdio: 'ignore' });
-    return result.status === 0;
+    const result = spawnSync(OBS_BINARY, ['--version'], { stdio: 'ignore' })
+    return result.status === 0
   } catch {
-    return false;
+    return false
   }
 }
 
@@ -91,10 +92,7 @@ export function isOBSAvailable() {
  *   stop: () => void
  * }>}
  */
-export async function startOBS({
-  initialScenes = ['Scene'],
-  startupTimeoutMs = 45_000,
-} = {}) {
+export async function startOBS({ initialScenes = ['Scene'], startupTimeoutMs = 45_000 } = {}) {
   // On Windows, --portable is the only reliable way to isolate the OBS config,
   // and --portable derives the config root from the binary's location.  If
   // OBS_BINARY is not an absolute path (e.g. just "obs64"), we cannot derive
@@ -103,14 +101,14 @@ export async function startOBS({
   if (isWindows && !path.isAbsolute(OBS_BINARY)) {
     throw new Error(
       `On Windows, OBS_BINARY must be an absolute path to obs64.exe so that ` +
-      `--portable mode can isolate the test configuration. ` +
-      `Current value: "${OBS_BINARY}". ` +
-      `Set OBS_BINARY to the full path of obs64.exe, e.g.: ` +
-      `C:\\Program Files\\obs-studio\\bin\\64bit\\obs64.exe`
-    );
+        `--portable mode can isolate the test configuration. ` +
+        `Current value: "${OBS_BINARY}". ` +
+        `Set OBS_BINARY to the full path of obs64.exe, e.g.: ` +
+        `C:\\Program Files\\obs-studio\\bin\\64bit\\obs64.exe`
+    )
   }
 
-  const wsPort = await findFreePort();
+  const wsPort = await findFreePort()
 
   // ── Determine config directory and spawn arguments ──────────────────────
   // Linux/macOS: create a fresh temp dir and point OBS at it via XDG_CONFIG_HOME.
@@ -119,26 +117,26 @@ export async function startOBS({
   // obsConfigDir from OBS_BINARY and clean it up in stop() after the tests
   // finish.  We only delete obsConfigDir (the obs-studio subtree we created),
   // not the parent config/ directory which may have been pre-existing.
-  let tmpBase, obsConfigDir, cleanupDir, obsArgs, extraEnv;
+  let tmpBase, obsConfigDir, cleanupDir, obsArgs, extraEnv
 
   if (isWindows) {
-    const binDir = path.dirname(OBS_BINARY);
-    tmpBase = path.resolve(binDir, '..', '..', 'config');
-    obsConfigDir = join(tmpBase, 'obs-studio');
+    const binDir = path.dirname(OBS_BINARY)
+    tmpBase = path.resolve(binDir, '..', '..', 'config')
+    obsConfigDir = join(tmpBase, 'obs-studio')
     // Only remove the obs-studio subtree we wrote, not the pre-existing
     // portable config root (tmpBase), to avoid data loss on existing installs.
-    cleanupDir = obsConfigDir;
-    obsArgs = ['--headless', '--portable'];
-    extraEnv = {};
+    cleanupDir = obsConfigDir
+    obsArgs = ['--headless', '--portable']
+    extraEnv = {}
   } else {
-    tmpBase = mkdtempSync(join(tmpdir(), 'openclip-obs-test-'));
-    obsConfigDir = join(tmpBase, 'obs-studio');
+    tmpBase = mkdtempSync(join(tmpdir(), 'openclip-obs-test-'))
+    obsConfigDir = join(tmpBase, 'obs-studio')
     // We created the entire tmpBase temp dir — clean up the whole thing.
-    cleanupDir = tmpBase;
-    obsArgs = ['--headless'];
+    cleanupDir = tmpBase
+    obsArgs = ['--headless']
     // When no X display is available (e.g. CI without Xvfb), tell Qt to use
     // the offscreen platform so OBS does not abort on startup.
-    extraEnv = process.env.DISPLAY ? {} : { QT_QPA_PLATFORM: 'offscreen' };
+    extraEnv = process.env.DISPLAY ? {} : { QT_QPA_PLATFORM: 'offscreen' }
   }
 
   // Wipe any leftover obsConfigDir from a previous run before writing a fresh
@@ -148,12 +146,12 @@ export async function startOBS({
   // startup and shows a "did not shut down properly / run in Safe Mode?"
   // dialog that blocks headless and CI runs indefinitely.  Deleting the
   // directory here guarantees every run starts from a pristine config.
-  _rmTemp(obsConfigDir);
+  _rmTemp(obsConfigDir)
 
-  _writeOBSConfig(obsConfigDir, wsPort, initialScenes);
+  _writeOBSConfig(obsConfigDir, wsPort, initialScenes)
 
-  let stopping = false;
-  let exited = false;
+  let stopping = false
+  let exited = false
 
   const obsProcess = spawn(OBS_BINARY, obsArgs, {
     env: {
@@ -171,24 +169,24 @@ export async function startOBS({
     // Suppress OBS output unless the caller sets OBS_DEBUG=1.
     stdio: process.env.OBS_DEBUG ? 'inherit' : 'ignore',
     detached: false,
-  });
+  })
 
   obsProcess.on('exit', (code, signal) => {
-    exited = true;
+    exited = true
     if (!stopping && code !== 0 && signal !== 'SIGTERM') {
-      console.error(`[obsHelper] OBS exited unexpectedly — code=${code} signal=${signal}`);
+      console.error(`[obsHelper] OBS exited unexpectedly — code=${code} signal=${signal}`)
     }
-  });
+  })
 
   // Guard against spawn errors (e.g. ENOENT when the binary is missing or
   // EACCES when it is not executable).  Without this, Node.js would throw an
   // unhandled 'error' event and crash the entire Vitest process.
-  let spawnError = null;
+  let spawnError = null
   obsProcess.on('error', (err) => {
-    spawnError = err;
-    stopping = true;
-    _rmTemp(cleanupDir);
-  });
+    spawnError = err
+    stopping = true
+    _rmTemp(cleanupDir)
+  })
 
   // Wait for the WebSocket server to be reachable.
   // The early-abort callback detects both spawn errors (ENOENT/EACCES) and
@@ -196,22 +194,22 @@ export async function startOBS({
   // test fails immediately rather than waiting the full timeout.
   try {
     await waitForPort('127.0.0.1', wsPort, startupTimeoutMs, () => {
-      if (spawnError) return spawnError;
-      if (exited && !stopping) return new Error('OBS process exited unexpectedly');
-      return null;
-    });
+      if (spawnError) return spawnError
+      if (exited && !stopping) return new Error('OBS process exited unexpectedly')
+      return null
+    })
   } catch (err) {
-    stopping = true;
-    if (!spawnError) obsProcess.kill('SIGTERM');
-    _rmTemp(cleanupDir);
-    const cause = spawnError || err;
+    stopping = true
+    if (!spawnError) obsProcess.kill('SIGTERM')
+    _rmTemp(cleanupDir)
+    const cause = spawnError || err
     throw new Error(
       `OBS WebSocket server did not become reachable on port ${wsPort} within ` +
         `${startupTimeoutMs}ms. Make sure OBS ${OBS_BINARY} supports --headless ` +
         `(OBS 28+) and that the obs-websocket plugin is installed.\n` +
         (isWindows ? 'On Windows, set OBS_BINARY to the full path of obs64.exe.\n' : '') +
         `Original error: ${cause.message}`
-    );
+    )
   }
 
   // Read back the actual WebSocket config that OBS wrote (or kept) after
@@ -220,9 +218,9 @@ export async function startOBS({
   // By reading the on-disk config we always use the credentials OBS is
   // actually enforcing, so the handshake and subsequent test calls never fail
   // due to a stale or mismatched password.
-  const wsConfigPath = join(obsConfigDir, 'plugin_config', 'obs-websocket', 'config.json');
-  const actualWsConfig = _readOBSWebSocketConfig(wsConfigPath);
-  const wsPassword = actualWsConfig.auth_required ? (actualWsConfig.server_password || '') : undefined;
+  const wsConfigPath = join(obsConfigDir, 'plugin_config', 'obs-websocket', 'config.json')
+  const actualWsConfig = _readOBSWebSocketConfig(wsConfigPath)
+  const wsPassword = actualWsConfig.auth_required ? actualWsConfig.server_password || '' : undefined
 
   // Verify the OBS WebSocket protocol handshake.  A plain TCP connection
   // succeeding is not enough — something other than the OBS WebSocket plugin
@@ -232,14 +230,14 @@ export async function startOBS({
   // an actionable diagnostic so tests never silently succeed against a
   // non-functional server.
   try {
-    await _verifyOBSWebSocketHandshake('127.0.0.1', wsPort, wsPassword);
+    await _verifyOBSWebSocketHandshake('127.0.0.1', wsPort, wsPassword)
   } catch (err) {
-    stopping = true;
-    obsProcess.kill('SIGTERM');
-    _rmTemp(cleanupDir);
+    stopping = true
+    obsProcess.kill('SIGTERM')
+    _rmTemp(cleanupDir)
     const authHint = actualWsConfig.auth_required
       ? ` Auth is enabled in the config (auth_required=true); password was read from ${wsConfigPath}.`
-      : '';
+      : ''
     throw new Error(
       `OBS is running and port ${wsPort} is open, but the WebSocket server did not ` +
         `complete the OBS protocol handshake. The server is enabled via ` +
@@ -247,7 +245,7 @@ export async function startOBS({
         `OBS ${OBS_BINARY} is version 28+ and that the obs-websocket plugin is installed.` +
         `${authHint}\n` +
         `Original error: ${err.message}`
-    );
+    )
   }
 
   return {
@@ -262,19 +260,19 @@ export async function startOBS({
 
     /** Kill the OBS process and clean up the temp directory. */
     stop() {
-      stopping = true;
+      stopping = true
       if (!exited) {
-        obsProcess.kill('SIGTERM');
+        obsProcess.kill('SIGTERM')
         // On Windows, the process may hold file locks briefly after SIGTERM.
         // Wait for exit before attempting directory removal to avoid EPERM.
         if (isWindows) {
-          obsProcess.once('exit', () => _rmTemp(cleanupDir));
-          return;
+          obsProcess.once('exit', () => _rmTemp(cleanupDir))
+          return
         }
       }
-      _rmTemp(cleanupDir);
+      _rmTemp(cleanupDir)
     },
-  };
+  }
 }
 
 // ------------------------------------------------------------------
@@ -284,13 +282,13 @@ export async function startOBS({
 /** Find a free TCP port by briefly binding to :0. */
 export function findFreePort() {
   return new Promise((resolve, reject) => {
-    const srv = net.createServer();
+    const srv = net.createServer()
     srv.listen(0, '127.0.0.1', () => {
-      const { port } = srv.address();
-      srv.close(() => resolve(port));
-    });
-    srv.on('error', reject);
-  });
+      const { port } = srv.address()
+      srv.close(() => resolve(port))
+    })
+    srv.on('error', reject)
+  })
 }
 
 /**
@@ -302,32 +300,32 @@ export function findFreePort() {
  */
 function waitForPort(host, port, timeoutMs, getSpawnError) {
   return new Promise((resolve, reject) => {
-    const deadline = Date.now() + timeoutMs;
+    const deadline = Date.now() + timeoutMs
 
     function attempt() {
       // Abort early if the process emitted a spawn error.
-      const spawnErr = typeof getSpawnError === 'function' ? getSpawnError() : null;
+      const spawnErr = typeof getSpawnError === 'function' ? getSpawnError() : null
       if (spawnErr) {
-        reject(spawnErr);
-        return;
+        reject(spawnErr)
+        return
       }
 
-      const sock = net.createConnection({ host, port });
+      const sock = net.createConnection({ host, port })
       sock.on('connect', () => {
-        sock.destroy();
-        resolve();
-      });
+        sock.destroy()
+        resolve()
+      })
       sock.on('error', () => {
         if (Date.now() >= deadline) {
-          reject(new Error(`Timed out after ${timeoutMs}ms waiting for ${host}:${port}`));
+          reject(new Error(`Timed out after ${timeoutMs}ms waiting for ${host}:${port}`))
         } else {
-          setTimeout(attempt, 500);
+          setTimeout(attempt, 500)
         }
-      });
+      })
     }
 
-    attempt();
-  });
+    attempt()
+  })
 }
 
 /**
@@ -339,9 +337,9 @@ function waitForPort(host, port, timeoutMs, getSpawnError) {
  */
 function _writeOBSConfig(obsConfigDir, wsPort, initialScenes) {
   // Directory skeleton
-  mkdirSync(join(obsConfigDir, 'plugin_config', 'obs-websocket'), { recursive: true });
-  mkdirSync(join(obsConfigDir, 'basic', 'profiles', 'Test'), { recursive: true });
-  mkdirSync(join(obsConfigDir, 'basic', 'scenes'), { recursive: true });
+  mkdirSync(join(obsConfigDir, 'plugin_config', 'obs-websocket'), { recursive: true })
+  mkdirSync(join(obsConfigDir, 'basic', 'profiles', 'Test'), { recursive: true })
+  mkdirSync(join(obsConfigDir, 'basic', 'scenes'), { recursive: true })
 
   // WebSocket server — no authentication, custom port
   writeFileSync(
@@ -352,7 +350,7 @@ function _writeOBSConfig(obsConfigDir, wsPort, initialScenes) {
       server_enabled: true,
       server_port: wsPort,
     })
-  );
+  )
 
   // Global OBS settings — point at the Test profile and Test scene collection,
   // and suppress the first-run wizard.
@@ -368,7 +366,7 @@ function _writeOBSConfig(obsConfigDir, wsPort, initialScenes) {
       '[General]',
       'firstRun=false',
     ].join('\n')
-  );
+  )
 
   // Minimal recording profile
   writeFileSync(
@@ -385,14 +383,14 @@ function _writeOBSConfig(obsConfigDir, wsPort, initialScenes) {
       'FPSType=0',
       'FPSCommon=30',
     ].join('\n')
-  );
+  )
 
   // Seed scene collection.  OBS will fail to start if the collection is absent
   // or completely empty, so we always create at least the first named scene.
-  const firstScene = initialScenes[0] || 'Scene';
+  const firstScene = initialScenes[0] || 'Scene'
   // Guarantee at least one scene even when initialScenes is empty, so that
   // current_scene / current_program_scene always reference an existing scene.
-  const sceneList = initialScenes.length > 0 ? initialScenes : [firstScene];
+  const sceneList = initialScenes.length > 0 ? initialScenes : [firstScene]
   writeFileSync(
     join(obsConfigDir, 'basic', 'scenes', 'Test.json'),
     JSON.stringify({
@@ -401,8 +399,8 @@ function _writeOBSConfig(obsConfigDir, wsPort, initialScenes) {
       groups: [],
       modules: {},
       name: 'Test',
-      scene_order: sceneList.map(name => ({ name })),
-      scenes: sceneList.map(name => ({
+      scene_order: sceneList.map((name) => ({ name })),
+      scenes: sceneList.map((name) => ({
         id: 'scene',
         name,
         settings: { custom_size: false, id_counter: 0, items: [] },
@@ -411,7 +409,7 @@ function _writeOBSConfig(obsConfigDir, wsPort, initialScenes) {
       sources: [],
       transitions: [{ duration: 300, id: 'cut_transition', name: 'Cut', settings: {} }],
     })
-  );
+  )
 }
 
 /**
@@ -430,15 +428,15 @@ function _writeOBSConfig(obsConfigDir, wsPort, initialScenes) {
  *   OBS WebSocket config; omit (or pass undefined) for no-auth servers.
  */
 async function _verifyOBSWebSocketHandshake(host, port, password) {
-  const { default: OBSWebSocket } = await import('obs-websocket-js');
-  const obs = new OBSWebSocket();
+  const { default: OBSWebSocket } = await import('obs-websocket-js')
+  const obs = new OBSWebSocket()
   try {
     // connect() performs the full WebSocket upgrade + obs-websocket v5
     // identification handshake.  It throws if the server is not an OBS
     // WebSocket server or if auth is required but the wrong password was
     // supplied.  We pass the password read back from the on-disk config so
     // we always use the credentials OBS is actually enforcing.
-    await obs.connect(`ws://${host}:${port}`, password);
+    await obs.connect(`ws://${host}:${port}`, password)
 
     // Call GetVersion to confirm OBS is fully initialised and ready to handle
     // requests.  The WS handshake alone only proves the plugin is loaded; OBS
@@ -447,20 +445,23 @@ async function _verifyOBSWebSocketHandshake(host, port, password) {
     // OBS WebSocket can accept connections before OBS finishes initialising and
     // returns RequestStatus 207 (NotReady) for any request during that window.
     // Retry with back-off until OBS is ready or we exhaust the attempts.
-    const MAX_ATTEMPTS = 20;
-    const RETRY_MS = 500;
+    const MAX_ATTEMPTS = 20
+    const RETRY_MS = 500
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
-        await obs.call('GetVersion');
-        return; // success
+        await obs.call('GetVersion')
+        return // success
       } catch (err) {
-        const isNotReady = err?.code === 207 ||
-          (typeof err?.message === 'string' && err.message.toLowerCase().includes('not ready'));
-        if (!isNotReady || attempt === MAX_ATTEMPTS) throw err;
+        const isNotReady =
+          err?.code === 207 ||
+          (typeof err?.message === 'string' && err.message.toLowerCase().includes('not ready'))
+        if (!isNotReady || attempt === MAX_ATTEMPTS) throw err
         if (process.env.OBS_DEBUG) {
-          console.debug(`[obsHelper] GetVersion NotReady (attempt ${attempt}/${MAX_ATTEMPTS}), retrying in ${RETRY_MS}ms`);
+          console.debug(
+            `[obsHelper] GetVersion NotReady (attempt ${attempt}/${MAX_ATTEMPTS}), retrying in ${RETRY_MS}ms`
+          )
         }
-        await new Promise(r => setTimeout(r, RETRY_MS));
+        await new Promise((r) => setTimeout(r, RETRY_MS))
       }
     }
   } finally {
@@ -468,9 +469,9 @@ async function _verifyOBSWebSocketHandshake(host, port, password) {
     // errors are suppressed because the earlier error is the one that matters.
     obs.disconnect().catch((e) => {
       if (process.env.OBS_DEBUG) {
-        console.debug(`[obsHelper] _verifyOBSWebSocketHandshake: disconnect error: ${e.message}`);
+        console.debug(`[obsHelper] _verifyOBSWebSocketHandshake: disconnect error: ${e.message}`)
       }
-    });
+    })
   }
 }
 
@@ -485,18 +486,22 @@ async function _verifyOBSWebSocketHandshake(host, port, password) {
  */
 function _readOBSWebSocketConfig(configPath) {
   try {
-    return JSON.parse(readFileSync(configPath, 'utf8'));
+    return JSON.parse(readFileSync(configPath, 'utf8'))
   } catch (e) {
     if (process.env.OBS_DEBUG) {
-      console.debug(`[obsHelper] Could not read OBS WebSocket config at ${configPath}: ${e.message}`);
+      console.debug(
+        `[obsHelper] Could not read OBS WebSocket config at ${configPath}: ${e.message}`
+      )
     }
     // Safe defaults — match what _writeOBSConfig wrote before OBS started.
-    return { auth_required: false, server_enabled: true };
+    return { auth_required: false, server_enabled: true }
   }
 }
 
 function _rmTemp(dir) {
-  try { rmSync(dir, { recursive: true, force: true }); } catch (e) {
-    console.warn(`[obsHelper] Failed to remove temp config directory ${dir}: ${e.message}`);
+  try {
+    rmSync(dir, { recursive: true, force: true })
+  } catch (e) {
+    console.warn(`[obsHelper] Failed to remove temp config directory ${dir}: ${e.message}`)
   }
 }

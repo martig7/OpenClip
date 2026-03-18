@@ -11,34 +11,40 @@ function Timeline({
   onClipEndChange,
   markers = [],
   onMarkerClick,
-  onHoverChange
+  onHoverChange,
 }) {
   const timelineRef = useRef(null)
   const [isDragging, setIsDragging] = useState(false)
   const [dragType, setDragType] = useState(null) // 'seek', 'clipStart', 'clipEnd'
 
-  const getTimeFromPosition = useCallback((clientX) => {
-    if (!timelineRef.current || !duration) return 0
-    const rect = timelineRef.current.getBoundingClientRect()
-    const position = (clientX - rect.left) / rect.width
-    return Math.max(0, Math.min(duration, position * duration))
-  }, [duration])
+  const getTimeFromPosition = useCallback(
+    (clientX) => {
+      if (!timelineRef.current || !duration) return 0
+      const rect = timelineRef.current.getBoundingClientRect()
+      const position = (clientX - rect.left) / rect.width
+      return Math.max(0, Math.min(duration, position * duration))
+    },
+    [duration]
+  )
 
-  const handleMouseDown = useCallback((e, type = 'seek') => {
-    e.preventDefault()
-    setIsDragging(true)
-    setDragType(type)
+  const handleMouseDown = useCallback(
+    (e, type = 'seek') => {
+      e.preventDefault()
+      setIsDragging(true)
+      setDragType(type)
 
-    const time = getTimeFromPosition(e.clientX)
+      const time = getTimeFromPosition(e.clientX)
 
-    if (type === 'seek') {
-      onSeek(time)
-    } else if (type === 'clipStart') {
-      onClipStartChange(Math.min(time, clipEnd - 1))
-    } else if (type === 'clipEnd') {
-      onClipEndChange(Math.max(time, clipStart + 1))
-    }
-  }, [getTimeFromPosition, onSeek, clipStart, clipEnd, onClipStartChange, onClipEndChange])
+      if (type === 'seek') {
+        onSeek(time)
+      } else if (type === 'clipStart') {
+        onClipStartChange(Math.min(time, clipEnd - 1))
+      } else if (type === 'clipEnd') {
+        onClipEndChange(Math.max(time, clipStart + 1))
+      }
+    },
+    [getTimeFromPosition, onSeek, clipStart, clipEnd, onClipStartChange, onClipEndChange]
+  )
 
   useEffect(() => {
     if (!isDragging) return
@@ -67,7 +73,16 @@ function Timeline({
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
     }
-  }, [isDragging, dragType, getTimeFromPosition, onSeek, clipStart, clipEnd, onClipStartChange, onClipEndChange])
+  }, [
+    isDragging,
+    dragType,
+    getTimeFromPosition,
+    onSeek,
+    clipStart,
+    clipEnd,
+    onClipStartChange,
+    onClipEndChange,
+  ])
 
   const progressPercent = duration ? (currentTime / duration) * 100 : 0
   const clipStartPercent = duration ? (clipStart / duration) * 100 : 0
@@ -91,18 +106,12 @@ function Timeline({
       onMouseLeave={() => onHoverChange?.(false)}
     >
       {/* Progress bar */}
-      <div
-        className="timeline-progress"
-        style={progressStyle}
-      />
+      <div className="timeline-progress" style={progressStyle} />
 
       {/* Clip region (when in clip mode) */}
       {clipMode && (
         <>
-          <div
-            className="clip-region"
-            style={clipRegionStyle}
-          />
+          <div className="clip-region" style={clipRegionStyle} />
           <div
             className="clip-handle start"
             style={clipStartStyle}
@@ -134,16 +143,17 @@ function Timeline({
               e.stopPropagation()
               onMarkerClick?.(marker.position)
             }}
-            title={`Clip marker at ${Math.floor(marker.position / 60)}:${Math.floor(marker.position % 60).toString().padStart(2, '0')}`}
+            title={`Clip marker at ${Math.floor(marker.position / 60)}:${Math.floor(
+              marker.position % 60
+            )
+              .toString()
+              .padStart(2, '0')}`}
           />
         )
       })}
 
       {/* Current time handle */}
-      <div
-        className="timeline-handle"
-        style={handleStyle}
-      />
+      <div className="timeline-handle" style={handleStyle} />
     </div>
   )
 }

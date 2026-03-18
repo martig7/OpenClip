@@ -32,11 +32,11 @@ beforeAll(async () => {
 
   const { startApiServer } = await import('../../electron/apiServer.js')
   server = startApiServer(store)
-  await new Promise(resolve => server.on('listening', resolve))
+  await new Promise((resolve) => server.on('listening', resolve))
 })
 
 afterAll(async () => {
-  await new Promise(resolve => server.close(resolve))
+  await new Promise((resolve) => server.close(resolve))
   fs.rmSync(tmpDir, { recursive: true, force: true })
 })
 
@@ -139,9 +139,7 @@ describe('GET /api/markers', () => {
 describe('POST /api/markers/delete', () => {
   it('returns 404 when marker timestamp not found', async () => {
     setMarkers([{ game_name: 'Halo', timestamp: 9999, created_at: '' }])
-    const res = await request(server)
-      .post('/api/markers/delete')
-      .send({ timestamp: 1234 })
+    const res = await request(server).post('/api/markers/delete').send({ timestamp: 1234 })
     expect(res.status).toBe(404)
   })
 
@@ -150,9 +148,7 @@ describe('POST /api/markers/delete', () => {
       { game_name: 'Halo', timestamp: 1705339800, created_at: '' },
       { game_name: 'Halo', timestamp: 1705340100, created_at: '' },
     ])
-    const res = await request(server)
-      .post('/api/markers/delete')
-      .send({ timestamp: 1705339800 })
+    const res = await request(server).post('/api/markers/delete').send({ timestamp: 1705339800 })
     expect(res.status).toBe(200)
     expect(res.body.success).toBe(true)
 

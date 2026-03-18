@@ -22,15 +22,21 @@ function ClipControls({
     return parseFloat(timeStr) || 0
   }
 
-  const handleStartChange = useCallback((e) => {
-    const time = parseTime(e.target.value)
-    if (time >= 0 && time < clipEnd) onClipStartChange(Math.min(time, duration))
-  }, [clipEnd, duration, onClipStartChange])
+  const handleStartChange = useCallback(
+    (e) => {
+      const time = parseTime(e.target.value)
+      if (time >= 0 && time < clipEnd) onClipStartChange(Math.min(time, duration))
+    },
+    [clipEnd, duration, onClipStartChange]
+  )
 
-  const handleEndChange = useCallback((e) => {
-    const time = parseTime(e.target.value)
-    if (time > clipStart && time <= duration) onClipEndChange(time)
-  }, [clipStart, duration, onClipEndChange])
+  const handleEndChange = useCallback(
+    (e) => {
+      const time = parseTime(e.target.value)
+      if (time > clipStart && time <= duration) onClipEndChange(time)
+    },
+    [clipStart, duration, onClipEndChange]
+  )
 
   const clipDuration = clipEnd - clipStart
 
@@ -71,9 +77,15 @@ function ClipControls({
             onClick={onCreate}
             disabled={isCreating || clipDuration <= 0}
           >
-            {isCreating
-              ? <><span className="spinner" style={{ width: 13, height: 13 }} /> Creating…</>
-              : <><Scissors size={13} /> Create Clip</>}
+            {isCreating ? (
+              <>
+                <span className="spinner" style={{ width: 13, height: 13 }} /> Creating…
+              </>
+            ) : (
+              <>
+                <Scissors size={13} /> Create Clip
+              </>
+            )}
           </button>
         </div>
       </div>

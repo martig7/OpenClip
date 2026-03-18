@@ -102,7 +102,9 @@ describe('readPluginPort / port cache', () => {
   })
 
   it('throws when port file is missing', async () => {
-    mockReadFileSync.mockImplementation(() => { throw new Error('ENOENT') })
+    mockReadFileSync.mockImplementation(() => {
+      throw new Error('ENOENT')
+    })
     const { callPlugin } = await getModule()
     await expect(callPlugin('getStatus')).rejects.toThrow('not running')
   })
@@ -222,9 +224,7 @@ describe('stopRecording', () => {
 
     await stopRecording()
 
-    expect(req.write).toHaveBeenCalledWith(
-      expect.stringContaining('"method":"stopRecording"')
-    )
+    expect(req.write).toHaveBeenCalledWith(expect.stringContaining('"method":"stopRecording"'))
   })
 })
 

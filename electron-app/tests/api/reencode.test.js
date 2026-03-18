@@ -26,15 +26,18 @@ beforeAll(async () => {
 
   const { startApiServer } = await import('../../electron/apiServer.js')
   server = startApiServer(store)
-  await new Promise(resolve => server.on('listening', resolve))
+  await new Promise((resolve) => server.on('listening', resolve))
 })
 
-afterAll(() => new Promise(resolve => {
-  server.close(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true })
-    resolve()
-  })
-}))
+afterAll(
+  () =>
+    new Promise((resolve) => {
+      server.close(() => {
+        fs.rmSync(tmpDir, { recursive: true, force: true })
+        resolve()
+      })
+    })
+)
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -48,9 +51,7 @@ describe('POST /api/reencode', () => {
   it('returns 400 when codec is not supported', async () => {
     const src = path.join(destDir, 'video.mp4')
     fs.writeFileSync(src, Buffer.alloc(1024))
-    const res = await request(server)
-      .post('/api/reencode')
-      .send({ source_path: src, codec: 'vp9' })
+    const res = await request(server).post('/api/reencode').send({ source_path: src, codec: 'vp9' })
     expect(res.status).toBe(400)
     expect(res.body.error).toMatch(/unsupported codec/i)
   })
@@ -61,9 +62,7 @@ describe('POST /api/reencode', () => {
     store._data.lockedRecordings = [src]
     let res
     try {
-      res = await request(server)
-        .post('/api/reencode')
-        .send({ source_path: src, codec: 'h265' })
+      res = await request(server).post('/api/reencode').send({ source_path: src, codec: 'h265' })
       expect(res.status).toBe(403)
     } finally {
       store._data.lockedRecordings = []
@@ -116,16 +115,14 @@ describe('POST /api/reencode', () => {
     const src = path.join(destDir, 'video.mp4')
     fs.writeFileSync(src, Buffer.alloc(2048))
 
-    const res = await request(server)
-      .post('/api/reencode')
-      .send({
-        source_path: src,
-        codec: 'h264',
-        crf: 23,
-        preset: 'medium',
-        replace_original: false,
-        original_size: 2048,
-      })
+    const res = await request(server).post('/api/reencode').send({
+      source_path: src,
+      codec: 'h264',
+      crf: 23,
+      preset: 'medium',
+      replace_original: false,
+      original_size: 2048,
+    })
     expect(res.status).toBe(200)
     expect(res.body.success).toBe(true)
     expect(res.body.output_path).toBeDefined()
@@ -145,16 +142,14 @@ describe('POST /api/reencode', () => {
     const src = path.join(destDir, 'video.mp4')
     fs.writeFileSync(src, Buffer.alloc(2048))
 
-    const res = await request(server)
-      .post('/api/reencode')
-      .send({
-        source_path: src,
-        codec: 'h264',
-        crf: 23,
-        preset: 'medium',
-        replace_original: true,
-        original_size: 2048,
-      })
+    const res = await request(server).post('/api/reencode').send({
+      source_path: src,
+      codec: 'h264',
+      crf: 23,
+      preset: 'medium',
+      replace_original: true,
+      original_size: 2048,
+    })
     expect(res.status).toBe(200)
     expect(res.body.success).toBe(true)
     expect(res.body.output_path).toBe(src)
@@ -190,16 +185,14 @@ describe('POST /api/reencode', () => {
       return realRenameSync(from, to)
     })
 
-    const res = await request(server)
-      .post('/api/reencode')
-      .send({
-        source_path: src,
-        codec: 'h264',
-        crf: 23,
-        preset: 'medium',
-        replace_original: true,
-        original_size: 2048,
-      })
+    const res = await request(server).post('/api/reencode').send({
+      source_path: src,
+      codec: 'h264',
+      crf: 23,
+      preset: 'medium',
+      replace_original: true,
+      original_size: 2048,
+    })
 
     vi.restoreAllMocks()
 

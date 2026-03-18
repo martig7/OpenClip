@@ -23,11 +23,11 @@ beforeAll(async () => {
 
   const { startApiServer } = await import('../../electron/apiServer.js')
   server = startApiServer(store)
-  await new Promise(resolve => server.on('listening', resolve))
+  await new Promise((resolve) => server.on('listening', resolve))
 })
 
 afterAll(async () => {
-  await new Promise(resolve => server.close(resolve))
+  await new Promise((resolve) => server.close(resolve))
   fs.rmSync(tmpDir, { recursive: true, force: true })
 })
 

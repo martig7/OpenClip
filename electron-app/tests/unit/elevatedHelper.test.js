@@ -21,7 +21,7 @@ let tmpDir
 let origArgv
 
 beforeEach(() => {
-  tmpDir   = fs.mkdtempSync(path.join(os.tmpdir(), 'openclip-helper-'))
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openclip-helper-'))
   origArgv = process.argv
   vi.spyOn(process, 'exit').mockImplementation(() => {})
 })
@@ -51,8 +51,8 @@ function readResult(resultFile) {
 
 describe('mkdir op', () => {
   it('creates the target directory (recursive)', () => {
-    const target     = path.join(tmpDir, 'sub', 'nested')
-    const paramFile  = path.join(tmpDir, 'params.json')
+    const target = path.join(tmpDir, 'sub', 'nested')
+    const paramFile = path.join(tmpDir, 'params.json')
     const resultFile = path.join(tmpDir, 'result.json')
     writeParams([{ type: 'mkdir', path: target }], paramFile, resultFile)
 
@@ -63,8 +63,8 @@ describe('mkdir op', () => {
   })
 
   it('writes { success: true } to the result file', () => {
-    const target     = path.join(tmpDir, 'newdir')
-    const paramFile  = path.join(tmpDir, 'params.json')
+    const target = path.join(tmpDir, 'newdir')
+    const paramFile = path.join(tmpDir, 'params.json')
     const resultFile = path.join(tmpDir, 'result.json')
     writeParams([{ type: 'mkdir', path: target }], paramFile, resultFile)
 
@@ -74,8 +74,8 @@ describe('mkdir op', () => {
   })
 
   it('deletes the param file on success', () => {
-    const target     = path.join(tmpDir, 'newdir')
-    const paramFile  = path.join(tmpDir, 'params.json')
+    const target = path.join(tmpDir, 'newdir')
+    const paramFile = path.join(tmpDir, 'params.json')
     const resultFile = path.join(tmpDir, 'result.json')
     writeParams([{ type: 'mkdir', path: target }], paramFile, resultFile)
 
@@ -85,8 +85,8 @@ describe('mkdir op', () => {
   })
 
   it('calls process.exit(0) on success', () => {
-    const target     = path.join(tmpDir, 'newdir')
-    const paramFile  = path.join(tmpDir, 'params.json')
+    const target = path.join(tmpDir, 'newdir')
+    const paramFile = path.join(tmpDir, 'params.json')
     const resultFile = path.join(tmpDir, 'result.json')
     writeParams([{ type: 'mkdir', path: target }], paramFile, resultFile)
 
@@ -100,11 +100,11 @@ describe('mkdir op', () => {
 
 describe('copy op', () => {
   it('copies a file and creates missing parent directories', () => {
-    const src        = path.join(tmpDir, 'source.dll')
-    const dest       = path.join(tmpDir, 'plugins', '64bit', 'target.dll')
-    const paramFile  = path.join(tmpDir, 'params.json')
+    const src = path.join(tmpDir, 'source.dll')
+    const dest = path.join(tmpDir, 'plugins', '64bit', 'target.dll')
+    const paramFile = path.join(tmpDir, 'params.json')
     const resultFile = path.join(tmpDir, 'result.json')
-    const content    = Buffer.alloc(256, 0xBE)
+    const content = Buffer.alloc(256, 0xbe)
     fs.writeFileSync(src, content)
     writeParams([{ type: 'copy', src, dest }], paramFile, resultFile)
 
@@ -115,9 +115,9 @@ describe('copy op', () => {
   })
 
   it('writes { success: true }', () => {
-    const src        = path.join(tmpDir, 'source.dll')
-    const dest       = path.join(tmpDir, 'out', 'target.dll')
-    const paramFile  = path.join(tmpDir, 'params.json')
+    const src = path.join(tmpDir, 'source.dll')
+    const dest = path.join(tmpDir, 'out', 'target.dll')
+    const paramFile = path.join(tmpDir, 'params.json')
     const resultFile = path.join(tmpDir, 'result.json')
     fs.writeFileSync(src, Buffer.alloc(64))
     writeParams([{ type: 'copy', src, dest }], paramFile, resultFile)
@@ -132,8 +132,8 @@ describe('copy op', () => {
 
 describe('delete op', () => {
   it('deletes an existing file', () => {
-    const target     = path.join(tmpDir, 'to-delete.dll')
-    const paramFile  = path.join(tmpDir, 'params.json')
+    const target = path.join(tmpDir, 'to-delete.dll')
+    const paramFile = path.join(tmpDir, 'params.json')
     const resultFile = path.join(tmpDir, 'result.json')
     fs.writeFileSync(target, Buffer.alloc(64))
     writeParams([{ type: 'delete', path: target }], paramFile, resultFile)
@@ -144,8 +144,8 @@ describe('delete op', () => {
   })
 
   it('deletes a directory tree when recursive is true', () => {
-    const target     = path.join(tmpDir, 'to-delete-dir')
-    const paramFile  = path.join(tmpDir, 'params.json')
+    const target = path.join(tmpDir, 'to-delete-dir')
+    const paramFile = path.join(tmpDir, 'params.json')
     const resultFile = path.join(tmpDir, 'result.json')
     fs.mkdirSync(path.join(target, 'sub'), { recursive: true })
     fs.writeFileSync(path.join(target, 'file.txt'), 'hello')
@@ -157,8 +157,8 @@ describe('delete op', () => {
   })
 
   it('is a no-op on a non-existent path (force mode) and still succeeds', () => {
-    const target     = path.join(tmpDir, 'does-not-exist.dll')
-    const paramFile  = path.join(tmpDir, 'params.json')
+    const target = path.join(tmpDir, 'does-not-exist.dll')
+    const paramFile = path.join(tmpDir, 'params.json')
     const resultFile = path.join(tmpDir, 'result.json')
     writeParams([{ type: 'delete', path: target }], paramFile, resultFile)
 
@@ -172,10 +172,14 @@ describe('delete op', () => {
 
 describe('write op', () => {
   it('creates a file with the specified content, creating parent dirs', () => {
-    const target     = path.join(tmpDir, 'locale', 'en-US', 'plugin.ini')
-    const paramFile  = path.join(tmpDir, 'params.json')
+    const target = path.join(tmpDir, 'locale', 'en-US', 'plugin.ini')
+    const paramFile = path.join(tmpDir, 'params.json')
     const resultFile = path.join(tmpDir, 'result.json')
-    writeParams([{ type: 'write', path: target, content: 'Name=TestPlugin' }], paramFile, resultFile)
+    writeParams(
+      [{ type: 'write', path: target, content: 'Name=TestPlugin' }],
+      paramFile,
+      resultFile
+    )
 
     invoke(paramFile, resultFile)
 
@@ -184,8 +188,8 @@ describe('write op', () => {
   })
 
   it('creates a file with empty content when content is omitted', () => {
-    const target     = path.join(tmpDir, 'empty.ini')
-    const paramFile  = path.join(tmpDir, 'params.json')
+    const target = path.join(tmpDir, 'empty.ini')
+    const paramFile = path.join(tmpDir, 'params.json')
     const resultFile = path.join(tmpDir, 'result.json')
     writeParams([{ type: 'write', path: target }], paramFile, resultFile)
 
@@ -200,21 +204,25 @@ describe('write op', () => {
 
 describe('multiple ops — OBS plugin install sequence', () => {
   it('executes mkdir → copy → write in order and writes success', () => {
-    const pluginDir  = path.join(tmpDir, 'obs-plugins', '64bit')
-    const localeDir  = path.join(tmpDir, 'obs-plugins', 'locale')
-    const src        = path.join(tmpDir, 'plugin.dll')
-    const dest       = path.join(pluginDir, 'plugin.dll')
+    const pluginDir = path.join(tmpDir, 'obs-plugins', '64bit')
+    const localeDir = path.join(tmpDir, 'obs-plugins', 'locale')
+    const src = path.join(tmpDir, 'plugin.dll')
+    const dest = path.join(pluginDir, 'plugin.dll')
     const localeFile = path.join(localeDir, 'en-US.ini')
-    const paramFile  = path.join(tmpDir, 'params.json')
+    const paramFile = path.join(tmpDir, 'params.json')
     const resultFile = path.join(tmpDir, 'result.json')
 
-    fs.writeFileSync(src, Buffer.alloc(128, 0xDE))
-    writeParams([
-      { type: 'mkdir', path: pluginDir },
-      { type: 'copy',  src,  dest },
-      { type: 'mkdir', path: localeDir },
-      { type: 'write', path: localeFile, content: '' },
-    ], paramFile, resultFile)
+    fs.writeFileSync(src, Buffer.alloc(128, 0xde))
+    writeParams(
+      [
+        { type: 'mkdir', path: pluginDir },
+        { type: 'copy', src, dest },
+        { type: 'mkdir', path: localeDir },
+        { type: 'write', path: localeFile, content: '' },
+      ],
+      paramFile,
+      resultFile
+    )
 
     invoke(paramFile, resultFile)
 
@@ -225,19 +233,23 @@ describe('multiple ops — OBS plugin install sequence', () => {
   })
 
   it('executes delete ops — OBS plugin remove sequence', () => {
-    const pluginDll  = path.join(tmpDir, 'obs-plugins', '64bit', 'plugin.dll')
-    const localeDir  = path.join(tmpDir, 'obs-plugins', 'locale', 'en-US')
-    const paramFile  = path.join(tmpDir, 'params.json')
+    const pluginDll = path.join(tmpDir, 'obs-plugins', '64bit', 'plugin.dll')
+    const localeDir = path.join(tmpDir, 'obs-plugins', 'locale', 'en-US')
+    const paramFile = path.join(tmpDir, 'params.json')
     const resultFile = path.join(tmpDir, 'result.json')
 
     fs.mkdirSync(path.dirname(pluginDll), { recursive: true })
     fs.mkdirSync(localeDir, { recursive: true })
     fs.writeFileSync(pluginDll, Buffer.alloc(64))
     fs.writeFileSync(path.join(localeDir, 'en-US.ini'), '')
-    writeParams([
-      { type: 'delete', path: pluginDll },
-      { type: 'delete', path: localeDir, recursive: true },
-    ], paramFile, resultFile)
+    writeParams(
+      [
+        { type: 'delete', path: pluginDll },
+        { type: 'delete', path: localeDir, recursive: true },
+      ],
+      paramFile,
+      resultFile
+    )
 
     invoke(paramFile, resultFile)
 
@@ -251,7 +263,7 @@ describe('multiple ops — OBS plugin install sequence', () => {
 
 describe('error cases', () => {
   it('writes { success: false, message } for an unknown op type', () => {
-    const paramFile  = path.join(tmpDir, 'params.json')
+    const paramFile = path.join(tmpDir, 'params.json')
     const resultFile = path.join(tmpDir, 'result.json')
     writeParams([{ type: 'unsupported_op', path: '/tmp/foo' }], paramFile, resultFile)
 
@@ -274,7 +286,7 @@ describe('error cases', () => {
   })
 
   it('writes { success: false, message } when the param file does not exist', () => {
-    const paramFile  = path.join(tmpDir, 'nonexistent-params.json')
+    const paramFile = path.join(tmpDir, 'nonexistent-params.json')
     const resultFile = path.join(tmpDir, 'result.json')
 
     invoke(paramFile, resultFile)
@@ -285,9 +297,9 @@ describe('error cases', () => {
   })
 
   it('writes { success: false, message } when copying a non-existent source', () => {
-    const src        = path.join(tmpDir, 'missing.dll')
-    const dest       = path.join(tmpDir, 'out', 'missing.dll')
-    const paramFile  = path.join(tmpDir, 'params.json')
+    const src = path.join(tmpDir, 'missing.dll')
+    const dest = path.join(tmpDir, 'out', 'missing.dll')
+    const paramFile = path.join(tmpDir, 'params.json')
     const resultFile = path.join(tmpDir, 'result.json')
     writeParams([{ type: 'copy', src, dest }], paramFile, resultFile)
 

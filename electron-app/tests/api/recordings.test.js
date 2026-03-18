@@ -7,7 +7,7 @@ import os from 'os'
 // child_process: setup.js patches Module._load + vi.mock for ESM.
 // No factory here — keeps same vi.fn() instances so apiServer.js CJS require shares stubs.
 
-import { makeMockStore } from "../helpers/mockStore.js"
+import { makeMockStore } from '../helpers/mockStore.js'
 import { createRequire } from 'module'
 const _cjsReq = createRequire(import.meta.url)
 const recordingService = _cjsReq('../../electron/recordingService.js')
@@ -33,7 +33,7 @@ beforeAll(async () => {
 
   const { startApiServer } = await import('../../electron/apiServer.js')
   server = startApiServer(store)
-  await new Promise(resolve => server.on('listening', resolve))
+  await new Promise((resolve) => server.on('listening', resolve))
 })
 
 afterAll((done) => {
@@ -44,8 +44,10 @@ afterAll((done) => {
 beforeEach(() => {
   recordingService.invalidateCache()
   // Clear obs and dest dirs between tests
-  for (const f of fs.readdirSync(obsDir)) fs.rmSync(path.join(obsDir, f), { recursive: true, force: true })
-  for (const f of fs.readdirSync(destDir)) fs.rmSync(path.join(destDir, f), { recursive: true, force: true })
+  for (const f of fs.readdirSync(obsDir))
+    fs.rmSync(path.join(obsDir, f), { recursive: true, force: true })
+  for (const f of fs.readdirSync(destDir))
+    fs.rmSync(path.join(destDir, f), { recursive: true, force: true })
 })
 
 describe('GET /api/recordings', () => {
@@ -78,12 +80,12 @@ describe('GET /api/recordings', () => {
   })
 
   it('returns empty array when recordings dir does not exist yet', async () => {
-    store.get.mockReturnValueOnce({ 
-      obsRecordingPath: '/nonexistent/path', 
-      destinationPath: destDir 
+    store.get.mockReturnValueOnce({
+      obsRecordingPath: '/nonexistent/path',
+      destinationPath: destDir,
     })
     recordingService.invalidateCache()
-    
+
     const res = await request(server).get('/api/recordings')
     expect(res.status).toBe(200)
     expect(res.body).toEqual([])

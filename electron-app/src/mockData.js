@@ -17,7 +17,7 @@ export const defaultSettings = {
     maxAgeDays: 30,
     excludeClips: true,
   },
-};
+}
 
 export const mockGames = [
   {
@@ -40,7 +40,7 @@ export const mockGames = [
     icon_path: '',
     enabled: true,
   },
-];
+]
 
 export const mockRecordings = [
   {
@@ -61,7 +61,7 @@ export const mockRecordings = [
     duration: 3600,
     size: 3200000000,
   },
-];
+]
 
 export const mockClips = [
   {
@@ -73,7 +73,7 @@ export const mockClips = [
     duration: 30,
     size: 50000000,
   },
-];
+]
 
 export const mockStorageStats = {
   totalSize: 4750000000,
@@ -84,4 +84,4 @@ export const mockStorageStats = {
     'Counter-Strike 2': 3200000000,
     Clips: 50000000,
   },
-};
+}

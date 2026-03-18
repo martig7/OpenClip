@@ -1,8 +1,22 @@
-function Modal({ isOpen, title, message, onConfirm, onCancel, confirmText = 'Confirm', cancelText = 'Cancel', danger = false }) {
+function Modal({
+  isOpen,
+  title,
+  message,
+  onConfirm,
+  onCancel,
+  confirmText = 'Confirm',
+  cancelText = 'Cancel',
+  danger = false,
+}) {
   if (!isOpen) return null
 
   return (
-    <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
+    <div
+      className="modal-overlay"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onCancel()
+      }}
+    >
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h3>{title}</h3>
         <p>{message}</p>
@@ -10,10 +24,7 @@ function Modal({ isOpen, title, message, onConfirm, onCancel, confirmText = 'Con
           <button className="btn btn-secondary" onClick={onCancel}>
             {cancelText}
           </button>
-          <button
-            className={`btn ${danger ? 'btn-danger' : 'btn-primary'}`}
-            onClick={onConfirm}
-          >
+          <button className={`btn ${danger ? 'btn-danger' : 'btn-primary'}`} onClick={onConfirm}>
             {confirmText}
           </button>
         </div>

@@ -13,8 +13,10 @@ import api from '../../src/api.js'
 vi.mock('../../src/viewer/components/MediaList.jsx', () => ({
   default: ({ items, onSelect }) => (
     <ul>
-      {items.map(item => (
-        <li key={item.path} onClick={() => onSelect(item)}>{item.filename}</li>
+      {items.map((item) => (
+        <li key={item.path} onClick={() => onSelect(item)}>
+          {item.filename}
+        </li>
       ))}
     </ul>
   ),
@@ -22,11 +24,12 @@ vi.mock('../../src/viewer/components/MediaList.jsx', () => ({
 
 vi.mock('../../src/viewer/apiBase.js', () => ({
   apiFetch: (path, opts) => fetch(path, opts),
-  apiPost: (path, data) => fetch(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  }),
+  apiPost: (path, data) =>
+    fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }),
   getBase: () => '',
   ready: Promise.resolve(),
 }))
@@ -64,7 +67,7 @@ describe('RecordingsPage', () => {
   it('shows loading spinner initially', async () => {
     server.use(
       http.get('/api/recordings', async () => {
-        await new Promise(r => setTimeout(r, 100))
+        await new Promise((r) => setTimeout(r, 100))
         return HttpResponse.json([])
       })
     )
@@ -78,7 +81,7 @@ describe('RecordingsPage', () => {
   it('renders sidebar with recording list', async () => {
     server.use(
       http.get('/api/recordings', () => HttpResponse.json([sampleRecording])),
-      http.get('/api/video/tracks', () => HttpResponse.json({ tracks: [] })),
+      http.get('/api/video/tracks', () => HttpResponse.json({ tracks: [] }))
     )
     renderPage()
     await waitFor(() => expect(screen.getByText(sampleRecording.filename)).toBeInTheDocument())
@@ -88,7 +91,7 @@ describe('RecordingsPage', () => {
     server.use(
       http.get('/api/recordings', () => HttpResponse.json([sampleRecording])),
       http.get('/api/video/tracks', () => HttpResponse.json({ tracks: [] })),
-      http.get('/api/markers', () => HttpResponse.json({ markers: [] })),
+      http.get('/api/markers', () => HttpResponse.json({ markers: [] }))
     )
     renderPage()
     await waitFor(() => screen.getByText(sampleRecording.filename))
@@ -102,10 +105,12 @@ describe('RecordingsPage', () => {
       // Use empty tracks to avoid waveform fetch requests that aren't relevant to this test
       http.get('/api/video/tracks', () => HttpResponse.json({ tracks: [] })),
       http.get('/api/markers', () => HttpResponse.json({ markers: [] })),
-      http.post('/api/clips/create', () => HttpResponse.json({
-        filename: 'Halo Clip 2025-01-15 #1.mp4',
-        path: 'C:\\clips\\Halo Clip 2025-01-15 #1.mp4',
-      })),
+      http.post('/api/clips/create', () =>
+        HttpResponse.json({
+          filename: 'Halo Clip 2025-01-15 #1.mp4',
+          path: 'C:\\clips\\Halo Clip 2025-01-15 #1.mp4',
+        })
+      )
     )
 
     // Provide a non-zero duration so the ClipControls "Create Clip" button is enabled
@@ -133,7 +138,7 @@ describe('RecordingsPage', () => {
 
     // Now ClipControls is shown – click its "Create Clip" button to submit the clip
     const clipControlsBtn = await waitFor(() =>
-      screen.getAllByRole('button', { name: /Create Clip/i }).find(b => !b.disabled)
+      screen.getAllByRole('button', { name: /Create Clip/i }).find((b) => !b.disabled)
     )
     await act(async () => {
       fireEvent.click(clipControlsBtn)
@@ -149,26 +154,30 @@ describe('RecordingsPage', () => {
     server.use(
       http.get('/api/recordings', () => HttpResponse.json([sampleRecording])),
       http.get('/api/video/tracks', () => HttpResponse.json({ tracks: [] })),
-      http.get('/api/markers', () => HttpResponse.json({ markers: [] })),
+      http.get('/api/markers', () => HttpResponse.json({ markers: [] }))
     )
     renderPage(`/recordings?path=${encodeURIComponent(sampleRecording.path)}`)
     await waitFor(() => document.querySelector('video'))
     // Flush VideoPlayer's async track fetch so it completes while MSW handlers
     // are still registered, preventing afterEach teardown warnings.
-    await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0))
+    })
   })
 
   // ── session-progress behaviour (banner now rendered globally in App, not here) ──
 
   it('refreshes recording list when a complete event fires', async () => {
     let fetchCount = 0
-    server.use(http.get('/api/recordings', () => {
-      fetchCount++
-      return HttpResponse.json([])
-    }))
+    server.use(
+      http.get('/api/recordings', () => {
+        fetchCount++
+        return HttpResponse.json([])
+      })
+    )
 
     let capturedProgressCb
-    vi.spyOn(api, 'onSessionProgress').mockImplementation(cb => {
+    vi.spyOn(api, 'onSessionProgress').mockImplementation((cb) => {
       capturedProgressCb = cb
       return () => {}
     })
@@ -190,7 +199,7 @@ describe('RecordingsPage', () => {
     server.use(http.get('/api/recordings', () => HttpResponse.json([])))
 
     let capturedProgressCb
-    vi.spyOn(api, 'onSessionProgress').mockImplementation(cb => {
+    vi.spyOn(api, 'onSessionProgress').mockImplementation((cb) => {
       capturedProgressCb = cb
       return () => {}
     })
@@ -199,7 +208,12 @@ describe('RecordingsPage', () => {
     await waitFor(() => expect(document.querySelector('.spinner')).not.toBeInTheDocument())
 
     await act(async () => {
-      capturedProgressCb?.({ phase: 'recording', stage: 'remuxing', label: 'Remuxing to MP4…', gameName: 'Halo' })
+      capturedProgressCb?.({
+        phase: 'recording',
+        stage: 'remuxing',
+        label: 'Remuxing to MP4…',
+        gameName: 'Halo',
+      })
     })
 
     // The banner is now in AppLayout, not RecordingsPage — should never appear here

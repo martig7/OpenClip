@@ -38,11 +38,11 @@ function ClipsPage() {
   const initialPathParamRef = useRef(searchParams.get('path'))
 
   useEffect(() => {
-    fetchClips().then(data => {
+    fetchClips().then((data) => {
       if (!data) return
       const param = initialPathParamRef.current
       if (param) {
-        const clip = data.find(c => c.path === param)
+        const clip = data.find((c) => c.path === param)
         if (clip) {
           initialPathParamRef.current = null
           setSelectedClip(clip)
@@ -111,10 +111,15 @@ function ClipsPage() {
           <VideoPlayer clip={selectedClip} onDelete={() => setDeleteModal(true)} />
         ) : (
           <>
-            <div className="h-[36px] w-full shrink-0 border-b border-[var(--border)] relative z-50" style={{ WebkitAppRegion: "drag", backgroundColor: "var(--bg-primary)" }} />
+            <div
+              className="h-[36px] w-full shrink-0 border-b border-[var(--border)] relative z-50"
+              style={{ WebkitAppRegion: 'drag', backgroundColor: 'var(--bg-primary)' }}
+            />
             <div className="player-container">
               <div className="player-placeholder">
-                <div className="icon"><Film size={40} /></div>
+                <div className="icon">
+                  <Film size={40} />
+                </div>
                 <p>Select a clip to play</p>
               </div>
             </div>

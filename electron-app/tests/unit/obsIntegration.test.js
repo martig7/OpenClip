@@ -41,10 +41,7 @@ describe('readOBSRecordingPath', () => {
     const recPath = path.join(tmpDir, 'Videos', 'OBS')
     fs.mkdirSync(recPath, { recursive: true })
 
-    fs.writeFileSync(
-      path.join(profilesDir, 'basic.ini'),
-      `[SimpleOutput]\nFilePath=${recPath}\n`
-    )
+    fs.writeFileSync(path.join(profilesDir, 'basic.ini'), `[SimpleOutput]\nFilePath=${recPath}\n`)
 
     vi.stubEnv('APPDATA', tmpDir)
     const { readOBSRecordingPath } = await getModule()
@@ -77,10 +74,7 @@ describe('readOBSRecordingPath', () => {
     const advOutPath = path.join(tmpDir, 'AdvOut')
     fs.mkdirSync(advOutPath, { recursive: true })
 
-    fs.writeFileSync(
-      path.join(profilesDir, 'basic.ini'),
-      `[AdvOut]\nRecFilePath=${advOutPath}\n`
-    )
+    fs.writeFileSync(path.join(profilesDir, 'basic.ini'), `[AdvOut]\nRecFilePath=${advOutPath}\n`)
 
     vi.stubEnv('APPDATA', tmpDir)
     const { readOBSRecordingPath } = await getModule()
@@ -98,10 +92,7 @@ describe('readOBSRecordingPath', () => {
     fs.mkdirSync(recPath, { recursive: true })
 
     // p2 has the ini, p1 does not
-    fs.writeFileSync(
-      path.join(p2, 'basic.ini'),
-      `[SimpleOutput]\nFilePath=${recPath}\n`
-    )
+    fs.writeFileSync(path.join(p2, 'basic.ini'), `[SimpleOutput]\nFilePath=${recPath}\n`)
 
     vi.stubEnv('APPDATA', tmpDir)
     const { readOBSRecordingPath } = await getModule()
@@ -137,14 +128,8 @@ describe('readOBSRecordingPath', () => {
     fs.mkdirSync(recPath1, { recursive: true })
     fs.mkdirSync(recPath2, { recursive: true })
 
-    fs.writeFileSync(
-      path.join(p1, 'basic.ini'),
-      `[SimpleOutput]\nFilePath=${recPath1}\n`
-    )
-    fs.writeFileSync(
-      path.join(p2, 'basic.ini'),
-      `[SimpleOutput]\nFilePath=${recPath2}\n`
-    )
+    fs.writeFileSync(path.join(p1, 'basic.ini'), `[SimpleOutput]\nFilePath=${recPath1}\n`)
+    fs.writeFileSync(path.join(p2, 'basic.ini'), `[SimpleOutput]\nFilePath=${recPath2}\n`)
 
     vi.stubEnv('APPDATA', tmpDir)
     const { readOBSRecordingPath } = await getModule()
@@ -156,7 +141,7 @@ describe('readOBSRecordingPath', () => {
     fs.mkdirSync(profilesDir, { recursive: true })
 
     // Write binary garbage that is not valid INI
-    const garbage = Buffer.from([0x00, 0xFF, 0xFE, 0x80, 0x90, 0xAB, 0xCD, 0xEF])
+    const garbage = Buffer.from([0x00, 0xff, 0xfe, 0x80, 0x90, 0xab, 0xcd, 0xef])
     fs.writeFileSync(path.join(profilesDir, 'basic.ini'), garbage)
 
     vi.stubEnv('APPDATA', tmpDir)

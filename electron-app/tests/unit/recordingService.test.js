@@ -97,17 +97,17 @@ describe('scanRecordings', () => {
   it('skips the Clips subdirectory', () => {
     makeFile(path.join(destDir, 'Halo', 'Halo Session 2025-01-15 #1.mp4'))
     makeFile(path.join(clipsDir, 'Halo Clip 2025-01-15 #1.mp4'))
-    expect(service.scanRecordings().every(r => !r.path.includes('Clips'))).toBe(true)
+    expect(service.scanRecordings().every((r) => !r.path.includes('Clips'))).toBe(true)
   })
 
   it('detects OBS-named files in obsPath', () => {
     makeFile(path.join(obsDir, '2025-01-20 18-30-00.mkv'))
-    expect(service.scanRecordings().some(r => r.game_name === '(Unorganized)')).toBe(true)
+    expect(service.scanRecordings().some((r) => r.game_name === '(Unorganized)')).toBe(true)
   })
 
   it('ignores non-OBS-named files in obsPath', () => {
     makeFile(path.join(obsDir, 'my-home-video.mp4'))
-    expect(service.scanRecordings().every(r => r.filename !== 'my-home-video.mp4')).toBe(true)
+    expect(service.scanRecordings().every((r) => r.filename !== 'my-home-video.mp4')).toBe(true)
   })
 
   it('returns cached results within TTL', () => {
@@ -120,15 +120,19 @@ describe('scanRecordings', () => {
     service.scanRecordings()
     makeFile(path.join(obsDir, '2025-01-20 18-30-00.mkv'))
     service.invalidateCache()
-    expect(service.scanRecordings().some(r => r.filename === '2025-01-20 18-30-00.mkv')).toBe(true)
+    expect(service.scanRecordings().some((r) => r.filename === '2025-01-20 18-30-00.mkv')).toBe(
+      true
+    )
   })
 
   it('sorts recordings by mtime descending', () => {
     const gameDir = path.join(destDir, 'Halo')
     const f1 = path.join(gameDir, 'Halo Session 2025-01-13 #1.mp4')
     const f2 = path.join(gameDir, 'Halo Session 2025-01-15 #1.mp4')
-    makeFile(f1); fs.utimesSync(f1, new Date(2025, 0, 13), new Date(2025, 0, 13))
-    makeFile(f2); fs.utimesSync(f2, new Date(2025, 0, 15), new Date(2025, 0, 15))
+    makeFile(f1)
+    fs.utimesSync(f1, new Date(2025, 0, 13), new Date(2025, 0, 13))
+    makeFile(f2)
+    fs.utimesSync(f2, new Date(2025, 0, 15), new Date(2025, 0, 15))
     service.invalidateCache()
     const recs = service.scanRecordings()
     expect(recs.length).toBeGreaterThanOrEqual(2)
@@ -228,7 +232,7 @@ describe('deleteFile', () => {
     makeFile(fp)
     service.scanRecordings()
     service.deleteFile(fp)
-    expect(service.scanRecordings().every(r => r.path !== fp)).toBe(true)
+    expect(service.scanRecordings().every((r) => r.path !== fp)).toBe(true)
   })
 })
 
@@ -244,7 +248,7 @@ describe('scanRecordings folder file cap', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     service.invalidateCache()
     const recs = service.scanRecordings()
-    expect(recs.filter(r => r.game_name === 'Halo').length).toBe(500)
+    expect(recs.filter((r) => r.game_name === 'Halo').length).toBe(500)
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('capping scan at 500'))
     warnSpy.mockRestore()
   })
@@ -268,7 +272,7 @@ describe('scoped cache invalidation', () => {
 
   it('deleteFile of a recording only invalidates the recordings cache', () => {
     const clipFp = path.join(clipsDir, 'Halo Clip 2025-01-15 #1.mp4')
-    const recFp  = path.join(destDir, 'Halo', 'Halo Session 2025-01-15 #1.mp4')
+    const recFp = path.join(destDir, 'Halo', 'Halo Session 2025-01-15 #1.mp4')
     makeFile(clipFp)
     makeFile(recFp)
     service.invalidateCache()
@@ -278,12 +282,12 @@ describe('scoped cache invalidation', () => {
     // Clips cache should be untouched (same reference)
     expect(service.scanClips()).toBe(clips1)
     // Recordings cache was cleared so the deleted file is gone
-    expect(service.scanRecordings().every(r => r.path !== recFp)).toBe(true)
+    expect(service.scanRecordings().every((r) => r.path !== recFp)).toBe(true)
   })
 
   it('deleteFile of a clip only invalidates the clips cache', () => {
     const clipFp = path.join(clipsDir, 'Halo Clip 2025-01-15 #1.mp4')
-    const recFp  = path.join(destDir, 'Halo', 'Halo Session 2025-01-15 #1.mp4')
+    const recFp = path.join(destDir, 'Halo', 'Halo Session 2025-01-15 #1.mp4')
     makeFile(clipFp)
     makeFile(recFp)
     service.invalidateCache()
@@ -293,7 +297,7 @@ describe('scoped cache invalidation', () => {
     // Recordings cache should be untouched (same reference)
     expect(service.scanRecordings()).toBe(recs1)
     // Clips cache was cleared so the deleted clip is gone
-    expect(service.scanClips().every(c => c.path !== clipFp)).toBe(true)
+    expect(service.scanClips().every((c) => c.path !== clipFp)).toBe(true)
   })
 })
 
@@ -343,12 +347,14 @@ describe('createClip', () => {
   })
 
   it('rejects when source does not exist', async () => {
-    await expect(service.createClip(path.join(tmpDir, 'missing.mp4'), 0, 10, 'Halo', null))
-      .rejects.toThrow('Source not found')
+    await expect(
+      service.createClip(path.join(tmpDir, 'missing.mp4'), 0, 10, 'Halo', null)
+    ).rejects.toThrow('Source not found')
   })
 
   it('rejects when endTime <= startTime', async () => {
-    const src = path.join(obsDir, 'rec.mp4'); makeFile(src)
+    const src = path.join(obsDir, 'rec.mp4')
+    makeFile(src)
     await expect(service.createClip(src, 10, 5, 'Halo', null)).rejects.toThrow('End time')
   })
 
@@ -359,35 +365,44 @@ describe('createClip', () => {
     // fallback OBS path detection doesn't find a real path on this machine.
     const obsPath = _req.resolve('../../electron/obsIntegration')
     const origObs = _req.cache[obsPath]
-    _req.cache[obsPath] = { id: obsPath, filename: obsPath, loaded: true,
-      exports: { readOBSRecordingPath: () => null } }
-    const src = path.join(tmpDir, 'rec.mp4'); makeFile(src)
+    _req.cache[obsPath] = {
+      id: obsPath,
+      filename: obsPath,
+      loaded: true,
+      exports: { readOBSRecordingPath: () => null },
+    }
+    const src = path.join(tmpDir, 'rec.mp4')
+    makeFile(src)
     try {
       await expect(service.createClip(src, 0, 10, 'Halo', null)).rejects.toThrow('No clips folder')
     } finally {
-      if (origObs) _req.cache[obsPath] = origObs; else delete _req.cache[obsPath]
+      if (origObs) _req.cache[obsPath] = origObs
+      else delete _req.cache[obsPath]
     }
   })
 
   it('creates a clip with correct naming', async () => {
-    const src = path.join(obsDir, 'rec.mp4'); makeFile(src)
+    const src = path.join(obsDir, 'rec.mp4')
+    makeFile(src)
     const result = await service.createClip(src, 0, 10, 'Halo', null)
     expect(result.filename).toMatch(/^Halo Clip \d{4}-\d{2}-\d{2} #1\.mp4$/)
   })
 
   it('increments clip number when existing clips present', async () => {
-    const src = path.join(obsDir, 'rec.mp4'); makeFile(src)
+    const src = path.join(obsDir, 'rec.mp4')
+    makeFile(src)
     const now = new Date()
-    const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     makeFile(path.join(clipsDir, `Halo Clip ${today} #1.mp4`))
     const result = await service.createClip(src, 0, 10, 'Halo', null)
     expect(result.filename).toContain('#2')
   })
 
   it('skips already-existing candidate filename to avoid overwrite under concurrency', async () => {
-    const src = path.join(obsDir, 'rec.mp4'); makeFile(src)
+    const src = path.join(obsDir, 'rec.mp4')
+    makeFile(src)
     const now = new Date()
-    const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     // Simulate a concurrent request having already claimed #1 (count=0+1) before writing it
     makeFile(path.join(clipsDir, `Halo Clip ${today} #1.mp4`))
     const result = await service.createClip(src, 0, 10, 'Halo', null)
@@ -397,7 +412,8 @@ describe('createClip', () => {
 
   it('uses -map 0 when no audioTracks specified', async () => {
     const cp = await import('child_process')
-    const src = path.join(obsDir, 'rec.mp4'); makeFile(src)
+    const src = path.join(obsDir, 'rec.mp4')
+    makeFile(src)
     await service.createClip(src, 0, 10, 'Halo', null)
     const args = cp.execFile.mock.calls[0][1]
     expect(args[args.indexOf('-map') + 1]).toBe('0')
@@ -405,14 +421,16 @@ describe('createClip', () => {
 
   it('maps single audio track correctly', async () => {
     const cp = await import('child_process')
-    const src = path.join(obsDir, 'rec.mp4'); makeFile(src)
+    const src = path.join(obsDir, 'rec.mp4')
+    makeFile(src)
     await service.createClip(src, 0, 10, 'Halo', [1])
     expect(cp.execFile.mock.calls[0][1].join(' ')).toContain('0:a:1')
   })
 
   it('includes amix for multiple audio tracks', async () => {
     const cp = await import('child_process')
-    const src = path.join(obsDir, 'rec.mp4'); makeFile(src)
+    const src = path.join(obsDir, 'rec.mp4')
+    makeFile(src)
     await service.createClip(src, 0, 10, 'Halo', [0, 1])
     expect(cp.execFile.mock.calls[0][1].join(' ')).toContain('amix')
   })
@@ -426,7 +444,12 @@ describe('runAutoDelete', () => {
   })
 
   it('deletes files older than max_age_days', () => {
-    store._data.storageSettings = { auto_delete_enabled: true, max_age_days: 1, max_storage_gb: 9999, exclude_clips: true }
+    store._data.storageSettings = {
+      auto_delete_enabled: true,
+      max_age_days: 1,
+      max_storage_gb: 9999,
+      exclude_clips: true,
+    }
     const fp = path.join(destDir, 'Halo', 'Halo Session 2025-01-01 #1.mp4')
     makeFile(fp)
     fs.utimesSync(fp, new Date(Date.now() - 2 * 86400000), new Date(Date.now() - 2 * 86400000))
@@ -440,7 +463,12 @@ describe('runAutoDelete', () => {
     makeFile(fp)
     fs.utimesSync(fp, new Date(Date.now() - 2 * 86400000), new Date(Date.now() - 2 * 86400000))
     store._data.lockedRecordings = [fp]
-    store._data.storageSettings = { auto_delete_enabled: true, max_age_days: 1, max_storage_gb: 9999, exclude_clips: true }
+    store._data.storageSettings = {
+      auto_delete_enabled: true,
+      max_age_days: 1,
+      max_storage_gb: 9999,
+      exclude_clips: true,
+    }
     service.invalidateCache()
     expect(service.runAutoDelete().skipped).toBeGreaterThan(0)
     expect(fs.existsSync(fp)).toBe(true)
@@ -450,7 +478,12 @@ describe('runAutoDelete', () => {
     const fp = path.join(clipsDir, 'Halo Clip 2025-01-01 #1.mp4')
     makeFile(fp)
     fs.utimesSync(fp, new Date(Date.now() - 2 * 86400000), new Date(Date.now() - 2 * 86400000))
-    store._data.storageSettings = { auto_delete_enabled: true, max_age_days: 1, max_storage_gb: 9999, exclude_clips: true }
+    store._data.storageSettings = {
+      auto_delete_enabled: true,
+      max_age_days: 1,
+      max_storage_gb: 9999,
+      exclude_clips: true,
+    }
     service.invalidateCache()
     service.runAutoDelete()
     expect(fs.existsSync(fp)).toBe(true)
@@ -460,7 +493,12 @@ describe('runAutoDelete', () => {
     const fp = path.join(clipsDir, 'Halo Clip 2025-01-01 #1.mp4')
     makeFile(fp)
     fs.utimesSync(fp, new Date(Date.now() - 2 * 86400000), new Date(Date.now() - 2 * 86400000))
-    store._data.storageSettings = { auto_delete_enabled: true, max_age_days: 1, max_storage_gb: 9999, exclude_clips: false }
+    store._data.storageSettings = {
+      auto_delete_enabled: true,
+      max_age_days: 1,
+      max_storage_gb: 9999,
+      exclude_clips: false,
+    }
     service.invalidateCache()
     expect(service.runAutoDelete().deleted).toBe(1)
     expect(fs.existsSync(fp)).toBe(false)
@@ -475,7 +513,9 @@ describe('killAllProcesses', () => {
     let closeListener
     const mockProc = {
       kill: vi.fn(),
-      once: vi.fn((event, cb) => { if (event === 'close') closeListener = cb }),
+      once: vi.fn((event, cb) => {
+        if (event === 'close') closeListener = cb
+      }),
     }
 
     // Register the mock process directly via createClip infrastructure isn't needed —
@@ -509,7 +549,7 @@ describe('killAllProcesses', () => {
     vi.advanceTimersByTime(3100)
 
     // kill should NOT have been called with SIGKILL since close cleared the timer
-    const sigkillCalls = mockProc.kill.mock.calls.filter(c => c[0] === 'SIGKILL')
+    const sigkillCalls = mockProc.kill.mock.calls.filter((c) => c[0] === 'SIGKILL')
     expect(sigkillCalls).toHaveLength(0)
 
     vi.useRealTimers()
@@ -521,7 +561,9 @@ describe('killAllProcesses', () => {
     let closeListener
     const mockProc = {
       kill: vi.fn(),
-      once: vi.fn((event, cb) => { if (event === 'close') closeListener = cb }),
+      once: vi.fn((event, cb) => {
+        if (event === 'close') closeListener = cb
+      }),
     }
 
     const cp = await import('child_process')
@@ -538,7 +580,7 @@ describe('killAllProcesses', () => {
     // Advance past 3s without firing the close listener
     vi.advanceTimersByTime(3100)
 
-    const sigkillCalls = mockProc.kill.mock.calls.filter(c => c[0] === 'SIGKILL')
+    const sigkillCalls = mockProc.kill.mock.calls.filter((c) => c[0] === 'SIGKILL')
     expect(sigkillCalls).toHaveLength(1)
 
     vi.useRealTimers()

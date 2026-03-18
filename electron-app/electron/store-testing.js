@@ -8,14 +8,32 @@ const electronConfigDefaults = {
   listView: true,
   onboardingComplete: false,
   obsInstallPath: '',
-};
+}
 
 const gamesConfigDefaults = {
   games: [
-    { id: '1', name: 'Valorant', exe: 'VALORANT.exe', windowClass: 'RiotWindowClass', selector: 'valorant', scene: 'Valorant', icon_path: '', enabled: true },
-    { id: '2', name: 'Counter-Strike 2', exe: 'cs2.exe', windowClass: 'class512', selector: 'cs2', scene: 'CS2', icon_path: '', enabled: true },
+    {
+      id: '1',
+      name: 'Valorant',
+      exe: 'VALORANT.exe',
+      windowClass: 'RiotWindowClass',
+      selector: 'valorant',
+      scene: 'Valorant',
+      icon_path: '',
+      enabled: true,
+    },
+    {
+      id: '2',
+      name: 'Counter-Strike 2',
+      exe: 'cs2.exe',
+      windowClass: 'class512',
+      selector: 'cs2',
+      scene: 'CS2',
+      icon_path: '',
+      enabled: true,
+    },
   ],
-};
+}
 const managerSettingsDefaults = {
   organized_path: '',
   auto_organize: true,
@@ -36,7 +54,7 @@ const managerSettingsDefaults = {
     delete_recording_after_clips: false,
   },
   obs_websocket: { host: 'localhost', port: 4455, password: '' },
-};
+}
 
 function msToElectronSettings(ms, obsRecordingPath, electronData) {
   return {
@@ -63,19 +81,19 @@ function msToElectronSettings(ms, obsRecordingPath, electronData) {
       port: ms.obs_websocket?.port ?? 4455,
       password: ms.obs_websocket?.password || '',
     },
-  };
+  }
 }
 
 function electronSettingsToMs(ms, electronSettings) {
-  const updated = { ...ms };
+  const updated = { ...ms }
   if (electronSettings.destinationPath !== undefined) {
-    updated.organized_path = electronSettings.destinationPath;
+    updated.organized_path = electronSettings.destinationPath
   }
   if (electronSettings.startWatcherOnStartup !== undefined) {
-    updated.start_watcher_on_startup = electronSettings.startWatcherOnStartup;
+    updated.start_watcher_on_startup = electronSettings.startWatcherOnStartup
   }
   if (electronSettings.clipMarkerHotkey !== undefined) {
-    updated.clip_hotkey = electronSettings.clipMarkerHotkey;
+    updated.clip_hotkey = electronSettings.clipMarkerHotkey
   }
   if (electronSettings.autoClip !== undefined) {
     updated.auto_clip_settings = {
@@ -85,7 +103,7 @@ function electronSettingsToMs(ms, electronSettings) {
       buffer_after_seconds: electronSettings.autoClip.bufferAfter ?? 15,
       remove_processed_markers: electronSettings.autoClip.removeMarkers !== false,
       delete_recording_after_clips: electronSettings.autoClip.deleteFullRecording || false,
-    };
+    }
   }
   if (electronSettings.autoDelete !== undefined) {
     updated.storage_settings = {
@@ -94,7 +112,7 @@ function electronSettingsToMs(ms, electronSettings) {
       max_storage_gb: electronSettings.autoDelete.maxStorageGB ?? 100,
       max_age_days: electronSettings.autoDelete.maxAgeDays ?? 30,
       exclude_clips: electronSettings.autoDelete.excludeClips !== false,
-    };
+    }
   }
   if (electronSettings.obsWebSocket !== undefined) {
     updated.obs_websocket = {
@@ -102,9 +120,9 @@ function electronSettingsToMs(ms, electronSettings) {
       host: electronSettings.obsWebSocket.host || 'localhost',
       port: electronSettings.obsWebSocket.port ?? 4455,
       password: electronSettings.obsWebSocket.password || '',
-    };
+    }
   }
-  return updated;
+  return updated
 }
 
 const store = {
@@ -114,34 +132,34 @@ const store = {
   _clipMarkers: [],
 
   _electron() {
-    return this._electronData;
+    return this._electronData
   },
 
   _saveElectron() {},
 
   get(key) {
-    if (!key) return null;
+    if (!key) return null
 
     if (key === 'games') {
-      return this._gamesData.games || [];
+      return this._gamesData.games || []
     }
     if (key === 'windowBounds') {
-      return this._electronData.windowBounds || electronConfigDefaults.windowBounds;
+      return this._electronData.windowBounds || electronConfigDefaults.windowBounds
     }
     if (key === 'masterAudioSources') {
-      return this._electronData.masterAudioSources || [];
+      return this._electronData.masterAudioSources || []
     }
     if (key === 'audioTracks') {
-      return this._electronData.audioTracks || {};
+      return this._electronData.audioTracks || {}
     }
     if (key === 'clipMarkers') {
-      return this._clipMarkers;
+      return this._clipMarkers
     }
     if (key === 'lockedRecordings') {
-      return this._msData.locked_recordings || [];
+      return this._msData.locked_recordings || []
     }
     if (key === 'storageSettings') {
-      return this._msData.storage_settings || {};
+      return this._msData.storage_settings || {}
     }
 
     if (key === 'settings') {
@@ -149,99 +167,99 @@ const store = {
         this._msData,
         this._electronData.obsRecordingPath,
         this._electronData
-      );
+      )
     }
 
     if (key.startsWith('settings.')) {
-      const subKey = key.slice('settings.'.length);
+      const subKey = key.slice('settings.'.length)
       const settings = msToElectronSettings(
         this._msData,
         this._electronData.obsRecordingPath,
         this._electronData
-      );
-      const parts = subKey.split('.');
-      let val = settings;
+      )
+      const parts = subKey.split('.')
+      let val = settings
       for (const p of parts) {
-        val = val?.[p];
+        val = val?.[p]
       }
-      return val;
+      return val
     }
 
-    return undefined;
+    return undefined
   },
 
   set(key, value) {
     if (key === 'games') {
-      this._gamesData.games = value;
-      return;
+      this._gamesData.games = value
+      return
     }
     if (key === 'windowBounds') {
-      this._electronData.windowBounds = value;
-      return;
+      this._electronData.windowBounds = value
+      return
     }
     if (key === 'masterAudioSources') {
-      this._electronData.masterAudioSources = value;
-      return;
+      this._electronData.masterAudioSources = value
+      return
     }
     if (key === 'audioTracks') {
-      this._electronData.audioTracks = value;
-      return;
+      this._electronData.audioTracks = value
+      return
     }
     if (key === 'clipMarkers') {
-      this._clipMarkers = value;
-      return;
+      this._clipMarkers = value
+      return
     }
     if (key === 'lockedRecordings') {
-      this._msData.locked_recordings = value;
-      return;
+      this._msData.locked_recordings = value
+      return
     }
     if (key === 'storageSettings') {
-      this._msData.storage_settings = value;
-      return;
+      this._msData.storage_settings = value
+      return
     }
     if (key === 'settings') {
       if (value.obsRecordingPath !== undefined) {
-        this._electronData.obsRecordingPath = value.obsRecordingPath;
+        this._electronData.obsRecordingPath = value.obsRecordingPath
       }
       if (value.listView !== undefined) {
-        this._electronData.listView = value.listView;
+        this._electronData.listView = value.listView
       }
-      this._msData = electronSettingsToMs(this._msData, value);
-      return;
+      this._msData = electronSettingsToMs(this._msData, value)
+      return
     }
     if (key.startsWith('settings.')) {
-      const subKey = key.slice('settings.'.length);
+      const subKey = key.slice('settings.'.length)
       if (subKey === 'obsRecordingPath') {
-        this._electronData.obsRecordingPath = value;
-        return;
+        this._electronData.obsRecordingPath = value
+        return
       }
       if (subKey === 'listView') {
-        this._electronData.listView = value;
-        return;
+        this._electronData.listView = value
+        return
       }
       const current = msToElectronSettings(
         this._msData,
         this._electronData.obsRecordingPath,
         this._electronData
-      );
-      const parts = subKey.split('.');
-      let obj = current;
+      )
+      const parts = subKey.split('.')
+      let obj = current
       for (let i = 0; i < parts.length - 1; i++) {
-        obj[parts[i]] = obj[parts[i]] || {};
-        obj = obj[parts[i]];
+        obj[parts[i]] = obj[parts[i]] || {}
+        obj = obj[parts[i]]
       }
-      obj[parts[parts.length - 1]] = value;
-      this._msData = electronSettingsToMs(this._msData, current);
-      return;
+      obj[parts[parts.length - 1]] = value
+      this._msData = electronSettingsToMs(this._msData, current)
+      return
     }
   },
 
   reset() {
-    this._gamesData = JSON.parse(JSON.stringify(gamesConfigDefaults));
-    this._msData = JSON.parse(JSON.stringify(managerSettingsDefaults));
-    this._electronData = JSON.parse(JSON.stringify(electronConfigDefaults));
-    this._clipMarkers = [];
+    this._gamesData = JSON.parse(JSON.stringify(gamesConfigDefaults))
+    this._msData = JSON.parse(JSON.stringify(managerSettingsDefaults))
+    this._electronData = JSON.parse(JSON.stringify(electronConfigDefaults))
+    this._clipMarkers = []
   },
-};
+}
 
-module.exports = { store };
+module.exports = { store }

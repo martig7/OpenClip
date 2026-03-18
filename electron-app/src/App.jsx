@@ -1,17 +1,27 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { HashRouter, Routes, Route, NavLink } from 'react-router-dom';
-import { AlertTriangle, Gamepad2, Video, Film, HardDrive, Settings, Sliders, Download, X } from 'lucide-react';
-import appIcon from '../assets/icon.png';
-import api from './api';
-import GamesPage from './pages/GamesPage';
-import SettingsPage from './pages/SettingsPage';
-import EncodingPage from './pages/EncodingPage';
-import ViewerRecordingsPage from './viewer/pages/RecordingsPage';
-import ViewerClipsPage from './viewer/pages/ClipsPage';
-import ViewerStoragePage from './viewer/pages/StoragePage';
-import OnboardingModal from './components/OnboardingModal';
-import './App.css';
-import './viewer/viewer.css';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import { HashRouter, Routes, Route, NavLink } from 'react-router-dom'
+import {
+  AlertTriangle,
+  Gamepad2,
+  Video,
+  Film,
+  HardDrive,
+  Settings,
+  Sliders,
+  Download,
+  X,
+} from 'lucide-react'
+import appIcon from '../assets/icon.png'
+import api from './api'
+import GamesPage from './pages/GamesPage'
+import SettingsPage from './pages/SettingsPage'
+import EncodingPage from './pages/EncodingPage'
+import ViewerRecordingsPage from './viewer/pages/RecordingsPage'
+import ViewerClipsPage from './viewer/pages/ClipsPage'
+import ViewerStoragePage from './viewer/pages/StoragePage'
+import OnboardingModal from './components/OnboardingModal'
+import './App.css'
+import './viewer/viewer.css'
 
 const navItems = [
   { path: '/', icon: Gamepad2, label: 'Games' },
@@ -20,55 +30,62 @@ const navItems = [
   { path: '/storage', icon: HardDrive, label: 'Storage' },
   { path: '/encoding', icon: Sliders, label: 'Encoding' },
   { path: '/settings', icon: Settings, label: 'Settings' },
-];
+]
 
-export const OrganizeErrorContext = createContext({ organizeError: null, clearOrganizeError: () => {} });
-export function useOrganizeError() { return useContext(OrganizeErrorContext); }
+export const OrganizeErrorContext = createContext({
+  organizeError: null,
+  clearOrganizeError: () => {},
+})
+export function useOrganizeError() {
+  return useContext(OrganizeErrorContext)
+}
 
 // Shared organize-progress state so VideoPlayer (deep) can signal App (root).
 // isManualOrganizing + organizeProgress: set by VideoPlayer, read by AppLayout for the popup.
 export const OrganizeProgressContext = createContext({
   isManualOrganizing: false,
   setIsManualOrganizing: () => {},
-  organizeProgress: null,       // { stage, label } | null
+  organizeProgress: null, // { stage, label } | null
   setOrganizeProgress: () => {},
-});
-export function useOrganizeProgress() { return useContext(OrganizeProgressContext); }
+})
+export function useOrganizeProgress() {
+  return useContext(OrganizeProgressContext)
+}
 
 // Unified progress width: covers the full recording→clipping pipeline.
 // Manual organize reuses the recording-phase scale (it runs the same stages).
 function getProgressWidth(p, isManual = false) {
-  if (!p) return 0;
-  const phase = isManual ? 'recording' : p.phase;
-  const stage = p.stage;
+  if (!p) return 0
+  const phase = isManual ? 'recording' : p.phase
+  const stage = p.stage
   if (phase === 'recording') {
-    if (stage === 'moving') return 45;
-    if (stage === 'remuxing') return 32;
-    if (stage === 'waiting') return 0;
-    return 10;
+    if (stage === 'moving') return 45
+    if (stage === 'remuxing') return 32
+    if (stage === 'waiting') return 0
+    return 10
   }
   if (phase === 'clipping') {
-    return 50 + (((p.clipIndex ?? 0) + 1) / (p.clipTotal ?? 1)) * 45;
+    return 50 + (((p.clipIndex ?? 0) + 1) / (p.clipTotal ?? 1)) * 45
   }
-  return 100;
+  return 100
 }
 
 // ── Inner layout component — needs useLocation() so it lives inside HashRouter ──
 
 function AppLayout({ sessionProgress, updateState, showOnboarding, setShowOnboarding }) {
-  const { organizeError, clearOrganizeError } = useOrganizeError();
-  const { isManualOrganizing, organizeProgress } = useOrganizeProgress();
+  const { organizeError, clearOrganizeError } = useOrganizeError()
+  const { isManualOrganizing, organizeProgress } = useOrganizeProgress()
 
   // Show session progress on all pages; fall back to manual organize progress.
-  const isManual = !sessionProgress && isManualOrganizing;
-  const activeProgress = sessionProgress ?? (isManualOrganizing ? organizeProgress : null);
+  const isManual = !sessionProgress && isManualOrganizing
+  const activeProgress = sessionProgress ?? (isManualOrganizing ? organizeProgress : null)
 
-  const bannerWidth = getProgressWidth(activeProgress, isManual);
+  const bannerWidth = getProgressWidth(activeProgress, isManual)
   const bannerLabel = isManual
     ? (activeProgress?.label ?? 'Organizing…')
     : sessionProgress?.phase === 'recording'
       ? `Processing session — ${sessionProgress.label}`
-      : (sessionProgress?.label ?? 'Processing…');
+      : (sessionProgress?.label ?? 'Processing…')
 
   return (
     <>
@@ -99,9 +116,7 @@ function AppLayout({ sessionProgress, updateState, showOnboarding, setShowOnboar
           {updateState && (
             <div className="update-banner">
               <Download size={14} />
-              {updateState.status === 'available' && (
-                <span>v{updateState.version} available</span>
-              )}
+              {updateState.status === 'available' && <span>v{updateState.version} available</span>}
               {updateState.status === 'downloading' && (
                 <span>Downloading… {updateState.percent}%</span>
               )}
@@ -140,7 +155,10 @@ function AppLayout({ sessionProgress, updateState, showOnboarding, setShowOnboar
       {activeProgress && (
         <div className="session-progress-banner">
           <div className="session-progress-label">
-            <div className="spinner-sm" style={{ borderColor: 'rgba(245,158,11,0.25)', borderTopColor: 'var(--amber)' }} />
+            <div
+              className="spinner-sm"
+              style={{ borderColor: 'rgba(245,158,11,0.25)', borderTopColor: 'var(--amber)' }}
+            />
             {bannerLabel}
           </div>
           <div className="progress-bar-container session-progress-bar">
@@ -152,103 +170,112 @@ function AppLayout({ sessionProgress, updateState, showOnboarding, setShowOnboar
         </div>
       )}
     </>
-  );
+  )
 }
 
 // ── Root component ────────────────────────────────────────────────────────────
 
 export default function App() {
-  const [updateState, setUpdateState] = useState(null);
-  const [showOnboarding, setShowOnboarding] = useState(false);
-  const [organizeError, setOrganizeError] = useState(null);
+  const [updateState, setUpdateState] = useState(null)
+  const [showOnboarding, setShowOnboarding] = useState(false)
+  const [organizeError, setOrganizeError] = useState(null)
 
   // Auto-organize progress (from gameWatcher via session:process-progress)
-  const [sessionProgress, setSessionProgress] = useState(null);
+  const [sessionProgress, setSessionProgress] = useState(null)
 
   // Manual organize progress (from VideoPlayer via recordings:organize-progress)
-  const [isManualOrganizing, setIsManualOrganizing] = useState(false);
-  const [organizeProgress, setOrganizeProgress] = useState(null);
+  const [isManualOrganizing, setIsManualOrganizing] = useState(false)
+  const [organizeProgress, setOrganizeProgress] = useState(null)
 
   // First-run onboarding
   useEffect(() => {
-    Promise.resolve(api.isOnboardingComplete?.()).then(done => {
-      if (!done) setShowOnboarding(true);
-    }).catch(() => {});
-  }, []);
+    Promise.resolve(api.isOnboardingComplete?.())
+      .then((done) => {
+        if (!done) setShowOnboarding(true)
+      })
+      .catch(() => {})
+  }, [])
 
   // Auto-updater events
   useEffect(() => {
     const offAvailable = api.onUpdateAvailable(({ version }) =>
       setUpdateState({ status: 'available', version })
-    );
+    )
     const offProgress = api.onUpdateProgress(({ percent }) =>
-      setUpdateState(s => ({ ...s, status: 'downloading', percent }))
-    );
+      setUpdateState((s) => ({ ...s, status: 'downloading', percent }))
+    )
     const offDownloaded = api.onUpdateDownloaded(() =>
-      setUpdateState(s => ({ ...s, status: 'ready' }))
-    );
+      setUpdateState((s) => ({ ...s, status: 'ready' }))
+    )
     const offError = api.onUpdateError((info) => {
-      console.error('[updater] download error:', info?.message);
-      setUpdateState(null);
-    });
-    return () => { offAvailable(); offProgress(); offDownloaded(); offError(); };
-  }, []);
+      console.error('[updater] download error:', info?.message)
+      setUpdateState(null)
+    })
+    return () => {
+      offAvailable()
+      offProgress()
+      offDownloaded()
+      offError()
+    }
+  }, [])
 
   // Session (auto-organize) progress — drives both the popup and the error banner
   useEffect(() => {
     const unsub = api.onSessionProgress?.((p) => {
       if (p.phase === 'error') {
-        setOrganizeError(p.error || 'An error occurred while organizing recordings.');
-        setSessionProgress(null);
+        setOrganizeError(p.error || 'An error occurred while organizing recordings.')
+        setSessionProgress(null)
       } else if (p.phase === 'complete') {
-        setSessionProgress(null);
+        setSessionProgress(null)
       } else {
         // 'recording' | 'clipping'
-        setSessionProgress(p);
+        setSessionProgress(p)
       }
-    });
-    return () => unsub?.();
-  }, []);
+    })
+    return () => unsub?.()
+  }, [])
 
   // Clip marker sound
   useEffect(() => {
-    let audioCtx = null;
+    let audioCtx = null
 
     const unsubscribe = api.onMarkerAdded(() => {
       try {
         if (!audioCtx || audioCtx.state === 'closed') {
-          audioCtx = new AudioContext();
+          audioCtx = new AudioContext()
         }
         if (audioCtx.state === 'suspended') {
-          audioCtx.resume();
+          audioCtx.resume()
         }
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.frequency.value = 880;
-        osc.type = 'sine';
-        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
-        osc.start(audioCtx.currentTime);
-        osc.stop(audioCtx.currentTime + 0.15);
+        const osc = audioCtx.createOscillator()
+        const gain = audioCtx.createGain()
+        osc.connect(gain)
+        gain.connect(audioCtx.destination)
+        osc.frequency.value = 880
+        osc.type = 'sine'
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime)
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15)
+        osc.start(audioCtx.currentTime)
+        osc.stop(audioCtx.currentTime + 0.15)
       } catch {}
-    });
+    })
 
     return () => {
-      unsubscribe();
-      if (audioCtx) audioCtx.close();
-    };
-  }, []);
+      unsubscribe()
+      if (audioCtx) audioCtx.close()
+    }
+  }, [])
 
   const clearOrganizeError = useCallback(() => {
-    setOrganizeError(null);
-    api.clearSessionProgress?.();
-  }, []);
+    setOrganizeError(null)
+    api.clearSessionProgress?.()
+  }, [])
 
   return (
     <OrganizeErrorContext.Provider value={{ organizeError, clearOrganizeError }}>
-      <OrganizeProgressContext.Provider value={{ isManualOrganizing, setIsManualOrganizing, organizeProgress, setOrganizeProgress }}>
+      <OrganizeProgressContext.Provider
+        value={{ isManualOrganizing, setIsManualOrganizing, organizeProgress, setOrganizeProgress }}
+      >
         <HashRouter>
           <AppLayout
             sessionProgress={sessionProgress}
@@ -259,5 +286,5 @@ export default function App() {
         </HashRouter>
       </OrganizeProgressContext.Provider>
     </OrganizeErrorContext.Provider>
-  );
+  )
 }

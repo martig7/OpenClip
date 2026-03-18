@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { ChevronRight, ChevronLeft } from 'lucide-react';
-import api from '../api';
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { ChevronRight, ChevronLeft } from 'lucide-react'
+import api from '../api'
 import {
   Status,
   StepWelcome,
@@ -10,141 +10,167 @@ import {
   StepOrganizeDestination,
   STEP_TITLES,
   TOTAL_STEPS,
-} from './OnboardingSteps';
+} from './OnboardingSteps'
 
 /* ══════════════════════════════════════════════════════════
    MAIN MODAL
 ══════════════════════════════════════════════════════════ */
 export default function OnboardingModal({ open, onClose }) {
-  const [step, setStep] = useState(0);
-  const [settings, setSettings] = useState(null);
-  const [obsInstallPath, setObsInstallPath] = useState('');
+  const [step, setStep] = useState(0)
+  const [settings, setSettings] = useState(null)
+  const [obsInstallPath, setObsInstallPath] = useState('')
 
   // Gated step state
-  const [pluginStatus, setPluginStatus] = useState(null); // null | 'checking' | 'success' | 'error'
-  const [pluginInstallMsg, setPluginInstallMsg] = useState('');
-  const reinstallingRef = useRef(false);
+  const [pluginStatus, setPluginStatus] = useState(null) // null | 'checking' | 'success' | 'error'
+  const [pluginInstallMsg, setPluginInstallMsg] = useState('')
+  const reinstallingRef = useRef(false)
 
   // Load settings on open
   useEffect(() => {
-    if (!open) return;
-    setStep(0);
-    setPluginStatus(null);
-    setPluginInstallMsg('');
-    api.getStore('settings').then(s => setSettings(s ?? {})).catch(() => setSettings({}));
-    api.getOBSInstallPath?.().then(p => setObsInstallPath(p || '')).catch(() => {});
-  }, [open]);
+    if (!open) return
+    setStep(0)
+    setPluginStatus(null)
+    setPluginInstallMsg('')
+    api
+      .getStore('settings')
+      .then((s) => setSettings(s ?? {}))
+      .catch(() => setSettings({}))
+    api
+      .getOBSInstallPath?.()
+      .then((p) => setObsInstallPath(p || ''))
+      .catch(() => {})
+  }, [open])
 
   // Auto-detect OBS install path when landing on step 1
   useEffect(() => {
-    if (step !== 1) return;
-    api.detectOBSInstallPath?.().then(p => { if (p) handleInstallPathChange(p); }).catch(() => {});
-  }, [step]);
+    if (step !== 1) return
+    api
+      .detectOBSInstallPath?.()
+      .then((p) => {
+        if (p) handleInstallPathChange(p)
+      })
+      .catch(() => {})
+  }, [step])
 
   // Auto-detect OBS recording path when landing on step 2
   useEffect(() => {
-    if (step !== 2) return;
-    api.detectOBSPath().then(p => { if (p) updateSetting('obsRecordingPath', p); }).catch(() => {});
-  }, [step]);
+    if (step !== 2) return
+    api
+      .detectOBSPath()
+      .then((p) => {
+        if (p) updateSetting('obsRecordingPath', p)
+      })
+      .catch(() => {})
+  }, [step])
 
   // Auto-populate destinationPath with <obsRecordingPath>/OpenClip when obsRecordingPath is set
   // and destinationPath has not been manually specified
   useEffect(() => {
-    const recPath = settings?.obsRecordingPath?.trim();
-    if (!recPath || settings?.destinationPath?.trim()) return;
-    const sep = recPath.includes('\\') ? '\\' : '/';
-    updateSetting('destinationPath', recPath.replace(/[\\/]+$/, '') + sep + 'OpenClip');
-  }, [settings?.obsRecordingPath]);
+    const recPath = settings?.obsRecordingPath?.trim()
+    if (!recPath || settings?.destinationPath?.trim()) return
+    const sep = recPath.includes('\\') ? '\\' : '/'
+    updateSetting('destinationPath', recPath.replace(/[\\/]+$/, '') + sep + 'OpenClip')
+  }, [settings?.obsRecordingPath])
 
   // When landing on step 3 (plugin), auto-check if plugin is already installed.
   // Skipped when the user has explicitly clicked Reinstall (reinstallingRef = true).
   useEffect(() => {
-    if (step !== 3 || pluginStatus) return;
-    if (reinstallingRef.current) return;
-    api.isOBSPluginRegistered?.().then(installed => {
-      if (installed) setPluginStatus('success');
-    }).catch(() => {});
-  }, [step, pluginStatus]);
+    if (step !== 3 || pluginStatus) return
+    if (reinstallingRef.current) return
+    api
+      .isOBSPluginRegistered?.()
+      .then((installed) => {
+        if (installed) setPluginStatus('success')
+      })
+      .catch(() => {})
+  }, [step, pluginStatus])
 
   const updateSetting = useCallback((path, value) => {
-    setSettings(prev => {
-      const keys = path.split('.');
-      const updated = { ...prev };
-      let obj = updated;
+    setSettings((prev) => {
+      const keys = path.split('.')
+      const updated = { ...prev }
+      let obj = updated
       for (let i = 0; i < keys.length - 1; i++) {
-        obj[keys[i]] = { ...obj[keys[i]] };
-        obj = obj[keys[i]];
+        obj[keys[i]] = { ...obj[keys[i]] }
+        obj = obj[keys[i]]
       }
-      obj[keys[keys.length - 1]] = value;
-      return updated;
-    });
-  }, []);
+      obj[keys[keys.length - 1]] = value
+      return updated
+    })
+  }, [])
 
   function handleInstallPathChange(p) {
-    setObsInstallPath(p);
-    api.setOBSInstallPath?.(p).catch(() => {});
+    setObsInstallPath(p)
+    api.setOBSInstallPath?.(p).catch(() => {})
   }
 
   // Whether Next is enabled for the current step
   function canAdvance() {
-    if (step === 1) return !!(obsInstallPath?.trim());
-    if (step === 2) return !!(settings?.obsRecordingPath?.trim());
-    if (step === 3) return pluginStatus === 'success';
-    if (step === 4) return !!(settings?.destinationPath?.trim());
-    return true;
+    if (step === 1) return !!obsInstallPath?.trim()
+    if (step === 2) return !!settings?.obsRecordingPath?.trim()
+    if (step === 3) return pluginStatus === 'success'
+    if (step === 4) return !!settings?.destinationPath?.trim()
+    return true
   }
 
   async function handleInstallPlugin() {
-    setPluginStatus('checking');
-    setPluginInstallMsg('');
-    const result = await api.installOBSPlugin?.(obsInstallPath).catch(err => ({ success: false, message: err.message }));
+    setPluginStatus('checking')
+    setPluginInstallMsg('')
+    const result = await api
+      .installOBSPlugin?.(obsInstallPath)
+      .catch((err) => ({ success: false, message: err.message }))
     if (result?.success) {
-      setPluginStatus('success');
+      setPluginStatus('success')
     } else {
-      setPluginStatus('error');
-      setPluginInstallMsg(result?.message || 'Installation failed');
+      setPluginStatus('error')
+      setPluginInstallMsg(result?.message || 'Installation failed')
     }
-    reinstallingRef.current = false;
+    reinstallingRef.current = false
   }
 
   async function handleVerifyPlugin() {
-    setPluginStatus('checking');
-    const installed = await api.isOBSPluginRegistered?.().catch(() => false);
+    setPluginStatus('checking')
+    const installed = await api.isOBSPluginRegistered?.().catch(() => false)
     if (installed) {
-      setPluginStatus('success');
-      setPluginInstallMsg('');
+      setPluginStatus('success')
+      setPluginInstallMsg('')
     } else {
-      setPluginStatus('error');
-      setPluginInstallMsg('Plugin not found — click Install Plugin to try again');
+      setPluginStatus('error')
+      setPluginInstallMsg('Plugin not found — click Install Plugin to try again')
     }
   }
 
   async function finishOrSkip(saveSettings = true) {
     if (saveSettings && settings) {
-      await api.setStore('settings', settings).catch(() => {});
-      await api.registerHotkey().catch(() => {});
+      await api.setStore('settings', settings).catch(() => {})
+      await api.registerHotkey().catch(() => {})
     }
-    await api.setOnboardingComplete(true).catch(() => {});
-    onClose();
+    await api.setOnboardingComplete(true).catch(() => {})
+    onClose()
   }
 
   function goNext() {
-    if (step < TOTAL_STEPS - 1) setStep(s => s + 1);
-    else finishOrSkip(true);
+    if (step < TOTAL_STEPS - 1) setStep((s) => s + 1)
+    else finishOrSkip(true)
   }
 
-  if (!open || !settings) return null;
+  if (!open || !settings) return null
 
-  const isLast = step === TOTAL_STEPS - 1;
-  const nextDisabled = !canAdvance();
+  const isLast = step === TOTAL_STEPS - 1
+  const nextDisabled = !canAdvance()
 
   // Tooltip for gated steps
-  const gateHint = nextDisabled ? (
-    step === 1 ? 'Enter or detect your OBS install location to continue' :
-    step === 2 ? 'Enter or detect your OBS recording folder to continue' :
-    step === 3 ? 'Click Install Plugin to install the OBS plugin' :
-    step === 4 ? 'Choose a destination folder to continue' : undefined
-  ) : undefined;
+  const gateHint = nextDisabled
+    ? step === 1
+      ? 'Enter or detect your OBS install location to continue'
+      : step === 2
+        ? 'Enter or detect your OBS recording folder to continue'
+        : step === 3
+          ? 'Click Install Plugin to install the OBS plugin'
+          : step === 4
+            ? 'Choose a destination folder to continue'
+            : undefined
+    : undefined
 
   return (
     <div className="onboarding-overlay">
@@ -153,7 +179,9 @@ export default function OnboardingModal({ open, onClose }) {
         <div className="onboarding-header">
           <div className="onboarding-header-left">
             <h2>Setup Wizard</h2>
-            <span>Step {step + 1} of {TOTAL_STEPS} — {STEP_TITLES[step]}</span>
+            <span>
+              Step {step + 1} of {TOTAL_STEPS} — {STEP_TITLES[step]}
+            </span>
           </div>
         </div>
 
@@ -182,7 +210,10 @@ export default function OnboardingModal({ open, onClose }) {
               pluginStatus={pluginStatus}
               pluginInstallMsg={pluginInstallMsg}
               onInstall={handleInstallPlugin}
-              onReinstall={() => { reinstallingRef.current = true; handleInstallPlugin(); }}
+              onReinstall={() => {
+                reinstallingRef.current = true
+                handleInstallPlugin()
+              }}
               onVerify={handleVerifyPlugin}
             />
           )}
@@ -191,13 +222,13 @@ export default function OnboardingModal({ open, onClose }) {
             <div className="onboarding-footer-right">
               <button
                 className="btn btn-secondary btn-sm"
-                onClick={() => setStep(s => s - 1)}
+                onClick={() => setStep((s) => s - 1)}
                 disabled={step === 0}
                 style={{ opacity: step === 0 ? 0.4 : 1 }}
               >
                 <ChevronLeft size={14} /> Back
               </button>
-              
+
               <button
                 className="btn btn-primary btn-sm"
                 onClick={goNext}
@@ -221,5 +252,5 @@ export default function OnboardingModal({ open, onClose }) {
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
-  );
+  )
 }

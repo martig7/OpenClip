@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 
 describe('IPC Layer', () => {
   const mockInvoke = vi.fn()
-  
+
   beforeEach(() => {
     vi.clearAllMocks()
     global.window = {
@@ -11,18 +11,16 @@ describe('IPC Layer', () => {
         createClip: (...args) => mockInvoke('create-clip', ...args),
         saveSettings: (...args) => mockInvoke('save-settings', ...args),
         unknownMethod: (...args) => mockInvoke('unknown', ...args),
-      }
+      },
     }
   })
 
   it('window.api.getRecordings returns data from main process', async () => {
-    const mockRecordings = [
-      { id: 1, name: 'Test Recording', path: '/test/rec.mp4' }
-    ]
+    const mockRecordings = [{ id: 1, name: 'Test Recording', path: '/test/rec.mp4' }]
     mockInvoke.mockResolvedValue(mockRecordings)
 
     const result = await window.api.getRecordings()
-    
+
     expect(mockInvoke).toHaveBeenCalledWith('get-recordings')
     expect(result).toEqual(mockRecordings)
   })
@@ -35,9 +33,9 @@ describe('IPC Layer', () => {
       start_time: 10,
       end_time: 20,
     }
-    
+
     const result = await window.api.createClip(clipParams)
-    
+
     expect(mockInvoke).toHaveBeenCalledWith('create-clip', clipParams)
     expect(result.success).toBe(true)
   })
@@ -47,7 +45,7 @@ describe('IPC Layer', () => {
     mockInvoke.mockResolvedValue(settings)
 
     const result = await window.api.saveSettings(settings)
-    
+
     expect(mockInvoke).toHaveBeenCalledWith('save-settings', settings)
     expect(result).toEqual(settings)
   })

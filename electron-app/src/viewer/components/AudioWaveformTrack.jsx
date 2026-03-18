@@ -1,6 +1,15 @@
 import { useRef, useEffect, useCallback } from 'react'
 
-function AudioWaveformTrack({ peaks, duration, viewStart, visibleDuration, isSelected, onClick, label, detail }) {
+function AudioWaveformTrack({
+  peaks,
+  duration,
+  viewStart,
+  visibleDuration,
+  isSelected,
+  onClick,
+  label,
+  detail,
+}) {
   const canvasRef = useRef(null)
   const containerRef = useRef(null)
 
@@ -13,7 +22,7 @@ function AudioWaveformTrack({ peaks, duration, viewStart, visibleDuration, isSel
         }
       }
     },
-    [onClick],
+    [onClick]
   )
 
   const draw = useCallback(() => {

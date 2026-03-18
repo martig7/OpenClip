@@ -1,4 +1,4 @@
-'use strict';
+'use strict'
 /**
  * Run file-system operations in an elevated (UAC) process.
  * Uses ShellExecuteW("runas") via koffi — no PowerShell spawned.
@@ -10,14 +10,14 @@
  *   { type: 'delete', path, recursive? }
  *   { type: 'write',  path, content? }
  */
-const { runElevatedOps } = require('./winUtils');
+const { runElevatedOps } = require('./winUtils')
 
 async function runElevated(ops) {
   try {
-    return await runElevatedOps(ops);
+    return await runElevatedOps(ops)
   } catch (err) {
-    return { success: false, message: err.message };
+    return { success: false, message: err.message }
   }
 }
 
-module.exports = { runElevated };
+module.exports = { runElevated }

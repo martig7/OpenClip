@@ -8,25 +8,25 @@
  * All test scenes are prefixed with TEST_PREFIX so afterEach cleanup is safe.
  */
 
-import OBSWebSocket from 'obs-websocket-js';
+import OBSWebSocket from 'obs-websocket-js'
 
-export const OBS_HOST = process.env.OBS_HOST || '127.0.0.1';
-export const OBS_PORT = parseInt(process.env.OBS_PORT || '4455', 10);
+export const OBS_HOST = process.env.OBS_HOST || '127.0.0.1'
+export const OBS_PORT = parseInt(process.env.OBS_PORT || '4455', 10)
 
 // All scenes created by integration tests use this prefix for easy cleanup
-export const TEST_PREFIX = '[OpenClipTest] ';
+export const TEST_PREFIX = '[OpenClipTest] '
 
 export function wsSettings() {
-  return { host: OBS_HOST, port: OBS_PORT };
+  return { host: OBS_HOST, port: OBS_PORT }
 }
 
 export async function withOBS(callback) {
-  const obs = new OBSWebSocket();
-  await obs.connect(`ws://${OBS_HOST}:${OBS_PORT}`);
+  const obs = new OBSWebSocket()
+  await obs.connect(`ws://${OBS_HOST}:${OBS_PORT}`)
   try {
-    return await callback(obs);
+    return await callback(obs)
   } finally {
-    await obs.disconnect().catch(() => {});
+    await obs.disconnect().catch(() => {})
   }
 }
 
@@ -34,28 +34,28 @@ export async function withOBS(callback) {
 export async function cleanupTestScenes() {
   await withOBS(async (obs) => {
     // Switch to the base scene first — OBS refuses to remove the active scene.
-    await obs.call('SetCurrentProgramScene', { sceneName: 'Scene' }).catch(() => {});
-    const { scenes } = await obs.call('GetSceneList');
-    for (const scene of scenes.filter(s => s.sceneName.startsWith(TEST_PREFIX))) {
-      await obs.call('RemoveScene', { sceneName: scene.sceneName }).catch(() => {});
+    await obs.call('SetCurrentProgramScene', { sceneName: 'Scene' }).catch(() => {})
+    const { scenes } = await obs.call('GetSceneList')
+    for (const scene of scenes.filter((s) => s.sceneName.startsWith(TEST_PREFIX))) {
+      await obs.call('RemoveScene', { sceneName: scene.sceneName }).catch(() => {})
     }
-  });
+  })
 }
 
 export async function getScenes() {
   return withOBS(async (obs) => {
-    const { scenes } = await obs.call('GetSceneList');
-    return scenes.map(s => s.sceneName);
-  });
+    const { scenes } = await obs.call('GetSceneList')
+    return scenes.map((s) => s.sceneName)
+  })
 }
 
 export async function createTestScene(label) {
-  const name = `${TEST_PREFIX}${label}`;
+  const name = `${TEST_PREFIX}${label}`
   await withOBS(async (obs) => {
-    const { scenes } = await obs.call('GetSceneList');
-    if (!scenes.some(s => s.sceneName === name)) {
-      await obs.call('CreateScene', { sceneName: name });
+    const { scenes } = await obs.call('GetSceneList')
+    if (!scenes.some((s) => s.sceneName === name)) {
+      await obs.call('CreateScene', { sceneName: name })
     }
-  });
-  return name;
+  })
+  return name
 }

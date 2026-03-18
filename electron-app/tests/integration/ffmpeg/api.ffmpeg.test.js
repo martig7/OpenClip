@@ -16,29 +16,44 @@ import os from 'os'
 import { createRequire } from 'module'
 
 const _req = createRequire(import.meta.url)
-const ffmpegPath  = _req('ffmpeg-static')
+const ffmpegPath = _req('ffmpeg-static')
 const ffprobePath = _req('ffprobe-static').path
 
 // ── Probe helpers ─────────────────────────────────────────────────────────────
 
 function probeDuration(filePath) {
-  const out = execFileSync(ffprobePath, [
-    '-v', 'error',
-    '-show_entries', 'format=duration',
-    '-of', 'default=noprint_wrappers=1:nokey=1',
-    filePath,
-  ], { encoding: 'utf-8', timeout: 10_000 })
+  const out = execFileSync(
+    ffprobePath,
+    [
+      '-v',
+      'error',
+      '-show_entries',
+      'format=duration',
+      '-of',
+      'default=noprint_wrappers=1:nokey=1',
+      filePath,
+    ],
+    { encoding: 'utf-8', timeout: 10_000 }
+  )
   return parseFloat(out.trim())
 }
 
 function probeVideoCodec(filePath) {
-  const out = execFileSync(ffprobePath, [
-    '-v', 'error',
-    '-select_streams', 'v:0',
-    '-show_entries', 'stream=codec_name',
-    '-of', 'default=noprint_wrappers=1:nokey=1',
-    filePath,
-  ], { encoding: 'utf-8', timeout: 10_000 })
+  const out = execFileSync(
+    ffprobePath,
+    [
+      '-v',
+      'error',
+      '-select_streams',
+      'v:0',
+      '-show_entries',
+      'stream=codec_name',
+      '-of',
+      'default=noprint_wrappers=1:nokey=1',
+      filePath,
+    ],
+    { encoding: 'utf-8', timeout: 10_000 }
+  )
   return out.trim()
 }
 
@@ -59,36 +74,71 @@ function makeStore(obsDir, destDir) {
 
 // ── Fixtures — generated once for the whole suite ─────────────────────────────
 
-let fixtureSilentMp4   // 3-second MP4, no audio track (clips & reencode tests)
-let fixtureAudioMp4    // 3-second MP4, video + 440 Hz sine audio (waveform & tracks tests)
+let fixtureSilentMp4 // 3-second MP4, no audio track (clips & reencode tests)
+let fixtureAudioMp4 // 3-second MP4, video + 440 Hz sine audio (waveform & tracks tests)
 
 beforeAll(() => {
   const tmp = os.tmpdir()
   fixtureSilentMp4 = path.join(tmp, 'openclip-api-silent.mp4')
-  fixtureAudioMp4  = path.join(tmp, 'openclip-api-audio.mp4')
+  fixtureAudioMp4 = path.join(tmp, 'openclip-api-audio.mp4')
 
   // Silent video — stream-copy-safe for clip extraction
-  execFileSync(ffmpegPath, [
-    '-y',
-    '-f', 'lavfi', '-i', 'testsrc=duration=3:size=32x32:rate=1',
-    '-c:v', 'libx264', '-crf', '51', '-preset', 'ultrafast', '-an',
-    fixtureSilentMp4,
-  ], { timeout: 30_000 })
+  execFileSync(
+    ffmpegPath,
+    [
+      '-y',
+      '-f',
+      'lavfi',
+      '-i',
+      'testsrc=duration=3:size=32x32:rate=1',
+      '-c:v',
+      'libx264',
+      '-crf',
+      '51',
+      '-preset',
+      'ultrafast',
+      '-an',
+      fixtureSilentMp4,
+    ],
+    { timeout: 30_000 }
+  )
 
   // Video + audio — required for waveform and track-detection tests
-  execFileSync(ffmpegPath, [
-    '-y',
-    '-f', 'lavfi', '-i', 'testsrc=duration=3:size=32x32:rate=1',
-    '-f', 'lavfi', '-i', 'sine=frequency=440:duration=3',
-    '-c:v', 'libx264', '-crf', '51', '-preset', 'ultrafast',
-    '-c:a', 'aac', '-b:a', '32k',
-    fixtureAudioMp4,
-  ], { timeout: 30_000 })
+  execFileSync(
+    ffmpegPath,
+    [
+      '-y',
+      '-f',
+      'lavfi',
+      '-i',
+      'testsrc=duration=3:size=32x32:rate=1',
+      '-f',
+      'lavfi',
+      '-i',
+      'sine=frequency=440:duration=3',
+      '-c:v',
+      'libx264',
+      '-crf',
+      '51',
+      '-preset',
+      'ultrafast',
+      '-c:a',
+      'aac',
+      '-b:a',
+      '32k',
+      fixtureAudioMp4,
+    ],
+    { timeout: 30_000 }
+  )
 }, 60_000)
 
 afterAll(() => {
-  try { fs.unlinkSync(fixtureSilentMp4) } catch {}
-  try { fs.unlinkSync(fixtureAudioMp4) } catch {}
+  try {
+    fs.unlinkSync(fixtureSilentMp4)
+  } catch {}
+  try {
+    fs.unlinkSync(fixtureAudioMp4)
+  } catch {}
 })
 
 // ── Shared server — one per test file (avoids module-level store conflicts) ────
@@ -96,20 +146,20 @@ afterAll(() => {
 let server, store, tmpDir, obsDir, destDir
 
 beforeAll(async () => {
-  tmpDir  = fs.mkdtempSync(path.join(os.tmpdir(), 'openclip-api-ffmpeg-'))
-  obsDir  = path.join(tmpDir, 'obs')
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openclip-api-ffmpeg-'))
+  obsDir = path.join(tmpDir, 'obs')
   destDir = path.join(tmpDir, 'dest')
-  fs.mkdirSync(obsDir,  { recursive: true })
+  fs.mkdirSync(obsDir, { recursive: true })
   fs.mkdirSync(destDir, { recursive: true })
 
-  store  = makeStore(obsDir, destDir)
+  store = makeStore(obsDir, destDir)
   const { startApiServer } = await import('../../../electron/apiServer.js')
   server = startApiServer(store)
-  await new Promise(resolve => server.on('listening', resolve))
+  await new Promise((resolve) => server.on('listening', resolve))
 }, 10_000)
 
 afterAll(async () => {
-  await new Promise(resolve => server.close(resolve))
+  await new Promise((resolve) => server.close(resolve))
   fs.rmSync(tmpDir, { recursive: true, force: true })
 })
 
@@ -118,7 +168,9 @@ beforeEach(() => {
   const clipsDir = path.join(destDir, 'Clips')
   if (fs.existsSync(clipsDir)) {
     for (const f of fs.readdirSync(clipsDir)) {
-      try { fs.rmSync(path.join(clipsDir, f), { force: true }) } catch {}
+      try {
+        fs.rmSync(path.join(clipsDir, f), { force: true })
+      } catch {}
     }
   }
 })
@@ -138,12 +190,12 @@ describe('POST /api/clips/create — real ffmpeg', () => {
     expect(res.body.filename).toMatch(/^ClipGame Clip \d{4}-\d{2}-\d{2} #1\.mp4$/)
 
     const clipsDir = path.join(destDir, 'Clips')
-    const clips = fs.readdirSync(clipsDir).filter(f => f.endsWith('.mp4'))
+    const clips = fs.readdirSync(clipsDir).filter((f) => f.endsWith('.mp4'))
     expect(clips).toHaveLength(1)
 
     const duration = probeDuration(path.join(clipsDir, clips[0]))
     expect(duration).toBeGreaterThan(0)
-    expect(duration).toBeLessThan(3)   // requested 1.5 s; allow rounding
+    expect(duration).toBeLessThan(3) // requested 1.5 s; allow rounding
   })
 })
 
@@ -173,7 +225,13 @@ describe('POST /api/reencode — real ffmpeg', () => {
 
     const res = await request(server)
       .post('/api/reencode')
-      .send({ source_path: src, codec: 'h264', crf: 51, preset: 'ultrafast', replace_original: true })
+      .send({
+        source_path: src,
+        codec: 'h264',
+        crf: 51,
+        preset: 'ultrafast',
+        replace_original: true,
+      })
 
     expect(res.status).toBe(200)
     expect(res.body.output_path).toBe(src)
@@ -195,8 +253,9 @@ describe('GET /api/video/waveform — real ffmpeg', () => {
     const src = path.join(obsDir, 'waveform-audio.mp4')
     fs.copyFileSync(fixtureAudioMp4, src)
 
-    const res = await request(server)
-      .get(`/api/video/waveform?path=${encodeURIComponent(src)}&track=0`)
+    const res = await request(server).get(
+      `/api/video/waveform?path=${encodeURIComponent(src)}&track=0`
+    )
 
     expect(res.status).toBe(200)
     expect(Array.isArray(res.body.peaks)).toBe(true)
@@ -209,8 +268,9 @@ describe('GET /api/video/waveform — real ffmpeg', () => {
     const src = path.join(obsDir, 'waveform-silent.mp4')
     fs.copyFileSync(fixtureSilentMp4, src)
 
-    const res = await request(server)
-      .get(`/api/video/waveform?path=${encodeURIComponent(src)}&track=0`)
+    const res = await request(server).get(
+      `/api/video/waveform?path=${encodeURIComponent(src)}&track=0`
+    )
 
     expect(res.status).toBe(200)
     expect(Array.isArray(res.body.peaks)).toBe(true)
@@ -225,8 +285,7 @@ describe('GET /api/video/tracks — real ffprobe', () => {
     const src = path.join(destDir, 'tracks-audio.mp4')
     fs.copyFileSync(fixtureAudioMp4, src)
 
-    const res = await request(server)
-      .get(`/api/video/tracks?path=${encodeURIComponent(src)}`)
+    const res = await request(server).get(`/api/video/tracks?path=${encodeURIComponent(src)}`)
 
     expect(res.status).toBe(200)
     expect(Array.isArray(res.body.tracks)).toBe(true)
@@ -241,8 +300,7 @@ describe('GET /api/video/tracks — real ffprobe', () => {
     const src = path.join(destDir, 'tracks-silent.mp4')
     fs.copyFileSync(fixtureSilentMp4, src)
 
-    const res = await request(server)
-      .get(`/api/video/tracks?path=${encodeURIComponent(src)}`)
+    const res = await request(server).get(`/api/video/tracks?path=${encodeURIComponent(src)}`)
 
     expect(res.status).toBe(200)
     expect(Array.isArray(res.body.tracks)).toBe(true)

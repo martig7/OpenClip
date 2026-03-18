@@ -13,7 +13,9 @@ import { makeMockStore } from '../helpers/mockStore.js'
 function makeMockIpcMain() {
   const handlers = {}
   return {
-    handle: (channel, fn) => { handlers[channel] = fn },
+    handle: (channel, fn) => {
+      handlers[channel] = fn
+    },
     invoke: (channel, ...args) => {
       try {
         return Promise.resolve(handlers[channel]({}, ...args))
@@ -68,7 +70,7 @@ describe('getWeekFolder', () => {
 
     // Directory should exist - name contains "Week of"
     const entries = fs.readdirSync(destDir)
-    expect(entries.some(e => e.includes('Week of'))).toBe(true)
+    expect(entries.some((e) => e.includes('Week of'))).toBe(true)
   })
 })
 
@@ -145,7 +147,7 @@ describe('organizeRecordings', () => {
     const destEntries = fs.readdirSync(destDir)
     const weekDir = path.join(destDir, destEntries[0])
     const files = fs.readdirSync(weekDir)
-    expect(files.some(f => f.endsWith('.mp4'))).toBe(true)
+    expect(files.some((f) => f.endsWith('.mp4'))).toBe(true)
   })
 
   it('MKV remux failure cleans up partial MP4 and keeps the original file', async () => {
@@ -171,13 +173,13 @@ describe('organizeRecordings', () => {
     const weekDirs = fs.readdirSync(destDir)
     for (const dir of weekDirs) {
       const files = fs.readdirSync(path.join(destDir, dir))
-      expect(files.filter(f => f.endsWith('.mp4'))).toHaveLength(0)
+      expect(files.filter((f) => f.endsWith('.mp4'))).toHaveLength(0)
     }
 
     // Original .mkv must still be accessible (renamed into dest dir or still in obsDir)
     const mkvInObs = fs.existsSync(src)
-    const mkvInDest = weekDirs.some(dir =>
-      fs.readdirSync(path.join(destDir, dir)).some(f => f.endsWith('.mkv'))
+    const mkvInDest = weekDirs.some((dir) =>
+      fs.readdirSync(path.join(destDir, dir)).some((f) => f.endsWith('.mkv'))
     )
     expect(mkvInObs || mkvInDest).toBe(true)
   })
@@ -189,9 +191,12 @@ describe('organizeRecordings', () => {
 
     cp.execFile.mockImplementation((bin, args, opts, callback) => {
       if (args.includes('-show_streams')) {
-        callback(null, { stdout: JSON.stringify({
-          streams: [{ tags: { title: 'Game Audio' } }, { tags: { title: 'Discord' } }],
-        }), stderr: '' })
+        callback(null, {
+          stdout: JSON.stringify({
+            streams: [{ tags: { title: 'Game Audio' } }, { tags: { title: 'Discord' } }],
+          }),
+          stderr: '',
+        })
       } else {
         const outPath = args[args.length - 1]
         fs.writeFileSync(outPath, Buffer.alloc(512))
@@ -203,7 +208,7 @@ describe('organizeRecordings', () => {
 
     const destEntries = fs.readdirSync(destDir)
     const weekDir = path.join(destDir, destEntries[0])
-    const sidecars = fs.readdirSync(weekDir).filter(f => f.endsWith('.tracks.json'))
+    const sidecars = fs.readdirSync(weekDir).filter((f) => f.endsWith('.tracks.json'))
     expect(sidecars).toHaveLength(1)
     const names = JSON.parse(fs.readFileSync(path.join(weekDir, sidecars[0]), 'utf-8'))
     expect(names).toContain('Game Audio')
@@ -225,8 +230,8 @@ describe('organizeRecordings', () => {
 
     const destEntries = fs.readdirSync(destDir)
     const weekDir = path.join(destDir, destEntries[0])
-    const files = fs.readdirSync(weekDir).filter(f => f.endsWith('.mp4'))
-    expect(files.some(f => f.includes('#2'))).toBe(true)
+    const files = fs.readdirSync(weekDir).filter((f) => f.endsWith('.mp4'))
+    expect(files.some((f) => f.includes('#2'))).toBe(true)
   })
 
   it('calls processAutoClips when autoClip is enabled', async () => {
@@ -257,13 +262,13 @@ describe('organizeRecordings', () => {
     const events = []
     await organizeRecordings(store, 'MyGame', (p) => events.push(p))
 
-    const phases = events.map(e => e.stage ?? e.phase)
+    const phases = events.map((e) => e.stage ?? e.phase)
     expect(phases).toContain('checking')
     expect(phases).toContain('moving')
-    expect(events.some(e => e.phase === 'complete')).toBe(true)
+    expect(events.some((e) => e.phase === 'complete')).toBe(true)
     // checking must appear before moving
-    const checkIdx = events.findIndex(e => e.stage === 'checking')
-    const moveIdx = events.findIndex(e => e.stage === 'moving')
+    const checkIdx = events.findIndex((e) => e.stage === 'checking')
+    const moveIdx = events.findIndex((e) => e.stage === 'moving')
     expect(checkIdx).toBeLessThan(moveIdx)
   })
 
@@ -285,12 +290,12 @@ describe('organizeRecordings', () => {
     const events = []
     await organizeRecordings(store, 'MyGame', (p) => events.push(p))
 
-    expect(events.some(e => e.stage === 'checking')).toBe(true)
-    expect(events.some(e => e.stage === 'remuxing')).toBe(true)
-    expect(events.some(e => e.phase === 'complete')).toBe(true)
+    expect(events.some((e) => e.stage === 'checking')).toBe(true)
+    expect(events.some((e) => e.stage === 'remuxing')).toBe(true)
+    expect(events.some((e) => e.phase === 'complete')).toBe(true)
     // checking must appear before remuxing
-    const checkIdx = events.findIndex(e => e.stage === 'checking')
-    const remuxIdx = events.findIndex(e => e.stage === 'remuxing')
+    const checkIdx = events.findIndex((e) => e.stage === 'checking')
+    const remuxIdx = events.findIndex((e) => e.stage === 'remuxing')
     expect(checkIdx).toBeLessThan(remuxIdx)
   })
 
@@ -303,7 +308,7 @@ describe('organizeRecordings', () => {
     await organizeRecordings(store, 'SpecificGame', (p) => events.push(p))
 
     expect(events.length).toBeGreaterThan(0)
-    expect(events.every(e => e.gameName === 'SpecificGame')).toBe(true)
+    expect(events.every((e) => e.gameName === 'SpecificGame')).toBe(true)
   })
 
   it('emits complete even when no files are found in obsDir', async () => {
@@ -314,7 +319,7 @@ describe('organizeRecordings', () => {
     await organizeRecordings(store, 'MyGame', (p) => events.push(p))
 
     // Still emits complete even with nothing to organize
-    expect(events.some(e => e.phase === 'complete')).toBe(true)
+    expect(events.some((e) => e.phase === 'complete')).toBe(true)
   })
 
   it('emits clipping events and complete when autoClip is enabled with markers', async () => {
@@ -351,14 +356,17 @@ describe('organizeRecordings', () => {
     const events = []
     await organizeRecordings(store, 'MyGame', (p) => events.push(p))
 
-    const clippingEvents = events.filter(e => e.phase === 'clipping')
+    const clippingEvents = events.filter((e) => e.phase === 'clipping')
     expect(clippingEvents.length).toBe(2)
     expect(clippingEvents[0].clipIndex).toBe(1)
     expect(clippingEvents[0].clipTotal).toBe(2)
     expect(clippingEvents[1].clipIndex).toBe(2)
     // complete fires after clipping
-    const completeIdx = events.findIndex(e => e.phase === 'complete')
-    const lastClipIdx = events.map((e, i) => ({ e, i })).filter(({ e }) => e.phase === 'clipping').pop().i
+    const completeIdx = events.findIndex((e) => e.phase === 'complete')
+    const lastClipIdx = events
+      .map((e, i) => ({ e, i }))
+      .filter(({ e }) => e.phase === 'clipping')
+      .pop().i
     expect(completeIdx).toBeGreaterThan(lastClipIdx)
   })
 
@@ -376,9 +384,7 @@ describe('organizeRecordings', () => {
     const recordingMtime = Date.now() / 1000
     const duration = 60
     const recordingStartUnix = recordingMtime - duration
-    store._data.clipMarkers = [
-      { game: 'MyGame', timestamp: recordingStartUnix + 30 },
-    ]
+    store._data.clipMarkers = [{ game: 'MyGame', timestamp: recordingStartUnix + 30 }]
 
     const { organizeRecordings } = await import('../../electron/fileManager.js')
     const src = path.join(obsDir, 'video.mp4')
@@ -401,8 +407,8 @@ describe('organizeRecordings', () => {
     await organizeRecordings(store, 'MyGame')
 
     // Verify execFile was called with ffmpeg clip-extraction args (not execSync)
-    const ffmpegCalls = cp.execFile.mock.calls.filter(([bin, args]) =>
-      !args.includes('-show_entries') && args.includes('-avoid_negative_ts')
+    const ffmpegCalls = cp.execFile.mock.calls.filter(
+      ([bin, args]) => !args.includes('-show_entries') && args.includes('-avoid_negative_ts')
     )
     expect(ffmpegCalls).toHaveLength(1)
     const [, clipArgs] = ffmpegCalls[0]
@@ -415,7 +421,7 @@ describe('organizeRecordings', () => {
     // Verify a clip was created in destDir/Clips
     const clipsDir = path.join(destDir, 'Clips')
     expect(fs.existsSync(clipsDir)).toBe(true)
-    const clips = fs.readdirSync(clipsDir).filter(f => f.endsWith('.mp4'))
+    const clips = fs.readdirSync(clipsDir).filter((f) => f.endsWith('.mp4'))
     expect(clips).toHaveLength(1)
     expect(clips[0]).toMatch(/^MyGame Clip \d{4}-\d{2}-\d{2} #1\.mp4$/)
   })
@@ -486,7 +492,9 @@ describe('organizeSpecificRecording', () => {
     const { organizeSpecificRecording } = await import('../../electron/fileManager.js')
 
     const mkdirErr = Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' })
-    const mkdirSpy = vi.spyOn(fs, 'mkdirSync').mockImplementation(() => { throw mkdirErr })
+    const mkdirSpy = vi.spyOn(fs, 'mkdirSync').mockImplementation(() => {
+      throw mkdirErr
+    })
 
     vi.useFakeTimers()
     const organizePromise = organizeSpecificRecording(store, filePath, 'MyGame')
@@ -508,8 +516,12 @@ describe('organizeSpecificRecording', () => {
     // mkdirSync succeeds, then renameSync fails with ENOSPC
     const origMkdir = fs.mkdirSync.bind(fs)
     const mkdirSpy = vi.spyOn(fs, 'mkdirSync').mockImplementation(origMkdir)
-    const renameErr = Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' })
-    const renameSpy = vi.spyOn(fs, 'renameSync').mockImplementation(() => { throw renameErr })
+    const renameErr = Object.assign(new Error('ENOSPC: no space left on device'), {
+      code: 'ENOSPC',
+    })
+    const renameSpy = vi.spyOn(fs, 'renameSync').mockImplementation(() => {
+      throw renameErr
+    })
 
     vi.useFakeTimers()
     const organizePromise = organizeSpecificRecording(store, filePath, 'MyGame')
@@ -531,8 +543,12 @@ describe('organizeSpecificRecording', () => {
 
     const { organizeSpecificRecording } = await import('../../electron/fileManager.js')
 
-    const exdevErr = Object.assign(new Error('EXDEV: cross-device link not permitted, rename'), { code: 'EXDEV' })
-    const renameSpy = vi.spyOn(fs, 'renameSync').mockImplementation(() => { throw exdevErr })
+    const exdevErr = Object.assign(new Error('EXDEV: cross-device link not permitted, rename'), {
+      code: 'EXDEV',
+    })
+    const renameSpy = vi.spyOn(fs, 'renameSync').mockImplementation(() => {
+      throw exdevErr
+    })
 
     vi.useFakeTimers()
     const organizePromise = organizeSpecificRecording(store, filePath, 'MyGame')
@@ -566,8 +582,12 @@ describe('organizeSpecificRecording', () => {
       }
     })
 
-    const exdevErr = Object.assign(new Error('EXDEV: cross-device link not permitted, rename'), { code: 'EXDEV' })
-    const renameSpy = vi.spyOn(fs, 'renameSync').mockImplementation(() => { throw exdevErr })
+    const exdevErr = Object.assign(new Error('EXDEV: cross-device link not permitted, rename'), {
+      code: 'EXDEV',
+    })
+    const renameSpy = vi.spyOn(fs, 'renameSync').mockImplementation(() => {
+      throw exdevErr
+    })
 
     vi.useFakeTimers()
     const organizePromise = organizeSpecificRecording(store, filePath, 'MyGame')
@@ -734,8 +754,8 @@ describe('organizeSpecificRecording', () => {
     // Dest must keep .mkv extension
     expect(result.path).toMatch(/\.mkv$/)
     // ffmpeg (remux) must NOT have been called
-    const remuxCalls = cp.execFile.mock.calls.filter(([, args]) =>
-      args && args.includes('-movflags')
+    const remuxCalls = cp.execFile.mock.calls.filter(
+      ([, args]) => args && args.includes('-movflags')
     )
     expect(remuxCalls).toHaveLength(0)
     // Source file must have been removed
@@ -789,8 +809,8 @@ describe('organizeSpecificRecording', () => {
 
     expect(result.success).toBe(true)
     expect(result.path).toMatch(/\.mp4$/)
-    const remuxCalls = cp.execFile.mock.calls.filter(([, args]) =>
-      args && args.includes('-movflags')
+    const remuxCalls = cp.execFile.mock.calls.filter(
+      ([, args]) => args && args.includes('-movflags')
     )
     expect(remuxCalls).toHaveLength(1)
   })

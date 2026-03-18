@@ -16,10 +16,10 @@ let tmpDir, obsDir, destDir, store
 
 beforeEach(async () => {
   vi.resetModules()
-  tmpDir  = fs.mkdtempSync(path.join(os.tmpdir(), 'openclip-movesafe-'))
-  obsDir  = path.join(tmpDir, 'obs')
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openclip-movesafe-'))
+  obsDir = path.join(tmpDir, 'obs')
   destDir = path.join(tmpDir, 'dest')
-  fs.mkdirSync(obsDir,  { recursive: true })
+  fs.mkdirSync(obsDir, { recursive: true })
   fs.mkdirSync(destDir, { recursive: true })
   store = makeMockStore({
     settings: { obsRecordingPath: obsDir, destinationPath: destDir, autoClip: null },
@@ -93,7 +93,7 @@ describe('moveFileSafe — EBUSY rename retry', () => {
 
   it('falls back to copy+delete after three persistent EBUSY failures', async () => {
     const filePath = path.join(obsDir, 'recording.mp4')
-    const content = Buffer.alloc(1024, 0xAB)
+    const content = Buffer.alloc(1024, 0xab)
     fs.writeFileSync(filePath, content)
 
     let renameCallCount = 0
@@ -120,7 +120,7 @@ describe('moveFileSafe — EBUSY rename retry', () => {
 describe('moveFileSafe — EXDEV immediate copy+delete fallback', () => {
   it('falls back to copy+delete immediately on EXDEV without retrying rename', async () => {
     const filePath = path.join(obsDir, 'recording.mp4')
-    const content = Buffer.alloc(1024, 0xCD)
+    const content = Buffer.alloc(1024, 0xcd)
     fs.writeFileSync(filePath, content)
 
     let renameAttempts = 0
@@ -221,9 +221,9 @@ describe('organizeRecordings — locked-file skip', () => {
     const { organizeRecordings } = await import('../../electron/fileManager.js')
 
     const locked = path.join(obsDir, 'locked.mp4')
-    const good   = path.join(obsDir, 'good.mp4')
+    const good = path.join(obsDir, 'good.mp4')
     fs.writeFileSync(locked, Buffer.alloc(512))
-    fs.writeFileSync(good,   Buffer.alloc(1024))
+    fs.writeFileSync(good, Buffer.alloc(1024))
 
     const origOpen = fs.openSync.bind(fs)
     vi.spyOn(fs, 'openSync').mockImplementation((p, flags) => {
@@ -242,8 +242,8 @@ describe('organizeRecordings — locked-file skip', () => {
     // The good file was organized into destDir
     const weekDirs = fs.readdirSync(destDir)
     expect(weekDirs.length).toBeGreaterThan(0)
-    const movedFiles = weekDirs.flatMap(d =>
-      fs.readdirSync(path.join(destDir, d)).filter(f => f.endsWith('.mp4'))
+    const movedFiles = weekDirs.flatMap((d) =>
+      fs.readdirSync(path.join(destDir, d)).filter((f) => f.endsWith('.mp4'))
     )
     expect(movedFiles.length).toBeGreaterThan(0)
   })
@@ -277,7 +277,7 @@ describe('finalizeDirectRecording — locked-file skip', () => {
     // File must be untouched — skipped due to lock
     expect(fs.existsSync(filePath)).toBe(true)
     // No session-format file was created
-    const sessionFiles = fs.readdirSync(sessionDir).filter(f => f.includes('Session'))
+    const sessionFiles = fs.readdirSync(sessionDir).filter((f) => f.includes('Session'))
     expect(sessionFiles).toHaveLength(0)
   })
 })

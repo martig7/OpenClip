@@ -1,8 +1,15 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { ZoomIn, ZoomOut, ChevronUp, ChevronDown } from 'lucide-react'
 import {
-  CELL_GAP, TOOLTIP_W, TOOLTIP_H, TOOLTIP_PAD,
-  squarifiedTreemap, hexToRgba, drawRoundRect, buildHitIndex, hitTestIndex,
+  CELL_GAP,
+  TOOLTIP_W,
+  TOOLTIP_H,
+  TOOLTIP_PAD,
+  squarifiedTreemap,
+  hexToRgba,
+  drawRoundRect,
+  buildHitIndex,
+  hitTestIndex,
 } from '../utils/treemapUtils'
 
 /**
@@ -24,7 +31,18 @@ const SORT_OPTIONS = [
   { key: 'game', label: 'Game' },
 ]
 
-export default function StorageTreemap({ items, selectedItems, onSelect, lockedRecordings, onLock, gameColors, onNavigate, sortBy, sortDir, onColumnSort }) {
+export default function StorageTreemap({
+  items,
+  selectedItems,
+  onSelect,
+  lockedRecordings,
+  onLock,
+  gameColors,
+  onNavigate,
+  sortBy,
+  sortDir,
+  onColumnSort,
+}) {
   const [zoom, setZoom] = useState(1)
   const [isDragging, setIsDragging] = useState(false)
   const [baseSize, setBaseSize] = useState({ w: 0, h: 0 })
@@ -63,7 +81,8 @@ export default function StorageTreemap({ items, selectedItems, onSelect, lockedR
     const ro = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect
       if (width > 10 && height > 10) {
-        const w = Math.floor(width), h = Math.floor(height)
+        const w = Math.floor(width),
+          h = Math.floor(height)
         setBaseSize({ w, h })
         sizeCanvas(w, h)
       }
@@ -71,7 +90,8 @@ export default function StorageTreemap({ items, selectedItems, onSelect, lockedR
     ro.observe(el)
     const r = el.getBoundingClientRect()
     if (r.width > 10) {
-      const w = Math.floor(r.width), h = Math.floor(r.height)
+      const w = Math.floor(r.width),
+        h = Math.floor(r.height)
       setBaseSize({ w, h })
       sizeCanvas(w, h)
     }
@@ -124,7 +144,8 @@ export default function StorageTreemap({ items, selectedItems, onSelect, lockedR
       return
     }
     const ellipsis = '\u2026'
-    let lo = 0, hi = text.length
+    let lo = 0,
+      hi = text.length
     while (lo < hi) {
       const mid = Math.ceil((lo + hi) / 2)
       if (ctx.measureText(text.slice(0, mid) + ellipsis).width <= maxWidth) lo = mid
@@ -207,7 +228,11 @@ export default function StorageTreemap({ items, selectedItems, onSelect, lockedR
       }
 
       if (minDim >= 36) {
-        const lx = x + w - 12, ly = y + barH + 3, lw = 7, lh = 6, lr = 1.5
+        const lx = x + w - 12,
+          ly = y + barH + 3,
+          lw = 7,
+          lh = 6,
+          lr = 1.5
         if (isLocked) {
           ctx.fillStyle = '#f59e0b'
           ctx.strokeStyle = '#f59e0b'
@@ -242,7 +267,10 @@ export default function StorageTreemap({ items, selectedItems, onSelect, lockedR
 
   const flushRedraw = useCallback(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current)
-    rafRef.current = requestAnimationFrame(() => { rafRef.current = null; drawCanvasRef.current() })
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null
+      drawCanvasRef.current()
+    })
   }, [])
 
   // Layout — computed at base (zoom=1) dimensions; zoom applied via coordinate scaling
@@ -252,14 +280,26 @@ export default function StorageTreemap({ items, selectedItems, onSelect, lockedR
   )
 
   // Sync render-relevant state into refs and trigger canvas redraw
-  useEffect(() => { layoutRef.current = treemapLayout; hitIndexRef.current = buildHitIndex(treemapLayout); requestRedraw() }, [treemapLayout, requestRedraw])
-  useEffect(() => { selectedItemsRef.current = selectedItems; requestRedraw() }, [selectedItems, requestRedraw])
   useEffect(() => {
-    lockedRef.current = new Set([...lockedRecordings].map(p => p.replace(/\\/g, '/')))
+    layoutRef.current = treemapLayout
+    hitIndexRef.current = buildHitIndex(treemapLayout)
+    requestRedraw()
+  }, [treemapLayout, requestRedraw])
+  useEffect(() => {
+    selectedItemsRef.current = selectedItems
+    requestRedraw()
+  }, [selectedItems, requestRedraw])
+  useEffect(() => {
+    lockedRef.current = new Set([...lockedRecordings].map((p) => p.replace(/\\/g, '/')))
     requestRedraw()
   }, [lockedRecordings, requestRedraw])
-  useEffect(() => { gameColorsRef.current = gameColors; requestRedraw() }, [gameColors, requestRedraw])
-  useEffect(() => { requestRedraw() }, [zoom, requestRedraw])
+  useEffect(() => {
+    gameColorsRef.current = gameColors
+    requestRedraw()
+  }, [gameColors, requestRedraw])
+  useEffect(() => {
+    requestRedraw()
+  }, [zoom, requestRedraw])
 
   // Hit-test: canvas pixel → layout item (O(1) via spatial grid index)
   const getItemAt = useCallback((canvasX, canvasY) => {
@@ -279,86 +319,105 @@ export default function StorageTreemap({ items, selectedItems, onSelect, lockedR
     return canvasX >= bx + bw - 22 && canvasY >= by && canvasY <= by + 22
   }, [])
 
-  const handleCanvasClick = useCallback((e) => {
-    if (dragRef.current?.moved) return
-    const rect = canvasRef.current.getBoundingClientRect()
-    const item = getItemAt(e.clientX - rect.left, e.clientY - rect.top)
-    if (!item) return
-    if (isLockArea(item, e.clientX - rect.left, e.clientY - rect.top)) {
-      onLock(e, item.path)
-    } else {
-      onSelect(item.path)
-    }
-  }, [getItemAt, isLockArea, onLock, onSelect])
-
-  const handleCanvasDblClick = useCallback((e) => {
-    const rect = canvasRef.current.getBoundingClientRect()
-    const item = getItemAt(e.clientX - rect.left, e.clientY - rect.top)
-    if (item) onNavigate(item)
-  }, [getItemAt, onNavigate])
-
-  const handleCanvasMouseMove = useCallback((e) => {
-    if (tooltipRafRef.current) return
-    tooltipRafRef.current = requestAnimationFrame(() => {
-      tooltipRafRef.current = null
-      if (!canvasRef.current) return
+  const handleCanvasClick = useCallback(
+    (e) => {
+      if (dragRef.current?.moved) return
       const rect = canvasRef.current.getBoundingClientRect()
-      const cx = e.clientX - rect.left
-      const cy = e.clientY - rect.top
-      const item = getItemAt(cx, cy)
-      const newPath = item ? item.path : null
-      if (newPath !== hoverItemRef.current) {
-        hoverItemRef.current = newPath
-        flushRedraw()
-      }
-      if (newPath === tooltipItemRef.current) return
-      tooltipItemRef.current = newPath
-      if (item) {
-        const isLocked = lockedRef.current.has(item.path.replace(/\\/g, '/'))
-        setTooltip({
-          x: e.clientX, y: e.clientY,
-          text: `${item.game_name} · ${item.filename}\n${item.size_formatted} · ${item.date}${isLocked ? ' · [Locked]' : ''}`
-        })
+      const item = getItemAt(e.clientX - rect.left, e.clientY - rect.top)
+      if (!item) return
+      if (isLockArea(item, e.clientX - rect.left, e.clientY - rect.top)) {
+        onLock(e, item.path)
       } else {
-        setTooltip(null)
+        onSelect(item.path)
       }
-    })
-  }, [getItemAt, flushRedraw])
+    },
+    [getItemAt, isLockArea, onLock, onSelect]
+  )
+
+  const handleCanvasDblClick = useCallback(
+    (e) => {
+      const rect = canvasRef.current.getBoundingClientRect()
+      const item = getItemAt(e.clientX - rect.left, e.clientY - rect.top)
+      if (item) onNavigate(item)
+    },
+    [getItemAt, onNavigate]
+  )
+
+  const handleCanvasMouseMove = useCallback(
+    (e) => {
+      if (tooltipRafRef.current) return
+      tooltipRafRef.current = requestAnimationFrame(() => {
+        tooltipRafRef.current = null
+        if (!canvasRef.current) return
+        const rect = canvasRef.current.getBoundingClientRect()
+        const cx = e.clientX - rect.left
+        const cy = e.clientY - rect.top
+        const item = getItemAt(cx, cy)
+        const newPath = item ? item.path : null
+        if (newPath !== hoverItemRef.current) {
+          hoverItemRef.current = newPath
+          flushRedraw()
+        }
+        if (newPath === tooltipItemRef.current) return
+        tooltipItemRef.current = newPath
+        if (item) {
+          const isLocked = lockedRef.current.has(item.path.replace(/\\/g, '/'))
+          setTooltip({
+            x: e.clientX,
+            y: e.clientY,
+            text: `${item.game_name} · ${item.filename}\n${item.size_formatted} · ${item.date}${isLocked ? ' · [Locked]' : ''}`,
+          })
+        } else {
+          setTooltip(null)
+        }
+      })
+    },
+    [getItemAt, flushRedraw]
+  )
 
   const tooltipPos = useMemo(() => {
     if (!tooltip) return null
     return {
-      left: Math.min(tooltip.x + TOOLTIP_PAD, window.innerWidth  - TOOLTIP_W - TOOLTIP_PAD),
-      top:  Math.min(tooltip.y + TOOLTIP_PAD, window.innerHeight - TOOLTIP_H - TOOLTIP_PAD),
+      left: Math.min(tooltip.x + TOOLTIP_PAD, window.innerWidth - TOOLTIP_W - TOOLTIP_PAD),
+      top: Math.min(tooltip.y + TOOLTIP_PAD, window.innerHeight - TOOLTIP_H - TOOLTIP_PAD),
     }
   }, [tooltip])
 
-  const zoomBy = useCallback((factor) => {
-    const el = containerRef.current
-    if (!el) return
-    const rect = el.getBoundingClientRect()
-    const anchorX = rect.width / 2
-    const anchorY = rect.height / 2
-    const curZoom = zoomRef.current
-    const curPan = panRef.current
-    const newZoom = Math.max(0.5, Math.min(1000, curZoom * factor))
-    const cx = (anchorX - curPan.x) / curZoom
-    const cy = (anchorY - curPan.y) / curZoom
-    const newPanX = anchorX - cx * newZoom
-    const newPanY = anchorY - cy * newZoom
-    zoomRef.current = newZoom
-    panRef.current = { x: newPanX, y: newPanY }
-    setZoom(newZoom)
-    flushRedraw()
-  }, [flushRedraw])
+  const zoomBy = useCallback(
+    (factor) => {
+      const el = containerRef.current
+      if (!el) return
+      const rect = el.getBoundingClientRect()
+      const anchorX = rect.width / 2
+      const anchorY = rect.height / 2
+      const curZoom = zoomRef.current
+      const curPan = panRef.current
+      const newZoom = Math.max(0.5, Math.min(1000, curZoom * factor))
+      const cx = (anchorX - curPan.x) / curZoom
+      const cy = (anchorY - curPan.y) / curZoom
+      const newPanX = anchorX - cx * newZoom
+      const newPanY = anchorY - cy * newZoom
+      zoomRef.current = newZoom
+      panRef.current = { x: newPanX, y: newPanY }
+      setZoom(newZoom)
+      flushRedraw()
+    },
+    [flushRedraw]
+  )
 
   return (
     <div
       className={`sv2-treemap-container${isDragging ? ' dragging' : ''}`}
       ref={containerRef}
-      onMouseDown={e => {
+      onMouseDown={(e) => {
         if (e.button !== 0) return
-        dragRef.current = { startX: e.clientX, startY: e.clientY, startPanX: panRef.current.x, startPanY: panRef.current.y, moved: false }
+        dragRef.current = {
+          startX: e.clientX,
+          startY: e.clientY,
+          startPanX: panRef.current.x,
+          startPanY: panRef.current.y,
+          moved: false,
+        }
         const onMove = (me) => {
           const dx = me.clientX - dragRef.current.startX
           const dy = me.clientY - dragRef.current.startY
@@ -367,7 +426,10 @@ export default function StorageTreemap({ items, selectedItems, onSelect, lockedR
             setIsDragging(true)
           }
           if (dragRef.current.moved) {
-            panRef.current = { x: dragRef.current.startPanX + dx, y: dragRef.current.startPanY + dy }
+            panRef.current = {
+              x: dragRef.current.startPanX + dx,
+              y: dragRef.current.startPanY + dy,
+            }
             flushRedraw()
           }
         }
@@ -378,7 +440,11 @@ export default function StorageTreemap({ items, selectedItems, onSelect, lockedR
           window.removeEventListener('mousemove', onMove)
           window.removeEventListener('mouseup', onUp)
           dragHandlersRef.current = { move: null, up: null }
-          if (wasDrag) window.addEventListener('click', e => e.stopPropagation(), { capture: true, once: true })
+          if (wasDrag)
+            window.addEventListener('click', (e) => e.stopPropagation(), {
+              capture: true,
+              once: true,
+            })
         }
         dragHandlersRef.current = { move: onMove, up: onUp }
         window.addEventListener('mousemove', onMove)
@@ -392,7 +458,10 @@ export default function StorageTreemap({ items, selectedItems, onSelect, lockedR
         onDoubleClick={handleCanvasDblClick}
         onMouseMove={handleCanvasMouseMove}
         onMouseLeave={() => {
-          if (tooltipRafRef.current) { cancelAnimationFrame(tooltipRafRef.current); tooltipRafRef.current = null }
+          if (tooltipRafRef.current) {
+            cancelAnimationFrame(tooltipRafRef.current)
+            tooltipRafRef.current = null
+          }
           tooltipItemRef.current = null
           hoverItemRef.current = null
           setTooltip(null)
@@ -420,19 +489,30 @@ export default function StorageTreemap({ items, selectedItems, onSelect, lockedR
         </div>
       )}
       <div className="sv2-zoom-ctrl">
-        <button onClick={() => zoomBy(0.8)} title="Zoom out"><ZoomOut size={13} /></button>
+        <button onClick={() => zoomBy(0.8)} title="Zoom out">
+          <ZoomOut size={13} />
+        </button>
         <button
           className="sv2-zoom-pct"
-          onClick={() => { setZoom(1); zoomRef.current = 1; panRef.current = { x: 0, y: 0 }; flushRedraw() }}
+          onClick={() => {
+            setZoom(1)
+            zoomRef.current = 1
+            panRef.current = { x: 0, y: 0 }
+            flushRedraw()
+          }}
           title="Reset view"
         >
           {Math.round(zoom * 100)}%
         </button>
-        <button onClick={() => zoomBy(1.25)} title="Zoom in"><ZoomIn size={13} /></button>
+        <button onClick={() => zoomBy(1.25)} title="Zoom in">
+          <ZoomIn size={13} />
+        </button>
       </div>
       {tooltipPos && (
         <div className="sv2-tooltip" style={{ left: tooltipPos.left, top: tooltipPos.top }}>
-          {tooltip.text.split('\n').map((line, i) => <div key={i}>{line}</div>)}
+          {tooltip.text.split('\n').map((line, i) => (
+            <div key={i}>{line}</div>
+          ))}
         </div>
       )}
     </div>

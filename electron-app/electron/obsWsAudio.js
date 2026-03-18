@@ -2,30 +2,30 @@
 // Extracted from obsWebSocket.js to keep that file under the 800-line limit.
 // All functions connect via withOBSConnection imported from obsWebSocket.js.
 
-const _obsWs = require('./obsWebSocket');
+const _obsWs = require('./obsWebSocket')
 
 // Mutable refs so tests can inject mock implementations via _inject() without
 // having to cross the CJS/ESM boundary that prevents vi.mock('obs-websocket-js')
 // from intercepting dynamic import() calls in the required obsWebSocket.js instance.
-let withOBSConnection = _obsWs.withOBSConnection;
-let fitSourceToCanvas = _obsWs.fitSourceToCanvas;
+let withOBSConnection = _obsWs.withOBSConnection
+let fitSourceToCanvas = _obsWs.fitSourceToCanvas
 
 /** Test-only: replace the connection helpers with mock implementations. */
 function _inject(deps) {
-  if (deps.withOBSConnection) withOBSConnection = deps.withOBSConnection;
-  if (deps.fitSourceToCanvas) fitSourceToCanvas = deps.fitSourceToCanvas;
+  if (deps.withOBSConnection) withOBSConnection = deps.withOBSConnection
+  if (deps.fitSourceToCanvas) fitSourceToCanvas = deps.fitSourceToCanvas
 }
 
 // The set of OBS input kinds that represent audio sources
 const AUDIO_INPUT_KINDS = new Set([
   'wasapi_output_capture',
   'wasapi_input_capture',
-  'wasapi_process_output_capture',   // Application Audio Capture (Windows)
+  'wasapi_process_output_capture', // Application Audio Capture (Windows)
   'coreaudio_input_capture',
   'coreaudio_output_capture',
   'pulse_input_capture',
   'pulse_output_capture',
-]);
+])
 
 /**
  * Add an audio source (input) to a list of OBS scenes.
@@ -38,33 +38,40 @@ const AUDIO_INPUT_KINDS = new Set([
  * @param {string}   inputName   - Display name for the source
  * @returns {Promise<{ success: boolean, message: string, results: object[] }>}
  */
-async function addAudioSourceToScenes(wsSettings, sceneNames, inputKind, inputName, inputSettings = {}, options = {}) {
+async function addAudioSourceToScenes(
+  wsSettings,
+  sceneNames,
+  inputKind,
+  inputName,
+  inputSettings = {},
+  options = {}
+) {
   if (!sceneNames || sceneNames.length === 0) {
-    return { success: false, message: 'No scene names provided', results: [] };
+    return { success: false, message: 'No scene names provided', results: [] }
   }
   if (!inputKind || !inputName) {
-    return { success: false, message: 'Input kind and name are required', results: [] };
+    return { success: false, message: 'Input kind and name are required', results: [] }
   }
 
   try {
     return await withOBSConnection(wsSettings, async (obs) => {
-      const results = [];
+      const results = []
 
       // Fetch canvas dimensions once upfront if any source will need fitting
-      let videoSettings = null;
+      let videoSettings = null
       if (options.fitToCanvas) {
-        videoSettings = await obs.call('GetVideoSettings').catch(() => null);
+        videoSettings = await obs.call('GetVideoSettings').catch(() => null)
       }
 
       for (const sceneName of sceneNames) {
         try {
           // First, check if the source is already in this scene — if so, skip entirely
-          const listResult = await obs.call('GetSceneItemList', { sceneName }).catch(() => null);
-          const sceneItems = listResult?.sceneItems ?? [];
-          const alreadyInScene = sceneItems.some(item => item.sourceName === inputName);
+          const listResult = await obs.call('GetSceneItemList', { sceneName }).catch(() => null)
+          const sceneItems = listResult?.sceneItems ?? []
+          const alreadyInScene = sceneItems.some((item) => item.sourceName === inputName)
           if (alreadyInScene) {
-            results.push({ scene: sceneName, status: 'already present' });
-            continue;
+            results.push({ scene: sceneName, status: 'already present' })
+            continue
           }
 
           // Try to create a brand-new input and place it in this scene
@@ -74,41 +81,48 @@ async function addAudioSourceToScenes(wsSettings, sceneNames, inputKind, inputNa
               inputName,
               inputKind,
               inputSettings: inputSettings || {},
-            });
+            })
             if (options.fitToCanvas && createResult?.sceneItemId != null) {
-              await fitSourceToCanvas(obs, sceneName, createResult.sceneItemId, videoSettings);
+              await fitSourceToCanvas(obs, sceneName, createResult.sceneItemId, videoSettings)
             }
-            results.push({ scene: sceneName, status: 'added' });
+            results.push({ scene: sceneName, status: 'added' })
           } catch (createErr) {
-
             // The input already exists globally — add it as a scene item
             try {
-              await obs.call('GetInputSettings', { inputName });
-              const sceneItemResult = await obs.call('CreateSceneItem', { sceneName, sourceName: inputName });
+              await obs.call('GetInputSettings', { inputName })
+              const sceneItemResult = await obs.call('CreateSceneItem', {
+                sceneName,
+                sourceName: inputName,
+              })
               if (options.fitToCanvas && sceneItemResult?.sceneItemId != null) {
-                await fitSourceToCanvas(obs, sceneName, sceneItemResult.sceneItemId, videoSettings);
+                await fitSourceToCanvas(obs, sceneName, sceneItemResult.sceneItemId, videoSettings)
               }
-              results.push({ scene: sceneName, status: 'added (existing source)' });
+              results.push({ scene: sceneName, status: 'added (existing source)' })
             } catch (itemErr) {
-              results.push({ scene: sceneName, status: 'error', error: itemErr.message });
+              results.push({ scene: sceneName, status: 'error', error: itemErr.message })
             }
           }
         } catch (err) {
-          results.push({ scene: sceneName, status: 'error', error: err.message });
+          results.push({ scene: sceneName, status: 'error', error: err.message })
         }
       }
 
-      const added = results.filter(r => r.status === 'added' || r.status === 'added (existing source)').length;
-      const skipped = results.filter(r => r.status === 'already present').length;
-      const errors = results.filter(r => r.status === 'error').length;
-      let message = added > 0 ? `"${inputName}" added to ${added} scene(s)` : `"${inputName}" was already in all scenes`;
-      if (skipped > 0) message += ` (skipped ${skipped} that already had it)`;
-      if (errors > 0) message += `, ${errors} failed`;
-      return { success: added > 0 || skipped > 0, message, results, added, skipped };
-    });
+      const added = results.filter(
+        (r) => r.status === 'added' || r.status === 'added (existing source)'
+      ).length
+      const skipped = results.filter((r) => r.status === 'already present').length
+      const errors = results.filter((r) => r.status === 'error').length
+      let message =
+        added > 0
+          ? `"${inputName}" added to ${added} scene(s)`
+          : `"${inputName}" was already in all scenes`
+      if (skipped > 0) message += ` (skipped ${skipped} that already had it)`
+      if (errors > 0) message += `, ${errors} failed`
+      return { success: added > 0 || skipped > 0, message, results, added, skipped }
+    })
   } catch (err) {
-    console.error('[obsWebSocket] Failed to add audio source to scenes:', err.message);
-    return { success: false, message: err.message, results: [] };
+    console.error('[obsWebSocket] Failed to add audio source to scenes:', err.message)
+    return { success: false, message: err.message, results: [] }
   }
 }
 
@@ -123,44 +137,46 @@ async function addAudioSourceToScenes(wsSettings, sceneNames, inputKind, inputNa
  */
 async function removeAudioSourceFromScenes(wsSettings, sceneNames, inputName) {
   if (!sceneNames || sceneNames.length === 0) {
-    return { success: false, message: 'No scene names provided', results: [] };
+    return { success: false, message: 'No scene names provided', results: [] }
   }
   if (!inputName) {
-    return { success: false, message: 'Input name is required', results: [] };
+    return { success: false, message: 'Input name is required', results: [] }
   }
 
   try {
     return await withOBSConnection(wsSettings, async (obs) => {
       const settled = await Promise.allSettled(
         sceneNames.map(async (sceneName) => {
-          const listResult = await obs.call('GetSceneItemList', { sceneName }).catch(() => null);
-          const sceneItems = listResult?.sceneItems ?? [];
-          const matching = sceneItems.filter(item => item.sourceName === inputName);
-          if (matching.length === 0) return { scene: sceneName, status: 'not found' };
+          const listResult = await obs.call('GetSceneItemList', { sceneName }).catch(() => null)
+          const sceneItems = listResult?.sceneItems ?? []
+          const matching = sceneItems.filter((item) => item.sourceName === inputName)
+          if (matching.length === 0) return { scene: sceneName, status: 'not found' }
           await Promise.all(
-            matching.map(item => obs.call('RemoveSceneItem', { sceneName, sceneItemId: item.sceneItemId }))
-          );
-          return { scene: sceneName, status: 'removed' };
+            matching.map((item) =>
+              obs.call('RemoveSceneItem', { sceneName, sceneItemId: item.sceneItemId })
+            )
+          )
+          return { scene: sceneName, status: 'removed' }
         })
-      );
+      )
 
       const results = settled.map((r, i) =>
         r.status === 'fulfilled'
           ? r.value
           : { scene: sceneNames[i], status: 'error', error: r.reason?.message }
-      );
+      )
 
-      const removed = results.filter(r => r.status === 'removed').length;
-      const notFound = results.filter(r => r.status === 'not found').length;
-      const errors = results.filter(r => r.status === 'error').length;
-      let message = `"${inputName}" removed from ${removed} scene(s)`;
-      if (notFound > 0) message += `, not found in ${notFound}`;
-      if (errors > 0) message += `, ${errors} failed`;
-      return { success: true, message, results };
-    });
+      const removed = results.filter((r) => r.status === 'removed').length
+      const notFound = results.filter((r) => r.status === 'not found').length
+      const errors = results.filter((r) => r.status === 'error').length
+      let message = `"${inputName}" removed from ${removed} scene(s)`
+      if (notFound > 0) message += `, not found in ${notFound}`
+      if (errors > 0) message += `, ${errors} failed`
+      return { success: true, message, results }
+    })
   } catch (err) {
-    console.error('[obsWebSocket] Failed to remove audio source from scenes:', err.message);
-    return { success: false, message: err.message, results: [] };
+    console.error('[obsWebSocket] Failed to remove audio source from scenes:', err.message)
+    return { success: false, message: err.message, results: [] }
   }
 }
 
@@ -174,14 +190,14 @@ async function removeAudioSourceFromScenes(wsSettings, sceneNames, inputName) {
 async function getOBSAudioInputs(wsSettings) {
   try {
     return await withOBSConnection(wsSettings, async (obs) => {
-      const { inputs } = await obs.call('GetInputList');
+      const { inputs } = await obs.call('GetInputList')
       return (inputs || [])
-        .filter(inp => AUDIO_INPUT_KINDS.has(inp.inputKind))
-        .map(inp => ({ inputName: inp.inputName, inputKind: inp.inputKind }));
-    });
+        .filter((inp) => AUDIO_INPUT_KINDS.has(inp.inputKind))
+        .map((inp) => ({ inputName: inp.inputName, inputKind: inp.inputKind }))
+    })
   } catch (err) {
-    console.error('[obsWebSocket] Failed to get OBS audio inputs:', err.message);
-    throw err;
+    console.error('[obsWebSocket] Failed to get OBS audio inputs:', err.message)
+    throw err
   }
 }
 
@@ -195,13 +211,15 @@ async function getOBSAudioInputs(wsSettings) {
  */
 async function getSceneAudioSources(wsSettings, sceneName) {
   if (!sceneName || !sceneName.trim()) {
-    return [];
+    return []
   }
   try {
     return await withOBSConnection(wsSettings, async (obs) => {
-      const listResult = await obs.call('GetSceneItemList', { sceneName: sceneName.trim() }).catch(() => null);
-      const sceneItems = listResult?.sceneItems ?? [];
-      if (sceneItems.length === 0) return [];
+      const listResult = await obs
+        .call('GetSceneItemList', { sceneName: sceneName.trim() })
+        .catch(() => null)
+      const sceneItems = listResult?.sceneItems ?? []
+      if (sceneItems.length === 0) return []
 
       // Filter to items whose source kind is an audio kind.
       // sceneItems contain sourceType and inputKind (OBS 30+); fall back to checking each
@@ -210,37 +228,50 @@ async function getSceneAudioSources(wsSettings, sceneName) {
         sceneItems.map(async (item) => {
           // OBS WS v5 typically includes inputKind on sceneItems for inputs
           if (item.inputKind && AUDIO_INPUT_KINDS.has(item.inputKind)) {
-            const settingsResp = await obs.call('GetInputSettings', { inputName: item.sourceName }).catch(() => null);
+            const settingsResp = await obs
+              .call('GetInputSettings', { inputName: item.sourceName })
+              .catch(() => null)
             return {
               inputName: item.sourceName,
               inputKind: item.inputKind,
               sceneItemId: item.sceneItemId,
               inputSettings: settingsResp?.inputSettings,
-            };
+            }
           }
           if (!item.inputKind) {
             // Try to resolve kind via GetInputKind, falling back to GetInputSettings
             try {
-              const kindResp = await obs.call('GetInputKind', { inputName: item.sourceName })
-                .catch(() => obs.call('GetInputSettings', { inputName: item.sourceName }));
-              const inputKind = kindResp?.inputKind;
+              const kindResp = await obs
+                .call('GetInputKind', { inputName: item.sourceName })
+                .catch(() => obs.call('GetInputSettings', { inputName: item.sourceName }))
+              const inputKind = kindResp?.inputKind
               if (inputKind && AUDIO_INPUT_KINDS.has(inputKind)) {
-                const inputSettings = kindResp?.inputSettings
-                  ?? (await obs.call('GetInputSettings', { inputName: item.sourceName }).catch(() => null))?.inputSettings;
-                return { inputName: item.sourceName, inputKind, sceneItemId: item.sceneItemId, inputSettings };
+                const inputSettings =
+                  kindResp?.inputSettings ??
+                  (
+                    await obs
+                      .call('GetInputSettings', { inputName: item.sourceName })
+                      .catch(() => null)
+                  )?.inputSettings
+                return {
+                  inputName: item.sourceName,
+                  inputKind,
+                  sceneItemId: item.sceneItemId,
+                  inputSettings,
+                }
               }
             } catch {
               // Not an input we can read — skip
             }
           }
-          return null;
+          return null
         })
-      );
-      return resolved.filter(Boolean);
-    });
+      )
+      return resolved.filter(Boolean)
+    })
   } catch (err) {
-    console.error('[obsWebSocket] Failed to get scene audio sources:', err.message);
-    throw err;
+    console.error('[obsWebSocket] Failed to get scene audio sources:', err.message)
+    throw err
   }
 }
 
@@ -253,15 +284,15 @@ async function getSceneAudioSources(wsSettings, sceneName) {
  * @returns {Promise<{ '1': boolean, '2': boolean, ..., '6': boolean }>}
  */
 async function getInputAudioTracks(wsSettings, inputName) {
-  if (!inputName) throw new Error('Input name is required');
+  if (!inputName) throw new Error('Input name is required')
   try {
     return await withOBSConnection(wsSettings, async (obs) => {
-      const { inputAudioTracks } = await obs.call('GetInputAudioTracks', { inputName });
-      return inputAudioTracks || {};
-    });
+      const { inputAudioTracks } = await obs.call('GetInputAudioTracks', { inputName })
+      return inputAudioTracks || {}
+    })
   } catch (err) {
-    console.error('[obsWebSocket] Failed to get input audio tracks:', err.message);
-    throw err;
+    console.error('[obsWebSocket] Failed to get input audio tracks:', err.message)
+    throw err
   }
 }
 
@@ -274,15 +305,15 @@ async function getInputAudioTracks(wsSettings, inputName) {
  * @returns {Promise<{ success: boolean, message: string }>}
  */
 async function setInputAudioTracks(wsSettings, inputName, tracks) {
-  if (!inputName) return { success: false, message: 'Input name is required' };
+  if (!inputName) return { success: false, message: 'Input name is required' }
   try {
     return await withOBSConnection(wsSettings, async (obs) => {
-      await obs.call('SetInputAudioTracks', { inputName, inputAudioTracks: tracks });
-      return { success: true, message: `Track routing updated for "${inputName}"` };
-    });
+      await obs.call('SetInputAudioTracks', { inputName, inputAudioTracks: tracks })
+      return { success: true, message: `Track routing updated for "${inputName}"` }
+    })
   } catch (err) {
-    console.error('[obsWebSocket] Failed to set input audio tracks:', err.message);
-    return { success: false, message: err.message };
+    console.error('[obsWebSocket] Failed to set input audio tracks:', err.message)
+    return { success: false, message: err.message }
   }
 }
 
@@ -294,23 +325,34 @@ async function setInputAudioTracks(wsSettings, inputName, tracks) {
 async function getTrackNames(wsSettings) {
   try {
     return await withOBSConnection(wsSettings, async (obs) => {
-      const names = ['Track 1', 'Track 2', 'Track 3', 'Track 4', 'Track 5', 'Track 6'];
+      const names = ['Track 1', 'Track 2', 'Track 3', 'Track 4', 'Track 5', 'Track 6']
       for (let i = 1; i <= 6; i++) {
-        const paramName = `Track${i}Name`;
+        const paramName = `Track${i}Name`
         try {
-          const adv = await obs.call('GetProfileParameter', { parameterCategory: 'AdvOut', parameterName: paramName });
-          if (adv.parameterValue) { names[i - 1] = adv.parameterValue; continue; }
+          const adv = await obs.call('GetProfileParameter', {
+            parameterCategory: 'AdvOut',
+            parameterName: paramName,
+          })
+          if (adv.parameterValue) {
+            names[i - 1] = adv.parameterValue
+            continue
+          }
         } catch {}
         try {
-          const simple = await obs.call('GetProfileParameter', { parameterCategory: 'SimpleOutput', parameterName: paramName });
-          if (simple.parameterValue) { names[i - 1] = simple.parameterValue; }
+          const simple = await obs.call('GetProfileParameter', {
+            parameterCategory: 'SimpleOutput',
+            parameterName: paramName,
+          })
+          if (simple.parameterValue) {
+            names[i - 1] = simple.parameterValue
+          }
         } catch {}
       }
-      return names;
-    });
+      return names
+    })
   } catch (err) {
-    console.error('[obsWebSocket] Failed to get track names:', err.message);
-    return ['Track 1', 'Track 2', 'Track 3', 'Track 4', 'Track 5', 'Track 6']; // fallback
+    console.error('[obsWebSocket] Failed to get track names:', err.message)
+    return ['Track 1', 'Track 2', 'Track 3', 'Track 4', 'Track 5', 'Track 6'] // fallback
   }
 }
 
@@ -322,17 +364,29 @@ async function setTrackNames(wsSettings, names) {
   try {
     return await withOBSConnection(wsSettings, async (obs) => {
       for (let i = 1; i <= 6; i++) {
-        const paramName = `Track${i}Name`;
-        const val = names[i - 1] || `Track ${i}`;
+        const paramName = `Track${i}Name`
+        const val = names[i - 1] || `Track ${i}`
         // Set both so they remain in sync regardless of the output mode
-        try { await obs.call('SetProfileParameter', { parameterCategory: 'AdvOut', parameterName: paramName, parameterValue: val }); } catch {}
-        try { await obs.call('SetProfileParameter', { parameterCategory: 'SimpleOutput', parameterName: paramName, parameterValue: val }); } catch {}
+        try {
+          await obs.call('SetProfileParameter', {
+            parameterCategory: 'AdvOut',
+            parameterName: paramName,
+            parameterValue: val,
+          })
+        } catch {}
+        try {
+          await obs.call('SetProfileParameter', {
+            parameterCategory: 'SimpleOutput',
+            parameterName: paramName,
+            parameterValue: val,
+          })
+        } catch {}
       }
-      return { success: true };
-    });
+      return { success: true }
+    })
   } catch (err) {
-    console.error('[obsWebSocket] Failed to set track names:', err.message);
-    throw err;
+    console.error('[obsWebSocket] Failed to set track names:', err.message)
+    throw err
   }
 }
 
@@ -346,4 +400,4 @@ module.exports = {
   getTrackNames,
   setTrackNames,
   _inject,
-};
+}

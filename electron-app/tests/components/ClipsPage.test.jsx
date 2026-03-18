@@ -13,8 +13,10 @@ import api from '../../src/api.js'
 vi.mock('../../src/viewer/components/MediaList.jsx', () => ({
   default: ({ items, onSelect }) => (
     <ul>
-      {items.map(item => (
-        <li key={item.path} onClick={() => onSelect(item)}>{item.filename}</li>
+      {items.map((item) => (
+        <li key={item.path} onClick={() => onSelect(item)}>
+          {item.filename}
+        </li>
       ))}
     </ul>
   ),
@@ -23,11 +25,12 @@ vi.mock('../../src/viewer/components/MediaList.jsx', () => ({
 // Mock apiBase so it resolves immediately with relative paths (no Electron port lookup)
 vi.mock('../../src/viewer/apiBase.js', () => ({
   apiFetch: (path, opts) => fetch(path, opts),
-  apiPost: (path, data) => fetch(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  }),
+  apiPost: (path, data) =>
+    fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }),
   getBase: () => '',
   ready: Promise.resolve(),
 }))
@@ -52,7 +55,7 @@ describe('ClipsPage', () => {
   it('shows loading spinner initially', async () => {
     server.use(
       http.get('/api/clips', async () => {
-        await new Promise(r => setTimeout(r, 100))
+        await new Promise((r) => setTimeout(r, 100))
         return HttpResponse.json([])
       })
     )
@@ -72,10 +75,12 @@ describe('ClipsPage', () => {
 
   it('renders sidebar with clip list', async () => {
     server.use(
-      http.get('/api/clips', () => HttpResponse.json([
-        sampleClip,
-        { ...sampleClip, filename: 'Halo Clip 2025-01-15 #2.mp4', path: sampleClip.path + '2' },
-      ]))
+      http.get('/api/clips', () =>
+        HttpResponse.json([
+          sampleClip,
+          { ...sampleClip, filename: 'Halo Clip 2025-01-15 #2.mp4', path: sampleClip.path + '2' },
+        ])
+      )
     )
     renderPage()
     await waitFor(() => expect(screen.getByText('Halo Clip 2025-01-15 #1.mp4')).toBeInTheDocument())
@@ -87,7 +92,9 @@ describe('ClipsPage', () => {
     renderPage()
     await waitFor(() => screen.getByText(sampleClip.filename))
     fireEvent.click(screen.getByText(sampleClip.filename))
-    await waitFor(() => expect(screen.getAllByText(sampleClip.filename).length).toBeGreaterThanOrEqual(1))
+    await waitFor(() =>
+      expect(screen.getAllByText(sampleClip.filename).length).toBeGreaterThanOrEqual(1)
+    )
     expect(screen.getAllByText(sampleClip.game_name).length).toBeGreaterThanOrEqual(1)
   })
 
@@ -120,7 +127,9 @@ describe('ClipsPage', () => {
   it('shows error toast when delete fails', async () => {
     server.use(
       http.get('/api/clips', () => HttpResponse.json([sampleClip])),
-      http.post('/api/clips/delete', () => HttpResponse.json({ error: 'Forbidden' }, { status: 403 }))
+      http.post('/api/clips/delete', () =>
+        HttpResponse.json({ error: 'Forbidden' }, { status: 403 })
+      )
     )
     renderPage()
     await waitFor(() => screen.getByText(sampleClip.filename))
@@ -146,10 +155,14 @@ describe('ClipsPage', () => {
   it('auto-selects clip from ?path= URL param', async () => {
     server.use(http.get('/api/clips', () => HttpResponse.json([sampleClip])))
     renderPage(`/clips?path=${encodeURIComponent(sampleClip.path)}`)
-    await waitFor(() => expect(screen.getAllByText(sampleClip.filename).length).toBeGreaterThanOrEqual(1))
+    await waitFor(() =>
+      expect(screen.getAllByText(sampleClip.filename).length).toBeGreaterThanOrEqual(1)
+    )
     // Flush any re-renders triggered by setSearchParams({}) so pending fetches
     // complete while MSW handlers are still registered, preventing afterEach warnings.
-    await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0))
+    })
   })
 
   // ── session-progress side-effect tests ────────────────────────────────────
@@ -158,13 +171,15 @@ describe('ClipsPage', () => {
 
   it('refreshes clips list when complete event fires', async () => {
     let fetchCount = 0
-    server.use(http.get('/api/clips', () => {
-      fetchCount++
-      return HttpResponse.json([])
-    }))
+    server.use(
+      http.get('/api/clips', () => {
+        fetchCount++
+        return HttpResponse.json([])
+      })
+    )
 
     let capturedProgressCb
-    vi.spyOn(api, 'onSessionProgress').mockImplementation(cb => {
+    vi.spyOn(api, 'onSessionProgress').mockImplementation((cb) => {
       capturedProgressCb = cb
       return () => {}
     })
@@ -175,7 +190,14 @@ describe('ClipsPage', () => {
 
     // Firing a non-complete event should NOT trigger a refresh
     await act(async () => {
-      capturedProgressCb?.({ phase: 'clipping', stage: 'clipping', label: 'Creating clip 1 of 1…', gameName: 'Halo', clipIndex: 1, clipTotal: 1 })
+      capturedProgressCb?.({
+        phase: 'clipping',
+        stage: 'clipping',
+        label: 'Creating clip 1 of 1…',
+        gameName: 'Halo',
+        clipIndex: 1,
+        clipTotal: 1,
+      })
     })
     expect(fetchCount).toBe(fetchCountAfterMount)
 

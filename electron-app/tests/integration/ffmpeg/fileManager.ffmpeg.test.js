@@ -17,21 +17,36 @@ const ffprobePath = _req('ffprobe-static').path
 
 // ── Fixture generation ───────────────────────────────────────────────────────
 
-let fixtureMkv   // path to a real, valid MKV generated once for the whole suite
+let fixtureMkv // path to a real, valid MKV generated once for the whole suite
 
 beforeAll(() => {
   fixtureMkv = path.join(os.tmpdir(), 'openclip-ffmpeg-fixture.mkv')
   // 1-second, 32×32 silent video — the smallest valid MKV ffmpeg can produce
-  execFileSync(ffmpegPath, [
-    '-y',
-    '-f', 'lavfi', '-i', 'testsrc=duration=1:size=32x32:rate=1',
-    '-c:v', 'libx264', '-crf', '51', '-preset', 'ultrafast', '-an',
-    fixtureMkv,
-  ], { timeout: 20_000 })
+  execFileSync(
+    ffmpegPath,
+    [
+      '-y',
+      '-f',
+      'lavfi',
+      '-i',
+      'testsrc=duration=1:size=32x32:rate=1',
+      '-c:v',
+      'libx264',
+      '-crf',
+      '51',
+      '-preset',
+      'ultrafast',
+      '-an',
+      fixtureMkv,
+    ],
+    { timeout: 20_000 }
+  )
 })
 
 afterAll(() => {
-  try { fs.unlinkSync(fixtureMkv) } catch {}
+  try {
+    fs.unlinkSync(fixtureMkv)
+  } catch {}
 })
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -48,12 +63,19 @@ function makeStore(obsDir, destDir) {
 }
 
 function probeDuration(filePath) {
-  const out = execFileSync(ffprobePath, [
-    '-v', 'error',
-    '-show_entries', 'format=duration',
-    '-of', 'default=noprint_wrappers=1:nokey=1',
-    filePath,
-  ], { encoding: 'utf-8', timeout: 10_000 })
+  const out = execFileSync(
+    ffprobePath,
+    [
+      '-v',
+      'error',
+      '-show_entries',
+      'format=duration',
+      '-of',
+      'default=noprint_wrappers=1:nokey=1',
+      filePath,
+    ],
+    { encoding: 'utf-8', timeout: 10_000 }
+  )
   return parseFloat(out.trim())
 }
 
@@ -63,10 +85,10 @@ describe('organizeRecordings — real ffmpeg', () => {
   let tmpDir, obsDir, destDir, store
 
   beforeEach(() => {
-    tmpDir  = fs.mkdtempSync(path.join(os.tmpdir(), 'openclip-ffmpeg-'))
-    obsDir  = path.join(tmpDir, 'obs')
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openclip-ffmpeg-'))
+    obsDir = path.join(tmpDir, 'obs')
     destDir = path.join(tmpDir, 'dest')
-    fs.mkdirSync(obsDir,  { recursive: true })
+    fs.mkdirSync(obsDir, { recursive: true })
     fs.mkdirSync(destDir, { recursive: true })
     store = makeStore(obsDir, destDir)
   })
@@ -92,7 +114,7 @@ describe('organizeRecordings — real ffmpeg', () => {
     const weekDir = path.join(destDir, weekDirs[0])
 
     // Exactly one MP4 should exist in it
-    const mp4s = fs.readdirSync(weekDir).filter(f => f.endsWith('.mp4'))
+    const mp4s = fs.readdirSync(weekDir).filter((f) => f.endsWith('.mp4'))
     expect(mp4s).toHaveLength(1)
     expect(mp4s[0]).toMatch(/^TestGame Session \d{4}-\d{2}-\d{2} #1\.mp4$/)
 
@@ -112,15 +134,15 @@ describe('organizeRecordings — real ffmpeg', () => {
     // No .mp4 files anywhere in destDir
     const weekDirs = fs.readdirSync(destDir)
     for (const dir of weekDirs) {
-      const mp4s = fs.readdirSync(path.join(destDir, dir)).filter(f => f.endsWith('.mp4'))
+      const mp4s = fs.readdirSync(path.join(destDir, dir)).filter((f) => f.endsWith('.mp4'))
       expect(mp4s).toHaveLength(0)
     }
 
     // Original must still be accessible — either renamed to the week dir (.mkv)
     // or still in obsDir if the rename itself also failed
     const inObs = fs.existsSync(src)
-    const inDest = weekDirs.some(dir =>
-      fs.readdirSync(path.join(destDir, dir)).some(f => f.endsWith('.mkv'))
+    const inDest = weekDirs.some((dir) =>
+      fs.readdirSync(path.join(destDir, dir)).some((f) => f.endsWith('.mkv'))
     )
     expect(inObs || inDest).toBe(true)
   })
@@ -130,7 +152,7 @@ describe('finalizeDirectRecording — real ffmpeg', () => {
   let tmpDir, sessionDir, store
 
   beforeEach(() => {
-    tmpDir     = fs.mkdtempSync(path.join(os.tmpdir(), 'openclip-finalize-'))
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openclip-finalize-'))
     sessionDir = path.join(tmpDir, 'TestGame - Week of Jan 1 2026')
     fs.mkdirSync(sessionDir, { recursive: true })
     store = makeStore(path.join(tmpDir, 'obs'), tmpDir)
@@ -142,17 +164,32 @@ describe('finalizeDirectRecording — real ffmpeg', () => {
 
   it('renames an MP4 already in the session dir to session format', async () => {
     const src = path.join(sessionDir, '2026-01-15 14-30-00.mp4')
-    execFileSync(ffmpegPath, [
-      '-y', '-f', 'lavfi', '-i', 'testsrc=duration=1:size=32x32:rate=1',
-      '-c:v', 'libx264', '-crf', '51', '-preset', 'ultrafast', '-an', src,
-    ], { timeout: 20_000 })
+    execFileSync(
+      ffmpegPath,
+      [
+        '-y',
+        '-f',
+        'lavfi',
+        '-i',
+        'testsrc=duration=1:size=32x32:rate=1',
+        '-c:v',
+        'libx264',
+        '-crf',
+        '51',
+        '-preset',
+        'ultrafast',
+        '-an',
+        src,
+      ],
+      { timeout: 20_000 }
+    )
 
     const { finalizeDirectRecording } = await import('../../../electron/fileManager.js')
     await finalizeDirectRecording(store, 'TestGame', sessionDir)
 
     expect(fs.existsSync(src)).toBe(false)
 
-    const mp4s = fs.readdirSync(sessionDir).filter(f => f.endsWith('.mp4'))
+    const mp4s = fs.readdirSync(sessionDir).filter((f) => f.endsWith('.mp4'))
     expect(mp4s).toHaveLength(1)
     expect(mp4s[0]).toMatch(/^TestGame Session \d{4}-\d{2}-\d{2} #1\.mp4$/)
 
@@ -169,7 +206,7 @@ describe('finalizeDirectRecording — real ffmpeg', () => {
 
     expect(fs.existsSync(src)).toBe(false)
 
-    const mp4s = fs.readdirSync(sessionDir).filter(f => f.endsWith('.mp4'))
+    const mp4s = fs.readdirSync(sessionDir).filter((f) => f.endsWith('.mp4'))
     expect(mp4s).toHaveLength(1)
     expect(mp4s[0]).toMatch(/^TestGame Session \d{4}-\d{2}-\d{2} #1\.mp4$/)
 
@@ -179,16 +216,31 @@ describe('finalizeDirectRecording — real ffmpeg', () => {
 
   it('skips files already in session format', async () => {
     const alreadyOrganized = path.join(sessionDir, 'TestGame Session 2026-01-15 #1.mp4')
-    execFileSync(ffmpegPath, [
-      '-y', '-f', 'lavfi', '-i', 'testsrc=duration=1:size=32x32:rate=1',
-      '-c:v', 'libx264', '-crf', '51', '-preset', 'ultrafast', '-an', alreadyOrganized,
-    ], { timeout: 20_000 })
+    execFileSync(
+      ffmpegPath,
+      [
+        '-y',
+        '-f',
+        'lavfi',
+        '-i',
+        'testsrc=duration=1:size=32x32:rate=1',
+        '-c:v',
+        'libx264',
+        '-crf',
+        '51',
+        '-preset',
+        'ultrafast',
+        '-an',
+        alreadyOrganized,
+      ],
+      { timeout: 20_000 }
+    )
 
     const { finalizeDirectRecording } = await import('../../../electron/fileManager.js')
     await finalizeDirectRecording(store, 'TestGame', sessionDir)
 
     expect(fs.existsSync(alreadyOrganized)).toBe(true)
-    const files = fs.readdirSync(sessionDir).filter(f => f.endsWith('.mp4'))
+    const files = fs.readdirSync(sessionDir).filter((f) => f.endsWith('.mp4'))
     expect(files).toHaveLength(1)
     expect(files[0]).toBe('TestGame Session 2026-01-15 #1.mp4')
   })

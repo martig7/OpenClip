@@ -3,11 +3,11 @@ import { Search, FileVideo, Calendar, HardDrive, Folder, AlertTriangle } from 'l
 
 const SORT_OPTIONS = [
   { value: 'time-desc', label: 'Newest first' },
-  { value: 'time-asc',  label: 'Oldest first' },
-  { value: 'name-asc',  label: 'Name A→Z' },
+  { value: 'time-asc', label: 'Oldest first' },
+  { value: 'name-asc', label: 'Name A→Z' },
   { value: 'name-desc', label: 'Name Z→A' },
   { value: 'size-desc', label: 'Largest first' },
-  { value: 'size-asc',  label: 'Smallest first' },
+  { value: 'size-asc', label: 'Smallest first' },
 ]
 
 // ── Time grouping ────────────────────────────────────────────────────────────
@@ -16,9 +16,9 @@ const TIME_BUCKETS = ['Today', 'Yesterday', 'This Week', 'Last Week', 'This Mont
 
 function getTimeBucket(mtime) {
   const days = (Date.now() - mtime * 1000) / 86_400_000
-  if (days < 1)  return 'Today'
-  if (days < 2)  return 'Yesterday'
-  if (days < 7)  return 'This Week'
+  if (days < 1) return 'Today'
+  if (days < 2) return 'Yesterday'
+  if (days < 7) return 'This Week'
   if (days < 14) return 'Last Week'
   if (days < 30) return 'This Month'
   return 'Older'
@@ -30,8 +30,8 @@ const SIZE_BUCKETS = ['Huge (>10 GB)', 'Large (1–10 GB)', 'Medium (100 MB–1 
 
 function getSizeBucket(bytes) {
   if (bytes >= 10 * 1_073_741_824) return SIZE_BUCKETS[0]
-  if (bytes >= 1_073_741_824)      return SIZE_BUCKETS[1]
-  if (bytes >= 104_857_600)        return SIZE_BUCKETS[2]
+  if (bytes >= 1_073_741_824) return SIZE_BUCKETS[1]
+  if (bytes >= 104_857_600) return SIZE_BUCKETS[2]
   return SIZE_BUCKETS[3]
 }
 
@@ -40,13 +40,20 @@ function getSizeBucket(bytes) {
 function sortItems(items, sortKey) {
   return [...items].sort((a, b) => {
     switch (sortKey) {
-      case 'time-asc':  return a.mtime - b.mtime
-      case 'time-desc': return b.mtime - a.mtime
-      case 'name-asc':  return a.filename.localeCompare(b.filename)
-      case 'name-desc': return b.filename.localeCompare(a.filename)
-      case 'size-asc':  return a.size_bytes - b.size_bytes
-      case 'size-desc': return b.size_bytes - a.size_bytes
-      default:          return b.mtime - a.mtime
+      case 'time-asc':
+        return a.mtime - b.mtime
+      case 'time-desc':
+        return b.mtime - a.mtime
+      case 'name-asc':
+        return a.filename.localeCompare(b.filename)
+      case 'name-desc':
+        return b.filename.localeCompare(a.filename)
+      case 'size-asc':
+        return a.size_bytes - b.size_bytes
+      case 'size-desc':
+        return b.size_bytes - a.size_bytes
+      default:
+        return b.mtime - a.mtime
     }
   })
 }
@@ -98,9 +105,10 @@ function Sidebar({ items, selectedItem, onSelect, title, emptyMessage }) {
   const filteredItems = useMemo(() => {
     if (!searchQuery.trim()) return items
     const query = searchQuery.toLowerCase()
-    return items.filter(item =>
-      (item.filename || '').toLowerCase().includes(query) ||
-      (item.game_name || '').toLowerCase().includes(query)
+    return items.filter(
+      (item) =>
+        (item.filename || '').toLowerCase().includes(query) ||
+        (item.game_name || '').toLowerCase().includes(query)
     )
   }, [items, searchQuery])
 
@@ -117,7 +125,9 @@ function Sidebar({ items, selectedItem, onSelect, title, emptyMessage }) {
       <div className="sidebar-header">
         <h2>{title}</h2>
         <div className="search-box">
-          <span className="search-icon"><Search size={14} /></span>
+          <span className="search-icon">
+            <Search size={14} />
+          </span>
           <input
             type="search"
             placeholder="Search..."
@@ -126,15 +136,19 @@ function Sidebar({ items, selectedItem, onSelect, title, emptyMessage }) {
           />
         </div>
         <div className="sort-row">
-          <label className="sort-label" htmlFor="sidebar-sort">Sort</label>
+          <label className="sort-label" htmlFor="sidebar-sort">
+            Sort
+          </label>
           <select
             id="sidebar-sort"
             className="sort-select"
             value={sortKey}
             onChange={(e) => setSortKey(e.target.value)}
           >
-            {SORT_OPTIONS.map(o => (
-              <option key={o.value} value={o.value}>{o.label}</option>
+            {SORT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
             ))}
           </select>
         </div>
@@ -143,7 +157,9 @@ function Sidebar({ items, selectedItem, onSelect, title, emptyMessage }) {
       <div className="items-list">
         {filteredItems.length === 0 ? (
           <div className="empty-state">
-            <div className="icon"><FileVideo size={40} /></div>
+            <div className="icon">
+              <FileVideo size={40} />
+            </div>
             <h3>No items found</h3>
             <p>{emptyMessage || 'No recordings available'}</p>
           </div>
@@ -152,7 +168,9 @@ function Sidebar({ items, selectedItem, onSelect, title, emptyMessage }) {
             const isUnorganizedGroup = groupingByGame && groupKey === '(Unorganized)'
             return (
               <div key={groupKey} className="item-group">
-                <div className={`group-header${isUnorganizedGroup ? ' group-header--unorganized' : ''}`}>
+                <div
+                  className={`group-header${isUnorganizedGroup ? ' group-header--unorganized' : ''}`}
+                >
                   {isUnorganizedGroup && <AlertTriangle size={11} />}
                   {isUnorganizedGroup ? 'Unorganized' : groupKey} ({groupItems.length})
                 </div>
@@ -167,10 +185,16 @@ function Sidebar({ items, selectedItem, onSelect, title, emptyMessage }) {
                       <div className="item-name">{item.filename}</div>
                       <div className="item-meta">
                         {!groupingByGame && (
-                          <span><Folder size={11} /> {item.game_name}</span>
+                          <span>
+                            <Folder size={11} /> {item.game_name}
+                          </span>
                         )}
-                        <span><Calendar size={11} /> {item.date}</span>
-                        <span><HardDrive size={11} /> {item.size_formatted}</span>
+                        <span>
+                          <Calendar size={11} /> {item.date}
+                        </span>
+                        <span>
+                          <HardDrive size={11} /> {item.size_formatted}
+                        </span>
                       </div>
                     </div>
                   )

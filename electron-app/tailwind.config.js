@@ -10,4 +10,3 @@ module.exports = {
   // .list-item flex component).
   blocklist: ['list-item'],
 }
-

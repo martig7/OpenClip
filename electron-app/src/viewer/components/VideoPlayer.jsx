@@ -1,5 +1,23 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
-import { Film, SkipBack, SkipForward, Play, Pause, Volume2, VolumeX, Folder, Calendar, HardDrive, Scissors, FolderOpen, MoveRight, Trash2, Maximize, Minimize, MoreHorizontal } from 'lucide-react'
+import {
+  Film,
+  SkipBack,
+  SkipForward,
+  Play,
+  Pause,
+  Volume2,
+  VolumeX,
+  Folder,
+  Calendar,
+  HardDrive,
+  Scissors,
+  FolderOpen,
+  MoveRight,
+  Trash2,
+  Maximize,
+  Minimize,
+  MoreHorizontal,
+} from 'lucide-react'
 import Timeline from './Timeline'
 import ClipControls from './ClipControls'
 import ZoomTimeline from './ZoomTimeline'
@@ -8,10 +26,19 @@ import { formatTime } from '../utils'
 import api from '../../api'
 import { useOrganizeProgress } from '../../App'
 
-function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onOrganized, onOrganizeError, organizeRemux = true }) {
+function VideoPlayer({
+  recording,
+  clip,
+  onClipCreated,
+  onDelete,
+  games = [],
+  onOrganized,
+  onOrganizeError,
+  organizeRemux = true,
+}) {
   // Use recording if provided, otherwise fall back to clip (for clips page)
   const media = recording || clip
-  
+
   const videoRef = useRef(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -43,7 +70,7 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
   const [organizeMode, setOrganizeMode] = useState(false)
   const [organizeGame, setOrganizeGame] = useState('')
   const [isOrganizing, setIsOrganizing] = useState(false)
-  
+
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef(null)
@@ -76,9 +103,7 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
 
     const fetchTracks = async () => {
       try {
-        const response = await apiFetch(
-          `/api/video/tracks?path=${encodeURIComponent(media.path)}`
-        )
+        const response = await apiFetch(`/api/video/tracks?path=${encodeURIComponent(media.path)}`)
         const data = await response.json()
         if (cancelled) return
         if (response.ok && data.tracks) {
@@ -94,7 +119,7 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
               const waveData = await waveRes.json()
               if (cancelled) break
               if (waveRes.ok && waveData.peaks?.length) {
-                setWaveforms(prev => ({ ...prev, [i]: waveData.peaks }))
+                setWaveforms((prev) => ({ ...prev, [i]: waveData.peaks }))
               }
             } catch {}
           }
@@ -105,7 +130,9 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
     }
 
     fetchTracks()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [recording])
 
   // Fullscreen listener
@@ -133,9 +160,9 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
   const toggleFullscreen = useCallback(() => {
     const container = videoRef.current?.closest('.player-container')
     if (!container) return
-    
+
     if (!document.fullscreenElement) {
-      container.requestFullscreen().catch(err => {
+      container.requestFullscreen().catch((err) => {
         console.error(`Error attempting to enable fullscreen: ${err.message}`)
       })
     } else {
@@ -217,20 +244,23 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
     }
   }, [isMuted, volume])
 
-  const skip = useCallback((seconds) => {
-    if (videoRef.current) {
-      const newTime = Math.max(0, Math.min(duration, currentTime + seconds))
-      videoRef.current.currentTime = newTime
-    }
-  }, [currentTime, duration])
+  const skip = useCallback(
+    (seconds) => {
+      if (videoRef.current) {
+        const newTime = Math.max(0, Math.min(duration, currentTime + seconds))
+        videoRef.current.currentTime = newTime
+      }
+    },
+    [currentTime, duration]
+  )
 
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
       // Ignore if typing in an input
       if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return
-      
-      switch(e.key) {
+
+      switch (e.key) {
         case 'ArrowLeft':
           e.preventDefault()
           if (videoRef.current) {
@@ -240,7 +270,10 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
         case 'ArrowRight':
           e.preventDefault()
           if (videoRef.current) {
-            videoRef.current.currentTime = Math.min(videoRef.current.duration || 0, videoRef.current.currentTime + 10)
+            videoRef.current.currentTime = Math.min(
+              videoRef.current.duration || 0,
+              videoRef.current.currentTime + 10
+            )
           }
           break
         case ' ':
@@ -254,7 +287,7 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
           break
       }
     }
-    
+
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [togglePlay, toggleMute])
@@ -282,12 +315,15 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
     return () => {}
   }, [])
 
-  const handleMarkerClick = useCallback((position) => {
-    handleSeek(position)
-    if (videoRef.current && !isPlaying) {
-      videoRef.current.play()
-    }
-  }, [handleSeek, isPlaying])
+  const handleMarkerClick = useCallback(
+    (position) => {
+      handleSeek(position)
+      if (videoRef.current && !isPlaying) {
+        videoRef.current.play()
+      }
+    },
+    [handleSeek, isPlaying]
+  )
 
   const enterClipMode = useCallback(() => {
     setClipMode(true)
@@ -305,11 +341,11 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
   }, [audioTracks])
 
   const toggleTrack = useCallback((index) => {
-    setSelectedTracks(prev => {
+    setSelectedTracks((prev) => {
       if (prev.includes(index)) {
         // Prevent deselecting the last selected track
         if (prev.length === 1) return prev
-        return prev.filter(i => i !== index)
+        return prev.filter((i) => i !== index)
       }
       return [...prev, index].sort((a, b) => a - b)
     })
@@ -325,8 +361,12 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
         start_time: clipStart,
         end_time: clipEnd,
         game_name: media.game_name,
-        audio_tracks: audioTracks.length > 1 && selectedTracks.length > 0 && selectedTracks.length < audioTracks.length
-          ? selectedTracks : null
+        audio_tracks:
+          audioTracks.length > 1 &&
+          selectedTracks.length > 0 &&
+          selectedTracks.length < audioTracks.length
+            ? selectedTracks
+            : null,
       })
 
       const data = await response.json()
@@ -373,7 +413,16 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
       setIsManualOrganizing(false)
       setOrganizeProgress(null)
     }
-  }, [recording, organizeGame, organizeRemux, isOrganizing, setIsManualOrganizing, setOrganizeProgress, onOrganized, onOrganizeError])
+  }, [
+    recording,
+    organizeGame,
+    organizeRemux,
+    isOrganizing,
+    setIsManualOrganizing,
+    setOrganizeProgress,
+    onOrganized,
+    onOrganizeError,
+  ])
 
   const handleOpenInPlayer = useCallback(() => {
     setDropdownOpen(false)
@@ -388,10 +437,15 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
   if (!media) {
     return (
       <div className="main-content">
-        <div className="h-[36px] w-full shrink-0 border-b border-[var(--border)]" style={{ WebkitAppRegion: "drag", backgroundColor: "var(--bg-primary)" }} />
+        <div
+          className="h-[36px] w-full shrink-0 border-b border-[var(--border)]"
+          style={{ WebkitAppRegion: 'drag', backgroundColor: 'var(--bg-primary)' }}
+        />
         <div className="player-container">
           <div className="player-placeholder">
-            <div className="icon"><Film size={40} /></div>
+            <div className="icon">
+              <Film size={40} />
+            </div>
             <p>Select a recording to play</p>
           </div>
         </div>
@@ -401,8 +455,11 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
 
   return (
     <div className="main-content">
-      <div className="h-[36px] w-full shrink-0 border-b border-[var(--border)] relative z-50" style={{ WebkitAppRegion: "drag", backgroundColor: "var(--bg-primary)" }} />
-      <div 
+      <div
+        className="h-[36px] w-full shrink-0 border-b border-[var(--border)] relative z-50"
+        style={{ WebkitAppRegion: 'drag', backgroundColor: 'var(--bg-primary)' }}
+      />
+      <div
         className="player-container"
         onMouseEnter={handleVideoMouseEnter}
         onMouseLeave={handleVideoMouseLeave}
@@ -434,14 +491,29 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
           />
 
           <div className="controls-row">
-            
-            <button className="control-btn control-btn--play" onClick={togglePlay} title={isPlaying ? 'Pause' : 'Play'}>
-              {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}
+            <button
+              className="control-btn control-btn--play"
+              onClick={togglePlay}
+              title={isPlaying ? 'Pause' : 'Play'}
+            >
+              {isPlaying ? (
+                <Pause size={20} fill="currentColor" />
+              ) : (
+                <Play size={20} fill="currentColor" />
+              )}
             </button>
-            <button className="control-btn control-btn--icon" onClick={() => skip(-10)} title="Rewind 10s">
+            <button
+              className="control-btn control-btn--icon"
+              onClick={() => skip(-10)}
+              title="Rewind 10s"
+            >
               <SkipBack size={18} fill="currentColor" />
             </button>
-            <button className="control-btn control-btn--icon" onClick={() => skip(10)} title="Forward 10s">
+            <button
+              className="control-btn control-btn--icon"
+              onClick={() => skip(10)}
+              title="Forward 10s"
+            >
               <SkipForward size={18} fill="currentColor" />
             </button>
             <span className="time-display">
@@ -449,7 +521,11 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
             </span>
 
             <div className="volume-control">
-              <button className="control-btn control-btn--icon" onClick={toggleMute} title={isMuted ? 'Unmute' : 'Mute'}>
+              <button
+                className="control-btn control-btn--icon"
+                onClick={toggleMute}
+                title={isMuted ? 'Unmute' : 'Mute'}
+              >
                 {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
               </button>
               <div className="volume-slider-container">
@@ -462,16 +538,20 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
                   value={isMuted ? 0 : volume}
                   onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
                 />
-                <div 
-                  className="volume-slider-fill" 
+                <div
+                  className="volume-slider-fill"
                   style={{ width: `${(isMuted ? 0 : volume) * 100}%` }}
                 />
-                <div 
+                <div
                   className="volume-slider-thumb"
                   style={{ left: `${(isMuted ? 0 : volume) * 100}%` }}
                 />
               </div>
-              <button className="control-btn control-btn--icon ml-2" onClick={toggleFullscreen} title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}>
+              <button
+                className="control-btn control-btn--icon ml-2"
+                onClick={toggleFullscreen}
+                title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+              >
                 {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
               </button>
             </div>
@@ -522,22 +602,28 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
                 )}
               </div>
               <div className="video-info-meta">
-                <span><FolderOpen size={18} /> {media.game_name}</span>
-                <span><Calendar size={18} /> {media.date}</span>
-                <span><HardDrive size={18} /> {media.size_formatted}</span>
+                <span>
+                  <FolderOpen size={18} /> {media.game_name}
+                </span>
+                <span>
+                  <Calendar size={18} /> {media.date}
+                </span>
+                <span>
+                  <HardDrive size={18} /> {media.size_formatted}
+                </span>
               </div>
             </div>
           </div>
-          
+
           <div className="video-info-actions">
             {isClipMode && onDelete ? (
               <button className="btn-action-danger" onClick={() => onDelete && onDelete()}>
                 <Trash2 size={21} /> Delete
               </button>
             ) : isUnorganized ? (
-              <button 
+              <button
                 className={`btn-action-organize${organizeMode ? ' active' : ''}`}
-                onClick={() => setOrganizeMode(o => !o)}
+                onClick={() => setOrganizeMode((o) => !o)}
                 disabled={isOrganizing}
               >
                 <MoveRight size={21} /> Organize
@@ -547,9 +633,9 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
                 <Scissors size={21} /> Create Clip
               </button>
             )}
-            
+
             <div className="action-dropdown" ref={dropdownRef}>
-              <button 
+              <button
                 className={`btn-action-more ${dropdownOpen ? 'active' : ''}`}
                 onClick={() => setDropdownOpen(!dropdownOpen)}
               >
@@ -584,12 +670,14 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
               <select
                 className="organize-select"
                 value={organizeGame}
-                onChange={e => setOrganizeGame(e.target.value)}
+                onChange={(e) => setOrganizeGame(e.target.value)}
                 disabled={isOrganizing}
               >
                 <option value="">— Select game —</option>
-                {games.map(g => (
-                  <option key={g.id} value={g.name}>{g.name}</option>
+                {games.map((g) => (
+                  <option key={g.id} value={g.name}>
+                    {g.name}
+                  </option>
                 ))}
               </select>
               <button
@@ -597,10 +685,15 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
                 onClick={handleOrganize}
                 disabled={!organizeGame || isOrganizing}
               >
-                {isOrganizing
-                  ? <><div className="spinner-sm" /> Organizing…</>
-                  : <><MoveRight size={13} /> Organize</>
-                }
+                {isOrganizing ? (
+                  <>
+                    <div className="spinner-sm" /> Organizing…
+                  </>
+                ) : (
+                  <>
+                    <MoveRight size={13} /> Organize
+                  </>
+                )}
               </button>
               <button
                 className="btn btn-secondary"
@@ -613,13 +706,18 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
             {isOrganizing && (
               <div className="organize-progress">
                 <div className="organize-progress-label">
-                  <div className="spinner-sm" style={{ borderColor: 'rgba(245,158,11,0.25)', borderTopColor: 'var(--amber)' }} />
+                  <div
+                    className="spinner-sm"
+                    style={{ borderColor: 'rgba(245,158,11,0.25)', borderTopColor: 'var(--amber)' }}
+                  />
                   {organizeProgress?.label ?? 'Starting…'}
                 </div>
                 <div className="progress-bar-container organize-progress-bar">
                   <div
                     className="progress-bar-fill organize-progress-fill"
-                    style={{ width: `${organizeProgress?.stage === 'moving' ? 90 : organizeProgress?.stage === 'remuxing' ? 65 : 20}%` }}
+                    style={{
+                      width: `${organizeProgress?.stage === 'moving' ? 90 : organizeProgress?.stage === 'remuxing' ? 65 : 20}%`,
+                    }}
                   />
                 </div>
               </div>
@@ -629,10 +727,16 @@ function VideoPlayer({ recording, clip, onClipCreated, onDelete, games = [], onO
                 {(() => {
                   const ext = media?.path ? media.path.split('.').pop().toLowerCase() : ''
                   const willRemux = organizeRemux && ext !== 'mp4'
-                  return <>
-                    Will be saved as: <strong>{organizeGame}</strong> Session &gt; Week folder
-                    {willRemux ? ' › remuxed to MP4' : ext ? ` › ${ext.toUpperCase()} (move only)` : ' › MP4'}
-                  </>
+                  return (
+                    <>
+                      Will be saved as: <strong>{organizeGame}</strong> Session &gt; Week folder
+                      {willRemux
+                        ? ' › remuxed to MP4'
+                        : ext
+                          ? ` › ${ext.toUpperCase()} (move only)`
+                          : ' › MP4'}
+                    </>
+                  )
                 })()}
               </div>
             )}

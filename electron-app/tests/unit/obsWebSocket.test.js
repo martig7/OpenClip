@@ -9,9 +9,15 @@ const mockObsDisconnect = vi.fn()
 // `new OBSWebSocket()` works correctly inside obsWebSocket.js.
 vi.mock('obs-websocket-js', () => {
   class MockOBSWebSocket {
-    call(...args) { return mockObsCall(...args) }
-    connect(...args) { return mockObsConnect(...args) }
-    disconnect(...args) { return mockObsDisconnect(...args) }
+    call(...args) {
+      return mockObsCall(...args)
+    }
+    connect(...args) {
+      return mockObsConnect(...args)
+    }
+    disconnect(...args) {
+      return mockObsDisconnect(...args)
+    }
   }
   return { default: MockOBSWebSocket }
 })
@@ -75,13 +81,15 @@ async function injectAudioMocks() {
         const code = err.code
         let msg = err.message || ''
         if (code === 1006 || msg.includes('1006')) {
-          msg = 'Cannot connect to OBS. Make sure OBS is running and WebSocket Server is enabled in Tools \u2192 WebSocket Server Settings.'
+          msg =
+            'Cannot connect to OBS. Make sure OBS is running and WebSocket Server is enabled in Tools \u2192 WebSocket Server Settings.'
         } else if (msg.includes('authentication') || msg.includes('password')) {
           msg = 'Authentication failed. Check your WebSocket password in Settings.'
         } else if (msg.includes('timed out') || msg.includes('timeout')) {
           msg = 'Connection timed out. Verify OBS is running and the host/port are correct.'
         } else if (msg.includes('ECONNREFUSED') || msg.includes('refused')) {
-          msg = 'Connection refused. Check that OBS WebSocket Server is enabled and the port is correct.'
+          msg =
+            'Connection refused. Check that OBS WebSocket Server is enabled and the port is correct.'
         }
         const wrapped = new Error(msg)
         wrapped.code = code
@@ -97,17 +105,23 @@ async function injectAudioMocks() {
     fitSourceToCanvas: async (obs, sceneName, sceneItemId, videoSettings) => {
       if (sceneItemId == null) return
       try {
-        const { baseWidth, baseHeight } = videoSettings ?? await obs.call('GetVideoSettings')
+        const { baseWidth, baseHeight } = videoSettings ?? (await obs.call('GetVideoSettings'))
         await obs.call('SetSceneItemTransform', {
           sceneName,
           sceneItemId,
           sceneItemTransform: {
-            positionX: 0, positionY: 0, alignment: 5,
-            boundsType: 'OBS_BOUNDS_SCALE_INNER', boundsAlignment: 0,
-            boundsWidth: baseWidth, boundsHeight: baseHeight,
+            positionX: 0,
+            positionY: 0,
+            alignment: 5,
+            boundsType: 'OBS_BOUNDS_SCALE_INNER',
+            boundsAlignment: 0,
+            boundsWidth: baseWidth,
+            boundsHeight: baseHeight,
           },
         })
-      } catch { /* non-fatal */ }
+      } catch {
+        /* non-fatal */
+      }
     },
   })
 }
@@ -132,30 +146,30 @@ describe('createSceneFromScratch', () => {
 
   it('creates an empty scene when no options provided', async () => {
     mockObsCall
-      .mockResolvedValueOnce({ scenes: [] })   // GetSceneList
-      .mockResolvedValue(undefined)             // CreateScene
+      .mockResolvedValueOnce({ scenes: [] }) // GetSceneList
+      .mockResolvedValue(undefined) // CreateScene
     const { createSceneFromScratch } = await getModule()
     const result = await createSceneFromScratch({}, 'TestScene')
     expect(result.success).toBe(true)
     expect(result.message).toContain('TestScene')
     expect(mockObsCall).toHaveBeenCalledWith('CreateScene', { sceneName: 'TestScene' })
-    const createInputCalls = mockObsCall.mock.calls.filter(c => c[0] === 'CreateInput')
+    const createInputCalls = mockObsCall.mock.calls.filter((c) => c[0] === 'CreateInput')
     expect(createInputCalls).toHaveLength(0)
   })
 
   it('adds game_capture source when addWindowCapture is true', async () => {
     mockObsCall
-      .mockResolvedValueOnce({ scenes: [] })   // GetSceneList
-      .mockResolvedValue(undefined)             // CreateScene + CreateInput
+      .mockResolvedValueOnce({ scenes: [] }) // GetSceneList
+      .mockResolvedValue(undefined) // CreateScene + CreateInput
     const { createSceneFromScratch } = await getModule()
     const result = await createSceneFromScratch({}, 'TestScene', {
       windowTitle: 'Valorant',
       addWindowCapture: true,
     })
     expect(result.success).toBe(true)
-    const createInputCalls = mockObsCall.mock.calls.filter(c => c[0] === 'CreateInput')
+    const createInputCalls = mockObsCall.mock.calls.filter((c) => c[0] === 'CreateInput')
     expect(createInputCalls.length).toBeGreaterThan(0)
-    const captureCall = createInputCalls.find(c => c[1].inputKind === 'game_capture')
+    const captureCall = createInputCalls.find((c) => c[1].inputKind === 'game_capture')
     expect(captureCall).toBeTruthy()
     expect(captureCall[1].inputSettings.window).toBe('Valorant')
     expect(result.message).toMatch(/game capture/)
@@ -163,8 +177,8 @@ describe('createSceneFromScratch', () => {
 
   it('uses window_capture when captureKind is window_capture', async () => {
     mockObsCall
-      .mockResolvedValueOnce({ scenes: [] })     // GetSceneList
-      .mockResolvedValue(undefined)               // CreateScene + CreateInput
+      .mockResolvedValueOnce({ scenes: [] }) // GetSceneList
+      .mockResolvedValue(undefined) // CreateScene + CreateInput
     const { createSceneFromScratch } = await getModule()
     const result = await createSceneFromScratch({}, 'TestScene', {
       windowTitle: 'SomeGame',
@@ -172,44 +186,38 @@ describe('createSceneFromScratch', () => {
       captureKind: 'window_capture',
     })
     expect(result.success).toBe(true)
-    const createInputCalls = mockObsCall.mock.calls.filter(c => c[0] === 'CreateInput')
-    const windowCaptureCall = createInputCalls.find(c => c[1].inputKind === 'window_capture')
+    const createInputCalls = mockObsCall.mock.calls.filter((c) => c[0] === 'CreateInput')
+    const windowCaptureCall = createInputCalls.find((c) => c[1].inputKind === 'window_capture')
     expect(windowCaptureCall).toBeTruthy()
     expect(result.message).toMatch(/window capture/)
   })
 
   it('adds desktop audio source when addDesktopAudio is true', async () => {
-    mockObsCall
-      .mockResolvedValueOnce({ scenes: [] })
-      .mockResolvedValue(undefined)
+    mockObsCall.mockResolvedValueOnce({ scenes: [] }).mockResolvedValue(undefined)
     const { createSceneFromScratch } = await getModule()
     const result = await createSceneFromScratch({}, 'TestScene', { addDesktopAudio: true })
     expect(result.success).toBe(true)
-    const createInputCalls = mockObsCall.mock.calls.filter(c => c[0] === 'CreateInput')
-    const desktopCall = createInputCalls.find(c => c[1].inputKind === 'wasapi_output_capture')
+    const createInputCalls = mockObsCall.mock.calls.filter((c) => c[0] === 'CreateInput')
+    const desktopCall = createInputCalls.find((c) => c[1].inputKind === 'wasapi_output_capture')
     expect(desktopCall).toBeTruthy()
     expect(desktopCall[1].inputName).toContain('Desktop Audio')
     expect(result.message).toMatch(/desktop audio/)
   })
 
   it('adds microphone source when addMicAudio is true', async () => {
-    mockObsCall
-      .mockResolvedValueOnce({ scenes: [] })
-      .mockResolvedValue(undefined)
+    mockObsCall.mockResolvedValueOnce({ scenes: [] }).mockResolvedValue(undefined)
     const { createSceneFromScratch } = await getModule()
     const result = await createSceneFromScratch({}, 'TestScene', { addMicAudio: true })
     expect(result.success).toBe(true)
-    const createInputCalls = mockObsCall.mock.calls.filter(c => c[0] === 'CreateInput')
-    const micCall = createInputCalls.find(c => c[1].inputKind === 'wasapi_input_capture')
+    const createInputCalls = mockObsCall.mock.calls.filter((c) => c[0] === 'CreateInput')
+    const micCall = createInputCalls.find((c) => c[1].inputKind === 'wasapi_input_capture')
     expect(micCall).toBeTruthy()
     expect(micCall[1].inputName).toContain('Microphone')
     expect(result.message).toMatch(/microphone/)
   })
 
   it('adds all three sources together', async () => {
-    mockObsCall
-      .mockResolvedValueOnce({ scenes: [] })
-      .mockResolvedValue(undefined)
+    mockObsCall.mockResolvedValueOnce({ scenes: [] }).mockResolvedValue(undefined)
     const { createSceneFromScratch } = await getModule()
     const result = await createSceneFromScratch({}, 'TestScene', {
       windowTitle: 'MyGame',
@@ -218,7 +226,7 @@ describe('createSceneFromScratch', () => {
       addMicAudio: true,
     })
     expect(result.success).toBe(true)
-    const createInputCalls = mockObsCall.mock.calls.filter(c => c[0] === 'CreateInput')
+    const createInputCalls = mockObsCall.mock.calls.filter((c) => c[0] === 'CreateInput')
     expect(createInputCalls.length).toBe(3)
     expect(result.message).toMatch(/game capture/)
     expect(result.message).toMatch(/desktop audio/)
@@ -227,10 +235,10 @@ describe('createSceneFromScratch', () => {
 
   it('reports partial failure in message but still succeeds when capture fails', async () => {
     mockObsCall
-      .mockResolvedValueOnce({ scenes: [] })   // GetSceneList
-      .mockResolvedValueOnce(undefined)         // CreateScene
-      .mockRejectedValueOnce(new Error('game_capture unavailable'))   // game_capture fails
-      .mockResolvedValue(undefined)             // desktop audio succeeds
+      .mockResolvedValueOnce({ scenes: [] }) // GetSceneList
+      .mockResolvedValueOnce(undefined) // CreateScene
+      .mockRejectedValueOnce(new Error('game_capture unavailable')) // game_capture fails
+      .mockResolvedValue(undefined) // desktop audio succeeds
     const { createSceneFromScratch } = await getModule()
     const result = await createSceneFromScratch({}, 'TestScene', {
       windowTitle: 'MyGame',
@@ -251,9 +259,7 @@ describe('createSceneFromScratch', () => {
   })
 
   it('trims whitespace from scene name', async () => {
-    mockObsCall
-      .mockResolvedValueOnce({ scenes: [] })
-      .mockResolvedValue(undefined)
+    mockObsCall.mockResolvedValueOnce({ scenes: [] }).mockResolvedValue(undefined)
     const { createSceneFromScratch } = await getModule()
     const result = await createSceneFromScratch({}, '  TestScene  ')
     expect(result.success).toBe(true)
@@ -267,8 +273,8 @@ describe('createSceneFromScratch', () => {
 
   it('game_capture window string uses Title:Class:Exe format when exe and windowClass are provided', async () => {
     mockObsCall
-      .mockResolvedValueOnce({ scenes: [] })  // GetSceneList
-      .mockResolvedValue(undefined)            // CreateScene + CreateInput
+      .mockResolvedValueOnce({ scenes: [] }) // GetSceneList
+      .mockResolvedValue(undefined) // CreateScene + CreateInput
     const { createSceneFromScratch } = await getModule()
     const result = await createSceneFromScratch({}, 'TestScene', {
       windowTitle: 'Valorant',
@@ -277,15 +283,17 @@ describe('createSceneFromScratch', () => {
       addWindowCapture: true,
     })
     expect(result.success).toBe(true)
-    const captureCall = mockObsCall.mock.calls.find(c => c[0] === 'CreateInput' && c[1].inputKind === 'game_capture')
+    const captureCall = mockObsCall.mock.calls.find(
+      (c) => c[0] === 'CreateInput' && c[1].inputKind === 'game_capture'
+    )
     expect(captureCall).toBeTruthy()
-    expect(captureCall[1].inputSettings.window).toBe('Valorant:UnrealWindow:VALORANT-Win64-Shipping.exe')
+    expect(captureCall[1].inputSettings.window).toBe(
+      'Valorant:UnrealWindow:VALORANT-Win64-Shipping.exe'
+    )
   })
 
   it('game_capture falls back to title-only window string when exe/windowClass are absent', async () => {
-    mockObsCall
-      .mockResolvedValueOnce({ scenes: [] })
-      .mockResolvedValue(undefined)
+    mockObsCall.mockResolvedValueOnce({ scenes: [] }).mockResolvedValue(undefined)
     const { createSceneFromScratch } = await getModule()
     const result = await createSceneFromScratch({}, 'TestScene', {
       windowTitle: 'Valorant',
@@ -293,15 +301,17 @@ describe('createSceneFromScratch', () => {
       // exe and windowClass intentionally omitted
     })
     expect(result.success).toBe(true)
-    const captureCall = mockObsCall.mock.calls.find(c => c[0] === 'CreateInput' && c[1].inputKind === 'game_capture')
+    const captureCall = mockObsCall.mock.calls.find(
+      (c) => c[0] === 'CreateInput' && c[1].inputKind === 'game_capture'
+    )
     expect(captureCall).toBeTruthy()
     expect(captureCall[1].inputSettings.window).toBe('Valorant')
   })
 
   it('window_capture uses Title:Class:Exe format when captureKind is window_capture', async () => {
     mockObsCall
-      .mockResolvedValueOnce({ scenes: [] })  // GetSceneList
-      .mockResolvedValue(undefined)            // CreateScene + CreateInput
+      .mockResolvedValueOnce({ scenes: [] }) // GetSceneList
+      .mockResolvedValue(undefined) // CreateScene + CreateInput
     const { createSceneFromScratch } = await getModule()
     const result = await createSceneFromScratch({}, 'TestScene', {
       windowTitle: 'SomeGame',
@@ -311,39 +321,39 @@ describe('createSceneFromScratch', () => {
       captureKind: 'window_capture',
     })
     expect(result.success).toBe(true)
-    const windowCaptureCall = mockObsCall.mock.calls.find(c => c[0] === 'CreateInput' && c[1].inputKind === 'window_capture')
+    const windowCaptureCall = mockObsCall.mock.calls.find(
+      (c) => c[0] === 'CreateInput' && c[1].inputKind === 'window_capture'
+    )
     expect(windowCaptureCall).toBeTruthy()
     expect(windowCaptureCall[1].inputSettings.window).toBe('SomeGame:GameWindow:somegame.exe')
   })
 
   it('desktop audio inputSettings has no window field', async () => {
-    mockObsCall
-      .mockResolvedValueOnce({ scenes: [] })
-      .mockResolvedValue(undefined)
+    mockObsCall.mockResolvedValueOnce({ scenes: [] }).mockResolvedValue(undefined)
     const { createSceneFromScratch } = await getModule()
     await createSceneFromScratch({}, 'TestScene', { addDesktopAudio: true })
-    const desktopCall = mockObsCall.mock.calls.find(c => c[0] === 'CreateInput' && c[1].inputKind === 'wasapi_output_capture')
+    const desktopCall = mockObsCall.mock.calls.find(
+      (c) => c[0] === 'CreateInput' && c[1].inputKind === 'wasapi_output_capture'
+    )
     expect(desktopCall).toBeTruthy()
     expect(desktopCall[1].inputSettings).toEqual({})
     expect(desktopCall[1].inputSettings).not.toHaveProperty('window')
   })
 
   it('microphone inputSettings has no window field', async () => {
-    mockObsCall
-      .mockResolvedValueOnce({ scenes: [] })
-      .mockResolvedValue(undefined)
+    mockObsCall.mockResolvedValueOnce({ scenes: [] }).mockResolvedValue(undefined)
     const { createSceneFromScratch } = await getModule()
     await createSceneFromScratch({}, 'TestScene', { addMicAudio: true })
-    const micCall = mockObsCall.mock.calls.find(c => c[0] === 'CreateInput' && c[1].inputKind === 'wasapi_input_capture')
+    const micCall = mockObsCall.mock.calls.find(
+      (c) => c[0] === 'CreateInput' && c[1].inputKind === 'wasapi_input_capture'
+    )
     expect(micCall).toBeTruthy()
     expect(micCall[1].inputSettings).toEqual({})
     expect(micCall[1].inputSettings).not.toHaveProperty('window')
   })
 
   it('all sources together: video uses Title:Class:Exe, audio inputs have empty inputSettings', async () => {
-    mockObsCall
-      .mockResolvedValueOnce({ scenes: [] })
-      .mockResolvedValue(undefined)
+    mockObsCall.mockResolvedValueOnce({ scenes: [] }).mockResolvedValue(undefined)
     const { createSceneFromScratch } = await getModule()
     const result = await createSceneFromScratch({}, 'TestScene', {
       windowTitle: 'MyGame',
@@ -354,17 +364,17 @@ describe('createSceneFromScratch', () => {
       addMicAudio: true,
     })
     expect(result.success).toBe(true)
-    const calls = mockObsCall.mock.calls.filter(c => c[0] === 'CreateInput')
+    const calls = mockObsCall.mock.calls.filter((c) => c[0] === 'CreateInput')
     expect(calls).toHaveLength(3)
 
-    const captureCall = calls.find(c => c[1].inputKind === 'game_capture')
+    const captureCall = calls.find((c) => c[1].inputKind === 'game_capture')
     expect(captureCall[1].inputSettings.window).toBe('MyGame:MyGameClass:mygame.exe')
 
-    const desktopCall = calls.find(c => c[1].inputKind === 'wasapi_output_capture')
+    const desktopCall = calls.find((c) => c[1].inputKind === 'wasapi_output_capture')
     expect(desktopCall[1].inputSettings).toEqual({})
     expect(desktopCall[1].inputSettings).not.toHaveProperty('window')
 
-    const micCall = calls.find(c => c[1].inputKind === 'wasapi_input_capture')
+    const micCall = calls.find((c) => c[1].inputKind === 'wasapi_input_capture')
     expect(micCall[1].inputSettings).toEqual({})
     expect(micCall[1].inputSettings).not.toHaveProperty('window')
   })
@@ -373,8 +383,8 @@ describe('createSceneFromScratch', () => {
 
   it('captureKind: "game_capture" uses only game_capture and never tries window_capture', async () => {
     mockObsCall
-      .mockResolvedValueOnce({ scenes: [] })  // GetSceneList
-      .mockResolvedValue(undefined)            // CreateScene + CreateInput
+      .mockResolvedValueOnce({ scenes: [] }) // GetSceneList
+      .mockResolvedValue(undefined) // CreateScene + CreateInput
     const { createSceneFromScratch } = await getModule()
     const result = await createSceneFromScratch({}, 'TestScene', {
       windowTitle: 'MyGame',
@@ -384,17 +394,21 @@ describe('createSceneFromScratch', () => {
       captureKind: 'game_capture',
     })
     expect(result.success).toBe(true)
-    const gameCaptureCall = mockObsCall.mock.calls.find(c => c[0] === 'CreateInput' && c[1].inputKind === 'game_capture')
+    const gameCaptureCall = mockObsCall.mock.calls.find(
+      (c) => c[0] === 'CreateInput' && c[1].inputKind === 'game_capture'
+    )
     expect(gameCaptureCall).toBeTruthy()
-    const windowCaptureCall = mockObsCall.mock.calls.find(c => c[0] === 'CreateInput' && c[1].inputKind === 'window_capture')
+    const windowCaptureCall = mockObsCall.mock.calls.find(
+      (c) => c[0] === 'CreateInput' && c[1].inputKind === 'window_capture'
+    )
     expect(windowCaptureCall).toBeUndefined()
     expect(result.message).toMatch(/game capture/)
   })
 
   it('captureKind: "window_capture" skips game_capture and uses window_capture directly', async () => {
     mockObsCall
-      .mockResolvedValueOnce({ scenes: [] })  // GetSceneList
-      .mockResolvedValue(undefined)            // CreateScene + CreateInput
+      .mockResolvedValueOnce({ scenes: [] }) // GetSceneList
+      .mockResolvedValue(undefined) // CreateScene + CreateInput
     const { createSceneFromScratch } = await getModule()
     const result = await createSceneFromScratch({}, 'TestScene', {
       windowTitle: 'MyGame',
@@ -404,9 +418,13 @@ describe('createSceneFromScratch', () => {
       captureKind: 'window_capture',
     })
     expect(result.success).toBe(true)
-    const gameCaptureCall = mockObsCall.mock.calls.find(c => c[0] === 'CreateInput' && c[1].inputKind === 'game_capture')
+    const gameCaptureCall = mockObsCall.mock.calls.find(
+      (c) => c[0] === 'CreateInput' && c[1].inputKind === 'game_capture'
+    )
     expect(gameCaptureCall).toBeUndefined()
-    const windowCaptureCall = mockObsCall.mock.calls.find(c => c[0] === 'CreateInput' && c[1].inputKind === 'window_capture')
+    const windowCaptureCall = mockObsCall.mock.calls.find(
+      (c) => c[0] === 'CreateInput' && c[1].inputKind === 'window_capture'
+    )
     expect(windowCaptureCall).toBeTruthy()
     expect(windowCaptureCall[1].inputSettings.window).toBe('MyGame:MyGameWindow:mygame.exe')
     expect(result.message).toMatch(/window capture/)
@@ -414,9 +432,9 @@ describe('createSceneFromScratch', () => {
 
   it('captureKind: "game_capture" surfaces error on failure instead of falling back to window_capture', async () => {
     mockObsCall
-      .mockResolvedValueOnce({ scenes: [] })                                        // GetSceneList
-      .mockResolvedValueOnce(undefined)                                              // CreateScene
-      .mockRejectedValueOnce(new Error('game_capture not supported on this OS'))    // game_capture fails
+      .mockResolvedValueOnce({ scenes: [] }) // GetSceneList
+      .mockResolvedValueOnce(undefined) // CreateScene
+      .mockRejectedValueOnce(new Error('game_capture not supported on this OS')) // game_capture fails
     const { createSceneFromScratch } = await getModule()
     const result = await createSceneFromScratch({}, 'TestScene', {
       windowTitle: 'MyGame',
@@ -426,7 +444,9 @@ describe('createSceneFromScratch', () => {
     // Should still succeed overall but report the capture error
     expect(result.success).toBe(true)
     expect(result.message).toMatch(/could not be added|game capture/i)
-    const windowCaptureCall = mockObsCall.mock.calls.find(c => c[0] === 'CreateInput' && c[1].inputKind === 'window_capture')
+    const windowCaptureCall = mockObsCall.mock.calls.find(
+      (c) => c[0] === 'CreateInput' && c[1].inputKind === 'window_capture'
+    )
     expect(windowCaptureCall).toBeUndefined()
   })
 
@@ -434,11 +454,11 @@ describe('createSceneFromScratch', () => {
 
   it('calls GetVideoSettings and SetSceneItemTransform after creating a capture source', async () => {
     mockObsCall
-      .mockResolvedValueOnce({ scenes: [] })           // GetSceneList
-      .mockResolvedValueOnce(undefined)                 // CreateScene
-      .mockResolvedValueOnce({ sceneItemId: 42 })      // CreateInput (game_capture)
+      .mockResolvedValueOnce({ scenes: [] }) // GetSceneList
+      .mockResolvedValueOnce(undefined) // CreateScene
+      .mockResolvedValueOnce({ sceneItemId: 42 }) // CreateInput (game_capture)
       .mockResolvedValueOnce({ baseWidth: 1920, baseHeight: 1080 }) // GetVideoSettings
-      .mockResolvedValue(undefined)                     // SetSceneItemTransform
+      .mockResolvedValue(undefined) // SetSceneItemTransform
     const { createSceneFromScratch } = await getModule()
     const result = await createSceneFromScratch({}, 'TestScene', {
       windowTitle: 'MyGame',
@@ -446,17 +466,20 @@ describe('createSceneFromScratch', () => {
     })
     expect(result.success).toBe(true)
     expect(mockObsCall).toHaveBeenCalledWith('GetVideoSettings')
-    expect(mockObsCall).toHaveBeenCalledWith('SetSceneItemTransform', expect.objectContaining({
-      sceneName: 'TestScene',
-      sceneItemId: 42,
-      sceneItemTransform: expect.objectContaining({
-        positionX: 0,
-        positionY: 0,
-        boundsType: 'OBS_BOUNDS_SCALE_INNER',
-        boundsWidth: 1920,
-        boundsHeight: 1080,
-      }),
-    }))
+    expect(mockObsCall).toHaveBeenCalledWith(
+      'SetSceneItemTransform',
+      expect.objectContaining({
+        sceneName: 'TestScene',
+        sceneItemId: 42,
+        sceneItemTransform: expect.objectContaining({
+          positionX: 0,
+          positionY: 0,
+          boundsType: 'OBS_BOUNDS_SCALE_INNER',
+          boundsWidth: 1920,
+          boundsHeight: 1080,
+        }),
+      })
+    )
   })
 })
 
@@ -480,10 +503,15 @@ describe('addAudioSourceToScenes', () => {
   it('creates input in each scene and reports added count', async () => {
     mockObsCall.mockResolvedValue(undefined) // CreateInput succeeds
     const { addAudioSourceToScenes } = await getModule()
-    const result = await addAudioSourceToScenes({}, ['Scene1', 'Scene2'], 'wasapi_output_capture', 'Desktop Audio')
+    const result = await addAudioSourceToScenes(
+      {},
+      ['Scene1', 'Scene2'],
+      'wasapi_output_capture',
+      'Desktop Audio'
+    )
     expect(result.success).toBe(true)
     expect(result.message).toMatch(/2 scene/)
-    const calls = mockObsCall.mock.calls.filter(c => c[0] === 'CreateInput')
+    const calls = mockObsCall.mock.calls.filter((c) => c[0] === 'CreateInput')
     expect(calls).toHaveLength(2)
     expect(calls[0][1].sceneName).toBe('Scene1')
     expect(calls[1][1].sceneName).toBe('Scene2')
@@ -491,14 +519,19 @@ describe('addAudioSourceToScenes', () => {
 
   it('falls back to CreateSceneItem when CreateInput fails (input already exists)', async () => {
     mockObsCall
-      .mockResolvedValueOnce({ sceneItems: [] })                 // GetSceneItemList Scene1
-      .mockRejectedValueOnce(new Error('input already exists'))  // CreateInput Scene1 fails
-      .mockResolvedValueOnce({ inputUuid: 'abc' })               // GetInputSettings (fallback)
-      .mockResolvedValueOnce(undefined)                          // CreateSceneItem (fallback)
-      .mockResolvedValueOnce({ sceneItems: [] })                 // GetSceneItemList Scene2
-      .mockResolvedValueOnce(undefined)                          // CreateInput Scene2 succeeds
+      .mockResolvedValueOnce({ sceneItems: [] }) // GetSceneItemList Scene1
+      .mockRejectedValueOnce(new Error('input already exists')) // CreateInput Scene1 fails
+      .mockResolvedValueOnce({ inputUuid: 'abc' }) // GetInputSettings (fallback)
+      .mockResolvedValueOnce(undefined) // CreateSceneItem (fallback)
+      .mockResolvedValueOnce({ sceneItems: [] }) // GetSceneItemList Scene2
+      .mockResolvedValueOnce(undefined) // CreateInput Scene2 succeeds
     const { addAudioSourceToScenes } = await getModule()
-    const result = await addAudioSourceToScenes({}, ['Scene1', 'Scene2'], 'wasapi_output_capture', 'Desktop Audio')
+    const result = await addAudioSourceToScenes(
+      {},
+      ['Scene1', 'Scene2'],
+      'wasapi_output_capture',
+      'Desktop Audio'
+    )
     expect(result.success).toBe(true)
     expect(result.results[0].status).toBe('added (existing source)')
     expect(result.results[1].status).toBe('added')
@@ -507,21 +540,33 @@ describe('addAudioSourceToScenes', () => {
   it('returns failure when OBS connection fails', async () => {
     mockObsConnect.mockRejectedValue(Object.assign(new Error('Connection refused'), { code: 1006 }))
     const { addAudioSourceToScenes } = await getModule()
-    const result = await addAudioSourceToScenes({}, ['Scene1'], 'wasapi_output_capture', 'Desktop Audio')
+    const result = await addAudioSourceToScenes(
+      {},
+      ['Scene1'],
+      'wasapi_output_capture',
+      'Desktop Audio'
+    )
     expect(result.success).toBe(false)
     expect(result.message).toBeTruthy()
   })
 
   it('calls SetSceneItemTransform when fitToCanvas option is true', async () => {
     mockObsCall
-      .mockResolvedValueOnce({ baseWidth: 1920, baseHeight: 1080 })       // GetVideoSettings (hoisted before loop)
-      .mockResolvedValueOnce({ sceneItems: [] })                          // GetSceneItemList Scene1
-      .mockResolvedValueOnce({ sceneItemId: 99 })                         // CreateInput → returns sceneItemId
-      // SetSceneItemTransform uses default undefined
+      .mockResolvedValueOnce({ baseWidth: 1920, baseHeight: 1080 }) // GetVideoSettings (hoisted before loop)
+      .mockResolvedValueOnce({ sceneItems: [] }) // GetSceneItemList Scene1
+      .mockResolvedValueOnce({ sceneItemId: 99 }) // CreateInput → returns sceneItemId
+    // SetSceneItemTransform uses default undefined
     const { addAudioSourceToScenes } = await getModule()
-    const result = await addAudioSourceToScenes({}, ['Scene1'], 'game_capture', 'My Game Capture', {}, { fitToCanvas: true })
+    const result = await addAudioSourceToScenes(
+      {},
+      ['Scene1'],
+      'game_capture',
+      'My Game Capture',
+      {},
+      { fitToCanvas: true }
+    )
     expect(result.success).toBe(true)
-    const transformCall = mockObsCall.mock.calls.find(c => c[0] === 'SetSceneItemTransform')
+    const transformCall = mockObsCall.mock.calls.find((c) => c[0] === 'SetSceneItemTransform')
     expect(transformCall).toBeTruthy()
     expect(transformCall[1]).toMatchObject({ sceneName: 'Scene1', sceneItemId: 99 })
     expect(transformCall[1].sceneItemTransform.boundsType).toBe('OBS_BOUNDS_SCALE_INNER')
@@ -530,9 +575,15 @@ describe('addAudioSourceToScenes', () => {
   it('does not call SetSceneItemTransform when fitToCanvas is omitted', async () => {
     // default mock returns undefined for CreateInput → sceneItemId is undefined
     const { addAudioSourceToScenes } = await getModule()
-    const result = await addAudioSourceToScenes({}, ['Scene1'], 'wasapi_output_capture', 'Desktop Audio', {})
+    const result = await addAudioSourceToScenes(
+      {},
+      ['Scene1'],
+      'wasapi_output_capture',
+      'Desktop Audio',
+      {}
+    )
     expect(result.success).toBe(true)
-    const transformCall = mockObsCall.mock.calls.find(c => c[0] === 'SetSceneItemTransform')
+    const transformCall = mockObsCall.mock.calls.find((c) => c[0] === 'SetSceneItemTransform')
     expect(transformCall).toBeFalsy()
   })
 })
@@ -581,8 +632,8 @@ describe('createSceneFromTemplate', () => {
 
   it('creates empty scene when no template provided', async () => {
     mockObsCall
-      .mockResolvedValueOnce({ scenes: [] })  // GetSceneList
-      .mockResolvedValue(undefined)            // CreateScene
+      .mockResolvedValueOnce({ scenes: [] }) // GetSceneList
+      .mockResolvedValue(undefined) // CreateScene
     const { createSceneFromTemplate } = await getModule()
     const result = await createSceneFromTemplate({}, 'NewScene', null)
     expect(result.success).toBe(true)
@@ -601,18 +652,21 @@ describe('createSceneFromTemplate', () => {
 
   it('duplicates sources from template scene', async () => {
     mockObsCall
-      .mockResolvedValueOnce({ scenes: [{ sceneName: 'Template' }] })  // GetSceneList
-      .mockResolvedValueOnce(undefined)                                  // CreateScene
-      .mockResolvedValueOnce({ sceneItems: [                            // GetSceneItemList
-        { sceneItemId: 1, sourceName: 'Capture' },
-        { sceneItemId: 2, sourceName: 'Audio' },
-      ]})
-      .mockResolvedValue(undefined)                                      // DuplicateSceneItem x2
+      .mockResolvedValueOnce({ scenes: [{ sceneName: 'Template' }] }) // GetSceneList
+      .mockResolvedValueOnce(undefined) // CreateScene
+      .mockResolvedValueOnce({
+        sceneItems: [
+          // GetSceneItemList
+          { sceneItemId: 1, sourceName: 'Capture' },
+          { sceneItemId: 2, sourceName: 'Audio' },
+        ],
+      })
+      .mockResolvedValue(undefined) // DuplicateSceneItem x2
     const { createSceneFromTemplate } = await getModule()
     const result = await createSceneFromTemplate({}, 'NewScene', 'Template')
     expect(result.success).toBe(true)
     expect(result.message).toMatch(/2\/2/)
-    const dupCalls = mockObsCall.mock.calls.filter(c => c[0] === 'DuplicateSceneItem')
+    const dupCalls = mockObsCall.mock.calls.filter((c) => c[0] === 'DuplicateSceneItem')
     expect(dupCalls).toHaveLength(2)
   })
 
@@ -620,12 +674,14 @@ describe('createSceneFromTemplate', () => {
     mockObsCall
       .mockResolvedValueOnce({ scenes: [{ sceneName: 'Template' }] })
       .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce({ sceneItems: [
-        { sceneItemId: 1, sourceName: 'A' },
-        { sceneItemId: 2, sourceName: 'B' },
-      ]})
-      .mockResolvedValueOnce(undefined)                                   // DuplicateSceneItem A succeeds
-      .mockRejectedValueOnce(new Error('nested scene not supported'))     // DuplicateSceneItem B fails
+      .mockResolvedValueOnce({
+        sceneItems: [
+          { sceneItemId: 1, sourceName: 'A' },
+          { sceneItemId: 2, sourceName: 'B' },
+        ],
+      })
+      .mockResolvedValueOnce(undefined) // DuplicateSceneItem A succeeds
+      .mockRejectedValueOnce(new Error('nested scene not supported')) // DuplicateSceneItem B fails
     const { createSceneFromTemplate } = await getModule()
     const result = await createSceneFromTemplate({}, 'NewScene', 'Template')
     expect(result.success).toBe(true)
@@ -635,13 +691,13 @@ describe('createSceneFromTemplate', () => {
   it('removes created scene and returns error when template copy throws unexpectedly', async () => {
     mockObsCall
       .mockResolvedValueOnce({ scenes: [{ sceneName: 'Template' }] })
-      .mockResolvedValueOnce(undefined)                     // CreateScene
+      .mockResolvedValueOnce(undefined) // CreateScene
       .mockRejectedValueOnce(new Error('unexpected error')) // GetSceneItemList throws
-      .mockResolvedValue(undefined)                         // RemoveScene cleanup
+      .mockResolvedValue(undefined) // RemoveScene cleanup
     const { createSceneFromTemplate } = await getModule()
     const result = await createSceneFromTemplate({}, 'NewScene', 'Template')
     expect(result.success).toBe(false)
-    const removeCalls = mockObsCall.mock.calls.filter(c => c[0] === 'RemoveScene')
+    const removeCalls = mockObsCall.mock.calls.filter((c) => c[0] === 'RemoveScene')
     expect(removeCalls).toHaveLength(1)
     expect(removeCalls[0][1].sceneName).toBe('NewScene')
   })
@@ -655,9 +711,7 @@ describe('createSceneFromTemplate', () => {
   })
 
   it('trims whitespace from scene name', async () => {
-    mockObsCall
-      .mockResolvedValueOnce({ scenes: [] })
-      .mockResolvedValue(undefined)
+    mockObsCall.mockResolvedValueOnce({ scenes: [] }).mockResolvedValue(undefined)
     const { createSceneFromTemplate } = await getModule()
     await createSceneFromTemplate({}, '  NewScene  ', null)
     expect(mockObsCall).toHaveBeenCalledWith('CreateScene', { sceneName: 'NewScene' })
@@ -689,12 +743,14 @@ describe('testOBSConnection', () => {
 
 describe('getOBSAudioInputs', () => {
   it('returns only audio inputs filtered by kind', async () => {
-    mockObsCall.mockResolvedValue({ inputs: [
-      { inputName: 'Desktop Audio', inputKind: 'wasapi_output_capture' },
-      { inputName: 'Microphone', inputKind: 'wasapi_input_capture' },
-      { inputName: 'Game Capture', inputKind: 'game_capture' },
-      { inputName: 'Browser', inputKind: 'browser_source' },
-    ]})
+    mockObsCall.mockResolvedValue({
+      inputs: [
+        { inputName: 'Desktop Audio', inputKind: 'wasapi_output_capture' },
+        { inputName: 'Microphone', inputKind: 'wasapi_input_capture' },
+        { inputName: 'Game Capture', inputKind: 'game_capture' },
+        { inputName: 'Browser', inputKind: 'browser_source' },
+      ],
+    })
     const { getOBSAudioInputs } = await getModule()
     const result = await getOBSAudioInputs({})
     expect(result).toHaveLength(2)
@@ -741,22 +797,32 @@ describe('getSceneAudioSources', () => {
   })
 
   it('returns audio items when inputKind is present on scene item', async () => {
-    mockObsCall.mockResolvedValue({ sceneItems: [
-      { sourceName: 'Desktop Audio', inputKind: 'wasapi_output_capture', sceneItemId: 1 },
-      { sourceName: 'Game Capture', inputKind: 'game_capture', sceneItemId: 2 },
-      { sourceName: 'Mic', inputKind: 'wasapi_input_capture', sceneItemId: 3 },
-    ]})
+    mockObsCall.mockResolvedValue({
+      sceneItems: [
+        { sourceName: 'Desktop Audio', inputKind: 'wasapi_output_capture', sceneItemId: 1 },
+        { sourceName: 'Game Capture', inputKind: 'game_capture', sceneItemId: 2 },
+        { sourceName: 'Mic', inputKind: 'wasapi_input_capture', sceneItemId: 3 },
+      ],
+    })
     const { getSceneAudioSources } = await getModule()
     const result = await getSceneAudioSources({}, 'Scene1')
     expect(result).toHaveLength(2)
-    expect(result[0]).toEqual({ inputName: 'Desktop Audio', inputKind: 'wasapi_output_capture', sceneItemId: 1 })
-    expect(result[1]).toEqual({ inputName: 'Mic', inputKind: 'wasapi_input_capture', sceneItemId: 3 })
+    expect(result[0]).toEqual({
+      inputName: 'Desktop Audio',
+      inputKind: 'wasapi_output_capture',
+      sceneItemId: 1,
+    })
+    expect(result[1]).toEqual({
+      inputName: 'Mic',
+      inputKind: 'wasapi_input_capture',
+      sceneItemId: 3,
+    })
   })
 
   it('falls back to GetInputKind when inputKind is missing from scene item', async () => {
     mockObsCall
       .mockResolvedValueOnce({ sceneItems: [{ sourceName: 'UnknownSource', sceneItemId: 5 }] }) // GetSceneItemList
-      .mockResolvedValueOnce({ inputKind: 'wasapi_output_capture' })                             // GetInputKind
+      .mockResolvedValueOnce({ inputKind: 'wasapi_output_capture' }) // GetInputKind
     const { getSceneAudioSources } = await getModule()
     const result = await getSceneAudioSources({}, 'Scene1')
     expect(result).toHaveLength(1)
@@ -767,7 +833,7 @@ describe('getSceneAudioSources', () => {
   it('skips item when fallback kind lookup fails', async () => {
     mockObsCall
       .mockResolvedValueOnce({ sceneItems: [{ sourceName: 'Nested Scene', sceneItemId: 7 }] })
-      .mockRejectedValueOnce(new Error('not an input'))  // GetInputKind fails
+      .mockRejectedValueOnce(new Error('not an input')) // GetInputKind fails
     const { getSceneAudioSources } = await getModule()
     const result = await getSceneAudioSources({}, 'Scene1')
     expect(result).toEqual([])
@@ -784,7 +850,9 @@ describe('getSceneAudioSources', () => {
 
 describe('getInputAudioTracks', () => {
   it('returns track routing object', async () => {
-    mockObsCall.mockResolvedValue({ inputAudioTracks: { '1': true, '2': false, '3': true, '4': false, '5': false, '6': false } })
+    mockObsCall.mockResolvedValue({
+      inputAudioTracks: { 1: true, 2: false, 3: true, 4: false, 5: false, 6: false },
+    })
     const { getInputAudioTracks } = await getModule()
     const result = await getInputAudioTracks({}, 'Desktop Audio')
     expect(result['1']).toBe(true)
@@ -816,7 +884,7 @@ describe('setInputAudioTracks', () => {
   it('sets track routing and returns success', async () => {
     mockObsCall.mockResolvedValue(undefined)
     const { setInputAudioTracks } = await getModule()
-    const tracks = { '1': true, '2': false, '3': false, '4': false, '5': false, '6': false }
+    const tracks = { 1: true, 2: false, 3: false, 4: false, 5: false, 6: false }
     const result = await setInputAudioTracks({}, 'Desktop Audio', tracks)
     expect(result.success).toBe(true)
     expect(result.message).toMatch(/Desktop Audio/)
@@ -864,7 +932,8 @@ describe('getTrackNames', () => {
     mockObsCall.mockImplementation((cmd, args) => {
       if (cmd === 'GetProfileParameter') {
         if (args.parameterCategory === 'AdvOut') return Promise.resolve({ parameterValue: '' })
-        if (args.parameterCategory === 'SimpleOutput') return Promise.resolve({ parameterValue: 'Simple Track' })
+        if (args.parameterCategory === 'SimpleOutput')
+          return Promise.resolve({ parameterValue: 'Simple Track' })
       }
       return Promise.resolve({})
     })
@@ -890,9 +959,9 @@ describe('setTrackNames', () => {
     const names = ['Game', 'Mic', 'Desktop', 'Commentary', 'Music', 'SFX']
     const result = await setTrackNames({}, names)
     expect(result.success).toBe(true)
-    const setCalls = mockObsCall.mock.calls.filter(c => c[0] === 'SetProfileParameter')
+    const setCalls = mockObsCall.mock.calls.filter((c) => c[0] === 'SetProfileParameter')
     expect(setCalls).toHaveLength(12) // 2 categories × 6 tracks
-    const advCalls = setCalls.filter(c => c[1].parameterCategory === 'AdvOut')
+    const advCalls = setCalls.filter((c) => c[1].parameterCategory === 'AdvOut')
     expect(advCalls[0][1]).toMatchObject({ parameterName: 'Track1Name', parameterValue: 'Game' })
     expect(advCalls[5][1]).toMatchObject({ parameterName: 'Track6Name', parameterValue: 'SFX' })
   })
@@ -901,8 +970,9 @@ describe('setTrackNames', () => {
     mockObsCall.mockResolvedValue(undefined)
     const { setTrackNames } = await getModule()
     await setTrackNames({}, ['', null, undefined, 'Custom', '', ''])
-    const advCalls = mockObsCall.mock.calls
-      .filter(c => c[0] === 'SetProfileParameter' && c[1].parameterCategory === 'AdvOut')
+    const advCalls = mockObsCall.mock.calls.filter(
+      (c) => c[0] === 'SetProfileParameter' && c[1].parameterCategory === 'AdvOut'
+    )
     expect(advCalls[0][1].parameterValue).toBe('Track 1')
     expect(advCalls[3][1].parameterValue).toBe('Custom')
   })
@@ -935,12 +1005,12 @@ describe('removeAudioSourceFromScenes', () => {
     mockObsCall
       .mockResolvedValueOnce({ sceneItems: [{ sourceName: 'Desktop Audio', sceneItemId: 10 }] }) // GetSceneItemList Scene1
       .mockResolvedValueOnce({ sceneItems: [{ sourceName: 'Desktop Audio', sceneItemId: 20 }] }) // GetSceneItemList Scene2
-      // RemoveSceneItem calls use default (undefined)
+    // RemoveSceneItem calls use default (undefined)
     const { removeAudioSourceFromScenes } = await getModule()
     const result = await removeAudioSourceFromScenes({}, ['Scene1', 'Scene2'], 'Desktop Audio')
     expect(result.success).toBe(true)
     expect(result.message).toMatch(/removed from 2/)
-    const removeCalls = mockObsCall.mock.calls.filter(c => c[0] === 'RemoveSceneItem')
+    const removeCalls = mockObsCall.mock.calls.filter((c) => c[0] === 'RemoveSceneItem')
     expect(removeCalls).toHaveLength(2)
   })
 
@@ -973,7 +1043,7 @@ describe('deleteOBSScene', () => {
     const result = await deleteOBSScene({}, 'MyScene')
     expect(result.success).toBe(true)
     expect(result.message).toMatch(/MyScene/)
-    const removeCall = mockObsCall.mock.calls.find(c => c[0] === 'RemoveScene')
+    const removeCall = mockObsCall.mock.calls.find((c) => c[0] === 'RemoveScene')
     expect(removeCall).toBeTruthy()
     expect(removeCall[1]).toEqual({ sceneName: 'MyScene' })
   })
@@ -984,7 +1054,7 @@ describe('deleteOBSScene', () => {
     const result = await deleteOBSScene({}, 'MyScene')
     expect(result.success).toBe(false)
     expect(result.message).toMatch(/not found|does not exist/i)
-    const removeCall = mockObsCall.mock.calls.find(c => c[0] === 'RemoveScene')
+    const removeCall = mockObsCall.mock.calls.find((c) => c[0] === 'RemoveScene')
     expect(removeCall).toBeFalsy()
   })
 
@@ -996,4 +1066,3 @@ describe('deleteOBSScene', () => {
     expect(result.message).toBeTruthy()
   })
 })
-

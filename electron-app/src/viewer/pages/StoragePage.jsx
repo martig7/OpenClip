@@ -9,7 +9,6 @@ import StorageTreemap from '../components/StorageTreemap'
 import StorageList from '../components/StorageList'
 import ReencodeModal from '../components/ReencodeModal'
 
-
 const DEFAULT_SORT_DIR = { date: 'desc', size: 'desc', name: 'asc', game: 'asc' }
 
 function normPath(p) {
@@ -25,10 +24,17 @@ function StoragePage() {
   const [deleteModal, setDeleteModal] = useState(false)
   const [reencodeModal, setReencodeModal] = useState(false)
   const [reencodeSettings, setReencodeSettings] = useState({
-    codec: 'h265', crf: 23, preset: 'medium', replaceOriginal: false
+    codec: 'h265',
+    crf: 23,
+    preset: 'medium',
+    replaceOriginal: false,
   })
   const [isReencoding, setIsReencoding] = useState(false)
-  const [reencodeProgress, setReencodeProgress] = useState({ current: 0, total: 0, currentFile: '' })
+  const [reencodeProgress, setReencodeProgress] = useState({
+    current: 0,
+    total: 0,
+    currentFile: '',
+  })
   const [reencodeAudioTracks, setReencodeAudioTracks] = useState([])
   const [reencodeSelectedTracks, setReencodeSelectedTracks] = useState([])
   const [loadingTracks, setLoadingTracks] = useState(false)
@@ -73,7 +79,7 @@ function StoragePage() {
   }, [])
 
   const toggleSelection = useCallback((path) => {
-    setSelectedItems(prev => {
+    setSelectedItems((prev) => {
       const newSet = new Set(prev)
       if (newSet.has(path)) newSet.delete(path)
       else newSet.add(path)
@@ -81,37 +87,43 @@ function StoragePage() {
     })
   }, [])
 
-  const toggleLock = useCallback(async (e, path) => {
-    e.stopPropagation()
-    const normalizedPath = normPath(path)
-    const isLocked = lockedRecordings.has(normalizedPath)
-    try {
-      const response = await apiPost('/api/storage/lock', { path, locked: !isLocked })
-      if (response.ok) {
-        setLockedRecordings(prev => {
-          const newSet = new Set(prev)
-          if (isLocked) newSet.delete(normalizedPath)
-          else newSet.add(normalizedPath)
-          return newSet
-        })
-        showToast('success', isLocked ? 'Recording unlocked' : 'Recording locked')
+  const toggleLock = useCallback(
+    async (e, path) => {
+      e.stopPropagation()
+      const normalizedPath = normPath(path)
+      const isLocked = lockedRecordings.has(normalizedPath)
+      try {
+        const response = await apiPost('/api/storage/lock', { path, locked: !isLocked })
+        if (response.ok) {
+          setLockedRecordings((prev) => {
+            const newSet = new Set(prev)
+            if (isLocked) newSet.delete(normalizedPath)
+            else newSet.add(normalizedPath)
+            return newSet
+          })
+          showToast('success', isLocked ? 'Recording unlocked' : 'Recording locked')
+        }
+      } catch {
+        showToast('error', 'Failed to toggle lock')
       }
-    } catch {
-      showToast('error', 'Failed to toggle lock')
-    }
-  }, [lockedRecordings, showToast])
+    },
+    [lockedRecordings, showToast]
+  )
 
   const handleBatchDelete = useCallback(async () => {
     if (selectedItems.size === 0) return
     try {
-      const response = await apiPost('/api/storage/delete-batch', { paths: Array.from(selectedItems) })
+      const response = await apiPost('/api/storage/delete-batch', {
+        paths: Array.from(selectedItems),
+      })
       const data = await response.json()
       if (response.ok) {
         setSelectedItems(new Set())
         setDeleteModal(false)
         fetchStats()
         let message = `Deleted ${data.deleted_count} item(s)`
-        if (data.skipped_locked_count > 0) message += `, skipped ${data.skipped_locked_count} locked`
+        if (data.skipped_locked_count > 0)
+          message += `, skipped ${data.skipped_locked_count} locked`
         if (data.failed_count > 0) message += `, ${data.failed_count} failed`
         showToast('success', message)
       }
@@ -119,7 +131,6 @@ function StoragePage() {
       showToast('error', 'Failed to delete items')
     }
   }, [selectedItems, fetchStats, showToast])
-
 
   const fetchReencodeTracks = useCallback(async () => {
     const paths = Array.from(selectedItems)
@@ -144,10 +155,10 @@ function StoragePage() {
   }, [selectedItems])
 
   const toggleReencodeTrack = useCallback((index) => {
-    setReencodeSelectedTracks(prev => {
+    setReencodeSelectedTracks((prev) => {
       if (prev.includes(index)) {
         if (prev.length <= 1) return prev
-        return prev.filter(i => i !== index)
+        return prev.filter((i) => i !== index)
       }
       return [...prev, index].sort((a, b) => a - b)
     })
@@ -157,11 +168,10 @@ function StoragePage() {
     if (!stats) return []
     let result = []
     if (filterType === 'all' || filterType === 'recordings')
-      result = [...result, ...stats.recordings.map(r => ({ ...r, type: 'recording' }))]
+      result = [...result, ...stats.recordings.map((r) => ({ ...r, type: 'recording' }))]
     if (filterType === 'all' || filterType === 'clips')
-      result = [...result, ...stats.clips.map(c => ({ ...c, type: 'clip' }))]
-    if (filterGame !== 'all')
-      result = result.filter(item => item.game_name === filterGame)
+      result = [...result, ...stats.clips.map((c) => ({ ...c, type: 'clip' }))]
+    if (filterGame !== 'all') result = result.filter((item) => item.game_name === filterGame)
     const dir = sortDir === 'asc' ? 1 : -1
     result.sort((a, b) => {
       if (sortBy === 'date') return dir * (a.mtime - b.mtime)
@@ -177,9 +187,10 @@ function StoragePage() {
 
   const formatBytes = (bytes) => {
     if (!bytes) return '0 B'
-    const k = 1024, sizes = ['B', 'KB', 'MB', 'GB']
+    const k = 1024,
+      sizes = ['B', 'KB', 'MB', 'GB']
     const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i]
   }
 
   const handleReencode = useCallback(async () => {
@@ -187,25 +198,37 @@ function StoragePage() {
     setIsReencoding(true)
     const paths = Array.from(selectedItems)
     const totalFiles = paths.length
-    let successCount = 0, failCount = 0, totalSavings = 0
-    const audioTracksParam = reencodeAudioTracks.length > 1 && reencodeSelectedTracks.length < reencodeAudioTracks.length
-      ? reencodeSelectedTracks : null
+    let successCount = 0,
+      failCount = 0,
+      totalSavings = 0
+    const audioTracksParam =
+      reencodeAudioTracks.length > 1 && reencodeSelectedTracks.length < reencodeAudioTracks.length
+        ? reencodeSelectedTracks
+        : null
     setReencodeProgress({ current: 0, total: totalFiles, currentFile: '' })
     for (let i = 0; i < paths.length; i++) {
       const path = paths[i]
-      const item = items.find(it => it.path === path)
+      const item = items.find((it) => it.path === path)
       const filename = item?.filename || path.split(/[\\/]/).pop()
       setReencodeProgress({ current: i + 1, total: totalFiles, currentFile: filename })
       try {
         const response = await apiPost('/api/reencode', {
-          source_path: path, codec: reencodeSettings.codec, crf: reencodeSettings.crf,
-          preset: reencodeSettings.preset, replace_original: reencodeSettings.replaceOriginal,
-          original_size: item?.size_bytes || 0, audio_tracks: audioTracksParam
+          source_path: path,
+          codec: reencodeSettings.codec,
+          crf: reencodeSettings.crf,
+          preset: reencodeSettings.preset,
+          replace_original: reencodeSettings.replaceOriginal,
+          original_size: item?.size_bytes || 0,
+          audio_tracks: audioTracksParam,
         })
         const data = await response.json()
-        if (response.ok) { successCount++; totalSavings += data.savings || 0 }
-        else failCount++
-      } catch { failCount++ }
+        if (response.ok) {
+          successCount++
+          totalSavings += data.savings || 0
+        } else failCount++
+      } catch {
+        failCount++
+      }
     }
     setIsReencoding(false)
     setReencodeModal(false)
@@ -214,40 +237,62 @@ function StoragePage() {
     fetchStats()
     const label = reencodeSettings.codec === 'copy' ? 'Re-exported' : 'Reencoded'
     const savingsFormatted = totalSavings > 0 ? ` (saved ${formatBytes(totalSavings)})` : ''
-    showToast('success', `${label} ${successCount} file(s)${savingsFormatted}${failCount > 0 ? `, ${failCount} failed` : ''}`)
-  }, [items, selectedItems, reencodeSettings, reencodeAudioTracks, reencodeSelectedTracks, fetchStats, showToast])
+    showToast(
+      'success',
+      `${label} ${successCount} file(s)${savingsFormatted}${failCount > 0 ? `, ${failCount} failed` : ''}`
+    )
+  }, [
+    items,
+    selectedItems,
+    reencodeSettings,
+    reencodeAudioTracks,
+    reencodeSelectedTracks,
+    fetchStats,
+    showToast,
+  ])
 
-  const handleColumnSort = useCallback((col) => {
-    if (sortBy === col) {
-      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    } else {
-      setSortBy(col)
-      setSortDir(DEFAULT_SORT_DIR[col] || 'asc')
-    }
-  }, [sortBy])
+  const handleColumnSort = useCallback(
+    (col) => {
+      if (sortBy === col) {
+        setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+      } else {
+        setSortBy(col)
+        setSortDir(DEFAULT_SORT_DIR[col] || 'asc')
+      }
+    },
+    [sortBy]
+  )
 
-  const handleItemClick = useCallback((item) => {
-    if (item.type === 'clip') navigate(`/clips?path=${encodeURIComponent(item.path)}`)
-    else navigate(`/recordings?path=${encodeURIComponent(item.path)}`)
-  }, [navigate])
+  const handleItemClick = useCallback(
+    (item) => {
+      if (item.type === 'clip') navigate(`/clips?path=${encodeURIComponent(item.path)}`)
+      else navigate(`/recordings?path=${encodeURIComponent(item.path)}`)
+    },
+    [navigate]
+  )
 
   const gameColors = useMemo(() => buildGameColors(stats), [stats])
 
   const byGameBytes = useMemo(() => {
     if (!stats) return {}
     const map = {}
-    ;[...(stats.recordings || []), ...(stats.clips || [])].forEach(item => {
+    ;[...(stats.recordings || []), ...(stats.clips || [])].forEach((item) => {
       map[item.game_name] = (map[item.game_name] || 0) + item.size_bytes
     })
     return map
   }, [stats])
 
-  const totalBytes = useMemo(() => Object.values(byGameBytes).reduce((s, v) => s + v, 0), [byGameBytes])
+  const totalBytes = useMemo(
+    () => Object.values(byGameBytes).reduce((s, v) => s + v, 0),
+    [byGameBytes]
+  )
 
   if (loading) {
     return (
       <div className="page-content">
-        <div className="loading"><div className="spinner" /></div>
+        <div className="loading">
+          <div className="spinner" />
+        </div>
       </div>
     )
   }
@@ -277,7 +322,7 @@ function StoragePage() {
                     className="sv2-usage-seg"
                     style={{
                       width: `${(bytes / (stats?.disk_usage?.total || totalBytes)) * 100}%`,
-                      background: gameColors[game] || '#666'
+                      background: gameColors[game] || '#666',
                     }}
                     title={`${game}: ${formatBytes(bytes)}`}
                   />
@@ -287,7 +332,7 @@ function StoragePage() {
                   className="sv2-usage-seg"
                   style={{
                     width: `${((stats.disk_usage.used - totalBytes) / stats.disk_usage.total) * 100}%`,
-                    background: '#3a3a3a'
+                    background: '#3a3a3a',
                   }}
                   title={`Other: ${formatBytes(stats.disk_usage.used - totalBytes)}`}
                 />
@@ -305,8 +350,19 @@ function StoragePage() {
           {selectedCount > 0 && (
             <>
               <span className="sv2-sel-pill">{selectedCount} selected</span>
-              <button className="btn btn-secondary btn-sm" onClick={() => setSelectedItems(new Set())}>Clear</button>
-              <button className="btn btn-primary btn-sm" onClick={() => { setReencodeModal(true); fetchReencodeTracks() }}>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => setSelectedItems(new Set())}
+              >
+                Clear
+              </button>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => {
+                  setReencodeModal(true)
+                  fetchReencodeTracks()
+                }}
+              >
                 <Film size={12} /> Reencode
               </button>
               <button className="btn btn-danger btn-sm" onClick={() => setDeleteModal(true)}>
@@ -324,7 +380,9 @@ function StoragePage() {
             <button
               className={`sv2-legend-all${filterGame === 'all' ? ' active' : ''}`}
               onClick={() => setFilterGame('all')}
-            >All</button>
+            >
+              All
+            </button>
             {Object.entries(gameColors).map(([game, color]) => (
               <button
                 key={game}
@@ -339,27 +397,39 @@ function StoragePage() {
         )}
         <div className="sv2-legend-spacer" />
         <div className="sv2-view-toggle">
-            {[
-              { value: 'all',        label: 'All' },
-              { value: 'recordings', label: 'Recordings' },
-              { value: 'clips',      label: 'Clips' },
-            ].map(({ value, label }) => (
-              <button
-                key={value}
-                className={`sv2-view-btn${filterType === value ? ' active' : ''}`}
-                onClick={() => setFilterType(value)}
-              >{label}</button>
-            ))}
-          </div>
+          {[
+            { value: 'all', label: 'All' },
+            { value: 'recordings', label: 'Recordings' },
+            { value: 'clips', label: 'Clips' },
+          ].map(({ value, label }) => (
+            <button
+              key={value}
+              className={`sv2-view-btn${filterType === value ? ' active' : ''}`}
+              onClick={() => setFilterType(value)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <div className="sv2-view-toggle" style={{ marginLeft: 6 }}>
           <button
             className={`sv2-view-btn${listView ? ' active' : ''}`}
-            onClick={() => { startTransition(() => setListView(true)); api.setStore('settings.listView', true) }}
-          >List</button>
+            onClick={() => {
+              startTransition(() => setListView(true))
+              api.setStore('settings.listView', true)
+            }}
+          >
+            List
+          </button>
           <button
             className={`sv2-view-btn${!listView ? ' active' : ''}`}
-            onClick={() => { startTransition(() => setListView(false)); api.setStore('settings.listView', false) }}
-          >Treemap</button>
+            onClick={() => {
+              startTransition(() => setListView(false))
+              api.setStore('settings.listView', false)
+            }}
+          >
+            Treemap
+          </button>
         </div>
       </div>
 

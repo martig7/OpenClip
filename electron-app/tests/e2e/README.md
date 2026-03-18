@@ -12,11 +12,13 @@ This directory contains Playwright end-to-end tests for the OpenClip Electron ap
 ## Running Tests
 
 ### Run all E2E tests:
+
 ```bash
 npm run test:e2e
 ```
 
 ### Run tests with UI:
+
 ```bash
 npm run test:e2e:ui
 ```
@@ -26,6 +28,7 @@ npm run test:e2e:ui
 Playwright runs its own Chromium browser, **not** Electron's renderer. This means:
 
 ### Pages that use `window.api` (GamesPage, SettingsPage)
+
 `window.api` is not injected by Electron's preload in Playwright's browser, so the app
 falls back to `mockApi` in `src/api.js`. This returns `mockGames` (Valorant, CS2) and
 `defaultSettings` (F9 hotkey, toggles off) from `src/mockData.js`.
@@ -33,6 +36,7 @@ falls back to `mockApi` in `src/api.js`. This returns `mockGames` (Valorant, CS2
 No special setup needed — these pages already have deterministic mock data.
 
 ### Pages that use `apiFetch` (RecordingsPage, ClipsPage, StoragePage)
+
 These pages call `apiFetch('/api/...')` which would normally proxy to the Electron API
 server. In tests we intercept these requests using Playwright's `page.route()` before
 they hit the network.
@@ -40,16 +44,19 @@ they hit the network.
 Call `setupApiRoutes(page)` from `fixtures/routes.js` **before** `page.goto()`:
 
 ```js
-import { setupApiRoutes } from './fixtures/routes.js';
+import { setupApiRoutes } from './fixtures/routes.js'
 
 test('shows recordings', async ({ page }) => {
-  await setupApiRoutes(page);
-  await page.goto('/#/recordings');
-  await expect(page.locator('.item-name:has-text("Valorant_2024-01-15_20-30-45.mp4")')).toBeVisible();
-});
+  await setupApiRoutes(page)
+  await page.goto('/#/recordings')
+  await expect(
+    page.locator('.item-name:has-text("Valorant_2024-01-15_20-30-45.mp4")')
+  ).toBeVisible()
+})
 ```
 
 `setupApiRoutes` mocks:
+
 - `GET /api/recordings` → `testRecordings` (Valorant + CS2 recordings)
 - `GET /api/clips` → `testClips` (one Valorant clip)
 - `GET /api/storage/stats` → `testStorageStats` (4.43 GB total, 2 rec, 1 clip)

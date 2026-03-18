@@ -12,16 +12,16 @@ import { createRequire } from 'module'
 
 const _runElevatedOpsMock = vi.fn()
 const _winUtilsMock = {
-  runElevatedOps:           _runElevatedOpsMock,
-  getDiskFreeSpace:         vi.fn(),
+  runElevatedOps: _runElevatedOpsMock,
+  getDiskFreeSpace: vi.fn(),
   listWindowsWithProcesses: vi.fn(),
-  listRunningApps:          vi.fn(),
-  listAudioDevices:         vi.fn(),
-  extractProcessIcon:       vi.fn(),
+  listRunningApps: vi.fn(),
+  listAudioDevices: vi.fn(),
+  extractProcessIcon: vi.fn(),
 }
 
 const _req = createRequire(import.meta.url)
-const _winUtilsPath    = _req.resolve('../../electron/winUtils.js')
+const _winUtilsPath = _req.resolve('../../electron/winUtils.js')
 const _runElevatedPath = _req.resolve('../../electron/runElevated.js')
 
 // Override (or create) the winUtils cache entry so require('./winUtils') returns our mock
@@ -78,7 +78,7 @@ describe('multiple ops', () => {
     _runElevatedOpsMock.mockResolvedValue({ success: true })
     const ops = [
       { type: 'mkdir', path: 'C:\\dir' },
-      { type: 'copy',  src: 'C:\\a.dll', dest: 'C:\\b.dll' },
+      { type: 'copy', src: 'C:\\a.dll', dest: 'C:\\b.dll' },
       { type: 'write', path: 'C:\\f.ini', content: '' },
     ]
     await runElevated(ops)

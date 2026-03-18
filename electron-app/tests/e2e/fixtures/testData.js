@@ -20,7 +20,7 @@ export const testGames = [
     enabled: true,
     scene: 'Scene',
   },
-];
+]
 
 export const testSettings = {
   obsRecordingPath: 'C:\\Users\\TestUser\\Videos\\OBS',
@@ -28,7 +28,7 @@ export const testSettings = {
   startWatcherOnStartup: false,
   clipMarkerHotkey: 'F9',
   listView: true,
-};
+}
 
 // API response shapes for /api/recordings and /api/clips
 export const testRecordings = [
@@ -50,7 +50,7 @@ export const testRecordings = [
     size_bytes: 3200000000,
     mtime: 1705256530000,
   },
-];
+]
 
 export const testClips = [
   {
@@ -62,7 +62,7 @@ export const testClips = [
     size_bytes: 50000000,
     mtime: 1705350300000,
   },
-];
+]
 
 // API response shape for /api/storage/stats
 export const testStorageStats = {
@@ -104,7 +104,7 @@ export const testStorageStats = {
     },
   ],
   locked_recordings: [],
-};
+}
 
 // API response shape for /api/storage/settings
 export const testStorageSettings = {
@@ -112,10 +112,10 @@ export const testStorageSettings = {
   max_storage_gb: 100,
   max_age_days: 30,
   exclude_clips: true,
-};
+}
 
 export async function setupTestGames(page) {
   await page.evaluate((games) => {
-    window.__testGames = games;
-  }, testGames);
+    window.__testGames = games
+  }, testGames)
 }

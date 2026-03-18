@@ -36,7 +36,7 @@ beforeAll(async () => {
 
   const { startApiServer } = await import('../../electron/apiServer.js')
   server = startApiServer(store)
-  await new Promise(resolve => server.on('listening', resolve))
+  await new Promise((resolve) => server.on('listening', resolve))
 })
 
 afterAll((done) => {
@@ -154,16 +154,19 @@ describe('POST /api/clips/delete', () => {
   it('returns 403 when URL-encoded path traversal %2F.. is used', async () => {
     const res = await request(server)
       .post('/api/clips/delete')
-      .send({ path: path.join(clipsDir, '..', '..', 'Windows', 'System32', 'evil.exe').replace(/\\/g, '/').replace('..', '%2F..') })
+      .send({
+        path: path
+          .join(clipsDir, '..', '..', 'Windows', 'System32', 'evil.exe')
+          .replace(/\\/g, '/')
+          .replace('..', '%2F..'),
+      })
     expect(res.status).toBe(403)
   })
 
   it('returns 200 when deleting an existing allowed file', async () => {
     const fp = path.join(clipsDir, 'Halo Clip 2025-01-15 #1.mp4')
     fs.writeFileSync(fp, Buffer.alloc(1024))
-    const res = await request(server)
-      .post('/api/clips/delete')
-      .send({ path: fp })
+    const res = await request(server).post('/api/clips/delete').send({ path: fp })
     expect(res.status).toBe(200)
     expect(res.body.success).toBe(true)
     expect(fs.existsSync(fp)).toBe(false)
@@ -174,9 +177,7 @@ describe('POST /api/delete (alias)', () => {
   it('also deletes a file via the alias route', async () => {
     const fp = path.join(clipsDir, 'Halo Clip 2025-01-15 #2.mp4')
     fs.writeFileSync(fp, Buffer.alloc(1024))
-    const res = await request(server)
-      .post('/api/delete')
-      .send({ path: fp })
+    const res = await request(server).post('/api/delete').send({ path: fp })
     expect(res.status).toBe(200)
     expect(res.body.success).toBe(true)
   })
@@ -193,9 +194,10 @@ describe('Clip Creation Concurrency', () => {
       return { kill: () => {} }
     })
 
-    const makeRequest = () => request(server)
-      .post('/api/clips/create')
-      .send({ source_path: src, start_time: 0, end_time: 10 })
+    const makeRequest = () =>
+      request(server)
+        .post('/api/clips/create')
+        .send({ source_path: src, start_time: 0, end_time: 10 })
 
     const [res1, res2] = await Promise.all([makeRequest(), makeRequest()])
     expect([res1.status, res2.status]).toContain(200)
@@ -213,9 +215,10 @@ describe('Clip Creation Concurrency', () => {
       return { kill: () => {} }
     })
 
-    const makeClip = (i) => request(server)
-      .post('/api/clips/create')
-      .send({ source_path: src, start_time: i, end_time: i + 5 })
+    const makeClip = (i) =>
+      request(server)
+        .post('/api/clips/create')
+        .send({ source_path: src, start_time: i, end_time: i + 5 })
 
     const res1 = await makeClip(0)
     expect(res1.status).toBe(200)

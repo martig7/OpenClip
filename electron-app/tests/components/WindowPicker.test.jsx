@@ -9,8 +9,20 @@ describe('WindowPicker', () => {
     showPicker: true,
     setShowPicker: vi.fn(),
     visibleWindows: [
-      { title: 'Valorant', exe: 'VALORANT.exe', hwnd: '1234', windowClass: 'VALORANT', process: 'VALORANT.exe' },
-      { title: 'Discord', exe: 'Discord.exe', hwnd: '5678', windowClass: 'Discord', process: 'Discord.exe' },
+      {
+        title: 'Valorant',
+        exe: 'VALORANT.exe',
+        hwnd: '1234',
+        windowClass: 'VALORANT',
+        process: 'VALORANT.exe',
+      },
+      {
+        title: 'Discord',
+        exe: 'Discord.exe',
+        hwnd: '5678',
+        windowClass: 'Discord',
+        process: 'Discord.exe',
+      },
     ],
     loadingWindows: false,
     onSelect: vi.fn(),
@@ -36,8 +48,20 @@ describe('WindowPicker', () => {
     const filteredProps = {
       ...defaultProps,
       visibleWindows: [
-        { title: 'Valorant Game', exe: 'game.exe', hwnd: '1', windowClass: 'game', process: 'game.exe' },
-        { title: 'Not Related', exe: 'other.exe', hwnd: '2', windowClass: 'other', process: 'other.exe' },
+        {
+          title: 'Valorant Game',
+          exe: 'game.exe',
+          hwnd: '1',
+          windowClass: 'game',
+          process: 'game.exe',
+        },
+        {
+          title: 'Not Related',
+          exe: 'other.exe',
+          hwnd: '2',
+          windowClass: 'other',
+          process: 'other.exe',
+        },
       ],
     }
     const { container } = render(<WindowPicker {...filteredProps} />)

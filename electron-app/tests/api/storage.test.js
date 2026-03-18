@@ -33,11 +33,11 @@ beforeAll(async () => {
 
   const { startApiServer } = await import('../../electron/apiServer.js')
   server = startApiServer(store)
-  await new Promise(resolve => server.on('listening', resolve))
+  await new Promise((resolve) => server.on('listening', resolve))
 })
 
 afterAll(async () => {
-  await new Promise(resolve => server.close(resolve))
+  await new Promise((resolve) => server.close(resolve))
   fs.rmSync(tmpDir, { recursive: true, force: true })
 })
 
@@ -137,9 +137,7 @@ describe('POST /api/storage/settings', () => {
 describe('POST /api/storage/lock', () => {
   it('locks a path', async () => {
     const fp = path.join(destDir, 'rec.mp4')
-    const res = await request(server)
-      .post('/api/storage/lock')
-      .send({ path: fp, locked: true })
+    const res = await request(server).post('/api/storage/lock').send({ path: fp, locked: true })
     expect(res.status).toBe(200)
     expect(store._data.lockedRecordings).toContain(path.normalize(fp))
   })
@@ -147,9 +145,7 @@ describe('POST /api/storage/lock', () => {
   it('unlocks a path', async () => {
     const fp = path.join(destDir, 'rec.mp4')
     store._data.lockedRecordings = [path.normalize(fp)]
-    const res = await request(server)
-      .post('/api/storage/lock')
-      .send({ path: fp, locked: false })
+    const res = await request(server).post('/api/storage/lock').send({ path: fp, locked: false })
     expect(res.status).toBe(200)
     expect(store._data.lockedRecordings).not.toContain(path.normalize(fp))
   })
@@ -215,17 +211,13 @@ describe('Storage - Edge Cases', () => {
   it('lock/unlock round-trip persists in store', async () => {
     const fp = path.join(destDir, 'persist.mp4')
     fs.writeFileSync(fp, Buffer.alloc(1024))
-    
+
     // Lock
-    await request(server)
-      .post('/api/storage/lock')
-      .send({ path: fp, locked: true })
+    await request(server).post('/api/storage/lock').send({ path: fp, locked: true })
     expect(store._data.lockedRecordings).toContain(path.normalize(fp))
-    
+
     // Unlock
-    await request(server)
-      .post('/api/storage/lock')
-      .send({ path: fp, locked: false })
+    await request(server).post('/api/storage/lock').send({ path: fp, locked: false })
     expect(store._data.lockedRecordings).not.toContain(path.normalize(fp))
   })
 
@@ -238,13 +230,13 @@ describe('Storage - Edge Cases', () => {
     const deleteReq1 = request(server)
       .post('/api/storage/delete-batch')
       .send({ paths: [fp1] })
-    
+
     const deleteReq2 = request(server)
       .post('/api/storage/delete-batch')
       .send({ paths: [fp2] })
 
     const [res1, res2] = await Promise.all([deleteReq1, deleteReq2])
-    
+
     expect(res1.status).toBe(200)
     expect(res2.status).toBe(200)
     expect(store._data.lockedRecordings).toEqual([])

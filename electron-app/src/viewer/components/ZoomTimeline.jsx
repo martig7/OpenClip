@@ -41,7 +41,7 @@ function ZoomTimeline({
     const el = containerRef.current
     if (!el) return
     setContainerWidth(el.clientWidth)
-    const ro = new ResizeObserver(entries => setContainerWidth(entries[0].contentRect.width))
+    const ro = new ResizeObserver((entries) => setContainerWidth(entries[0].contentRect.width))
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
@@ -53,13 +53,16 @@ function ZoomTimeline({
   const actualViewStart = viewEnd === duration ? Math.max(0, duration - visibleDuration) : viewStart
 
   // Convert pixel position to time
-  const xToTime = useCallback((clientX) => {
-    if (!containerRef.current || !duration) return 0
-    const rect = containerRef.current.getBoundingClientRect()
-    const ratio = (clientX - rect.left) / rect.width
-    const time = actualViewStart + ratio * visibleDuration
-    return Math.max(0, Math.min(duration, time))
-  }, [actualViewStart, visibleDuration, duration])
+  const xToTime = useCallback(
+    (clientX) => {
+      if (!containerRef.current || !duration) return 0
+      const rect = containerRef.current.getBoundingClientRect()
+      const ratio = (clientX - rect.left) / rect.width
+      const time = actualViewStart + ratio * visibleDuration
+      return Math.max(0, Math.min(duration, time))
+    },
+    [actualViewStart, visibleDuration, duration]
+  )
 
   // Time ruler tick marks
   const ticks = useMemo(() => {
@@ -86,7 +89,8 @@ function ZoomTimeline({
       const x = ((t - actualViewStart) / visibleDuration) * 100
       if (x < -5 || x > 105) continue
 
-      const isMajor = Math.abs(t % majorInterval) < 0.01 || Math.abs(t % majorInterval - majorInterval) < 0.01
+      const isMajor =
+        Math.abs(t % majorInterval) < 0.01 || Math.abs((t % majorInterval) - majorInterval) < 0.01
       result.push({ time: t, x, isMajor })
     }
     return result
@@ -102,30 +106,33 @@ function ZoomTimeline({
   }
 
   // Mouse handlers
-  const handleMouseDown = useCallback((e, type = 'seek') => {
-    e.preventDefault()
-    e.stopPropagation()
+  const handleMouseDown = useCallback(
+    (e, type = 'seek') => {
+      e.preventDefault()
+      e.stopPropagation()
 
-    if (type === 'pan') {
+      if (type === 'pan') {
+        setIsDragging(true)
+        setDragType('pan')
+        setPanStartX(e.clientX)
+        setPanStartCenter(viewCenter)
+        return
+      }
+
       setIsDragging(true)
-      setDragType('pan')
-      setPanStartX(e.clientX)
-      setPanStartCenter(viewCenter)
-      return
-    }
+      setDragType(type)
 
-    setIsDragging(true)
-    setDragType(type)
-
-    const time = xToTime(e.clientX)
-    if (type === 'seek') {
-      onSeek(time)
-    } else if (type === 'clipStart') {
-      onClipStartChange(Math.min(time, clipEnd - 0.1))
-    } else if (type === 'clipEnd') {
-      onClipEndChange(Math.max(time, clipStart + 0.1))
-    }
-  }, [xToTime, onSeek, clipStart, clipEnd, onClipStartChange, onClipEndChange, viewCenter])
+      const time = xToTime(e.clientX)
+      if (type === 'seek') {
+        onSeek(time)
+      } else if (type === 'clipStart') {
+        onClipStartChange(Math.min(time, clipEnd - 0.1))
+      } else if (type === 'clipEnd') {
+        onClipEndChange(Math.max(time, clipStart + 0.1))
+      }
+    },
+    [xToTime, onSeek, clipStart, clipEnd, onClipStartChange, onClipEndChange, viewCenter]
+  )
 
   useEffect(() => {
     if (!isDragging) return
@@ -165,28 +172,44 @@ function ZoomTimeline({
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
     }
-  }, [isDragging, dragType, xToTime, onSeek, clipStart, clipEnd, onClipStartChange, onClipEndChange, panStartX, panStartCenter, visibleDuration, duration])
+  }, [
+    isDragging,
+    dragType,
+    xToTime,
+    onSeek,
+    clipStart,
+    clipEnd,
+    onClipStartChange,
+    onClipEndChange,
+    panStartX,
+    panStartCenter,
+    visibleDuration,
+    duration,
+  ])
 
   // Scroll to zoom
-  const handleWheel = useCallback((e) => {
-    e.preventDefault()
-    const delta = e.deltaY > 0 ? -1 : 1
-    const factor = 1.25
+  const handleWheel = useCallback(
+    (e) => {
+      e.preventDefault()
+      const delta = e.deltaY > 0 ? -1 : 1
+      const factor = 1.25
 
-    setZoom(prev => {
-      const newZoom = delta > 0 ? prev * factor : prev / factor
-      return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom))
-    })
-
-    // Zoom toward mouse position
-    if (containerRef.current) {
-      const time = xToTime(e.clientX)
-      setViewCenter(prev => {
-        const blend = 0.3
-        return prev * (1 - blend) + time * blend
+      setZoom((prev) => {
+        const newZoom = delta > 0 ? prev * factor : prev / factor
+        return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom))
       })
-    }
-  }, [xToTime])
+
+      // Zoom toward mouse position
+      if (containerRef.current) {
+        const time = xToTime(e.clientX)
+        setViewCenter((prev) => {
+          const blend = 0.3
+          return prev * (1 - blend) + time * blend
+        })
+      }
+    },
+    [xToTime]
+  )
 
   // Attach non-passive wheel listener
   useEffect(() => {
@@ -197,8 +220,8 @@ function ZoomTimeline({
   }, [handleWheel])
 
   // Zoom controls
-  const zoomIn = () => setZoom(prev => Math.min(MAX_ZOOM, prev * 1.5))
-  const zoomOut = () => setZoom(prev => Math.max(MIN_ZOOM, prev / 1.5))
+  const zoomIn = () => setZoom((prev) => Math.min(MAX_ZOOM, prev * 1.5))
+  const zoomOut = () => setZoom((prev) => Math.max(MIN_ZOOM, prev / 1.5))
   const zoomFit = () => {
     // Fit the clip region in view with some padding
     const clipDuration = clipEnd - clipStart
@@ -224,7 +247,9 @@ function ZoomTimeline({
       <div className="zoom-controls-row">
         <div className="zoom-controls-left">
           <span className="zoom-label">Timeline Zoom</span>
-          <button className="zoom-btn" onClick={zoomOut} title="Zoom out">-</button>
+          <button className="zoom-btn" onClick={zoomOut} title="Zoom out">
+            -
+          </button>
           <div className="zoom-level-bar">
             <input
               type="range"
@@ -235,9 +260,13 @@ function ZoomTimeline({
               onChange={(e) => setZoom(Math.exp(parseFloat(e.target.value)))}
             />
           </div>
-          <button className="zoom-btn" onClick={zoomIn} title="Zoom in">+</button>
+          <button className="zoom-btn" onClick={zoomIn} title="Zoom in">
+            +
+          </button>
           <span className="zoom-value">{zoom.toFixed(1)}x</span>
-          <button className="zoom-btn zoom-fit-btn" onClick={zoomFit} title="Fit clip in view">Fit Clip</button>
+          <button className="zoom-btn zoom-fit-btn" onClick={zoomFit} title="Fit clip in view">
+            Fit Clip
+          </button>
         </div>
 
         {/* Mini-map */}
@@ -246,20 +275,34 @@ function ZoomTimeline({
           onMouseDown={(e) => {
             const rect = e.currentTarget.getBoundingClientRect()
             const ratio = (e.clientX - rect.left) / rect.width
-            setViewCenter(Math.max(visibleDuration / 2, Math.min(duration - visibleDuration / 2, ratio * duration)))
+            setViewCenter(
+              Math.max(
+                visibleDuration / 2,
+                Math.min(duration - visibleDuration / 2, ratio * duration)
+              )
+            )
           }}
         >
-          <div className="minimap-clip" style={{
-            left: `${(clipStart / duration) * 100}%`,
-            width: `${((clipEnd - clipStart) / duration) * 100}%`
-          }} />
-          <div className="minimap-playhead" style={{
-            left: `${(currentTime / duration) * 100}%`
-          }} />
-          <div className="minimap-viewport" style={{
-            left: `${miniMapViewStart}%`,
-            width: `${Math.max(2, miniMapViewWidth)}%`
-          }} />
+          <div
+            className="minimap-clip"
+            style={{
+              left: `${(clipStart / duration) * 100}%`,
+              width: `${((clipEnd - clipStart) / duration) * 100}%`,
+            }}
+          />
+          <div
+            className="minimap-playhead"
+            style={{
+              left: `${(currentTime / duration) * 100}%`,
+            }}
+          />
+          <div
+            className="minimap-viewport"
+            style={{
+              left: `${miniMapViewStart}%`,
+              width: `${Math.max(2, miniMapViewWidth)}%`,
+            }}
+          />
         </div>
       </div>
 
@@ -271,9 +314,7 @@ function ZoomTimeline({
             className={`ruler-tick ${tick.isMajor ? 'major' : 'minor'}`}
             style={{ left: `${tick.x}%` }}
           >
-            {tick.isMajor && (
-              <span className="ruler-label">{formatTickTime(tick.time)}</span>
-            )}
+            {tick.isMajor && <span className="ruler-label">{formatTickTime(tick.time)}</span>}
           </div>
         ))}
       </div>
@@ -294,20 +335,18 @@ function ZoomTimeline({
         onContextMenu={(e) => e.preventDefault()}
       >
         {/* Background grid lines */}
-        {ticks.filter(t => t.isMajor).map((tick, i) => (
-          <div
-            key={i}
-            className="zoom-grid-line"
-            style={{ left: `${tick.x}%` }}
-          />
-        ))}
+        {ticks
+          .filter((t) => t.isMajor)
+          .map((tick, i) => (
+            <div key={i} className="zoom-grid-line" style={{ left: `${tick.x}%` }} />
+          ))}
 
         {/* Clip region */}
         <div
           className="zoom-clip-region"
           style={{
             left: `${Math.max(0, clipStartX)}%`,
-            width: `${Math.min(100, clipEndX) - Math.max(0, clipStartX)}%`
+            width: `${Math.min(100, clipEndX) - Math.max(0, clipStartX)}%`,
           }}
         />
 
@@ -321,7 +360,9 @@ function ZoomTimeline({
           }}
         >
           <div className="handle-grip">
-            <span /><span /><span />
+            <span />
+            <span />
+            <span />
           </div>
         </div>
 
@@ -335,7 +376,9 @@ function ZoomTimeline({
           }}
         >
           <div className="handle-grip">
-            <span /><span /><span />
+            <span />
+            <span />
+            <span />
           </div>
         </div>
 
@@ -359,10 +402,7 @@ function ZoomTimeline({
 
         {/* Playhead */}
         {playheadX >= -1 && playheadX <= 101 && (
-          <div
-            className="zoom-playhead"
-            style={{ left: `${playheadX}%` }}
-          >
+          <div className="zoom-playhead" style={{ left: `${playheadX}%` }}>
             <div className="playhead-head" />
             <div className="playhead-line" />
           </div>

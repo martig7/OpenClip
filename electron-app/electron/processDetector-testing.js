@@ -3,49 +3,49 @@
  * Returns deterministic process/window lists for testing game detection.
  */
 
-const mockProcesses = new Set();
-const mockWindowTitles = new Set();
+const mockProcesses = new Set()
+const mockWindowTitles = new Set()
 
 function addMockProcess(name) {
-  mockProcesses.add(name.toLowerCase());
+  mockProcesses.add(name.toLowerCase())
 }
 
 function addMockWindowTitle(title) {
-  mockWindowTitles.add(title.toLowerCase());
+  mockWindowTitles.add(title.toLowerCase())
 }
 
 function clearMockData() {
-  mockProcesses.clear();
-  mockWindowTitles.clear();
+  mockProcesses.clear()
+  mockWindowTitles.clear()
 }
 
 function getRunningProcessNames() {
-  return Array.from(mockProcesses);
+  return Array.from(mockProcesses)
 }
 
 function getWindowTitles() {
-  return Array.from(mockWindowTitles);
+  return Array.from(mockWindowTitles)
 }
 
 function setGameProcesses(games) {
-  clearMockData();
-  if (!games || !Array.isArray(games)) return;
+  clearMockData()
+  if (!games || !Array.isArray(games)) return
 
   for (const game of games) {
     if (game.exe) {
-      addMockProcess(game.exe);
+      addMockProcess(game.exe)
     }
     if (game.selector) {
-      addMockWindowTitle(game.selector);
+      addMockWindowTitle(game.selector)
     }
   }
 }
 
-clearMockData();
+clearMockData()
 
-addMockProcess('explorer.exe');
-addMockProcess('electron.exe');
-addMockProcess('code.exe');
+addMockProcess('explorer.exe')
+addMockProcess('electron.exe')
+addMockProcess('code.exe')
 
 module.exports = {
   getRunningProcessNames,
@@ -54,4 +54,4 @@ module.exports = {
   addMockWindowTitle,
   clearMockData,
   setGameProcesses,
-};
+}

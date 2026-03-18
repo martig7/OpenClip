@@ -28,11 +28,12 @@ const sampleGames = [
 
 vi.mock('../../src/viewer/apiBase.js', () => ({
   apiFetch: (path, opts) => fetch(path, opts),
-  apiPost: (path, data) => fetch(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  }),
+  apiPost: (path, data) =>
+    fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }),
   getBase: () => '',
   ready: Promise.resolve(),
 }))
@@ -103,7 +104,7 @@ describe('VideoPlayer', () => {
   it('renders video element when recording is provided', async () => {
     server.use(
       http.get('/api/video/tracks', () => HttpResponse.json({ tracks: [] })),
-      http.get('/api/markers', () => HttpResponse.json({ markers: [] })),
+      http.get('/api/markers', () => HttpResponse.json({ markers: [] }))
     )
     renderPlayer(sampleRecording)
     await waitFor(() => expect(document.querySelector('video')).toBeInTheDocument())
@@ -112,7 +113,7 @@ describe('VideoPlayer', () => {
   it('video src includes encoded recording path', async () => {
     server.use(
       http.get('/api/video/tracks', () => HttpResponse.json({ tracks: [] })),
-      http.get('/api/markers', () => HttpResponse.json({ markers: [] })),
+      http.get('/api/markers', () => HttpResponse.json({ markers: [] }))
     )
     renderPlayer(sampleRecording)
     await waitFor(() => document.querySelector('video'))
@@ -123,7 +124,7 @@ describe('VideoPlayer', () => {
   it('shows clip mode controls when Create Clip is clicked', async () => {
     server.use(
       http.get('/api/video/tracks', () => HttpResponse.json({ tracks: [] })),
-      http.get('/api/markers', () => HttpResponse.json({ markers: [] })),
+      http.get('/api/markers', () => HttpResponse.json({ markers: [] }))
     )
     renderPlayer(sampleRecording)
     await waitFor(() => screen.getByText(/Create Clip/i))
@@ -134,7 +135,7 @@ describe('VideoPlayer', () => {
   it('hides clip controls when Cancel is clicked', async () => {
     server.use(
       http.get('/api/video/tracks', () => HttpResponse.json({ tracks: [] })),
-      http.get('/api/markers', () => HttpResponse.json({ markers: [] })),
+      http.get('/api/markers', () => HttpResponse.json({ markers: [] }))
     )
     renderPlayer(sampleRecording)
     await waitFor(() => screen.getByText(/Create Clip/i))
@@ -148,7 +149,7 @@ describe('VideoPlayer', () => {
     server.use(
       http.get('/api/video/tracks', () => HttpResponse.json({ tracks: sampleAudioTracks })),
       http.get('/api/video/waveform', () => HttpResponse.json({ peaks: [], duration: 60 })),
-      http.get('/api/markers', () => HttpResponse.json({ markers: [] })),
+      http.get('/api/markers', () => HttpResponse.json({ markers: [] }))
     )
     renderPlayer(sampleRecording)
     // Audio tracks are inside ZoomTimeline which only renders in clip mode
@@ -161,7 +162,7 @@ describe('VideoPlayer', () => {
   it('resets state when recording prop changes', async () => {
     server.use(
       http.get('/api/video/tracks', () => HttpResponse.json({ tracks: [] })),
-      http.get('/api/markers', () => HttpResponse.json({ markers: [] })),
+      http.get('/api/markers', () => HttpResponse.json({ markers: [] }))
     )
     const { rerender } = renderPlayer(sampleRecording)
     await waitFor(() => document.querySelector('video'))
@@ -183,7 +184,7 @@ describe('VideoPlayer', () => {
       http.get('/api/video/tracks', () => HttpResponse.json({ tracks: sampleAudioTracks })),
       http.get('/api/video/waveform', () => HttpResponse.json({ peaks: [0.5], duration: 60 })),
       http.get('/api/markers', () => HttpResponse.json({ markers: [] })),
-      http.post('/api/clips/create', () => HttpResponse.json(clipResult)),
+      http.post('/api/clips/create', () => HttpResponse.json(clipResult))
     )
     renderPlayer(sampleRecording, onClipCreated)
     await waitFor(() => document.querySelector('video'))
@@ -209,7 +210,7 @@ describe('VideoPlayer', () => {
   it('seeking to position updates current time', async () => {
     server.use(
       http.get('/api/video/tracks', () => HttpResponse.json({ tracks: [] })),
-      http.get('/api/markers', () => HttpResponse.json({ markers: [] })),
+      http.get('/api/markers', () => HttpResponse.json({ markers: [] }))
     )
     renderPlayer(sampleRecording)
     await waitFor(() => document.querySelector('video'))
@@ -235,20 +236,28 @@ describe('VideoPlayer — organize panel', () => {
   function setupHandlers() {
     server.use(
       http.get('/api/video/tracks', () => HttpResponse.json({ tracks: [] })),
-      http.get('/api/markers', () => HttpResponse.json({ markers: [] })),
+      http.get('/api/markers', () => HttpResponse.json({ markers: [] }))
     )
   }
 
   it('shows Unorganized badge for an unorganized recording', async () => {
     setupHandlers()
-    render(<WithOrganizeContext><VideoPlayer recording={unorganizedRecording} games={sampleGames} /></WithOrganizeContext>)
+    render(
+      <WithOrganizeContext>
+        <VideoPlayer recording={unorganizedRecording} games={sampleGames} />
+      </WithOrganizeContext>
+    )
     // Badge text is exactly 'Unorganized'; game_name in meta is '(Unorganized)'
     await waitFor(() => expect(screen.getByText('Unorganized')).toBeInTheDocument())
   })
 
   it('shows Organize button instead of Create Clip for unorganized recordings', async () => {
     setupHandlers()
-    render(<WithOrganizeContext><VideoPlayer recording={unorganizedRecording} games={sampleGames} /></WithOrganizeContext>)
+    render(
+      <WithOrganizeContext>
+        <VideoPlayer recording={unorganizedRecording} games={sampleGames} />
+      </WithOrganizeContext>
+    )
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /^Organize$/i })).toBeInTheDocument()
     )
@@ -257,7 +266,11 @@ describe('VideoPlayer — organize panel', () => {
 
   it('opens organize panel when Organize button is clicked', async () => {
     setupHandlers()
-    render(<WithOrganizeContext><VideoPlayer recording={unorganizedRecording} games={sampleGames} /></WithOrganizeContext>)
+    render(
+      <WithOrganizeContext>
+        <VideoPlayer recording={unorganizedRecording} games={sampleGames} />
+      </WithOrganizeContext>
+    )
     await waitFor(() => screen.getByRole('button', { name: /^Organize$/i }))
     fireEvent.click(screen.getByRole('button', { name: /^Organize$/i }))
     await waitFor(() => expect(screen.getByText(/Move to organized library/i)).toBeInTheDocument())
@@ -269,11 +282,7 @@ describe('VideoPlayer — organize panel', () => {
     setupHandlers()
     render(
       <WithOrganizeContext>
-        <VideoPlayer
-          recording={unorganizedRecording}
-          games={sampleGames}
-          organizeRemux={true}
-        />
+        <VideoPlayer recording={unorganizedRecording} games={sampleGames} organizeRemux={true} />
       </WithOrganizeContext>
     )
     await waitFor(() => screen.getByRole('button', { name: /^Organize$/i }))
@@ -282,20 +291,14 @@ describe('VideoPlayer — organize panel', () => {
 
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Minecraft' } })
 
-    await waitFor(() =>
-      expect(screen.getByText(/remuxed to MP4/i)).toBeInTheDocument()
-    )
+    await waitFor(() => expect(screen.getByText(/remuxed to MP4/i)).toBeInTheDocument())
   })
 
   it('preview shows "move only" when organizeRemux=false and file is non-mp4', async () => {
     setupHandlers()
     render(
       <WithOrganizeContext>
-        <VideoPlayer
-          recording={unorganizedRecording}
-          games={sampleGames}
-          organizeRemux={false}
-        />
+        <VideoPlayer recording={unorganizedRecording} games={sampleGames} organizeRemux={false} />
       </WithOrganizeContext>
     )
     await waitFor(() => screen.getByRole('button', { name: /^Organize$/i }))
@@ -304,9 +307,7 @@ describe('VideoPlayer — organize panel', () => {
 
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Minecraft' } })
 
-    await waitFor(() =>
-      expect(screen.getByText(/move only/i)).toBeInTheDocument()
-    )
+    await waitFor(() => expect(screen.getByText(/move only/i)).toBeInTheDocument())
   })
 
   it('shows progress bar with "Starting…" label immediately when organizing begins', async () => {
@@ -315,7 +316,10 @@ describe('VideoPlayer — organize panel', () => {
     // organizeRecording resolves only when we let it — so we can assert mid-flight
     let resolveOrganize
     vi.spyOn(api, 'organizeRecording').mockImplementation(
-      () => new Promise(resolve => { resolveOrganize = resolve })
+      () =>
+        new Promise((resolve) => {
+          resolveOrganize = resolve
+        })
     )
 
     render(
@@ -338,9 +342,7 @@ describe('VideoPlayer — organize panel', () => {
     const [, panelOrganizeBtn] = screen.getAllByRole('button', { name: /^Organize$/i })
     fireEvent.click(panelOrganizeBtn)
 
-    await waitFor(() =>
-      expect(screen.getByText(/Starting…/i)).toBeInTheDocument()
-    )
+    await waitFor(() => expect(screen.getByText(/Starting…/i)).toBeInTheDocument())
 
     // Resolve the pending promise inside act() so React state updates are flushed cleanly
     await act(async () => {
@@ -356,12 +358,15 @@ describe('VideoPlayer — organize panel', () => {
     let capturedProgressCallback
 
     // Both spies must be registered before render so mount-time useEffect captures them
-    vi.spyOn(api, 'onOrganizeProgress').mockImplementation(cb => {
+    vi.spyOn(api, 'onOrganizeProgress').mockImplementation((cb) => {
       capturedProgressCallback = cb
       return () => {}
     })
     vi.spyOn(api, 'organizeRecording').mockImplementation(
-      () => new Promise(resolve => { resolveOrganize = resolve })
+      () =>
+        new Promise((resolve) => {
+          resolveOrganize = resolve
+        })
     )
 
     render(
@@ -388,9 +393,7 @@ describe('VideoPlayer — organize panel', () => {
       capturedProgressCallback?.({ stage: 'remuxing', label: 'Remuxing to MP4…' })
     })
 
-    await waitFor(() =>
-      expect(screen.getByText(/Remuxing to MP4/i)).toBeInTheDocument()
-    )
+    await waitFor(() => expect(screen.getByText(/Remuxing to MP4/i)).toBeInTheDocument())
 
     await act(async () => {
       resolveOrganize({ success: true, filename: 'Minecraft Session 2026-03-11 #1.mkv' })

@@ -4,11 +4,11 @@
  */
 
 function readOBSRecordingPath() {
-  return 'C:\\Users\\TestUser\\Videos\\TestRecordings';
+  return 'C:\\Users\\TestUser\\Videos\\TestRecordings'
 }
 
 function getProfiles() {
-  return ['TestProfile'];
+  return ['TestProfile']
 }
 
 function readEncodingSettings(profileDir) {
@@ -16,17 +16,17 @@ function readEncodingSettings(profileDir) {
     encoder: 'x264',
     preset: 'veryfast',
     bitrate: 6000,
-  };
+  }
 }
 
 function writeEncodingSettings(profileDir, settings) {}
 
 function isOBSRunning() {
-  return false;
+  return false
 }
 
 function findOBSExecutable() {
-  return null;
+  return null
 }
 
 module.exports = {
@@ -36,4 +36,4 @@ module.exports = {
   writeEncodingSettings,
   isOBSRunning,
   findOBSExecutable,
-};
+}

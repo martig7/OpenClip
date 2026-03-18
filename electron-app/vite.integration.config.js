@@ -15,7 +15,7 @@
  * Keeping a separate config ensures that no module mocks bleed into the
  * integration layer and vice-versa.
  */
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vite'
 
 export default defineConfig({
   test: {
@@ -26,4 +26,4 @@ export default defineConfig({
     testTimeout: 90_000, // Allow up to 90 s per test (OBS startup + operation)
     hookTimeout: 90_000, // Allow up to 90 s in beforeAll/afterAll hooks
   },
-});
+})

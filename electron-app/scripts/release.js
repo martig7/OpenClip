@@ -10,9 +10,9 @@
  *      The auto-updater requires latest.yml to detect and download new versions.
  */
 
-const { execSync } = require('child_process');
-const fs = require('fs');
-const path = require('path');
+const { execSync } = require('child_process')
+const fs = require('fs')
+const path = require('path')
 
 /**
  * Return the subset of filenames in distDir that electron-builder produces
@@ -21,9 +21,9 @@ const path = require('path');
  * @returns {string[]}      Plain filenames (not full paths).
  */
 function collectArtifacts(distDir) {
-  return fs.readdirSync(distDir).filter(
-    (f) => f.endsWith('.exe') || f.endsWith('.exe.blockmap') || f === 'latest.yml',
-  );
+  return fs
+    .readdirSync(distDir)
+    .filter((f) => f.endsWith('.exe') || f.endsWith('.exe.blockmap') || f === 'latest.yml')
 }
 
 /**
@@ -34,83 +34,83 @@ function collectArtifacts(distDir) {
  * @returns {string}
  */
 function buildGhCommand(tag, distDir, files) {
-  const fileArgs = files.map((f) => `"${path.join(distDir, f)}"`).join(' ');
-  return `gh release create "${tag}" ${fileArgs} --title "${tag}" --generate-notes`;
+  const fileArgs = files.map((f) => `"${path.join(distDir, f)}"`).join(' ')
+  return `gh release create "${tag}" ${fileArgs} --title "${tag}" --generate-notes`
 }
 
 // ─── Main execution (only when run directly) ────────────────────────────────
 if (require.main === module) {
-  const pkg = require('../package.json');
-  const version = pkg.version;
-  const tag = `v${version}`;
-  const distDir = path.join(__dirname, '..', 'dist');
+  const pkg = require('../package.json')
+  const version = pkg.version
+  const tag = `v${version}`
+  const distDir = path.join(__dirname, '..', 'dist')
 
   function run(cmd, opts = {}) {
-    console.log(`\n> ${cmd}`);
-    execSync(cmd, { stdio: 'inherit', cwd: path.join(__dirname, '..'), ...opts });
+    console.log(`\n> ${cmd}`)
+    execSync(cmd, { stdio: 'inherit', cwd: path.join(__dirname, '..'), ...opts })
   }
 
   // 1. Build the native OBS plugin DLL and stage it for packaging
-  const obsPluginSrc = path.join(__dirname, '..', '..', 'obs-plugin');
-  const obsBuildDir = path.join(obsPluginSrc, 'build', 'Release');
-  const obsPluginStaging = path.join(__dirname, '..', 'resources', 'obs-plugin');
-  const pluginDllName = 'openclip-obs.dll';
+  const obsPluginSrc = path.join(__dirname, '..', '..', 'obs-plugin')
+  const obsBuildDir = path.join(obsPluginSrc, 'build', 'Release')
+  const obsPluginStaging = path.join(__dirname, '..', 'resources', 'obs-plugin')
+  const pluginDllName = 'openclip-obs.dll'
 
-  console.log('\nBuilding OBS plugin\u2026');
-  run('cmake -S . -B build -G "Visual Studio 17 2022" -A x64', { cwd: obsPluginSrc });
-  run('cmake --build build --config Release', { cwd: obsPluginSrc });
+  console.log('\nBuilding OBS plugin\u2026')
+  run('cmake -S . -B build -G "Visual Studio 17 2022" -A x64', { cwd: obsPluginSrc })
+  run('cmake --build build --config Release', { cwd: obsPluginSrc })
 
-  const dllSrc = path.join(obsBuildDir, pluginDllName);
+  const dllSrc = path.join(obsBuildDir, pluginDllName)
   if (!fs.existsSync(dllSrc)) {
-    console.error(`\nPlugin DLL not found after build: ${dllSrc}`);
-    process.exit(1);
+    console.error(`\nPlugin DLL not found after build: ${dllSrc}`)
+    process.exit(1)
   }
-  fs.mkdirSync(obsPluginStaging, { recursive: true });
-  fs.copyFileSync(dllSrc, path.join(obsPluginStaging, pluginDllName));
-  console.log(`Staged ${pluginDllName} \u2192 resources/obs-plugin/`);
+  fs.mkdirSync(obsPluginStaging, { recursive: true })
+  fs.copyFileSync(dllSrc, path.join(obsPluginStaging, pluginDllName))
+  console.log(`Staged ${pluginDllName} \u2192 resources/obs-plugin/`)
 
   // 2. Build Vite frontend
-  run('npx vite build');
+  run('npx vite build')
 
   // 3. Build Windows installer — publish never; gh handles the upload
-  run('npx electron-builder --win --publish never');
+  run('npx electron-builder --win --publish never')
 
   // 4. Collect artefacts produced by electron-builder
-  const releaseFiles = collectArtifacts(distDir);
+  const releaseFiles = collectArtifacts(distDir)
 
   if (releaseFiles.length === 0) {
-    console.error('\nNo release artefacts found in dist/. Aborting.');
-    process.exit(1);
+    console.error('\nNo release artefacts found in dist/. Aborting.')
+    process.exit(1)
   }
 
-  console.log('\nRelease artefacts:');
-  releaseFiles.forEach((f) => console.log(`  ${f}`));
+  console.log('\nRelease artefacts:')
+  releaseFiles.forEach((f) => console.log(`  ${f}`))
 
   // 5. Fail fast with a clear message when the release tag already exists.
   try {
     execSync(`gh release view "${tag}"`, {
       cwd: path.join(__dirname, '..'),
       stdio: 'pipe',
-    });
+    })
     console.error(
       `\nRelease ${tag} already exists.\n` +
-      `Use a new version in package.json (for example bump beta.9 -> beta.10), then run npm run release again.`,
-    );
-    process.exit(1);
+        `Use a new version in package.json (for example bump beta.9 -> beta.10), then run npm run release again.`
+    )
+    process.exit(1)
   } catch (err) {
-    const stderr = String(err?.stderr || '').toLowerCase();
-    const stdout = String(err?.stdout || '').toLowerCase();
-    const output = `${stdout}\n${stderr}`;
+    const stderr = String(err?.stderr || '').toLowerCase()
+    const stdout = String(err?.stdout || '').toLowerCase()
+    const output = `${stdout}\n${stderr}`
     // "release not found" means it's safe to create the release.
     if (!output.includes('release not found') && !output.includes('not found')) {
-      throw err;
+      throw err
     }
   }
 
   // 6. Publish GitHub release via gh CLI
-  run(buildGhCommand(tag, distDir, releaseFiles));
+  run(buildGhCommand(tag, distDir, releaseFiles))
 
-  console.log(`\nRelease ${tag} published successfully!`);
+  console.log(`\nRelease ${tag} published successfully!`)
 }
 
-module.exports = { collectArtifacts, buildGhCommand };
+module.exports = { collectArtifacts, buildGhCommand }

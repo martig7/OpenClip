@@ -30,7 +30,7 @@ beforeAll(async () => {
 
   const { startApiServer } = await import('../../electron/apiServer.js')
   server = startApiServer(store)
-  await new Promise(resolve => server.on('listening', resolve))
+  await new Promise((resolve) => server.on('listening', resolve))
 })
 
 afterAll((done) => {
@@ -118,13 +118,23 @@ describe('GET /api/video/tracks', () => {
     fs.writeFileSync(fp, Buffer.alloc(1024))
 
     cp.execFile.mockImplementation((bin, args, opts, cb) => {
-      if (args.some(a => a.includes('show_streams'))) {
-        cb(null, JSON.stringify({
-          streams: [
-            { index: 0, codec_name: 'aac', channels: 2, channel_layout: 'stereo',
-              sample_rate: '48000', tags: { title: 'Game Audio' } },
-          ]
-        }), '')
+      if (args.some((a) => a.includes('show_streams'))) {
+        cb(
+          null,
+          JSON.stringify({
+            streams: [
+              {
+                index: 0,
+                codec_name: 'aac',
+                channels: 2,
+                channel_layout: 'stereo',
+                sample_rate: '48000',
+                tags: { title: 'Game Audio' },
+              },
+            ],
+          }),
+          ''
+        )
       } else {
         cb(null, '120', '')
       }
@@ -143,12 +153,22 @@ describe('GET /api/video/tracks', () => {
     fs.writeFileSync(fp + '.tracks.json', JSON.stringify(['My Custom Title', null]))
 
     cp.execFile.mockImplementation((bin, args, opts, cb) => {
-      cb(null, JSON.stringify({
-        streams: [
-          { index: 0, codec_name: 'aac', channels: 2, channel_layout: 'stereo',
-            sample_rate: '48000', tags: { title: 'Original Title' } },
-        ]
-      }), '')
+      cb(
+        null,
+        JSON.stringify({
+          streams: [
+            {
+              index: 0,
+              codec_name: 'aac',
+              channels: 2,
+              channel_layout: 'stereo',
+              sample_rate: '48000',
+              tags: { title: 'Original Title' },
+            },
+          ],
+        }),
+        ''
+      )
     })
 
     const res = await request(server).get(`/api/video/tracks?path=${encodeURIComponent(fp)}`)
@@ -235,7 +255,7 @@ describe('GET /api/video/waveform', () => {
     expect(res.status).toBe(200)
     expect(res.body.peaks.length).toBeGreaterThan(0)
     // All peaks normalized to max 1.0
-    expect(res.body.peaks.every(p => p >= 0 && p <= 1.0)).toBe(true)
+    expect(res.body.peaks.every((p) => p >= 0 && p <= 1.0)).toBe(true)
   })
 
   it('returns 200 with empty peaks when ffmpeg spawn errors', async () => {

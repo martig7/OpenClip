@@ -15,7 +15,10 @@ const { mockGetRunningProcessNames, mockGetWindowTitles } = vi.hoisted(() => {
     }
     return _currentLoad(request, parent, isMain)
   }
-  return { mockGetRunningProcessNames: getRunningProcessNames, mockGetWindowTitles: getWindowTitles }
+  return {
+    mockGetRunningProcessNames: getRunningProcessNames,
+    mockGetWindowTitles: getWindowTitles,
+  }
 })
 
 import { detectRunningGame } from '../../electron/gameWatcher.js'
@@ -204,7 +207,7 @@ describe('multiple games', () => {
       mockGetRunningProcessNames.mockReturnValueOnce(['game.exe'])
       mockGetWindowTitles.mockReturnValueOnce([])
       const result1 = detectRunningGame([makeGame({ name: 'Game1', exe: 'game.exe' })])
-      
+
       mockGetRunningProcessNames.mockReturnValueOnce([])
       mockGetWindowTitles.mockReturnValueOnce([])
       const result2 = detectRunningGame([makeGame({ name: 'Game1', exe: 'game.exe' })])

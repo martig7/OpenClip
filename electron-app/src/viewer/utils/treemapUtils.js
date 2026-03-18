@@ -3,20 +3,20 @@
  * canvas rendering helpers for the StoragePage treemap visualization.
  */
 
-export const CELL_GAP = 2  // px gap between cells
-export const MIN_DIM = 36  // px — minimum width or height for any cell; prevents hair-thin slivers
+export const CELL_GAP = 2 // px gap between cells
+export const MIN_DIM = 36 // px — minimum width or height for any cell; prevents hair-thin slivers
 
 // Tooltip sizing constants — kept in sync with the .sv2-tooltip CSS rule (max-width: 280px)
-export const TOOLTIP_W = 280  // matches CSS max-width
-export const TOOLTIP_H = 56   // conservative height estimate for two lines of text
+export const TOOLTIP_W = 280 // matches CSS max-width
+export const TOOLTIP_H = 56 // conservative height estimate for two lines of text
 export const TOOLTIP_PAD = 14 // gap between cursor and tooltip corner
 
 // ── Squarified treemap ────────────────────────────────────────────────────────
 // Worst aspect ratio for a candidate row given the short side of the current rect.
 function _worstRatio(row, shortSide) {
   const s = row.reduce((a, d) => a + d._area, 0)
-  const max = Math.max(...row.map(d => d._area))
-  const min = Math.min(...row.map(d => d._area))
+  const max = Math.max(...row.map((d) => d._area))
+  const min = Math.min(...row.map((d) => d._area))
   return Math.max(
     (shortSide * shortSide * max) / (s * s),
     (s * s) / (shortSide * shortSide * Math.max(min, 1e-10))
@@ -29,15 +29,18 @@ function _squarify(items, x, y, w, h, out) {
       const isWide = w >= h
       items.forEach((item, i) => {
         if (isWide) {
-          out.push({ ...item, rx: x + w * i / items.length, ry: y, rw: w / items.length, rh: h })
+          out.push({ ...item, rx: x + (w * i) / items.length, ry: y, rw: w / items.length, rh: h })
         } else {
-          out.push({ ...item, rx: x, ry: y + h * i / items.length, rw: w, rh: h / items.length })
+          out.push({ ...item, rx: x, ry: y + (h * i) / items.length, rw: w, rh: h / items.length })
         }
       })
     }
     return
   }
-  if (items.length === 1) { out.push({ ...items[0], rx: x, ry: y, rw: w, rh: h }); return }
+  if (items.length === 1) {
+    out.push({ ...items[0], rx: x, ry: y, rw: w, rh: h })
+    return
+  }
 
   const isWide = w >= h
   const short = Math.min(w, h)
@@ -54,14 +57,14 @@ function _squarify(items, x, y, w, h, out) {
   let off = 0
   for (const item of row) {
     const len = (item._area / rowArea) * short
-    if (isWide) out.push({ ...item, rx: x,       ry: y + off, rw: depth, rh: len })
-    else        out.push({ ...item, rx: x + off,  ry: y,       rw: len,   rh: depth })
+    if (isWide) out.push({ ...item, rx: x, ry: y + off, rw: depth, rh: len })
+    else out.push({ ...item, rx: x + off, ry: y, rw: len, rh: depth })
     off += len
   }
 
   const rest = items.slice(row.length)
   if (isWide) _squarify(rest, x + depth, y, Math.max(0, w - depth), h, out)
-  else        _squarify(rest, x, y + depth, w, Math.max(0, h - depth), out)
+  else _squarify(rest, x, y + depth, w, Math.max(0, h - depth), out)
 }
 
 /**
@@ -74,8 +77,8 @@ export function squarifiedTreemap(items, w, h) {
   if (!total) return []
   const totalArea = w * h
   const minArea = MIN_DIM * MIN_DIM
-  const rawAreas = items.map(item => (item.size_bytes / total) * totalArea)
-  const floored = rawAreas.map(a => Math.max(a, minArea))
+  const rawAreas = items.map((item) => (item.size_bytes / total) * totalArea)
+  const floored = rawAreas.map((a) => Math.max(a, minArea))
   const scale = totalArea / floored.reduce((s, a) => s + a, 0)
   const nodes = items.map((item, i) => ({ ...item, _area: floored[i] * scale }))
   const out = []
@@ -109,7 +112,8 @@ const GRID_CELLS = 16
 
 export function buildHitIndex(layout) {
   if (!layout.length) return null
-  let maxX = 0, maxY = 0
+  let maxX = 0,
+    maxY = 0
   for (const item of layout) {
     if (item.rx + item.rw > maxX) maxX = item.rx + item.rw
     if (item.ry + item.rh > maxY) maxY = item.ry + item.rh
@@ -138,8 +142,8 @@ export function hitTestIndex(index, lx, ly) {
   const row = Math.min(GRID_CELLS - 1, Math.floor(ly / index.cellH))
   const bucket = index.buckets[row * GRID_CELLS + col]
   for (const item of bucket) {
-    if (lx >= item.rx && lx <= item.rx + item.rw &&
-        ly >= item.ry && ly <= item.ry + item.rh) return item
+    if (lx >= item.rx && lx <= item.rx + item.rw && ly >= item.ry && ly <= item.ry + item.rh)
+      return item
   }
   return null
 }

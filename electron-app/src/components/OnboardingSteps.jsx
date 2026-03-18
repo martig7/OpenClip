@@ -1,134 +1,193 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
-  ChevronRight, ChevronLeft, FolderOpen, RefreshCw,
-  Download, CheckCircle, AlertCircle, Loader, Keyboard,
-  HardDrive, Scissors, Play, ExternalLink, Package, Monitor,
-} from 'lucide-react';
-import api from '../api';
+  ChevronRight,
+  ChevronLeft,
+  FolderOpen,
+  RefreshCw,
+  Download,
+  CheckCircle,
+  AlertCircle,
+  Loader,
+  Keyboard,
+  HardDrive,
+  Scissors,
+  Play,
+  ExternalLink,
+  Package,
+  Monitor,
+} from 'lucide-react'
+import api from '../api'
 
-const MODIFIER_KEYS = new Set(['Control', 'Shift', 'Alt', 'Meta', 'OS']);
+const MODIFIER_KEYS = new Set(['Control', 'Shift', 'Alt', 'Meta', 'OS'])
 const NUMPAD_MAP = {
-  Numpad0:'num0', Numpad1:'num1', Numpad2:'num2', Numpad3:'num3',
-  Numpad4:'num4', Numpad5:'num5', Numpad6:'num6', Numpad7:'num7',
-  Numpad8:'num8', Numpad9:'num9', NumpadAdd:'numadd',
-  NumpadSubtract:'numsub', NumpadMultiply:'nummult',
-  NumpadDivide:'numdiv', NumpadDecimal:'numdec', NumpadEnter:'Return',
-};
+  Numpad0: 'num0',
+  Numpad1: 'num1',
+  Numpad2: 'num2',
+  Numpad3: 'num3',
+  Numpad4: 'num4',
+  Numpad5: 'num5',
+  Numpad6: 'num6',
+  Numpad7: 'num7',
+  Numpad8: 'num8',
+  Numpad9: 'num9',
+  NumpadAdd: 'numadd',
+  NumpadSubtract: 'numsub',
+  NumpadMultiply: 'nummult',
+  NumpadDivide: 'numdiv',
+  NumpadDecimal: 'numdec',
+  NumpadEnter: 'Return',
+}
 const SPECIAL_KEYS = {
-  ' ':'Space', ArrowUp:'Up', ArrowDown:'Down',
-  ArrowLeft:'Left', ArrowRight:'Right', Enter:'Return',
-};
+  ' ': 'Space',
+  ArrowUp: 'Up',
+  ArrowDown: 'Down',
+  ArrowLeft: 'Left',
+  ArrowRight: 'Right',
+  Enter: 'Return',
+}
 
 function buildAccelerator(e, useModifiers) {
-  let key;
-  if (e.code.startsWith('Numpad')) key = NUMPAD_MAP[e.code];
-  else key = SPECIAL_KEYS[e.key] ?? (e.key.length === 1 ? e.key.toUpperCase() : e.key);
-  if (!key) return null;
-  const parts = [];
+  let key
+  if (e.code.startsWith('Numpad')) key = NUMPAD_MAP[e.code]
+  else key = SPECIAL_KEYS[e.key] ?? (e.key.length === 1 ? e.key.toUpperCase() : e.key)
+  if (!key) return null
+  const parts = []
   if (useModifiers) {
-    if (e.ctrlKey)  parts.push('Ctrl');
-    if (e.altKey)   parts.push('Alt');
-    if (e.shiftKey) parts.push('Shift');
-    if (e.metaKey)  parts.push('Meta');
+    if (e.ctrlKey) parts.push('Ctrl')
+    if (e.altKey) parts.push('Alt')
+    if (e.shiftKey) parts.push('Shift')
+    if (e.metaKey) parts.push('Meta')
   }
-  parts.push(key);
-  return parts.join('+');
+  parts.push(key)
+  return parts.join('+')
 }
 
 export function HotkeyCapture({ value, onChange }) {
-  const [listening, setListening] = useState(false);
-  const [useMods, setUseMods] = useState(() => (value || '').includes('+'));
-  const ref = useRef(null);
-
-  useEffect(() => { if (!listening) setUseMods((value || '').includes('+')); }, [value]);
+  const [listening, setListening] = useState(false)
+  const [useMods, setUseMods] = useState(() => (value || '').includes('+'))
+  const ref = useRef(null)
 
   useEffect(() => {
-    if (!listening) return;
+    if (!listening) setUseMods((value || '').includes('+'))
+  }, [value])
+
+  useEffect(() => {
+    if (!listening) return
     const onKey = (e) => {
-      e.preventDefault(); e.stopPropagation();
-      if (MODIFIER_KEYS.has(e.key)) return;
+      e.preventDefault()
+      e.stopPropagation()
+      if (MODIFIER_KEYS.has(e.key)) return
       if (e.key === 'Escape' && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey) {
-        setListening(false); return;
+        setListening(false)
+        return
       }
-      const acc = buildAccelerator(e, useMods);
-      if (acc) { onChange(acc); setListening(false); }
-    };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
-  }, [listening, useMods, onChange]);
+      const acc = buildAccelerator(e, useMods)
+      if (acc) {
+        onChange(acc)
+        setListening(false)
+      }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [listening, useMods, onChange])
 
   useEffect(() => {
-    if (!listening) return;
-    const onPointer = (e) => { if (!ref.current?.contains(e.target)) setListening(false); };
-    document.addEventListener('pointerdown', onPointer);
-    return () => document.removeEventListener('pointerdown', onPointer);
-  }, [listening]);
+    if (!listening) return
+    const onPointer = (e) => {
+      if (!ref.current?.contains(e.target)) setListening(false)
+    }
+    document.addEventListener('pointerdown', onPointer)
+    return () => document.removeEventListener('pointerdown', onPointer)
+  }, [listening])
 
   return (
     <div ref={ref} className="hotkey-input-wrap">
       <button
         type="button"
         className={`hotkey-capture-btn${listening ? ' listening' : ''}`}
-        onClick={() => setListening(l => !l)}
+        onClick={() => setListening((l) => !l)}
       >
-        {listening ? 'Press a key…' : (value || 'Click to set')}
+        {listening ? 'Press a key…' : value || 'Click to set'}
       </button>
       <div className="toggle-row" style={{ paddingTop: 10, borderTop: 'none' }}>
         <div>
-          <div className="toggle-label" style={{ fontSize: 12 }}>Include modifier keys</div>
+          <div className="toggle-label" style={{ fontSize: 12 }}>
+            Include modifier keys
+          </div>
           <div className="toggle-desc">Allow Ctrl, Alt, Shift combined with the hotkey</div>
         </div>
-        <button type="button" aria-label="Include modifier keys" aria-pressed={useMods} className={`toggle ${useMods ? 'on' : ''}`} onClick={() => setUseMods(m => !m)} />
+        <button
+          type="button"
+          aria-label="Include modifier keys"
+          aria-pressed={useMods}
+          className={`toggle ${useMods ? 'on' : ''}`}
+          onClick={() => setUseMods((m) => !m)}
+        />
       </div>
     </div>
-  );
+  )
 }
 
 export function Status({ state, message }) {
-  if (!state) return null;
-  const icon = state === 'checking'
-    ? <Loader size={12} style={{ animation: 'spin 1s linear infinite' }} />
-    : state === 'success' ? <CheckCircle size={12} /> : <AlertCircle size={12} />;
-  return <div className={`onboarding-status ${state}`}>{icon}{message}</div>;
+  if (!state) return null
+  const icon =
+    state === 'checking' ? (
+      <Loader size={12} style={{ animation: 'spin 1s linear infinite' }} />
+    ) : state === 'success' ? (
+      <CheckCircle size={12} />
+    ) : (
+      <AlertCircle size={12} />
+    )
+  return (
+    <div className={`onboarding-status ${state}`}>
+      {icon}
+      {message}
+    </div>
+  )
 }
 
 export function StepWelcome() {
   return (
     <div className="onboarding-step">
-      <div className="onboarding-step-icon"><Package size={24} /></div>
+      <div className="onboarding-step-icon">
+        <Package size={24} />
+      </div>
       <h3>Welcome to OpenClip!</h3>
       <p>
-        Let's get you set up in just a few steps. We'll connect to OBS, configure the
-        plugin, and tweak the settings that matter most — so you're ready to start
-        capturing clips right away.
+        Let's get you set up in just a few steps. We'll connect to OBS, configure the plugin, and
+        tweak the settings that matter most — so you're ready to start capturing clips right away.
       </p>
-      <p style={{ marginBottom: 0 }}>Click <strong>Next</strong> to begin.</p>
+      <p style={{ marginBottom: 0 }}>
+        Click <strong>Next</strong> to begin.
+      </p>
     </div>
-  );
+  )
 }
 
 export function StepOBSPath({ settings, onChange }) {
-  const [detecting, setDetecting] = useState(false);
+  const [detecting, setDetecting] = useState(false)
 
   async function autoDetect() {
-    setDetecting(true);
-    const p = await api.detectOBSPath().catch(() => null);
-    if (p) onChange('obsRecordingPath', p);
-    setDetecting(false);
+    setDetecting(true)
+    const p = await api.detectOBSPath().catch(() => null)
+    if (p) onChange('obsRecordingPath', p)
+    setDetecting(false)
   }
 
   async function browse() {
-    const dir = await api.openDirectoryDialog();
-    if (dir) onChange('obsRecordingPath', dir);
+    const dir = await api.openDirectoryDialog()
+    if (dir) onChange('obsRecordingPath', dir)
   }
 
   return (
     <div className="onboarding-step">
-      <div className="onboarding-step-icon"><FolderOpen size={24} /></div>
+      <div className="onboarding-step-icon">
+        <FolderOpen size={24} />
+      </div>
       <h3>OBS Recording Folder</h3>
       <p className="onboarding-step-desc">
-        Tell OpenClip where OBS saves your recordings. We'll auto-detect it from
-        your OBS profile, or you can browse manually.
+        Tell OpenClip where OBS saves your recordings. We'll auto-detect it from your OBS profile,
+        or you can browse manually.
       </p>
 
       <div className="form-group">
@@ -137,11 +196,19 @@ export function StepOBSPath({ settings, onChange }) {
           <input
             className="form-input"
             value={settings.obsRecordingPath || ''}
-            onChange={e => onChange('obsRecordingPath', e.target.value)}
+            onChange={(e) => onChange('obsRecordingPath', e.target.value)}
             placeholder="e.g. C:\Users\You\Videos\OBS"
           />
-          <button className="btn btn-secondary btn-sm" onClick={autoDetect} disabled={detecting} title="Auto-detect">
-            <RefreshCw size={13} style={detecting ? { animation: 'spin 1s linear infinite' } : {}} />
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={autoDetect}
+            disabled={detecting}
+            title="Auto-detect"
+          >
+            <RefreshCw
+              size={13}
+              style={detecting ? { animation: 'spin 1s linear infinite' } : {}}
+            />
           </button>
           <button className="btn btn-secondary btn-sm" onClick={browse}>
             <FolderOpen size={13} />
@@ -156,31 +223,45 @@ export function StepOBSPath({ settings, onChange }) {
         <ExternalLink size={11} /> Don't have OBS? Install it here
       </button>
     </div>
-  );
+  )
 }
 
 export function StepOBSInstall({ obsInstallPath, onChangeInstallPath }) {
-  const [detecting, setDetecting] = useState(false);
+  const [detecting, setDetecting] = useState(false)
 
   async function autoDetect() {
-    setDetecting(true);
-    const p = await api.detectOBSInstallPath?.().catch(() => null);
-    if (p) onChangeInstallPath(p);
-    setDetecting(false);
+    setDetecting(true)
+    const p = await api.detectOBSInstallPath?.().catch(() => null)
+    if (p) onChangeInstallPath(p)
+    setDetecting(false)
   }
 
   async function browse() {
-    const dir = await api.openDirectoryDialog();
-    if (dir) onChangeInstallPath(dir);
+    const dir = await api.openDirectoryDialog()
+    if (dir) onChangeInstallPath(dir)
   }
 
   return (
     <div className="onboarding-step">
-      <div className="onboarding-step-icon"><Monitor size={24} /></div>
+      <div className="onboarding-step-icon">
+        <Monitor size={24} />
+      </div>
       <h3>OBS Install Location</h3>
       <p className="onboarding-step-desc">
-        OpenClip needs to know where OBS is installed so it can correctly install the
-        recording plugin. This is the folder containing <code style={{ fontFamily: 'monospace', fontSize: 12, background: 'var(--bg-tertiary)', padding: '1px 5px', borderRadius: 4 }}>obs64.exe</code>.
+        OpenClip needs to know where OBS is installed so it can correctly install the recording
+        plugin. This is the folder containing{' '}
+        <code
+          style={{
+            fontFamily: 'monospace',
+            fontSize: 12,
+            background: 'var(--bg-tertiary)',
+            padding: '1px 5px',
+            borderRadius: 4,
+          }}
+        >
+          obs64.exe
+        </code>
+        .
       </p>
 
       <div className="form-group">
@@ -189,11 +270,19 @@ export function StepOBSInstall({ obsInstallPath, onChangeInstallPath }) {
           <input
             className="form-input"
             value={obsInstallPath || ''}
-            onChange={e => onChangeInstallPath(e.target.value)}
+            onChange={(e) => onChangeInstallPath(e.target.value)}
             placeholder="e.g. C:\Program Files\obs-studio"
           />
-          <button className="btn btn-secondary btn-sm" onClick={autoDetect} disabled={detecting} title="Auto-detect">
-            <RefreshCw size={13} style={detecting ? { animation: 'spin 1s linear infinite' } : {}} />
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={autoDetect}
+            disabled={detecting}
+            title="Auto-detect"
+          >
+            <RefreshCw
+              size={13}
+              style={detecting ? { animation: 'spin 1s linear infinite' } : {}}
+            />
           </button>
           <button className="btn btn-secondary btn-sm" onClick={browse}>
             <FolderOpen size={13} />
@@ -208,17 +297,25 @@ export function StepOBSInstall({ obsInstallPath, onChangeInstallPath }) {
         <ExternalLink size={11} /> Don't have OBS? Install it here
       </button>
     </div>
-  );
+  )
 }
 
-export function StepOBSPlugin({ pluginStatus, pluginInstallMsg, onInstall, onReinstall, onVerify }) {
+export function StepOBSPlugin({
+  pluginStatus,
+  pluginInstallMsg,
+  onInstall,
+  onReinstall,
+  onVerify,
+}) {
   return (
     <div className="onboarding-step">
-      <div className="onboarding-step-icon"><Download size={24} /></div>
+      <div className="onboarding-step-icon">
+        <Download size={24} />
+      </div>
       <h3>Install OBS Plugin</h3>
       <p className="onboarding-step-desc">
-        OpenClip uses a native OBS plugin to control recording and scene management.
-        Click the button below to install it automatically — no manual steps required.
+        OpenClip uses a native OBS plugin to control recording and scene management. Click the
+        button below to install it automatically — no manual steps required.
       </p>
 
       <div className="onboarding-install-row" style={{ marginBottom: 12 }}>
@@ -232,16 +329,29 @@ export function StepOBSPlugin({ pluginStatus, pluginInstallMsg, onInstall, onRei
         <Status
           state={pluginStatus || null}
           message={
-            pluginStatus === 'checking' ? 'Installing…' :
-            pluginStatus === 'success'  ? 'Plugin installed ✓' :
-            pluginStatus === 'error'    ? (pluginInstallMsg || 'Installation failed') : null
+            pluginStatus === 'checking'
+              ? 'Installing…'
+              : pluginStatus === 'success'
+                ? 'Plugin installed ✓'
+                : pluginStatus === 'error'
+                  ? pluginInstallMsg || 'Installation failed'
+                  : null
           }
         />
         {pluginStatus === 'success' && (
           <button
             type="button"
             onClick={onReinstall}
-            style={{ background: 'none', border: 'none', padding: 0, margin: 0, cursor: 'pointer', fontSize: 12, color: 'var(--text-muted)', textDecoration: 'underline' }}
+            style={{
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              margin: 0,
+              cursor: 'pointer',
+              fontSize: 12,
+              color: 'var(--text-muted)',
+              textDecoration: 'underline',
+            }}
           >
             Reinstall
           </button>
@@ -256,51 +366,52 @@ export function StepOBSPlugin({ pluginStatus, pluginInstallMsg, onInstall, onRei
 
       {pluginStatus === 'error' && (
         <div className="onboarding-install-row">
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={onVerify}
-          >
+          <button className="btn btn-secondary btn-sm" onClick={onVerify}>
             <CheckCircle size={13} /> Check Again
           </button>
         </div>
       )}
     </div>
-  );
+  )
 }
 
 export function StepHotkey({ settings, onChange }) {
   return (
     <div className="onboarding-step">
-      <div className="onboarding-step-icon"><Keyboard size={24} /></div>
+      <div className="onboarding-step-icon">
+        <Keyboard size={24} />
+      </div>
       <h3>Clip Marker Hotkey</h3>
       <p className="onboarding-step-desc">
-        Press this key while gaming to drop a timestamp you can clip later.
-        Pick something easy to reach mid-game — <strong>F9</strong> is a popular choice.
+        Press this key while gaming to drop a timestamp you can clip later. Pick something easy to
+        reach mid-game — <strong>F9</strong> is a popular choice.
       </p>
       <div className="form-group">
         <label className="form-label">Hotkey</label>
         <HotkeyCapture
           value={settings.clipMarkerHotkey || 'F9'}
-          onChange={v => onChange('clipMarkerHotkey', v)}
+          onChange={(v) => onChange('clipMarkerHotkey', v)}
         />
       </div>
     </div>
-  );
+  )
 }
 
 export function StepOrganizeDestination({ settings, onChange }) {
   async function browse() {
-    const dir = await api.openDirectoryDialog();
-    if (dir) onChange('destinationPath', dir);
+    const dir = await api.openDirectoryDialog()
+    if (dir) onChange('destinationPath', dir)
   }
 
   return (
     <div className="onboarding-step">
-      <div className="onboarding-step-icon"><FolderOpen size={24} /></div>
+      <div className="onboarding-step-icon">
+        <FolderOpen size={24} />
+      </div>
       <h3>Recordings Destination</h3>
       <p className="onboarding-step-desc">
-        Choose where OpenClip should organize your recordings. After each session,
-        recordings are moved here and sorted by game into subfolders automatically.
+        Choose where OpenClip should organize your recordings. After each session, recordings are
+        moved here and sorted by game into subfolders automatically.
       </p>
 
       <div className="form-group">
@@ -309,7 +420,7 @@ export function StepOrganizeDestination({ settings, onChange }) {
           <input
             className="form-input"
             value={settings.destinationPath || ''}
-            onChange={e => onChange('destinationPath', e.target.value)}
+            onChange={(e) => onChange('destinationPath', e.target.value)}
             placeholder="e.g. C:\Users\You\Videos\Organized"
           />
           <button className="btn btn-secondary btn-sm" onClick={browse}>
@@ -323,21 +434,24 @@ export function StepOrganizeDestination({ settings, onChange }) {
 
       <hr className="onboarding-divider" />
       <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
-        You're all set! Click <strong>Finish</strong> to save your settings and start using OpenClip.
+        You're all set! Click <strong>Finish</strong> to save your settings and start using
+        OpenClip.
       </p>
     </div>
-  );
+  )
 }
 
 export function StepStorage({ settings, onChange }) {
-  const enabled = settings.autoDelete?.enabled;
+  const enabled = settings.autoDelete?.enabled
   return (
     <div className="onboarding-step">
-      <div className="onboarding-step-icon"><HardDrive size={24} /></div>
+      <div className="onboarding-step-icon">
+        <HardDrive size={24} />
+      </div>
       <h3>Storage Management</h3>
       <p className="onboarding-step-desc">
-        OpenClip can automatically delete old recordings to keep your disk from
-        filling up. You can always change these limits later in Settings.
+        OpenClip can automatically delete old recordings to keep your disk from filling up. You can
+        always change these limits later in Settings.
       </p>
 
       <div className="toggle-row" style={{ marginTop: 0 }}>
@@ -360,7 +474,9 @@ export function StepStorage({ settings, onChange }) {
               className="form-input"
               min="0"
               value={settings.autoDelete?.maxStorageGB ?? 50}
-              onChange={e => onChange('autoDelete.maxStorageGB', Math.max(0, parseInt(e.target.value) || 0))}
+              onChange={(e) =>
+                onChange('autoDelete.maxStorageGB', Math.max(0, parseInt(e.target.value) || 0))
+              }
               style={{ width: 100 }}
             />
           </div>
@@ -371,7 +487,9 @@ export function StepStorage({ settings, onChange }) {
               className="form-input"
               min="0"
               value={settings.autoDelete?.maxAgeDays ?? 30}
-              onChange={e => onChange('autoDelete.maxAgeDays', Math.max(0, parseInt(e.target.value) || 0))}
+              onChange={(e) =>
+                onChange('autoDelete.maxAgeDays', Math.max(0, parseInt(e.target.value) || 0))
+              }
               style={{ width: 100 }}
             />
           </div>
@@ -382,24 +500,28 @@ export function StepStorage({ settings, onChange }) {
             </div>
             <button
               className={`toggle ${settings.autoDelete?.excludeClips ? 'on' : ''}`}
-              onClick={() => onChange('autoDelete.excludeClips', !settings.autoDelete?.excludeClips)}
+              onClick={() =>
+                onChange('autoDelete.excludeClips', !settings.autoDelete?.excludeClips)
+              }
             />
           </div>
         </>
       )}
     </div>
-  );
+  )
 }
 
 export function StepAutoClip({ settings, onChange }) {
-  const enabled = settings.autoClip?.enabled;
+  const enabled = settings.autoClip?.enabled
   return (
     <div className="onboarding-step">
-      <div className="onboarding-step-icon"><Scissors size={24} /></div>
+      <div className="onboarding-step-icon">
+        <Scissors size={24} />
+      </div>
       <h3>Auto-Clip</h3>
       <p className="onboarding-step-desc">
-        When a recording ends, Auto-Clip automatically creates short clips around
-        every marker you dropped during the session.
+        When a recording ends, Auto-Clip automatically creates short clips around every marker you
+        dropped during the session.
       </p>
 
       <div className="toggle-row" style={{ marginTop: 0 }}>
@@ -423,7 +545,9 @@ export function StepAutoClip({ settings, onChange }) {
                 className="form-input"
                 min="0"
                 value={settings.autoClip?.bufferBefore ?? 30}
-                onChange={e => onChange('autoClip.bufferBefore', Math.max(0, parseInt(e.target.value) || 0))}
+                onChange={(e) =>
+                  onChange('autoClip.bufferBefore', Math.max(0, parseInt(e.target.value) || 0))
+                }
               />
             </div>
             <div className="form-group" style={{ margin: 0 }}>
@@ -433,12 +557,16 @@ export function StepAutoClip({ settings, onChange }) {
                 className="form-input"
                 min="0"
                 value={settings.autoClip?.bufferAfter ?? 5}
-                onChange={e => onChange('autoClip.bufferAfter', Math.max(0, parseInt(e.target.value) || 0))}
+                onChange={(e) =>
+                  onChange('autoClip.bufferAfter', Math.max(0, parseInt(e.target.value) || 0))
+                }
               />
             </div>
           </div>
           <div className="toggle-row" style={{ marginTop: 4 }}>
-            <div><div className="toggle-label">Remove Markers After Clipping</div></div>
+            <div>
+              <div className="toggle-label">Remove Markers After Clipping</div>
+            </div>
             <button
               className={`toggle ${settings.autoClip?.removeMarkers ? 'on' : ''}`}
               onClick={() => onChange('autoClip.removeMarkers', !settings.autoClip?.removeMarkers)}
@@ -451,23 +579,27 @@ export function StepAutoClip({ settings, onChange }) {
             </div>
             <button
               className={`toggle ${settings.autoClip?.deleteFullRecording ? 'on' : ''}`}
-              onClick={() => onChange('autoClip.deleteFullRecording', !settings.autoClip?.deleteFullRecording)}
+              onClick={() =>
+                onChange('autoClip.deleteFullRecording', !settings.autoClip?.deleteFullRecording)
+              }
             />
           </div>
         </>
       )}
     </div>
-  );
+  )
 }
 
 export function StepWatcherAutostart({ settings, onChange }) {
   return (
     <div className="onboarding-step">
-      <div className="onboarding-step-icon"><Play size={24} /></div>
+      <div className="onboarding-step-icon">
+        <Play size={24} />
+      </div>
       <h3>Watcher Autostart</h3>
       <p className="onboarding-step-desc">
-        The Game Watcher detects when you launch a tracked game and tells OBS to start
-        recording automatically. You can also start it manually from the Games page.
+        The Game Watcher detects when you launch a tracked game and tells OBS to start recording
+        automatically. You can also start it manually from the Games page.
       </p>
 
       <div className="toggle-row" style={{ marginTop: 0 }}>
@@ -483,10 +615,11 @@ export function StepWatcherAutostart({ settings, onChange }) {
 
       <hr className="onboarding-divider" />
       <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
-        You're all set! Click <strong>Finish</strong> to save your settings and start using OpenClip.
+        You're all set! Click <strong>Finish</strong> to save your settings and start using
+        OpenClip.
       </p>
     </div>
-  );
+  )
 }
 
 export const STEP_TITLES = [
@@ -495,5 +628,5 @@ export const STEP_TITLES = [
   'OBS Recordings',
   'OBS Plugin',
   'Recordings Dest.',
-];
-export const TOTAL_STEPS = STEP_TITLES.length;
+]
+export const TOTAL_STEPS = STEP_TITLES.length

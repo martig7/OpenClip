@@ -17,23 +17,27 @@
  *   });
  */
 
-import { testRecordings, testClips, testStorageStats, testStorageSettings } from './testData.js';
+import { testRecordings, testClips, testStorageStats, testStorageSettings } from './testData.js'
 
 function jsonResponse(data) {
   return {
     status: 200,
     contentType: 'application/json',
     body: JSON.stringify(data),
-  };
+  }
 }
 
 export async function setupApiRoutes(page) {
   // Inject test-mode flag so MediaList renders a DOM list instead of canvas.
   // Must be called before page.goto().
-  await page.addInitScript(() => { window.__OPENCLIP_TEST_MODE__ = true; });
+  await page.addInitScript(() => {
+    window.__OPENCLIP_TEST_MODE__ = true
+  })
 
-  await page.route('**/api/recordings', route => route.fulfill(jsonResponse(testRecordings)));
-  await page.route('**/api/clips', route => route.fulfill(jsonResponse(testClips)));
-  await page.route('**/api/storage/stats', route => route.fulfill(jsonResponse(testStorageStats)));
-  await page.route('**/api/storage/settings', route => route.fulfill(jsonResponse(testStorageSettings)));
+  await page.route('**/api/recordings', (route) => route.fulfill(jsonResponse(testRecordings)))
+  await page.route('**/api/clips', (route) => route.fulfill(jsonResponse(testClips)))
+  await page.route('**/api/storage/stats', (route) => route.fulfill(jsonResponse(testStorageStats)))
+  await page.route('**/api/storage/settings', (route) =>
+    route.fulfill(jsonResponse(testStorageSettings))
+  )
 }

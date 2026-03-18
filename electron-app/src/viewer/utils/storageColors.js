@@ -28,11 +28,13 @@ export const GAME_PALETTE = [
 export function buildGameColors(stats) {
   if (!stats) return {}
   const games = new Set()
-  stats.recordings?.forEach(r => games.add(r.game_name))
-  stats.clips?.forEach(c => games.add(c.game_name))
+  stats.recordings?.forEach((r) => games.add(r.game_name))
+  stats.clips?.forEach((c) => games.add(c.game_name))
   const map = {}
-  Array.from(games).sort().forEach((g, i) => {
-    map[g] = GAME_PALETTE[i % GAME_PALETTE.length]
-  })
+  Array.from(games)
+    .sort()
+    .forEach((g, i) => {
+      map[g] = GAME_PALETTE[i % GAME_PALETTE.length]
+    })
   return map
 }

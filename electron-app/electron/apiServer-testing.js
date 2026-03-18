@@ -8,7 +8,7 @@
  * The mock data mirrors src/mockData.js (browser fallback) so both code paths
  * behave consistently in test mode.
  */
-const http = require('http');
+const http = require('http')
 
 const MOCK_RECORDINGS = [
   {
@@ -29,7 +29,7 @@ const MOCK_RECORDINGS = [
     size_formatted: '2.98 GB',
     mtime: 1705256530,
   },
-];
+]
 
 const MOCK_CLIPS = [
   {
@@ -41,7 +41,7 @@ const MOCK_CLIPS = [
     size_formatted: '47.68 MB',
     mtime: 1705350300,
   },
-];
+]
 
 const MOCK_STORAGE_STATS = {
   recordings: MOCK_RECORDINGS,
@@ -57,21 +57,21 @@ const MOCK_STORAGE_STATS = {
   games: {},
   disk_usage: null,
   locked_recordings: [],
-};
+}
 
 const MOCK_STORAGE_SETTINGS = {
   auto_delete_enabled: false,
   max_storage_gb: 100,
   max_age_days: 30,
   exclude_clips: true,
-};
+}
 
 function json(res, data, status = 200) {
   res.writeHead(status, {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
-  });
-  res.end(JSON.stringify(data));
+  })
+  res.end(JSON.stringify(data))
 }
 
 function startApiServer() {
@@ -81,50 +81,50 @@ function startApiServer() {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type',
-      });
-      return res.end();
+      })
+      return res.end()
     }
 
-    const pathname = req.url.split('?')[0];
+    const pathname = req.url.split('?')[0]
 
     if (pathname === '/api/recordings' && req.method === 'GET') {
-      return json(res, MOCK_RECORDINGS);
+      return json(res, MOCK_RECORDINGS)
     }
     if (pathname === '/api/clips' && req.method === 'GET') {
-      return json(res, MOCK_CLIPS);
+      return json(res, MOCK_CLIPS)
     }
     if (pathname === '/api/storage/stats' && req.method === 'GET') {
-      return json(res, MOCK_STORAGE_STATS);
+      return json(res, MOCK_STORAGE_STATS)
     }
     if (pathname === '/api/storage/settings' && req.method === 'GET') {
-      return json(res, MOCK_STORAGE_SETTINGS);
+      return json(res, MOCK_STORAGE_SETTINGS)
     }
     if (pathname === '/api/markers' && req.method === 'GET') {
-      return json(res, { markers: [], duration: 0 });
+      return json(res, { markers: [], duration: 0 })
     }
     if (pathname === '/api/video/tracks' && req.method === 'GET') {
-      return json(res, { tracks: [] });
+      return json(res, { tracks: [] })
     }
     if (pathname === '/api/video/waveform' && req.method === 'GET') {
-      return json(res, { peaks: [], duration: 0 });
+      return json(res, { peaks: [], duration: 0 })
     }
     if (pathname === '/api/ffmpeg-check' && req.method === 'GET') {
-      return json(res, { available: false });
+      return json(res, { available: false })
     }
 
     // All POST mutations succeed silently
     if (req.method === 'POST') {
-      return json(res, { success: true });
+      return json(res, { success: true })
     }
 
-    json(res, { error: 'Not found' }, 404);
-  });
+    json(res, { error: 'Not found' }, 404)
+  })
 
   server.listen(47531, '127.0.0.1', () => {
-    console.log('[test] Mock API server listening on http://127.0.0.1:47531');
-  });
+    console.log('[test] Mock API server listening on http://127.0.0.1:47531')
+  })
 
-  return server;
+  return server
 }
 
-module.exports = { startApiServer };
+module.exports = { startApiServer }
