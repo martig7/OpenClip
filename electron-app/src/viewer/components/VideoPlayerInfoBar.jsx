@@ -8,6 +8,9 @@ import {
   MoreHorizontal,
   Play,
   Trash2,
+  Plus,
+  Minus,
+  Maximize,
 } from 'lucide-react'
 import { formatTime } from '../utils'
 
@@ -131,13 +134,22 @@ export default function VideoPlayerInfoBar({
       >
         <div className="video-info-left">
           <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-6">
-              <div className="flex flex-col">
-                <span className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider mb-0.5">Zoom Level</span>
-                <div className="flex gap-1">
-                  <button className="px-2 py-0.5 rounded bg-[#2a2a2a] hover:bg-[#333] text-xs text-gray-300 transition-colors" onClick={() => { if (!isZoomTimelineExpanded) setIsZoomTimelineExpanded(true); onZoomOut(); }}>-</button>
-                  <button className="px-2 py-0.5 rounded bg-[#2a2a2a] hover:bg-[#333] text-xs text-gray-300 transition-colors" onClick={() => { if (!isZoomTimelineExpanded) setIsZoomTimelineExpanded(true); onZoomIn(); }}>+</button>
-                  <button className="px-2 py-0.5 rounded bg-[#2a2a2a] hover:bg-[#333] text-xs text-gray-300 transition-colors" onClick={() => { if (!isZoomTimelineExpanded) setIsZoomTimelineExpanded(true); onZoomFit(); }}>Fit Region</button>
+            <div className="flex items-center gap-8">
+              
+              <div className="video-info-title-col">
+                <div className="video-info-title-row gap-2">
+                  <button className="btn-action-more !w-[36px] !h-[36px] font-medium shrink-0" onClick={() => { if (!isZoomTimelineExpanded) setIsZoomTimelineExpanded(true); onZoomOut(); }}>
+                    <Minus size={20} />
+                  </button>
+                  <button className="btn-action-more !w-[36px] !h-[36px] font-medium shrink-0" onClick={() => { if (!isZoomTimelineExpanded) setIsZoomTimelineExpanded(true); onZoomIn(); }}>
+                    <Plus size={20} />
+                  </button>
+                  <button className="btn-action-more !w-[36px] !h-[36px] font-medium shrink-0" title="Fit Region" onClick={() => { if (!isZoomTimelineExpanded) setIsZoomTimelineExpanded(true); onZoomFit(); }}>
+                    <Maximize size={18} />
+                  </button>
+                </div>
+                <div className="flex items-center">
+                  <span className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider ml-1 mt-0.5">Zoom Level</span>
                 </div>
               </div>
 
