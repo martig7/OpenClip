@@ -36,6 +36,7 @@ const {
 } = require('./obsPlugin')
 const { setupAutoUpdater, setupDevAutoUpdater, registerUpdateHandlers } = require('./autoUpdater')
 const { RUNTIME_DIR, STATE_FILE, ICONS_DIR, PLUGIN_DLL_NAME } = require('./constants')
+const { setWaveformResolution } = require('./waveformPreCache')
 
 // Short-lived caches for native Win32 queries.
 const _windowsListCache = { data: null, ts: 0 }
@@ -102,10 +103,8 @@ function registerIpcHandlers(store, appState) {
     const result = store.set(key, value)
     // Update waveform resolution when settings change
     if (key === 'settings' && value?.waveformResolution) {
-      const { setWaveformResolution } = require('./waveformPreCache')
       setWaveformResolution(value.waveformResolution)
     } else if (key === 'settings.waveformResolution') {
-      const { setWaveformResolution } = require('./waveformPreCache')
       setWaveformResolution(value)
     }
     return result

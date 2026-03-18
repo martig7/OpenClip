@@ -3,8 +3,7 @@
  * Automatically generates and caches waveforms for recordings when they are organized.
  */
 const fs = require('fs')
-const path = require('path')
-const { FFMPEG_PATH, FFPROBE_PATH } = require('./constants')
+const { FFPROBE_PATH } = require('./constants')
 const { getWaveform, setWaveform } = require('./waveformCache')
 const { getVideoDuration } = require('./videoMetadata')
 const { getNumPeaks, generateWaveform } = require('./waveformUtils')
