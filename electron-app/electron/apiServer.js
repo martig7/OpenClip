@@ -171,6 +171,15 @@ function startApiServer(appStore) {
         return json(res, result, result.status || 200)
       }
 
+      // POST /api/recordings/delete
+      if (pathname === '/api/recordings/delete' && req.method === 'POST') {
+        const data = await readBody(req)
+        if (!data.path) return json(res, { error: 'Not found' }, 404)
+        if (!isAllowedPath(data.path)) return json(res, { error: 'Forbidden' }, 403)
+        const result = service.deleteFile(data.path)
+        return json(res, result, result.status || 200)
+      }
+
       // POST /api/open-external
       if (pathname === '/api/open-external' && req.method === 'POST') {
         const data = await readBody(req)
