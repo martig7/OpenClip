@@ -78,10 +78,18 @@ function MediaSidebar({ items, selectedItem, onSelect, title, emptyMessage }) {
 
   const gameColors = useMemo(() => buildGameColors({ recordings: items, clips: [] }), [items])
 
-  // Re-check scroll overflow when game list changes
+  // Re-check scroll overflow when game list changes or container resizes
   useEffect(() => {
     updateScrollState()
   }, [gameColors, updateScrollState])
+
+  useEffect(() => {
+    const el = filterScrollRef.current
+    if (!el) return
+    const observer = new ResizeObserver(() => updateScrollState())
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [updateScrollState])
 
   const filteredItems = useMemo(() => {
     let result = items
