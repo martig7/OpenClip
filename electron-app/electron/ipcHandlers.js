@@ -648,7 +648,7 @@ function registerIpcHandlers(store, appState) {
         event.sender.send('recordings:organize-progress', { stage, label })
       } catch {}
     }
-    return organizeSpecificRecording(store, filePath, gameName, { moveOnly, onProgress })
+    return organizeSpecificRecording(store, filePath, gameName, { moveOnly, onProgress, forceReorganize: true })
   })
 
   // --- Auto-updater IPC handlers ---
