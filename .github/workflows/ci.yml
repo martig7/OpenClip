@@ -11,6 +11,8 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: read
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/pw-browsers
 
     steps:
       - uses: actions/checkout@v4
@@ -35,7 +37,7 @@ jobs:
         id: pw-cache
         uses: actions/cache@v4
         with:
-          path: ${{ env.LOCALAPPDATA }}\ms-playwright
+          path: ${{ github.workspace }}/pw-browsers
           key: playwright-${{ steps.pw-version.outputs.version }}-windows-chromium
 
       - name: Install Playwright browsers
@@ -56,6 +58,8 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: read
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/pw-browsers
 
     steps:
       - uses: actions/checkout@v4
@@ -100,7 +104,7 @@ jobs:
         id: pw-cache
         uses: actions/cache@v4
         with:
-          path: ${{ env.LOCALAPPDATA }}\ms-playwright
+          path: ${{ github.workspace }}/pw-browsers
           key: playwright-${{ steps.pw-version.outputs.version }}-windows-chromium
 
       - name: Install Playwright browsers
