@@ -33,6 +33,20 @@ function buildChunkQueue(numChunks, viewportIdx) {
   return queue
 }
 
+// Reorder pending (not yet in-flight) chunks in `queue` around a new priority center.
+// Mutates the queue array in place so the draining fetchNext loop picks up the new order.
+function reprioritizeQueue(queue, numChunks, newViewportIdx) {
+  const remaining = new Set(queue)
+  const newQueue = []
+  const seen = new Set()
+  const add = (i) => {
+    if (i >= 0 && i < numChunks && remaining.has(i) && !seen.has(i)) { newQueue.push(i); seen.add(i) }
+  }
+  add(newViewportIdx)
+  for (let delta = 1; delta < numChunks; delta++) { add(newViewportIdx - delta); add(newViewportIdx + delta) }
+  queue.splice(0, queue.length, ...newQueue)
+}
+
 function VideoPlayer({
   recording,
   clip,
@@ -84,6 +98,7 @@ function VideoPlayer({
   const waveformGlobalMaxRef = useRef(new Map())
   const waveformChunksDoneRef = useRef(new Set())
   const waveformQueueRef = useRef(null)
+  const waveformNumChunksRef = useRef(0)
   const viewportChunkRef = useRef(null)
 
   // Organize state
@@ -117,6 +132,7 @@ function VideoPlayer({
     waveformGlobalMaxRef.current.clear()
     waveformChunksDoneRef.current = new Set()
     waveformQueueRef.current = null
+    waveformNumChunksRef.current = 0
     viewportChunkRef.current = null
   }, [media])
 
@@ -193,6 +209,7 @@ function VideoPlayer({
           const viewportIdx = viewportChunkRef.current ?? 0
           const queue = buildChunkQueue(numChunks, viewportIdx)
           waveformQueueRef.current = queue
+          waveformNumChunksRef.current = numChunks
           const globalDone = new Set()
           waveformChunksDoneRef.current = globalDone
 
@@ -354,12 +371,7 @@ function VideoPlayer({
       const chunkIdx = Math.floor(t / WAVEFORM_CHUNK_SIZE)
       if (chunkIdx !== viewportChunkRef.current && waveformQueueRef.current) {
         viewportChunkRef.current = chunkIdx
-        const queue = waveformQueueRef.current
-        if (!waveformChunksDoneRef.current.has(chunkIdx)) {
-          const pos = queue.indexOf(chunkIdx)
-          if (pos > 0) { queue.splice(pos, 1); queue.unshift(chunkIdx) }
-          else if (pos === -1) queue.unshift(chunkIdx)
-        }
+        reprioritizeQueue(waveformQueueRef.current, waveformNumChunksRef.current, chunkIdx)
       }
     }
   }, [])
@@ -392,12 +404,7 @@ function VideoPlayer({
       const chunkIdx = Math.floor(time / WAVEFORM_CHUNK_SIZE)
       if (chunkIdx !== viewportChunkRef.current && waveformQueueRef.current) {
         viewportChunkRef.current = chunkIdx
-        const queue = waveformQueueRef.current
-        if (!waveformChunksDoneRef.current.has(chunkIdx)) {
-          const pos = queue.indexOf(chunkIdx)
-          if (pos > 0) { queue.splice(pos, 1); queue.unshift(chunkIdx) }
-          else if (pos === -1) queue.unshift(chunkIdx)
-        }
+        reprioritizeQueue(waveformQueueRef.current, waveformNumChunksRef.current, chunkIdx)
       }
     }
   }, [])
