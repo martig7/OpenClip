@@ -82,8 +82,8 @@ function VideoPlayer({
   // Chunked waveform delivery refs
   const waveformRawPeaksRef = useRef(new Map())
   const waveformGlobalMaxRef = useRef(new Map())
-  const waveformChunksDoneRef = useRef(new Map())
-  const waveformQueuesRef = useRef(new Map())
+  const waveformChunksDoneRef = useRef(new Set())
+  const waveformQueueRef = useRef(null)
   const viewportChunkRef = useRef(null)
 
   // Organize state
@@ -115,8 +115,8 @@ function VideoPlayer({
     waveformCacheRef.current.clear()
     waveformRawPeaksRef.current.clear()
     waveformGlobalMaxRef.current.clear()
-    waveformChunksDoneRef.current.clear()
-    waveformQueuesRef.current.clear()
+    waveformChunksDoneRef.current = new Set()
+    waveformQueueRef.current = null
     viewportChunkRef.current = null
   }, [media])
 
@@ -187,87 +187,91 @@ function VideoPlayer({
 
           if (cancelled || !tracksToChunk.length) return
 
-          // Chunked delivery for tracks that missed cache
-          const chunkTasks = tracksToChunk.map(({ trackIndex, fileDuration }) => {
-            const numChunks = Math.ceil(fileDuration / WAVEFORM_CHUNK_SIZE)
-            const viewportIdx = viewportChunkRef.current ?? 0
-            const queue = buildChunkQueue(numChunks, viewportIdx)
+          // Chunked delivery — one unified queue, all tracks fetched per chunk
+          const fileDuration = tracksToChunk[0].fileDuration
+          const numChunks = Math.ceil(fileDuration / WAVEFORM_CHUNK_SIZE)
+          const viewportIdx = viewportChunkRef.current ?? 0
+          const queue = buildChunkQueue(numChunks, viewportIdx)
+          waveformQueueRef.current = queue
+          const globalDone = new Set()
+          waveformChunksDoneRef.current = globalDone
 
-            waveformRawPeaksRef.current.set(trackIndex, null) // lazy init on first chunk
+          for (const { trackIndex } of tracksToChunk) {
+            waveformRawPeaksRef.current.set(trackIndex, null)
             waveformGlobalMaxRef.current.set(trackIndex, 0)
-            waveformChunksDoneRef.current.set(trackIndex, new Set())
-            waveformQueuesRef.current.set(trackIndex, queue)
+          }
 
-            return new Promise((resolve) => {
-              let inFlight = 0
-              const chunksDone = waveformChunksDoneRef.current.get(trackIndex)
+          await new Promise((resolve) => {
+            let inFlight = 0
 
-              function fetchNext() {
-                while (inFlight < WAVEFORM_MAX_INFLIGHT && queue.length > 0) {
-                  const chunkIdx = queue.shift()
-                  inFlight++
-                  const startTime = chunkIdx * WAVEFORM_CHUNK_SIZE
-                  const endTime = Math.min(startTime + WAVEFORM_CHUNK_SIZE, fileDuration)
+            function fetchNext() {
+              while (inFlight < WAVEFORM_MAX_INFLIGHT && queue.length > 0) {
+                const chunkIdx = queue.shift()
+                inFlight++
+                const startTime = chunkIdx * WAVEFORM_CHUNK_SIZE
+                const endTime = Math.min(startTime + WAVEFORM_CHUNK_SIZE, fileDuration)
 
-                  apiFetch(
-                    `/api/video/waveform/chunk?path=${encodeURIComponent(media.path)}&track=${trackIndex}&start=${startTime}&end=${endTime}&totalDuration=${fileDuration}&resolution=${waveformResolution}`,
-                    { signal: abortController.signal }
+                // Fetch all tracks for this chunk in parallel
+                Promise.all(
+                  tracksToChunk.map(({ trackIndex }) =>
+                    apiFetch(
+                      `/api/video/waveform/chunk?path=${encodeURIComponent(media.path)}&track=${trackIndex}&start=${startTime}&end=${endTime}&totalDuration=${fileDuration}&resolution=${waveformResolution}`,
+                      { signal: abortController.signal }
+                    )
+                      .then((r) => r.json())
+                      .then((data) => ({ trackIndex, data }))
+                      .catch((e) => ({ trackIndex, data: null, error: e }))
                   )
-                    .then((r) => r.json())
-                    .then((chunkData) => {
-                      if (!cancelled && chunkData.peaks?.length) {
-                        const numPeaksTotal = chunkData.numPeaksTotal
-
-                        // Lazy init accumulator on first chunk
-                        if (!waveformRawPeaksRef.current.get(trackIndex)) {
-                          waveformRawPeaksRef.current.set(trackIndex, new Float32Array(numPeaksTotal))
+                ).then((results) => {
+                  globalDone.add(chunkIdx)
+                  if (!cancelled) {
+                    const waveformsUpdate = {}
+                    for (const { trackIndex, data, error } of results) {
+                      if (error) {
+                        if (error.name !== 'AbortError') {
+                          console.error(`Waveform chunk error (track ${trackIndex}, chunk ${chunkIdx}):`, error)
                         }
-                        const rawPeaks = waveformRawPeaksRef.current.get(trackIndex)
-
-                        // Splice chunk peaks into accumulator
-                        const startIdx = Math.round((startTime / fileDuration) * numPeaksTotal)
-                        const endIdx = Math.min(
-                          Math.round((endTime / fileDuration) * numPeaksTotal),
-                          numPeaksTotal
-                        )
-                        const chunkPeaks = chunkData.peaks.slice(0, endIdx - startIdx)
-                        rawPeaks.set(chunkPeaks, startIdx)
-
-                        // Update running global max
-                        let globalMax = waveformGlobalMaxRef.current.get(trackIndex)
-                        const chunkMax = Math.max(...chunkPeaks)
-                        if (chunkMax > globalMax) globalMax = chunkMax
-                        globalMax = Math.max(globalMax, 0.001)
-                        waveformGlobalMaxRef.current.set(trackIndex, globalMax)
-
-                        // Renormalize and trigger redraw
-                        const normalizedPeaks = Array.from(rawPeaks, (v) => v / globalMax)
-                        setWaveforms((prev) => ({ ...prev, [trackIndex]: normalizedPeaks }))
+                        continue
                       }
+                      if (!data?.peaks?.length) continue
 
-                      chunksDone.add(chunkIdx)
-                      inFlight--
-                      if (queue.length === 0 && inFlight === 0) resolve()
-                      else fetchNext()
-                    })
-                    .catch((e) => {
-                      if (!cancelled && e.name !== 'AbortError') {
-                        console.error(`Waveform chunk error (track ${trackIndex}, chunk ${chunkIdx}):`, e)
+                      const numPeaksTotal = data.numPeaksTotal
+                      if (!waveformRawPeaksRef.current.get(trackIndex)) {
+                        waveformRawPeaksRef.current.set(trackIndex, new Float32Array(numPeaksTotal))
                       }
-                      inFlight--
-                      if (queue.length === 0 && inFlight === 0) resolve()
-                      else fetchNext()
-                    })
-                }
+                      const rawPeaks = waveformRawPeaksRef.current.get(trackIndex)
 
-                if (inFlight === 0 && queue.length === 0) resolve()
+                      const startIdx = Math.round((startTime / fileDuration) * numPeaksTotal)
+                      const endIdx = Math.min(
+                        Math.round((endTime / fileDuration) * numPeaksTotal),
+                        numPeaksTotal
+                      )
+                      const chunkPeaks = data.peaks.slice(0, endIdx - startIdx)
+                      rawPeaks.set(chunkPeaks, startIdx)
+
+                      let globalMax = waveformGlobalMaxRef.current.get(trackIndex)
+                      const chunkMax = Math.max(...chunkPeaks)
+                      if (chunkMax > globalMax) globalMax = chunkMax
+                      globalMax = Math.max(globalMax, 0.001)
+                      waveformGlobalMaxRef.current.set(trackIndex, globalMax)
+
+                      waveformsUpdate[trackIndex] = Array.from(rawPeaks, (v) => v / globalMax)
+                    }
+                    if (Object.keys(waveformsUpdate).length > 0) {
+                      setWaveforms((prev) => ({ ...prev, ...waveformsUpdate }))
+                    }
+                  }
+                  inFlight--
+                  if (queue.length === 0 && inFlight === 0) resolve()
+                  else fetchNext()
+                })
               }
 
-              fetchNext()
-            })
-          })
+              if (inFlight === 0 && queue.length === 0) resolve()
+            }
 
-          await Promise.all(chunkTasks)
+            fetchNext()
+          })
 
           if (cancelled) return
 
@@ -344,7 +348,19 @@ function VideoPlayer({
 
   const handleTimeUpdate = useCallback(() => {
     if (videoRef.current) {
-      setCurrentTime(videoRef.current.currentTime)
+      const t = videoRef.current.currentTime
+      setCurrentTime(t)
+      // Reprioritize chunk queue when playback crosses into a new chunk
+      const chunkIdx = Math.floor(t / WAVEFORM_CHUNK_SIZE)
+      if (chunkIdx !== viewportChunkRef.current && waveformQueueRef.current) {
+        viewportChunkRef.current = chunkIdx
+        const queue = waveformQueueRef.current
+        if (!waveformChunksDoneRef.current.has(chunkIdx)) {
+          const pos = queue.indexOf(chunkIdx)
+          if (pos > 0) { queue.splice(pos, 1); queue.unshift(chunkIdx) }
+          else if (pos === -1) queue.unshift(chunkIdx)
+        }
+      }
     }
   }, [])
 
@@ -372,6 +388,17 @@ function VideoPlayer({
     if (videoRef.current) {
       videoRef.current.currentTime = time
       setCurrentTime(time)
+      // Reprioritize chunk queue based on seek target
+      const chunkIdx = Math.floor(time / WAVEFORM_CHUNK_SIZE)
+      if (chunkIdx !== viewportChunkRef.current && waveformQueueRef.current) {
+        viewportChunkRef.current = chunkIdx
+        const queue = waveformQueueRef.current
+        if (!waveformChunksDoneRef.current.has(chunkIdx)) {
+          const pos = queue.indexOf(chunkIdx)
+          if (pos > 0) { queue.splice(pos, 1); queue.unshift(chunkIdx) }
+          else if (pos === -1) queue.unshift(chunkIdx)
+        }
+      }
     }
   }, [])
 
@@ -475,23 +502,6 @@ function VideoPlayer({
     },
     [handleSeek, isPlaying]
   )
-
-  const handleViewportChange = useCallback((viewStartSeconds) => {
-    const chunkIdx = Math.floor(viewStartSeconds / WAVEFORM_CHUNK_SIZE)
-    viewportChunkRef.current = chunkIdx
-    // Reprioritize active queues: move new viewport chunk to front if not yet fetched
-    for (const [trackIndex, queue] of waveformQueuesRef.current) {
-      const done = waveformChunksDoneRef.current.get(trackIndex)
-      if (!done || done.has(chunkIdx)) continue
-      const pos = queue.indexOf(chunkIdx)
-      if (pos > 0) {
-        queue.splice(pos, 1)
-        queue.unshift(chunkIdx)
-      } else if (pos === -1) {
-        queue.unshift(chunkIdx)
-      }
-    }
-  }, [])
 
   const enterClipMode = useCallback(() => {
     setClipMode(true)
@@ -759,7 +769,6 @@ function VideoPlayer({
         selectedTracks={selectedTracks}
         waveforms={waveforms}
         onTrackToggle={toggleTrack}
-        onViewportChange={handleViewportChange}
         isCreatingClip={isCreatingClip}
         isExpanded={isZoomTimelineExpanded}
       />
