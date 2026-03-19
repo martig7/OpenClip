@@ -62,6 +62,7 @@ vi.mock('child_process', () => ({ default: _cpMock, ..._cpMock }))
 vi.mock('../electron/waveformUtils.js', () => ({
   createWaveformFFmpegProcess: vi.fn(),
   calculatePeaks: vi.fn((samples, numPeaks) => []),
+  calculateRawPeaks: vi.fn((samples, numPeaks) => Array.from({ length: numPeaks }, () => 0.5)),
   getNumPeaks: vi.fn((resolution = 'default') => {
     switch (resolution) {
       case 'low': return 1000
@@ -71,4 +72,6 @@ vi.mock('../electron/waveformUtils.js', () => ({
   }),
   setupProcessTimeout: vi.fn(),
   bufferToSamples: vi.fn((buffer) => new Float32Array()),
+  generateWaveform: vi.fn().mockResolvedValue(null),
+  generateWaveformChunk: vi.fn().mockResolvedValue(null),
 }))

@@ -228,6 +228,31 @@ describe('VideoPlayer', () => {
 
     expect(video.currentTime).toBe(30)
   })
+
+  it('fetches chunks when waveform endpoint signals cache miss', async () => {
+    const chunkPeaks = [0.3, 0.5, 0.4]
+    server.use(
+      http.get('/api/video/tracks', () => HttpResponse.json({ tracks: sampleAudioTracks })),
+      http.get('/api/video/waveform', () =>
+        HttpResponse.json({ status: 'miss', duration: 60 })
+      ),
+      http.get('/api/video/waveform/chunk', () =>
+        HttpResponse.json({ peaks: chunkPeaks, startTime: 0, endTime: 30, numPeaksTotal: 1000 })
+      ),
+      http.post('/api/video/waveform/cache', () => HttpResponse.json({ status: 'accepted' }, { status: 202 })),
+      http.get('/api/markers', () => HttpResponse.json({ markers: [] }))
+    )
+
+    renderPlayer(sampleRecording)
+    await waitFor(() => screen.getByTestId('enter-clip-btn'))
+    fireEvent.click(screen.getByTestId('enter-clip-btn'))
+
+    // After entering clip mode, waveform canvases should render for each audio track
+    await waitFor(() => {
+      const canvases = document.querySelectorAll('canvas')
+      expect(canvases.length).toBeGreaterThan(0)
+    })
+  })
 })
 
 // ─────────────────────────────────────────────────────────────────

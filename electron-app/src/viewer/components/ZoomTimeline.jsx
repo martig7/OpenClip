@@ -20,6 +20,7 @@ const ZoomTimeline = forwardRef(function ZoomTimeline({
   selectedTracks = [],
   waveforms = {},
   onTrackToggle,
+  onViewportChange,
   isCreatingClip = false,
   isExpanded = false,
 }, ref) {
@@ -52,6 +53,11 @@ const ZoomTimeline = forwardRef(function ZoomTimeline({
   const viewStart = Math.max(0, viewCenter - visibleDuration / 2)
   const viewEnd = Math.min(duration, viewStart + visibleDuration)
   const actualViewStart = viewEnd === duration ? Math.max(0, duration - visibleDuration) : viewStart
+
+  // Report viewport position to parent for chunk prioritization
+  useEffect(() => {
+    onViewportChange?.(actualViewStart)
+  }, [actualViewStart])
 
   // Convert pixel position to time
   const xToTime = useCallback(

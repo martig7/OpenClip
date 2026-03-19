@@ -223,7 +223,7 @@ describe('GET /api/video/waveform', () => {
     expect(res.body.peaks).toEqual([])
   })
 
-  it('returns normalized peaks for valid audio data', async () => {
+  it('signals cache miss when file has audio (returns status: miss with duration)', async () => {
     const cp = await import('child_process')
     const fp = path.join(destDir, 'audio.mp4')
     fs.writeFileSync(fp, Buffer.alloc(1024))
@@ -231,57 +231,104 @@ describe('GET /api/video/waveform', () => {
     // Return duration from execFile (ffprobe)
     cp.execFile.mockImplementation((bin, args, opts, cb) => cb(null, '10', ''))
 
-    // Build mock spawn that emits float32 data then closes
+    const res = await request(server).get(
+      `/api/video/waveform?path=${encodeURIComponent(fp)}&track=0`
+    )
+    expect(res.status).toBe(200)
+    expect(res.body.status).toBe('miss')
+    expect(res.body.duration).toBe(10)
+  })
+})
+
+describe('GET /api/video/waveform/chunk', () => {
+  it('returns 400 for non-numeric track param', async () => {
+    const fp = path.join(destDir, 'video.mp4')
+    fs.writeFileSync(fp, Buffer.alloc(1024))
+    const res = await request(server).get(
+      `/api/video/waveform/chunk?path=${encodeURIComponent(fp)}&track=abc&start=0&end=30&totalDuration=60`
+    )
+    expect(res.status).toBe(400)
+  })
+
+  it('returns 400 when end <= start', async () => {
+    const fp = path.join(destDir, 'video.mp4')
+    fs.writeFileSync(fp, Buffer.alloc(1024))
+    const res = await request(server).get(
+      `/api/video/waveform/chunk?path=${encodeURIComponent(fp)}&track=0&start=30&end=30&totalDuration=60`
+    )
+    expect(res.status).toBe(400)
+  })
+
+  it('returns 403 for path outside allowed roots', async () => {
+    const res = await request(server).get(
+      `/api/video/waveform/chunk?path=${encodeURIComponent('C:\\evil.mp4')}&track=0&start=0&end=30&totalDuration=60`
+    )
+    expect(res.status).toBe(403)
+  })
+
+  it('returns 404 when file does not exist', async () => {
+    const fp = path.join(destDir, 'missing.mp4')
+    const res = await request(server).get(
+      `/api/video/waveform/chunk?path=${encodeURIComponent(fp)}&track=0&start=0&end=30&totalDuration=60`
+    )
+    expect(res.status).toBe(404)
+  })
+
+  it('returns raw peaks for valid chunk', async () => {
+    const cp = await import('child_process')
+    const fp = path.join(destDir, 'chunk.mp4')
+    fs.writeFileSync(fp, Buffer.alloc(1024))
+
     cp.spawn.mockImplementation(() => {
       const proc = new EventEmitter()
       proc.stdout = new EventEmitter()
       proc.stderr = { resume: vi.fn() }
       proc.kill = vi.fn()
-
-      // Emit 4 floats: [0.5, 1.0, 0.25, 0.75]
-      const floatArray = new Float32Array([0.5, 1.0, 0.25, 0.75])
-      const buf = Buffer.from(floatArray.buffer)
-
+      const floatArray = new Float32Array([0.2, 0.4, 0.6, 0.8])
       setTimeout(() => {
-        proc.stdout.emit('data', buf)
+        proc.stdout.emit('data', Buffer.from(floatArray.buffer))
         proc.emit('close', 0)
       }, 10)
       return proc
     })
 
     const res = await request(server).get(
-      `/api/video/waveform?path=${encodeURIComponent(fp)}&track=0`
+      `/api/video/waveform/chunk?path=${encodeURIComponent(fp)}&track=0&start=0&end=30&totalDuration=60`
     )
     expect(res.status).toBe(200)
     expect(res.body.peaks.length).toBeGreaterThan(0)
-    // All peaks normalized to max 1.0
-    expect(res.body.peaks.every((p) => p >= 0 && p <= 1.0)).toBe(true)
+    expect(res.body.startTime).toBe(0)
+    expect(res.body.endTime).toBe(30)
+    expect(res.body.numPeaksTotal).toBeGreaterThan(0)
+    // Raw peaks — max should NOT be normalized to 1.0 when true max is 0.8
+    expect(Math.max(...res.body.peaks)).toBeCloseTo(0.8, 1)
+  })
+})
+
+describe('POST /api/video/waveform/cache', () => {
+  it('returns 403 for path outside allowed roots', async () => {
+    const res = await request(server)
+      .post('/api/video/waveform/cache')
+      .send({ path: 'C:\\evil.mp4', track: 0, resolution: 'default' })
+    expect(res.status).toBe(403)
   })
 
-  it('returns 200 with empty peaks when ffmpeg spawn errors', async () => {
-    const cp = await import('child_process')
-    const fp = path.join(destDir, 'spawn-error.mp4')
+  it('returns 404 when file does not exist', async () => {
+    const fp = path.join(destDir, 'missing.mp4')
+    const res = await request(server)
+      .post('/api/video/waveform/cache')
+      .send({ path: fp, track: 0, resolution: 'default' })
+    expect(res.status).toBe(404)
+  })
+
+  it('returns 202 accepted and fires background job', async () => {
+    const fp = path.join(destDir, 'cache-me.mp4')
     fs.writeFileSync(fp, Buffer.alloc(1024))
-
-    // execFile (ffprobe) returns a valid duration
-    cp.execFile.mockImplementation((_bin, _args, _opts, cb) => cb(null, '10', ''))
-
-    // spawn (ffmpeg) emits an error event instead of producing output
-    cp.spawn.mockImplementation(() => {
-      const proc = new EventEmitter()
-      proc.stdout = new EventEmitter()
-      proc.stderr = { resume: vi.fn() }
-      proc.kill = vi.fn()
-      setTimeout(() => proc.emit('error', new Error('spawn ENOENT')), 10)
-      return proc
-    })
-
-    const res = await request(server).get(
-      `/api/video/waveform?path=${encodeURIComponent(fp)}&track=0`
-    )
-    // API returns 200 with empty peaks rather than 500 when ffmpeg is unavailable
-    expect(res.status).toBe(200)
-    expect(res.body.peaks).toEqual([])
+    const res = await request(server)
+      .post('/api/video/waveform/cache')
+      .send({ path: fp, track: 0, resolution: 'default' })
+    expect(res.status).toBe(202)
+    expect(res.body.status).toBe('accepted')
   })
 })
 

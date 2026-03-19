@@ -109,6 +109,99 @@ function bufferToSamples(buffer) {
 }
 
 /**
+ * Calculate raw (un-normalized) waveform peaks from audio samples
+ * @param {Float32Array} samples - Audio samples from FFmpeg output
+ * @param {number} numPeaks - Number of peaks to generate
+ * @returns {number[]} - Raw peak values (not normalized)
+ */
+function calculateRawPeaks(samples, numPeaks) {
+  if (!samples.length) {
+    return []
+  }
+
+  const chunkSize = Math.max(1, Math.ceil(samples.length / numPeaks))
+  const peaks = []
+
+  for (let i = 0; i < samples.length && peaks.length < numPeaks; i += chunkSize) {
+    let max = 0
+    for (let j = i; j < Math.min(i + chunkSize, samples.length); j++) {
+      const v = Math.abs(samples[j])
+      if (v > max) max = v
+    }
+    peaks.push(max)
+  }
+
+  return peaks
+}
+
+/**
+ * Generate raw waveform peaks for a time-range chunk of a video file
+ * @param {string} filePath - Path to video file
+ * @param {number} trackIndex - Audio track index
+ * @param {number} startTime - Start time in seconds
+ * @param {number} endTime - End time in seconds
+ * @param {number} numPeaksForChunk - Number of peaks to generate for this chunk
+ * @returns {Promise<number[]|null>} - Raw peak values or null on error
+ */
+async function generateWaveformChunk(filePath, trackIndex, startTime, endTime, numPeaksForChunk) {
+  try {
+    const chunkDuration = endTime - startTime
+    if (chunkDuration <= 0 || numPeaksForChunk <= 0) return null
+
+    const sampleRate = Math.max(2, Math.round(numPeaksForChunk / chunkDuration))
+    const ffmpegProc = spawn(FFMPEG_PATH, [
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-ss',
+      String(startTime),
+      '-i',
+      filePath,
+      '-map',
+      `0:a:${trackIndex}`,
+      '-ac',
+      '1',
+      '-ar',
+      String(sampleRate),
+      '-t',
+      String(chunkDuration),
+      '-f',
+      'f32le',
+      'pipe:1',
+    ])
+    setupProcessTimeout(ffmpegProc, 30_000)
+    ffmpegProc.stderr.resume()
+
+    const chunks = []
+    ffmpegProc.stdout.on('data', (chunk) => chunks.push(chunk))
+
+    return new Promise((resolve) => {
+      ffmpegProc.on('close', (code) => {
+        if (code !== 0) {
+          resolve(null)
+          return
+        }
+        try {
+          const buffer = Buffer.concat(chunks)
+          const samples = bufferToSamples(buffer)
+          if (!samples.length) {
+            resolve(null)
+            return
+          }
+          resolve(calculateRawPeaks(samples, numPeaksForChunk))
+        } catch {
+          resolve(null)
+        }
+      })
+
+      ffmpegProc.on('error', () => resolve(null))
+    })
+  } catch {
+    return null
+  }
+}
+
+/**
  * Generate waveform peaks for a specific track in a video file
  * @param {string} filePath - Path to video file
  * @param {number} trackIndex - Audio track index
@@ -164,8 +257,10 @@ async function generateWaveform(filePath, trackIndex, numPeaks, getDuration) {
 module.exports = {
   createWaveformFFmpegProcess,
   calculatePeaks,
+  calculateRawPeaks,
   getNumPeaks,
   setupProcessTimeout,
   bufferToSamples,
   generateWaveform,
+  generateWaveformChunk,
 }

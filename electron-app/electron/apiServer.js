@@ -14,7 +14,7 @@ const service = require('./recordingService')
 const { loadMarkers, saveMarkers } = require('./markerService')
 const { getVideoDuration, getDiskUsage } = require('./videoMetadata')
 const { getWaveform, setWaveform } = require('./waveformCache')
-const { getNumPeaks, generateWaveform } = require('./waveformUtils')
+const { getNumPeaks, generateWaveform, generateWaveformChunk } = require('./waveformUtils')
 
 let store // set in startApiServer
 
@@ -417,6 +417,59 @@ function startApiServer(appStore) {
         })
       }
 
+      // GET /api/video/waveform/chunk?path=...&track=0&start=0&end=30&totalDuration=1800&resolution=default
+      if (pathname === '/api/video/waveform/chunk' && req.method === 'GET') {
+        const filePath = query.path
+        const rawTrack = parseInt(query.track, 10)
+        const startTime = parseFloat(query.start)
+        const endTime = parseFloat(query.end)
+        const totalDuration = parseFloat(query.totalDuration)
+        const resolution = query.resolution || 'default'
+        if (isNaN(rawTrack) || rawTrack < 0) return json(res, { error: 'Invalid track index' }, 400)
+        if (
+          isNaN(startTime) ||
+          isNaN(endTime) ||
+          isNaN(totalDuration) ||
+          startTime < 0 ||
+          endTime <= startTime ||
+          totalDuration <= 0
+        )
+          return json(res, { error: 'Invalid time parameters' }, 400)
+        if (!filePath || !isAllowedPath(filePath)) return json(res, { error: 'Forbidden' }, 403)
+        if (!fs.existsSync(filePath)) return json(res, { error: 'File not found' }, 404)
+
+        const numPeaksTotal = getNumPeaks(resolution)
+        const peaksForChunk = Math.max(
+          1,
+          Math.round(numPeaksTotal * (endTime - startTime) / totalDuration)
+        )
+        const rawPeaks = await generateWaveformChunk(filePath, rawTrack, startTime, endTime, peaksForChunk)
+        if (!rawPeaks || !rawPeaks.length)
+          return json(res, { peaks: [], startTime, endTime, numPeaksTotal })
+        return json(res, { peaks: rawPeaks, startTime, endTime, numPeaksTotal })
+      }
+
+      // POST /api/video/waveform/cache
+      if (pathname === '/api/video/waveform/cache' && req.method === 'POST') {
+        const data = await readBody(req)
+        const { path: filePath, track, resolution } = data
+        const rawTrack = parseInt(track, 10)
+        if (isNaN(rawTrack) || rawTrack < 0) return json(res, { error: 'Invalid track index' }, 400)
+        if (!filePath || !isAllowedPath(filePath)) return json(res, { error: 'Forbidden' }, 403)
+        if (!fs.existsSync(filePath)) return json(res, { error: 'File not found' }, 404)
+        json(res, { status: 'accepted' }, 202)
+        setImmediate(async () => {
+          try {
+            const NUM_PEAKS = getNumPeaks(resolution || 'default')
+            const existing = getWaveform(filePath, rawTrack, NUM_PEAKS)
+            if (existing?.peaks?.length) return
+            const result = await generateWaveform(filePath, rawTrack, NUM_PEAKS, getVideoDuration)
+            if (result) setWaveform(filePath, rawTrack, NUM_PEAKS, result.peaks, result.duration)
+          } catch {}
+        })
+        return
+      }
+
       // GET /api/video/waveform?path=...&track=0&resolution=default
       if (pathname === '/api/video/waveform' && req.method === 'GET') {
         const filePath = query.path
@@ -435,14 +488,10 @@ function startApiServer(appStore) {
           return json(res, { peaks: cached.peaks, duration: cached.duration })
         }
 
-        const result = await generateWaveform(filePath, trackIndex, NUM_PEAKS, getVideoDuration)
-        if (!result) {
-          return json(res, { peaks: [] })
-        }
-
-        // Store in cache
-        setWaveform(filePath, trackIndex, NUM_PEAKS, result.peaks, result.duration)
-        return json(res, { peaks: result.peaks, duration: result.duration })
+        // Cache miss — signal the client to use the chunked path
+        const duration = await getVideoDuration(filePath)
+        if (!duration) return json(res, { peaks: [] })
+        return json(res, { status: 'miss', duration })
       }
 
       // GET /api/ffmpeg-check
