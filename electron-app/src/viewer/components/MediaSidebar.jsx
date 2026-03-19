@@ -1,7 +1,9 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Search, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, FileVideo } from 'lucide-react'
 import MediaList from './MediaList'
 import { buildGameColors } from '../utils/storageColors'
+import { useSidebarResize, STORAGE_KEY_MEDIA_SIDEBAR } from '../../hooks/useSidebarResize'
+import { useHorizontalScrollStrip } from '../../hooks/useHorizontalScrollStrip'
 
 const SORT_DIR_DEFAULTS = { date: 'desc', name: 'asc', size: 'desc', game: 'asc' }
 const SORT_KEYS = ['date', 'name', 'size', 'game']
@@ -11,63 +13,18 @@ function MediaSidebar({ items, selectedItem, onSelect, title, emptyMessage }) {
   const [filterGame, setFilterGame] = useState('all')
   const [sortBy, setSortBy] = useState('date')
   const [sortDir, setSortDir] = useState('desc')
-  const [canScrollLeft, setCanScrollLeft] = useState(false)
-  const [canScrollRight, setCanScrollRight] = useState(false)
-  const filterScrollRef = useRef(null)
 
-  const [sidebarWidth, setSidebarWidth] = useState(() => {
-    const saved = localStorage.getItem('sidebarWidth')
-    return saved ? parseInt(saved, 10) : 320
-  })
-  const isDraggingRef = useRef(false)
-  const startXRef = useRef(0)
-  const prevWidthRef = useRef(sidebarWidth)
+  const { sidebarWidth, handleMouseDown } = useSidebarResize(STORAGE_KEY_MEDIA_SIDEBAR)
 
-  const handleMouseMove = useCallback((e) => {
-    if (!isDraggingRef.current) return
-    const delta = e.clientX - startXRef.current
-    const newWidth = Math.max(280, Math.min(800, prevWidthRef.current + delta))
-    setSidebarWidth(newWidth)
-  }, [])
-
-  const handleMouseUp = useCallback(() => {
-    if (isDraggingRef.current) {
-      isDraggingRef.current = false
-      document.body.style.cursor = ''
-      localStorage.setItem('sidebarWidth', sidebarWidth.toString())
-    }
-  }, [sidebarWidth])
-
-  useEffect(() => {
-    window.addEventListener('mousemove', handleMouseMove)
-    window.addEventListener('mouseup', handleMouseUp)
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove)
-      window.removeEventListener('mouseup', handleMouseUp)
-    }
-  }, [handleMouseMove, handleMouseUp])
-
-  const handleMouseDown = useCallback(
-    (e) => {
-      isDraggingRef.current = true
-      startXRef.current = e.clientX
-      prevWidthRef.current = sidebarWidth
-      document.body.style.cursor = 'col-resize'
-    },
-    [sidebarWidth]
-  )
-
-  const updateScrollState = useCallback(() => {
-    const el = filterScrollRef.current
-    if (!el) return
-    setCanScrollLeft(el.scrollLeft > 0)
-    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1)
-  }, [])
-
-  const scrollFilter = (dir) => {
-    const el = filterScrollRef.current
-    if (el) el.scrollBy({ left: dir * 80, behavior: 'smooth' })
-  }
+  const gameColors = useMemo(() => buildGameColors({ recordings: items, clips: [] }), [items])
+  const filterStripKey = useMemo(() => Object.keys(gameColors).sort().join('|'), [gameColors])
+  const {
+    scrollRef: filterScrollRef,
+    canScrollLeft,
+    canScrollRight,
+    updateScrollState,
+    scrollBy: scrollFilter,
+  } = useHorizontalScrollStrip(filterStripKey)
 
   // Reset filterGame if the selected game disappears from the item list
   useEffect(() => {
@@ -75,21 +32,6 @@ function MediaSidebar({ items, selectedItem, onSelect, title, emptyMessage }) {
     const gameNames = new Set(items.map((i) => i.game_name))
     if (!gameNames.has(filterGame)) setFilterGame('all')
   }, [items, filterGame])
-
-  const gameColors = useMemo(() => buildGameColors({ recordings: items, clips: [] }), [items])
-
-  // Re-check scroll overflow when game list changes or container resizes
-  useEffect(() => {
-    updateScrollState()
-  }, [gameColors, updateScrollState])
-
-  useEffect(() => {
-    const el = filterScrollRef.current
-    if (!el) return
-    const observer = new ResizeObserver(() => updateScrollState())
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [updateScrollState])
 
   const filteredItems = useMemo(() => {
     let result = items

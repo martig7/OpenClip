@@ -27,9 +27,9 @@ test.describe('Navigation - Edge Cases', () => {
 
   test('page refresh maintains route', async ({ page }) => {
     await page.goto('/#/settings')
-    await expect(page.locator('.settings-sidebar-title')).toHaveText('Settings', { timeout: 5000 })
+    await expect(page.locator('.settings-page .msb-title')).toHaveText('Settings', { timeout: 5000 })
     await page.reload()
-    await expect(page.locator('.settings-sidebar-title')).toHaveText('Settings', { timeout: 5000 })
+    await expect(page.locator('.settings-page .msb-title')).toHaveText('Settings', { timeout: 5000 })
   })
 
   test('navigation via browser back/forward works', async ({ page }) => {

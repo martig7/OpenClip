@@ -80,6 +80,23 @@ body {
   @apply flex flex-1 overflow-hidden;
 }
 
+/* Electron drag strip + rule — shared by VideoPlayer (Recordings/Clips) and Settings detail pane */
+:root {
+  --main-content-topbar-strip-h: 36px;
+  --main-content-topbar-rule-h: 1px;
+}
+.main-content-topbar-strip {
+  width: 100%;
+  flex-shrink: 0;
+  height: var(--main-content-topbar-strip-h);
+}
+.main-content-topbar-rule {
+  width: 100%;
+  flex-shrink: 0;
+  height: var(--main-content-topbar-rule-h);
+  background: var(--border);
+}
+
 /* Sidebar */
 .sidebar {
   @apply relative bg-[var(--bg-secondary)] border-r border-[var(--border)] flex flex-col h-full;

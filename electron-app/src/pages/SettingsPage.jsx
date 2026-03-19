@@ -17,19 +17,9 @@ import {
   filterSettingsSections,
   isValidSectionId,
 } from '../settings/generalSectionConfig'
-
-/** Same min/max as Recordings MediaSidebar sidebar width */
-const SETTINGS_SIDEBAR_WIDTH_KEY = 'settingsSidebarWidth'
-const SETTINGS_SIDEBAR_MIN = 280
-const SETTINGS_SIDEBAR_MAX = 800
-
-function readStoredSettingsSidebarWidth() {
-  const saved = localStorage.getItem(SETTINGS_SIDEBAR_WIDTH_KEY)
-  if (!saved) return 320
-  const n = parseInt(saved, 10)
-  if (Number.isNaN(n)) return 320
-  return Math.min(SETTINGS_SIDEBAR_MAX, Math.max(SETTINGS_SIDEBAR_MIN, n))
-}
+import { useSidebarResize, STORAGE_KEY_SETTINGS_SIDEBAR } from '../hooks/useSidebarResize'
+import { useHorizontalScrollStrip } from '../hooks/useHorizontalScrollStrip'
+import MainContentTopBar from '../viewer/components/MainContentTopBar'
 
 export default function SettingsPage() {
   const navigate = useNavigate()
@@ -62,99 +52,14 @@ export default function SettingsPage() {
     /** @type {'all' | 'paths' | 'automation' | 'view' | 'integrations' | 'encoding'} */ ('all')
   )
 
-  const [settingsSidebarWidth, setSettingsSidebarWidth] = useState(() => readStoredSettingsSidebarWidth())
-  const settingsSidebarDragRef = useRef(false)
-  const settingsSidebarStartXRef = useRef(0)
-  const settingsSidebarPrevWidthRef = useRef(320)
-  const settingsSidebarWidthRef = useRef(settingsSidebarWidth)
-  settingsSidebarWidthRef.current = settingsSidebarWidth
-
-  const handleSettingsSidebarMouseMove = useCallback((e) => {
-    if (!settingsSidebarDragRef.current) return
-    const delta = e.clientX - settingsSidebarStartXRef.current
-    const newWidth = Math.max(
-      SETTINGS_SIDEBAR_MIN,
-      Math.min(SETTINGS_SIDEBAR_MAX, settingsSidebarPrevWidthRef.current + delta)
-    )
-    settingsSidebarWidthRef.current = newWidth
-    setSettingsSidebarWidth(newWidth)
-  }, [])
-
-  const handleSettingsSidebarMouseUp = useCallback(() => {
-    if (!settingsSidebarDragRef.current) return
-    settingsSidebarDragRef.current = false
-    document.body.style.cursor = ''
-    localStorage.setItem(SETTINGS_SIDEBAR_WIDTH_KEY, String(settingsSidebarWidthRef.current))
-  }, [])
-
-  useEffect(() => {
-    window.addEventListener('mousemove', handleSettingsSidebarMouseMove)
-    window.addEventListener('mouseup', handleSettingsSidebarMouseUp)
-    return () => {
-      window.removeEventListener('mousemove', handleSettingsSidebarMouseMove)
-      window.removeEventListener('mouseup', handleSettingsSidebarMouseUp)
-    }
-  }, [handleSettingsSidebarMouseMove, handleSettingsSidebarMouseUp])
-
-  const handleSettingsSidebarMouseDown = useCallback(
-    (e) => {
-      e.preventDefault()
-      settingsSidebarDragRef.current = true
-      settingsSidebarStartXRef.current = e.clientX
-      settingsSidebarPrevWidthRef.current = settingsSidebarWidth
-      document.body.style.cursor = 'col-resize'
-    },
-    [settingsSidebarWidth]
-  )
-
-  const [canScrollFilterPillsLeft, setCanScrollFilterPillsLeft] = useState(false)
-  const [canScrollFilterPillsRight, setCanScrollFilterPillsRight] = useState(false)
-  const filterPillsScrollRef = useRef(null)
-
-  const updateFilterPillsScrollState = useCallback(() => {
-    const el = filterPillsScrollRef.current
-    if (!el) return
-    setCanScrollFilterPillsLeft(el.scrollLeft > 0)
-    setCanScrollFilterPillsRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1)
-  }, [])
-
-  const scrollFilterPills = useCallback((dir) => {
-    const el = filterPillsScrollRef.current
-    if (el) el.scrollBy({ left: dir * 80, behavior: 'smooth' })
-  }, [])
-
-  /**
-   * Same pattern as MediaSidebar (Recordings): first paint may be loading spinner — ref is missing,
-   * so we must re-measure when content mounts. Recordings uses [gameColors]; we use [isLoading].
-   */
-  useEffect(() => {
-    if (isLoading) return
-    updateFilterPillsScrollState()
-  }, [isLoading, settingsSidebarWidth, updateFilterPillsScrollState])
-
-  useEffect(() => {
-    if (isLoading) return
-    const el = filterPillsScrollRef.current
-    if (!el) return
-    const observer = new ResizeObserver(() => updateFilterPillsScrollState())
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [isLoading, settingsSidebarWidth, updateFilterPillsScrollState])
+  const { sidebarWidth: settingsSidebarWidth, handleMouseDown: handleSettingsSidebarMouseDown } =
+    useSidebarResize(STORAGE_KEY_SETTINGS_SIDEBAR)
 
   const onEncodingStateChange = useCallback((state) => {
     setEncodingMeta(state)
   }, [])
 
   const sectionParam = searchParams.get('section')
-
-  /** Legacy `?tab=encoding` → `?section=encoding` */
-  useEffect(() => {
-    if (searchParams.get('tab') !== 'encoding') return
-    const next = new URLSearchParams(searchParams)
-    next.delete('tab')
-    next.set('section', 'encoding')
-    setSearchParams(next, { replace: true })
-  }, [searchParams, setSearchParams])
 
   const activeSection = useMemo(() => {
     if (!isValidSectionId(sectionParam)) return DEFAULT_SECTION_ID
@@ -165,6 +70,28 @@ export default function SettingsPage() {
     () => filterSettingsSections(filterChip, sidebarSearch),
     [filterChip, sidebarSearch]
   )
+
+  const settingsFilterStripKey = useMemo(
+    () =>
+      `${isLoading}|${settingsSidebarWidth}|${filterChip}|${sidebarSearch}|${filteredSections.map((s) => s.id).join(',')}`,
+    [isLoading, settingsSidebarWidth, filterChip, sidebarSearch, filteredSections]
+  )
+  const {
+    scrollRef: filterPillsScrollRef,
+    canScrollLeft: canScrollFilterPillsLeft,
+    canScrollRight: canScrollFilterPillsRight,
+    updateScrollState: updateFilterPillsScrollState,
+    scrollBy: scrollFilterPills,
+  } = useHorizontalScrollStrip(settingsFilterStripKey)
+
+  /** Legacy `?tab=encoding` → `?section=encoding` */
+  useEffect(() => {
+    if (searchParams.get('tab') !== 'encoding') return
+    const next = new URLSearchParams(searchParams)
+    next.delete('tab')
+    next.set('section', 'encoding')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
 
   const legacyEncodingTab = searchParams.get('tab') === 'encoding'
 
@@ -442,23 +369,22 @@ export default function SettingsPage() {
         <div className="page-body settings-page-body">
           <div className="settings-split">
             <aside
-              className="settings-sidebar"
-              style={{ '--settings-sidebar-width': `${settingsSidebarWidth}px` }}
+              className="sidebar"
+              style={{ '--sidebar-width': `${settingsSidebarWidth}px` }}
             >
-              <div className="settings-sidebar-header">
-                <div className="settings-sidebar-row1">
-                  <span className="settings-sidebar-title">Settings</span>
-                  <div className="settings-sidebar-search">
+              <div className="msb-header">
+                <div className="msb-row1">
+                  <span className="msb-title">Settings</span>
+                  <div className="msb-search">
                     <label htmlFor="settings-sidebar-search-input" className="visually-hidden">
                       Search settings
                     </label>
-                    <span className="settings-sidebar-search-icon" aria-hidden>
-                      <Search size={13} strokeWidth={2} />
+                    <span className="msb-search-icon" aria-hidden>
+                      <Search size={11} />
                     </span>
                     <input
                       id="settings-sidebar-search-input"
                       type="search"
-                      className="settings-sidebar-search-input"
                       placeholder="Search settings…"
                       value={sidebarSearch}
                       onChange={(e) => setSidebarSearch(e.target.value)}
@@ -466,46 +392,46 @@ export default function SettingsPage() {
                     />
                   </div>
                 </div>
-              </div>
-              <div className="settings-filter-pills-wrap">
-                {canScrollFilterPillsLeft && (
-                  <button
-                    type="button"
-                    className="settings-filter-pills-scroll-btn settings-filter-pills-scroll-left"
-                    aria-label="Scroll filters left"
-                    onClick={() => scrollFilterPills(-1)}
-                  >
-                    <ChevronLeft size={12} />
-                  </button>
-                )}
-                <div
-                  ref={filterPillsScrollRef}
-                  className="settings-filter-pills-track"
-                  role="group"
-                  aria-label="Filter by category"
-                  onScroll={updateFilterPillsScrollState}
-                >
-                  {SETTINGS_CHIP_IDS.map((id) => (
+                <div className="msb-game-filter-wrap">
+                  {canScrollFilterPillsLeft && (
                     <button
-                      key={id}
                       type="button"
-                      className={`settings-filter-pill ${filterChip === id ? 'active' : ''}`}
-                      onClick={() => setFilterChip(id)}
+                      className="msb-game-scroll-btn msb-game-scroll-left"
+                      aria-label="Scroll filters left"
+                      onClick={() => scrollFilterPills(-1)}
                     >
-                      {SETTINGS_CHIP_LABELS[id] ?? id}
+                      <ChevronLeft size={12} />
                     </button>
-                  ))}
-                </div>
-                {canScrollFilterPillsRight && (
-                  <button
-                    type="button"
-                    className="settings-filter-pills-scroll-btn settings-filter-pills-scroll-right"
-                    aria-label="Scroll filters right"
-                    onClick={() => scrollFilterPills(1)}
+                  )}
+                  <div
+                    ref={filterPillsScrollRef}
+                    className="msb-game-filter"
+                    role="group"
+                    aria-label="Filter by category"
+                    onScroll={updateFilterPillsScrollState}
                   >
-                    <ChevronRight size={12} />
-                  </button>
-                )}
+                    {SETTINGS_CHIP_IDS.map((id) => (
+                      <button
+                        key={id}
+                        type="button"
+                        className={`msb-game-pill${filterChip === id ? ' active' : ''}`}
+                        onClick={() => setFilterChip(id)}
+                      >
+                        {SETTINGS_CHIP_LABELS[id] ?? id}
+                      </button>
+                    ))}
+                  </div>
+                  {canScrollFilterPillsRight && (
+                    <button
+                      type="button"
+                      className="msb-game-scroll-btn msb-game-scroll-right"
+                      aria-label="Scroll filters right"
+                      onClick={() => scrollFilterPills(1)}
+                    >
+                      <ChevronRight size={12} />
+                    </button>
+                  )}
+                </div>
               </div>
 
               <nav className="settings-nav-list" role="navigation" aria-label="Settings sections">
@@ -539,7 +465,7 @@ export default function SettingsPage() {
             </aside>
 
             <div className="settings-detail">
-              <div className="settings-detail-topbar" aria-hidden="true" />
+              <MainContentTopBar />
               <div className="settings-detail-toolbar">
                 <div className="settings-detail-header-row">
                   <h2 className="settings-detail-title">
