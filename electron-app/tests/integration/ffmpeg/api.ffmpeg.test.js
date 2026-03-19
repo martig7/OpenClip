@@ -247,9 +247,14 @@ describe('POST /api/reencode — real ffmpeg', () => {
 })
 
 // ── GET /api/video/waveform ───────────────────────────────────────────────────
+//
+// The waveform endpoint now signals cache misses instead of generating peaks
+// inline. Clients receive { status: 'miss', duration } and fetch peaks via
+// /api/video/waveform/chunk. Actual peak generation is tested in the chunk
+// describe block below.
 
 describe('GET /api/video/waveform — real ffmpeg', () => {
-  it('returns a non-empty peaks array for a video with audio', async () => {
+  it('signals cache miss with duration for a video with audio', async () => {
     const src = path.join(obsDir, 'waveform-audio.mp4')
     fs.copyFileSync(fixtureAudioMp4, src)
 
@@ -258,13 +263,14 @@ describe('GET /api/video/waveform — real ffmpeg', () => {
     )
 
     expect(res.status).toBe(200)
-    expect(Array.isArray(res.body.peaks)).toBe(true)
-    expect(res.body.peaks.length).toBeGreaterThan(0)
+    expect(res.body.status).toBe('miss')
     expect(typeof res.body.duration).toBe('number')
     expect(res.body.duration).toBeGreaterThan(0)
   })
 
-  it('returns empty peaks for a video with no audio track', async () => {
+  it('signals cache miss with duration for a video-only file', async () => {
+    // Video-only files have a video-stream duration even with no audio track,
+    // so the endpoint returns { status: 'miss', duration } rather than { peaks: [] }.
     const src = path.join(obsDir, 'waveform-silent.mp4')
     fs.copyFileSync(fixtureSilentMp4, src)
 
@@ -273,23 +279,49 @@ describe('GET /api/video/waveform — real ffmpeg', () => {
     )
 
     expect(res.status).toBe(200)
+    expect(res.body.status).toBe('miss')
+    expect(typeof res.body.duration).toBe('number')
+    expect(res.body.duration).toBeGreaterThan(0)
+  })
+})
+
+// ── GET /api/video/waveform/chunk ────────────────────────────────────────────
+
+describe('GET /api/video/waveform/chunk — real ffmpeg', () => {
+  it('returns peaks for a chunk of a video with audio', async () => {
+    const src = path.join(obsDir, 'waveform-chunk-audio.mp4')
+    fs.copyFileSync(fixtureAudioMp4, src)
+
+    // Get duration from the waveform endpoint
+    const missRes = await request(server).get(
+      `/api/video/waveform?path=${encodeURIComponent(src)}&track=0`
+    )
+    const totalDuration = missRes.body.duration
+
+    const res = await request(server).get(
+      `/api/video/waveform/chunk?path=${encodeURIComponent(src)}&track=0&start=0&end=${totalDuration}&totalDuration=${totalDuration}`
+    )
+
+    expect(res.status).toBe(200)
     expect(Array.isArray(res.body.peaks)).toBe(true)
-    expect(res.body.peaks).toHaveLength(0)
+    expect(res.body.peaks.length).toBeGreaterThan(0)
+    expect(res.body.startTime).toBe(0)
+    expect(res.body.endTime).toBe(totalDuration)
   })
 
   it('returns different peak counts for different resolutions', async () => {
-    const src = path.join(obsDir, 'waveform-audio.mp4')
+    const src = path.join(obsDir, 'waveform-chunk-res.mp4')
     fs.copyFileSync(fixtureAudioMp4, src)
 
-    const lowRes = await request(server).get(
-      `/api/video/waveform?path=${encodeURIComponent(src)}&track=0&resolution=low`
+    const missRes = await request(server).get(
+      `/api/video/waveform?path=${encodeURIComponent(src)}&track=0`
     )
-    const defaultRes = await request(server).get(
-      `/api/video/waveform?path=${encodeURIComponent(src)}&track=0&resolution=default`
-    )
-    const highRes = await request(server).get(
-      `/api/video/waveform?path=${encodeURIComponent(src)}&track=0&resolution=high`
-    )
+    const totalDuration = missRes.body.duration
+
+    const params = `path=${encodeURIComponent(src)}&track=0&start=0&end=${totalDuration}&totalDuration=${totalDuration}`
+    const lowRes = await request(server).get(`/api/video/waveform/chunk?${params}&resolution=low`)
+    const defaultRes = await request(server).get(`/api/video/waveform/chunk?${params}&resolution=default`)
+    const highRes = await request(server).get(`/api/video/waveform/chunk?${params}&resolution=high`)
 
     expect(lowRes.status).toBe(200)
     expect(defaultRes.status).toBe(200)
@@ -299,10 +331,29 @@ describe('GET /api/video/waveform — real ffmpeg', () => {
     expect(lowRes.body.peaks.length).toBeLessThan(defaultRes.body.peaks.length)
     expect(defaultRes.body.peaks.length).toBeLessThan(highRes.body.peaks.length)
 
-    // Verify approximate peak counts
-    expect(lowRes.body.peaks.length).toBeGreaterThan(500)  // ~1000 for 3 sec video
-    expect(defaultRes.body.peaks.length).toBeGreaterThan(1000) // ~2000 for 3 sec video
-    expect(highRes.body.peaks.length).toBeGreaterThan(2000) // ~4000 for 3 sec video
+    // Approximate peak counts for the ~3 sec fixture video
+    expect(lowRes.body.peaks.length).toBeGreaterThan(500)    // ~1000 peaks total
+    expect(defaultRes.body.peaks.length).toBeGreaterThan(1000) // ~2000 peaks total
+    expect(highRes.body.peaks.length).toBeGreaterThan(2000)  // ~4000 peaks total
+  })
+
+  it('returns empty peaks for a video-only file (no audio stream at track 0)', async () => {
+    const src = path.join(obsDir, 'waveform-chunk-silent.mp4')
+    fs.copyFileSync(fixtureSilentMp4, src)
+
+    const missRes = await request(server).get(
+      `/api/video/waveform?path=${encodeURIComponent(src)}&track=0`
+    )
+    const totalDuration = missRes.body.duration
+
+    const res = await request(server).get(
+      `/api/video/waveform/chunk?path=${encodeURIComponent(src)}&track=0&start=0&end=${totalDuration}&totalDuration=${totalDuration}`
+    )
+
+    expect(res.status).toBe(200)
+    // FFmpeg returns no samples for a track that doesn't exist → empty peaks
+    expect(Array.isArray(res.body.peaks)).toBe(true)
+    expect(res.body.peaks).toHaveLength(0)
   })
 })
 
