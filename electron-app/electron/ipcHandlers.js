@@ -97,6 +97,17 @@ function registerIpcHandlers(store, appState) {
   // Make registerHotkey accessible to main.js via appState
   appState.registerHotkey = registerHotkey
 
+  // --- Window chrome (Windows/Linux title bar overlay; hiddenInset) ---
+  ipcMain.handle('window:setTitleBarOverlay', (_event, options) => {
+    const win = appState.mainWindow
+    if (!win || win.isDestroyed()) return
+    try {
+      win.setTitleBarOverlay(options)
+    } catch (err) {
+      console.warn('[ipc] window:setTitleBarOverlay:', err.message)
+    }
+  })
+
   // --- Settings ---
   ipcMain.handle('store:get', (_event, key) => store.get(key))
   ipcMain.handle('store:set', (_event, key, value) => {

@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import {
   FolderOpen,
   RefreshCw,
@@ -12,10 +13,25 @@ import {
   Loader,
 } from 'lucide-react'
 import api from '../api'
+import { stableStringify } from '../utils/stableStringify'
 import OnboardingModal from '../components/OnboardingModal'
+import EncodingSettingsPanel from '../components/EncodingSettingsPanel'
 import { HotkeyCapture } from '../components/OnboardingSteps'
+import { useSettingsNavGuard } from '../context/SettingsNavGuardContext'
+import { useTitleBarOverlayOverride } from '../context/TitleBarOverlayContext'
+import { TITLEBAR_SETTINGS_WARNING } from '../utils/titleBarOverlayDefaults'
 
 export default function SettingsPage() {
+  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const { setGuard } = useSettingsNavGuard()
+  const { setTitleBarOverlayOverride } = useTitleBarOverlayOverride()
+  const settingsTab = searchParams.get('tab') === 'encoding' ? 'encoding' : 'general'
+
+  /** After first blocked leave (sidebar or sub-tab), a second attempt on any destination discards and proceeds */
+  const leaveWarnArmedRef = useRef(false)
+  const [leaveBannerVisible, setLeaveBannerVisible] = useState(false)
+  const [saveFlashActive, setSaveFlashActive] = useState(false)
   const [settings, setSettings] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isDirty, setIsDirty] = useState(false)
@@ -27,12 +43,29 @@ export default function SettingsPage() {
   const [pluginBusy, setPluginBusy] = useState(false)
   const [pluginMsg, setPluginMsg] = useState(null) // { ok: bool, text: string }
   const [obsInstallPath, setObsInstallPath] = useState('')
+  const encodingPanelRef = useRef(null)
+  const [encodingMeta, setEncodingMeta] = useState({ dirty: false, canSave: false })
+  /** Snapshot of last loaded/saved app settings — used so Save enables only when values differ */
+  const settingsBaselineRef = useRef('')
+
+  const onEncodingStateChange = useCallback((state) => {
+    setEncodingMeta(state)
+  }, [])
 
   useEffect(() => {
     loadSettings()
     api.isOBSPluginRegistered().then(setPluginInstalled)
     api.getOBSInstallPath().then((p) => setObsInstallPath(p || ''))
   }, [])
+
+  useEffect(() => {
+    if (leaveBannerVisible) {
+      setTitleBarOverlayOverride(TITLEBAR_SETTINGS_WARNING)
+    } else {
+      setTitleBarOverlayOverride(null)
+    }
+    return () => setTitleBarOverlayOverride(null)
+  }, [leaveBannerVisible, setTitleBarOverlayOverride])
 
   useEffect(() => {
     const unsubAvailable = api.onUpdateAvailable?.((info) => {
@@ -61,6 +94,8 @@ export default function SettingsPage() {
   async function loadSettings() {
     const s = await api.getStore('settings')
     setSettings(s)
+    settingsBaselineRef.current = stableStringify(s)
+    setIsDirty(false)
     setIsLoading(false)
   }
 
@@ -74,15 +109,109 @@ export default function SettingsPage() {
     }
     obj[keys[keys.length - 1]] = value
     setSettings(updated)
-    setIsDirty(true)
+    setIsDirty(stableStringify(updated) !== settingsBaselineRef.current)
   }
 
   async function saveSettings() {
     await api.setStore('settings', settings)
     await api.registerHotkey()
+    settingsBaselineRef.current = stableStringify(settings)
     setIsDirty(false)
     showToast('Settings saved')
   }
+
+  async function handleHeaderSave() {
+    if (settingsTab === 'general') {
+      await saveSettings()
+      return
+    }
+    const ok = await encodingPanelRef.current?.save()
+    if (ok) showToast('Settings saved')
+  }
+
+  const headerSaveDisabled =
+    settingsTab === 'general'
+      ? !isDirty
+      : !encodingMeta.dirty || !encodingMeta.canSave
+
+  const showUnsavedHint =
+    (settingsTab === 'general' && isDirty) ||
+    (settingsTab === 'encoding' && encodingMeta.dirty)
+
+  const discardAllUnsaved = useCallback(() => {
+    try {
+      if (settingsBaselineRef.current) {
+        setSettings(JSON.parse(settingsBaselineRef.current))
+      }
+    } catch {
+      /* ignore */
+    }
+    setIsDirty(false)
+    encodingPanelRef.current?.resetToBaseline?.()
+  }, [])
+
+  const handleNavigateAway = useCallback(
+    (targetPath) => {
+      if (leaveWarnArmedRef.current) {
+        discardAllUnsaved()
+        navigate(targetPath)
+        leaveWarnArmedRef.current = false
+        setLeaveBannerVisible(false)
+        return
+      }
+      leaveWarnArmedRef.current = true
+      setLeaveBannerVisible(true)
+      setSaveFlashActive(true)
+      window.setTimeout(() => setSaveFlashActive(false), 900)
+    },
+    [navigate, discardAllUnsaved]
+  )
+
+  function handleSettingsSubTabClick(next) {
+    if (next === settingsTab) return
+    const blockGeneral = settingsTab === 'general' && isDirty && next === 'encoding'
+    const blockEncoding = settingsTab === 'encoding' && encodingMeta.dirty && next === 'general'
+    if (!blockGeneral && !blockEncoding) {
+      if (next === 'encoding') setSearchParams({ tab: 'encoding' })
+      else setSearchParams({})
+      return
+    }
+    if (leaveWarnArmedRef.current) {
+      discardAllUnsaved()
+      if (next === 'encoding') setSearchParams({ tab: 'encoding' })
+      else setSearchParams({})
+      leaveWarnArmedRef.current = false
+      setLeaveBannerVisible(false)
+      return
+    }
+    leaveWarnArmedRef.current = true
+    setLeaveBannerVisible(true)
+    setSaveFlashActive(true)
+    window.setTimeout(() => setSaveFlashActive(false), 900)
+  }
+
+  function handleLeaveBannerClick() {
+    discardAllUnsaved()
+    leaveWarnArmedRef.current = false
+    setLeaveBannerVisible(false)
+  }
+
+  useEffect(() => {
+    setGuard({
+      hasUnsaved: () => isDirty || (settingsTab === 'encoding' && encodingMeta.dirty),
+      handleNavigateAway,
+    })
+    return () => setGuard(null)
+  }, [setGuard, handleNavigateAway, isDirty, settingsTab, encodingMeta.dirty])
+
+  useEffect(() => {
+    const clean =
+      !isDirty && !(settingsTab === 'encoding' && encodingMeta.dirty)
+    if (clean) {
+      setLeaveBannerVisible(false)
+      leaveWarnArmedRef.current = false
+    }
+  }, [isDirty, settingsTab, encodingMeta.dirty])
 
   async function detectOBSPath() {
     const path = await api.detectOBSPath()
@@ -159,33 +288,75 @@ export default function SettingsPage() {
 
   return (
     <>
-      <div
-        className="page-header"
-        style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}
-      >
-        <div>
-          <h1>Settings</h1>
-          <p>Configure recording paths, hotkeys, and automation</p>
+      {leaveBannerVisible && (
+        <button
+          type="button"
+          className="settings-leave-warning-banner"
+          onClick={handleLeaveBannerClick}
+        >
+          Don&apos;t forget to save any changes. Click again to clear changes.
+        </button>
+      )}
+      <div className="page-header">
+        <div
+          style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}
+        >
+          <div>
+            <h1>Settings</h1>
+            <p>
+              {settingsTab === 'encoding'
+                ? 'Configure OBS recording encoder settings for your profile'
+                : 'Configure recording paths, hotkeys, and automation'}
+            </p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 2 }}>
+            {settingsTab === 'general' && (
+              <button className="btn btn-secondary btn-sm" onClick={() => setShowWizard(true)}>
+                <Wand2 size={13} /> Setup Wizard
+              </button>
+            )}
+            {showUnsavedHint && (
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Unsaved changes</span>
+            )}
+            <button
+              type="button"
+              className={`btn btn-primary btn-sm settings-save-btn ${saveFlashActive ? 'settings-save-btn-flash' : ''}`}
+              onClick={handleHeaderSave}
+              disabled={headerSaveDisabled}
+              style={{ opacity: headerSaveDisabled ? 0.4 : 1 }}
+            >
+              <Save size={13} /> Save Settings
+            </button>
+          </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 2 }}>
-          <button className="btn btn-secondary btn-sm" onClick={() => setShowWizard(true)}>
-            <Wand2 size={13} /> Setup Wizard
-          </button>
-          {isDirty && (
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Unsaved changes</span>
-          )}
+
+        <nav className="settings-subnav" role="tablist" aria-label="Settings sections">
           <button
-            className="btn btn-primary btn-sm"
-            onClick={saveSettings}
-            disabled={!isDirty}
-            style={{ opacity: isDirty ? 1 : 0.4 }}
+            type="button"
+            role="tab"
+            aria-selected={settingsTab === 'general'}
+            className={`settings-subnav-tab ${settingsTab === 'general' ? 'active' : ''}`}
+            onClick={() => handleSettingsSubTabClick('general')}
           >
-            <Save size={13} /> Save Settings
+            General
           </button>
-        </div>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={settingsTab === 'encoding'}
+            className={`settings-subnav-tab ${settingsTab === 'encoding' ? 'active' : ''}`}
+            onClick={() => handleSettingsSubTabClick('encoding')}
+          >
+            Encoding
+          </button>
+        </nav>
       </div>
 
       <div className="page-body" style={{ maxWidth: 640 }}>
+        {settingsTab === 'encoding' ? (
+          <EncodingSettingsPanel ref={encodingPanelRef} onEncodingStateChange={onEncodingStateChange} />
+        ) : (
+          <>
         {/* Paths */}
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="card-title">Recording Paths</div>
@@ -606,6 +777,8 @@ export default function SettingsPage() {
             )}
           </div>
         </div>
+          </>
+        )}
       </div>
 
       {toast && <div className="toast">{toast}</div>}

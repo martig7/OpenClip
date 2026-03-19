@@ -15,7 +15,6 @@ test.describe('Navigation', () => {
     await expect(page.getByRole('link', { name: 'Recordings' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Clips' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Storage' })).toBeVisible()
-    await expect(page.getByRole('link', { name: 'Encoding' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Settings' })).toBeVisible()
   })
 })

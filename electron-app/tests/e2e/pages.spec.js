@@ -157,14 +157,17 @@ test.describe('Storage Page', () => {
   })
 })
 
-test.describe('Encoding Page', () => {
-  test('encoding page loads with correct heading', async ({ page }) => {
+test.describe('Settings — Encoding', () => {
+  test('legacy /encoding URL redirects to settings encoding tab', async ({ page }) => {
     await page.goto('/#/encoding')
-    await expect(page.locator('h1:has-text("OBS Encoding")')).toBeVisible({ timeout: 5000 })
+    await expect(page).toHaveURL(/settings\?tab=encoding/)
+    await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByRole('tab', { name: 'Encoding' })).toHaveAttribute('aria-selected', 'true')
   })
 
-  test('encoding page has encoder selector', async ({ page }) => {
-    await page.goto('/#/encoding')
+  test('encoding tab has encoder selector', async ({ page }) => {
+    await page.goto('/#/settings?tab=encoding')
+    await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 })
     await expect(page.locator('label:has-text("Encoder")').first()).toBeVisible({ timeout: 5000 })
   })
 })

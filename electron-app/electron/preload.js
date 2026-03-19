@@ -8,6 +8,9 @@ contextBridge.exposeInMainWorld('api', {
   // Test-mode flag — true when Electron is started with --test-mode
   testMode: process.argv.includes('--test-mode') || process.env.OPENCLIP_TEST_MODE === 'true',
 
+  // Match native caption buttons to CSS theme (--bg-primary, --text-secondary)
+  setTitleBarOverlay: (options) => ipcRenderer.invoke('window:setTitleBarOverlay', options),
+
   // Store
   getStore: (key) => ipcRenderer.invoke('store:get', key),
   setStore: (key, value) => ipcRenderer.invoke('store:set', key, value),

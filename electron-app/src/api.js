@@ -113,6 +113,7 @@ const mockApi = {
   onUpdateProgress: () => noop,
   onUpdateDownloaded: () => noop,
   onUpdateError: () => noop,
+  setTitleBarOverlay: asyncNoop,
 }
 
 const api = window.api || mockApi
