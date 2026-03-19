@@ -158,16 +158,20 @@ test.describe('Storage Page', () => {
 })
 
 test.describe('Settings — Encoding', () => {
-  test('legacy /encoding URL redirects to settings encoding tab', async ({ page }) => {
+  test('legacy /encoding URL redirects to settings encoding section', async ({ page }) => {
     await page.goto('/#/encoding')
-    await expect(page).toHaveURL(/settings\?tab=encoding/)
-    await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 })
-    await expect(page.getByRole('tab', { name: 'Encoding' })).toHaveAttribute('aria-selected', 'true')
+    await expect(page).toHaveURL(/settings\?section=encoding/)
+    await expect(page.locator('.settings-nav-item.active:has-text("Encoding")')).toBeVisible({
+      timeout: 5000,
+    })
+    await expect(page.locator('.settings-detail-title:has-text("Encoding")')).toBeVisible()
   })
 
-  test('encoding tab has encoder selector', async ({ page }) => {
-    await page.goto('/#/settings?tab=encoding')
-    await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 })
+  test('encoding section has encoder selector', async ({ page }) => {
+    await page.goto('/#/settings?section=encoding')
+    await expect(page.locator('.settings-detail-title:has-text("Encoding")')).toBeVisible({
+      timeout: 5000,
+    })
     await expect(page.locator('label:has-text("Encoder")').first()).toBeVisible({ timeout: 5000 })
   })
 })

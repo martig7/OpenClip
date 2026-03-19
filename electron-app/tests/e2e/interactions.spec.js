@@ -53,14 +53,14 @@ test.describe('Games Page Interactions', () => {
 
 test.describe('Settings Page Interactions', () => {
   test('displays hotkey from mock settings', async ({ page }) => {
-    await page.goto('/#/settings')
-    await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 })
+    await page.goto('/#/settings?section=hotkey')
+    await expect(page.locator('.settings-sidebar-title')).toHaveText('Settings', { timeout: 5000 })
     await expect(page.locator('.hotkey-capture-btn:has-text("F9")')).toBeVisible()
   })
 
   test('watcher startup toggle changes state', async ({ page }) => {
-    await page.goto('/#/settings')
-    await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 })
+    await page.goto('/#/settings?section=watcher')
+    await expect(page.locator('.settings-sidebar-title')).toHaveText('Settings', { timeout: 5000 })
     // startWatcherOnStartup starts false in defaultSettings
     const watcherToggle = page
       .locator('.toggle-row', {
@@ -73,8 +73,8 @@ test.describe('Settings Page Interactions', () => {
   })
 
   test('changing a setting enables the save button', async ({ page }) => {
-    await page.goto('/#/settings')
-    await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 })
+    await page.goto('/#/settings?section=watcher')
+    await expect(page.locator('.settings-sidebar-title')).toHaveText('Settings', { timeout: 5000 })
     await expect(page.locator('button:has-text("Save Settings")')).not.toBeEnabled()
     const watcherToggle = page
       .locator('.toggle-row', {

@@ -6,25 +6,25 @@ import { test, expect } from '@playwright/test'
 test.describe('Settings Page', () => {
   test('settings page loads', async ({ page }) => {
     await page.goto('/#/settings')
-    await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('.settings-sidebar-title')).toHaveText('Settings', { timeout: 5000 })
   })
 
   test('displays F9 hotkey from mock settings', async ({ page }) => {
-    await page.goto('/#/settings')
-    await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 })
+    await page.goto('/#/settings?section=hotkey')
+    await expect(page.locator('.settings-sidebar-title')).toHaveText('Settings', { timeout: 5000 })
     await expect(page.locator('.hotkey-capture-btn:has-text("F9")')).toBeVisible()
   })
 
   test('save button is disabled when settings unchanged', async ({ page }) => {
     await page.goto('/#/settings')
-    await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('.settings-sidebar-title')).toHaveText('Settings', { timeout: 5000 })
     // The save button is always rendered, but disabled until settings are dirty
     await expect(page.locator('button:has-text("Save Settings")')).not.toBeEnabled()
   })
 
   test('save button becomes enabled after changing a setting', async ({ page }) => {
-    await page.goto('/#/settings')
-    await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 })
+    await page.goto('/#/settings?section=watcher')
+    await expect(page.locator('.settings-sidebar-title')).toHaveText('Settings', { timeout: 5000 })
     // startWatcherOnStartup starts false — clicking its toggle marks settings dirty
     const watcherToggle = page
       .locator('.toggle-row', {
@@ -36,8 +36,8 @@ test.describe('Settings Page', () => {
   })
 
   test('watcher startup toggle starts off', async ({ page }) => {
-    await page.goto('/#/settings')
-    await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 })
+    await page.goto('/#/settings?section=watcher')
+    await expect(page.locator('.settings-sidebar-title')).toHaveText('Settings', { timeout: 5000 })
     // defaultSettings.startWatcherOnStartup = false
     const watcherToggle = page
       .locator('.toggle-row', {
@@ -48,8 +48,8 @@ test.describe('Settings Page', () => {
   })
 
   test('watcher startup toggle turns on when clicked', async ({ page }) => {
-    await page.goto('/#/settings')
-    await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 })
+    await page.goto('/#/settings?section=watcher')
+    await expect(page.locator('.settings-sidebar-title')).toHaveText('Settings', { timeout: 5000 })
     const watcherToggle = page
       .locator('.toggle-row', {
         has: page.locator('.toggle-label:has-text("Start Watcher on Startup")'),
@@ -60,8 +60,8 @@ test.describe('Settings Page', () => {
   })
 
   test('auto-clip toggle starts off', async ({ page }) => {
-    await page.goto('/#/settings')
-    await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 })
+    await page.goto('/#/settings?section=autoclip')
+    await expect(page.locator('.settings-sidebar-title')).toHaveText('Settings', { timeout: 5000 })
     // defaultSettings.autoClip.enabled = false
     const autoClipToggle = page
       .locator('.toggle-row', {
@@ -73,15 +73,15 @@ test.describe('Settings Page', () => {
 
   test('setup wizard button is visible', async ({ page }) => {
     await page.goto('/#/settings')
-    await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('.settings-sidebar-title')).toHaveText('Settings', { timeout: 5000 })
     await expect(page.locator('button:has-text("Setup Wizard")')).toBeVisible()
   })
 })
 
 test.describe('Settings Page - Edge Cases', () => {
   test('toggling multiple settings enables save button', async ({ page }) => {
-    await page.goto('/#/settings')
-    await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 })
+    await page.goto('/#/settings?section=watcher')
+    await expect(page.locator('.settings-sidebar-title')).toHaveText('Settings', { timeout: 5000 })
     await expect(page.locator('button:has-text("Save Settings")')).not.toBeEnabled()
 
     const watcherToggle = page
@@ -91,6 +91,8 @@ test.describe('Settings Page - Edge Cases', () => {
       .locator('.toggle')
     await watcherToggle.click()
 
+    await page.goto('/#/settings?section=autoclip')
+    await expect(page.locator('.settings-sidebar-title')).toHaveText('Settings', { timeout: 5000 })
     const autoClipToggle = page
       .locator('.toggle-row', {
         has: page.locator('.toggle-label:has-text("Enable Auto-Clip")'),
@@ -102,8 +104,8 @@ test.describe('Settings Page - Edge Cases', () => {
   })
 
   test('toggle state persists after page refresh', async ({ page }) => {
-    await page.goto('/#/settings')
-    await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 })
+    await page.goto('/#/settings?section=autoclip')
+    await expect(page.locator('.settings-sidebar-title')).toHaveText('Settings', { timeout: 5000 })
 
     const autoClipToggle = page
       .locator('.toggle-row', {
@@ -114,14 +116,14 @@ test.describe('Settings Page - Edge Cases', () => {
     await expect(autoClipToggle).toHaveClass(/on/)
 
     await page.reload()
-    await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('.settings-sidebar-title')).toHaveText('Settings', { timeout: 5000 })
   })
 })
 
 test.describe('Settings Page - Persistence', () => {
   test('save settings persists to API and loads on page visit', async ({ page }) => {
-    await page.goto('/#/settings')
-    await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 })
+    await page.goto('/#/settings?section=watcher')
+    await expect(page.locator('.settings-sidebar-title')).toHaveText('Settings', { timeout: 5000 })
 
     const watcherToggle = page
       .locator('.toggle-row', {
@@ -134,15 +136,22 @@ test.describe('Settings Page - Persistence', () => {
     await page.locator('button:has-text("Save Settings")').click()
     await expect(page.locator('button:has-text("Save Settings")')).not.toBeEnabled()
 
-    await page.goto('/#/settings')
-    await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 })
+    await page.goto('/#/settings?section=watcher')
+    await expect(page.locator('.settings-sidebar-title')).toHaveText('Settings', { timeout: 5000 })
+    await expect(
+      page
+        .locator('.toggle-row', {
+          has: page.locator('.toggle-label:has-text("Start Watcher on Startup")'),
+        })
+        .locator('.toggle')
+    ).toHaveClass(/on/)
   })
 })
 
 test.describe('Settings Page - Hotkey Capture', () => {
   test('hotkey capture - pressing a key displays in field', async ({ page }) => {
-    await page.goto('/#/settings')
-    await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 })
+    await page.goto('/#/settings?section=hotkey')
+    await expect(page.locator('.settings-sidebar-title')).toHaveText('Settings', { timeout: 5000 })
 
     const hotkeyBtn = page.locator('.hotkey-capture-btn').first()
     const initialText = await hotkeyBtn.textContent()

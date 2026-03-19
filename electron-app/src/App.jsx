@@ -171,7 +171,7 @@ function AppLayout({ sessionProgress, updateState, showOnboarding, setShowOnboar
             <Route path="/storage" element={<ViewerStoragePage />} />
             <Route
               path="/encoding"
-              element={<Navigate to="/settings?tab=encoding" replace />}
+              element={<Navigate to="/settings?section=encoding" replace />}
             />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>

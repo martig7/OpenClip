@@ -1,34 +1,43 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import {
-  FolderOpen,
-  RefreshCw,
-  Save,
-  Wand2,
-  Download,
-  Package,
-  Trash2,
-  CheckCircle,
-  AlertCircle,
-  Loader,
-} from 'lucide-react'
+import { Save, Wand2, Loader, Search, ChevronLeft, ChevronRight } from 'lucide-react'
 import api from '../api'
 import { stableStringify } from '../utils/stableStringify'
 import OnboardingModal from '../components/OnboardingModal'
 import EncodingSettingsPanel from '../components/EncodingSettingsPanel'
-import { HotkeyCapture } from '../components/OnboardingSteps'
 import { useSettingsNavGuard } from '../context/SettingsNavGuardContext'
 import { useTitleBarOverlayOverride } from '../context/TitleBarOverlayContext'
 import { TITLEBAR_SETTINGS_WARNING } from '../utils/titleBarOverlayDefaults'
+import GeneralSettingsSections from '../settings/GeneralSettingsSections'
+import {
+  SETTINGS_SECTIONS,
+  SETTINGS_CHIP_IDS,
+  SETTINGS_CHIP_LABELS,
+  DEFAULT_SECTION_ID,
+  filterSettingsSections,
+  isValidSectionId,
+} from '../settings/generalSectionConfig'
+
+/** Same min/max as Recordings MediaSidebar sidebar width */
+const SETTINGS_SIDEBAR_WIDTH_KEY = 'settingsSidebarWidth'
+const SETTINGS_SIDEBAR_MIN = 280
+const SETTINGS_SIDEBAR_MAX = 800
+
+function readStoredSettingsSidebarWidth() {
+  const saved = localStorage.getItem(SETTINGS_SIDEBAR_WIDTH_KEY)
+  if (!saved) return 320
+  const n = parseInt(saved, 10)
+  if (Number.isNaN(n)) return 320
+  return Math.min(SETTINGS_SIDEBAR_MAX, Math.max(SETTINGS_SIDEBAR_MIN, n))
+}
 
 export default function SettingsPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const { setGuard } = useSettingsNavGuard()
   const { setTitleBarOverlayOverride } = useTitleBarOverlayOverride()
-  const settingsTab = searchParams.get('tab') === 'encoding' ? 'encoding' : 'general'
 
-  /** After first blocked leave (sidebar or sub-tab), a second attempt on any destination discards and proceeds */
+  /** After first blocked leave, a second attempt discards and proceeds */
   const leaveWarnArmedRef = useRef(false)
   const [leaveBannerVisible, setLeaveBannerVisible] = useState(false)
   const [saveFlashActive, setSaveFlashActive] = useState(false)
@@ -48,9 +57,138 @@ export default function SettingsPage() {
   /** Snapshot of last loaded/saved app settings — used so Save enables only when values differ */
   const settingsBaselineRef = useRef('')
 
+  const [sidebarSearch, setSidebarSearch] = useState('')
+  const [filterChip, setFilterChip] = useState(
+    /** @type {'all' | 'paths' | 'automation' | 'view' | 'integrations' | 'encoding'} */ ('all')
+  )
+
+  const [settingsSidebarWidth, setSettingsSidebarWidth] = useState(() => readStoredSettingsSidebarWidth())
+  const settingsSidebarDragRef = useRef(false)
+  const settingsSidebarStartXRef = useRef(0)
+  const settingsSidebarPrevWidthRef = useRef(320)
+  const settingsSidebarWidthRef = useRef(settingsSidebarWidth)
+  settingsSidebarWidthRef.current = settingsSidebarWidth
+
+  const handleSettingsSidebarMouseMove = useCallback((e) => {
+    if (!settingsSidebarDragRef.current) return
+    const delta = e.clientX - settingsSidebarStartXRef.current
+    const newWidth = Math.max(
+      SETTINGS_SIDEBAR_MIN,
+      Math.min(SETTINGS_SIDEBAR_MAX, settingsSidebarPrevWidthRef.current + delta)
+    )
+    settingsSidebarWidthRef.current = newWidth
+    setSettingsSidebarWidth(newWidth)
+  }, [])
+
+  const handleSettingsSidebarMouseUp = useCallback(() => {
+    if (!settingsSidebarDragRef.current) return
+    settingsSidebarDragRef.current = false
+    document.body.style.cursor = ''
+    localStorage.setItem(SETTINGS_SIDEBAR_WIDTH_KEY, String(settingsSidebarWidthRef.current))
+  }, [])
+
+  useEffect(() => {
+    window.addEventListener('mousemove', handleSettingsSidebarMouseMove)
+    window.addEventListener('mouseup', handleSettingsSidebarMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', handleSettingsSidebarMouseMove)
+      window.removeEventListener('mouseup', handleSettingsSidebarMouseUp)
+    }
+  }, [handleSettingsSidebarMouseMove, handleSettingsSidebarMouseUp])
+
+  const handleSettingsSidebarMouseDown = useCallback(
+    (e) => {
+      e.preventDefault()
+      settingsSidebarDragRef.current = true
+      settingsSidebarStartXRef.current = e.clientX
+      settingsSidebarPrevWidthRef.current = settingsSidebarWidth
+      document.body.style.cursor = 'col-resize'
+    },
+    [settingsSidebarWidth]
+  )
+
+  const [canScrollFilterPillsLeft, setCanScrollFilterPillsLeft] = useState(false)
+  const [canScrollFilterPillsRight, setCanScrollFilterPillsRight] = useState(false)
+  const filterPillsScrollRef = useRef(null)
+
+  const updateFilterPillsScrollState = useCallback(() => {
+    const el = filterPillsScrollRef.current
+    if (!el) return
+    setCanScrollFilterPillsLeft(el.scrollLeft > 0)
+    setCanScrollFilterPillsRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1)
+  }, [])
+
+  const scrollFilterPills = useCallback((dir) => {
+    const el = filterPillsScrollRef.current
+    if (el) el.scrollBy({ left: dir * 80, behavior: 'smooth' })
+  }, [])
+
+  /**
+   * Same pattern as MediaSidebar (Recordings): first paint may be loading spinner — ref is missing,
+   * so we must re-measure when content mounts. Recordings uses [gameColors]; we use [isLoading].
+   */
+  useEffect(() => {
+    if (isLoading) return
+    updateFilterPillsScrollState()
+  }, [isLoading, settingsSidebarWidth, updateFilterPillsScrollState])
+
+  useEffect(() => {
+    if (isLoading) return
+    const el = filterPillsScrollRef.current
+    if (!el) return
+    const observer = new ResizeObserver(() => updateFilterPillsScrollState())
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [isLoading, settingsSidebarWidth, updateFilterPillsScrollState])
+
   const onEncodingStateChange = useCallback((state) => {
     setEncodingMeta(state)
   }, [])
+
+  const sectionParam = searchParams.get('section')
+
+  /** Legacy `?tab=encoding` → `?section=encoding` */
+  useEffect(() => {
+    if (searchParams.get('tab') !== 'encoding') return
+    const next = new URLSearchParams(searchParams)
+    next.delete('tab')
+    next.set('section', 'encoding')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
+
+  const activeSection = useMemo(() => {
+    if (!isValidSectionId(sectionParam)) return DEFAULT_SECTION_ID
+    return sectionParam
+  }, [sectionParam])
+
+  const filteredSections = useMemo(
+    () => filterSettingsSections(filterChip, sidebarSearch),
+    [filterChip, sidebarSearch]
+  )
+
+  const legacyEncodingTab = searchParams.get('tab') === 'encoding'
+
+  /** Default and validate `section` in the URL. */
+  useEffect(() => {
+    if (legacyEncodingTab) return
+    if (!sectionParam) {
+      setSearchParams({ section: DEFAULT_SECTION_ID }, { replace: true })
+      return
+    }
+    if (!isValidSectionId(sectionParam)) {
+      setSearchParams({ section: DEFAULT_SECTION_ID }, { replace: true })
+    }
+  }, [sectionParam, legacyEncodingTab, setSearchParams])
+
+  /** Keep selected section visible when search/chips narrow the list. */
+  useEffect(() => {
+    if (legacyEncodingTab) return
+    if (filteredSections.length === 0) return
+    const current = isValidSectionId(sectionParam) ? sectionParam : DEFAULT_SECTION_ID
+    if (!filteredSections.some((s) => s.id === current)) {
+      setSearchParams({ section: filteredSections[0].id }, { replace: true })
+    }
+  }, [filteredSections, sectionParam, legacyEncodingTab, setSearchParams])
 
   useEffect(() => {
     loadSettings()
@@ -121,22 +259,27 @@ export default function SettingsPage() {
   }
 
   async function handleHeaderSave() {
-    if (settingsTab === 'general') {
-      await saveSettings()
+    if (activeSection === 'encoding') {
+      const ok = await encodingPanelRef.current?.save()
+      if (ok) showToast('Settings saved')
       return
     }
-    const ok = await encodingPanelRef.current?.save()
-    if (ok) showToast('Settings saved')
+    await saveSettings()
   }
 
   const headerSaveDisabled =
-    settingsTab === 'general'
-      ? !isDirty
-      : !encodingMeta.dirty || !encodingMeta.canSave
+    activeSection === 'encoding'
+      ? !encodingMeta.dirty || !encodingMeta.canSave
+      : !isDirty
 
   const showUnsavedHint =
-    (settingsTab === 'general' && isDirty) ||
-    (settingsTab === 'encoding' && encodingMeta.dirty)
+    (activeSection === 'encoding' && encodingMeta.dirty) ||
+    (activeSection !== 'encoding' && isDirty)
+
+  function hasUnsavedInCurrentSection() {
+    if (activeSection === 'encoding') return encodingMeta.dirty
+    return isDirty
+  }
 
   const discardAllUnsaved = useCallback(() => {
     try {
@@ -167,19 +310,15 @@ export default function SettingsPage() {
     [navigate, discardAllUnsaved]
   )
 
-  function handleSettingsSubTabClick(next) {
-    if (next === settingsTab) return
-    const blockGeneral = settingsTab === 'general' && isDirty && next === 'encoding'
-    const blockEncoding = settingsTab === 'encoding' && encodingMeta.dirty && next === 'general'
-    if (!blockGeneral && !blockEncoding) {
-      if (next === 'encoding') setSearchParams({ tab: 'encoding' })
-      else setSearchParams({})
+  function handleSectionSelect(nextId) {
+    if (nextId === activeSection) return
+    if (!hasUnsavedInCurrentSection()) {
+      setSearchParams({ section: nextId })
       return
     }
     if (leaveWarnArmedRef.current) {
       discardAllUnsaved()
-      if (next === 'encoding') setSearchParams({ tab: 'encoding' })
-      else setSearchParams({})
+      setSearchParams({ section: nextId })
       leaveWarnArmedRef.current = false
       setLeaveBannerVisible(false)
       return
@@ -198,20 +337,21 @@ export default function SettingsPage() {
 
   useEffect(() => {
     setGuard({
-      hasUnsaved: () => isDirty || (settingsTab === 'encoding' && encodingMeta.dirty),
+      hasUnsaved: () =>
+        activeSection === 'encoding' ? encodingMeta.dirty : isDirty,
       handleNavigateAway,
     })
     return () => setGuard(null)
-  }, [setGuard, handleNavigateAway, isDirty, settingsTab, encodingMeta.dirty])
+  }, [setGuard, handleNavigateAway, isDirty, encodingMeta.dirty, activeSection])
 
   useEffect(() => {
-    const clean =
-      !isDirty && !(settingsTab === 'encoding' && encodingMeta.dirty)
-    if (clean) {
+    const noUnsaved =
+      activeSection === 'encoding' ? !encodingMeta.dirty : !isDirty
+    if (noUnsaved) {
       setLeaveBannerVisible(false)
       leaveWarnArmedRef.current = false
     }
-  }, [isDirty, settingsTab, encodingMeta.dirty])
+  }, [isDirty, encodingMeta.dirty, activeSection])
 
   async function detectOBSPath() {
     const path = await api.detectOBSPath()
@@ -265,7 +405,6 @@ export default function SettingsPage() {
     setCheckingUpdate(true)
     setUpdateStatus(null)
     await api.checkForUpdate?.()
-    // If no update is available, electron-updater fires no event, so clear the spinner after a reasonable timeout.
     const UPDATE_CHECK_TIMEOUT_MS = 10000
     setTimeout(() => setCheckingUpdate(false), UPDATE_CHECK_TIMEOUT_MS)
   }
@@ -273,6 +412,8 @@ export default function SettingsPage() {
   async function installUpdate() {
     await api.installUpdate?.()
   }
+
+  const activeSectionMeta = SETTINGS_SECTIONS.find((s) => s.id === activeSection)
 
   if (isLoading) {
     return (
@@ -297,488 +438,178 @@ export default function SettingsPage() {
           Don&apos;t forget to save any changes. Click again to clear changes.
         </button>
       )}
-      <div className="page-header">
-        <div
-          style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}
-        >
-          <div>
-            <h1>Settings</h1>
-            <p>
-              {settingsTab === 'encoding'
-                ? 'Configure OBS recording encoder settings for your profile'
-                : 'Configure recording paths, hotkeys, and automation'}
-            </p>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 2 }}>
-            {settingsTab === 'general' && (
-              <button className="btn btn-secondary btn-sm" onClick={() => setShowWizard(true)}>
-                <Wand2 size={13} /> Setup Wizard
-              </button>
-            )}
-            {showUnsavedHint && (
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Unsaved changes</span>
-            )}
-            <button
-              type="button"
-              className={`btn btn-primary btn-sm settings-save-btn ${saveFlashActive ? 'settings-save-btn-flash' : ''}`}
-              onClick={handleHeaderSave}
-              disabled={headerSaveDisabled}
-              style={{ opacity: headerSaveDisabled ? 0.4 : 1 }}
+      <div className="settings-page">
+        <div className="page-body settings-page-body">
+          <div className="settings-split">
+            <aside
+              className="settings-sidebar"
+              style={{ '--settings-sidebar-width': `${settingsSidebarWidth}px` }}
             >
-              <Save size={13} /> Save Settings
-            </button>
-          </div>
-        </div>
-
-        <nav className="settings-subnav" role="tablist" aria-label="Settings sections">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={settingsTab === 'general'}
-            className={`settings-subnav-tab ${settingsTab === 'general' ? 'active' : ''}`}
-            onClick={() => handleSettingsSubTabClick('general')}
-          >
-            General
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={settingsTab === 'encoding'}
-            className={`settings-subnav-tab ${settingsTab === 'encoding' ? 'active' : ''}`}
-            onClick={() => handleSettingsSubTabClick('encoding')}
-          >
-            Encoding
-          </button>
-        </nav>
-      </div>
-
-      <div className="page-body" style={{ maxWidth: 640 }}>
-        {settingsTab === 'encoding' ? (
-          <EncodingSettingsPanel ref={encodingPanelRef} onEncodingStateChange={onEncodingStateChange} />
-        ) : (
-          <>
-        {/* Paths */}
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="card-title">Recording Paths</div>
-
-          <div className="form-group" style={{ marginTop: 16 }}>
-            <label className="form-label">OBS Recording Folder</label>
-            <div className="form-input-row">
-              <input
-                className="form-input"
-                value={settings.obsRecordingPath || ''}
-                onChange={(e) => updateSetting('obsRecordingPath', e.target.value)}
-                placeholder="Path to OBS recordings"
-              />
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={detectOBSPath}
-                title="Auto-detect"
-              >
-                <RefreshCw size={13} />
-              </button>
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => browseDirectory('obsRecordingPath')}
-              >
-                <FolderOpen size={13} />
-              </button>
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Organized Recordings Destination</label>
-            <div className="form-input-row">
-              <input
-                className="form-input"
-                value={settings.destinationPath || ''}
-                onChange={(e) => updateSetting('destinationPath', e.target.value)}
-                placeholder="Where to organize recordings"
-              />
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => browseDirectory('destinationPath')}
-              >
-                <FolderOpen size={13} />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Watcher */}
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="card-title">Watcher</div>
-
-          <div className="toggle-row" style={{ marginTop: 8 }}>
-            <div>
-              <div className="toggle-label">Start Watcher on Startup</div>
-              <div className="toggle-desc">
-                Automatically start the game watcher when the app launches
-              </div>
-            </div>
-            <button
-              className={`toggle ${settings.startWatcherOnStartup ? 'on' : ''}`}
-              onClick={() =>
-                updateSetting('startWatcherOnStartup', !settings.startWatcherOnStartup)
-              }
-            />
-          </div>
-        </div>
-
-        {/* Organize */}
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="card-title">Organize</div>
-
-          <div className="toggle-row" style={{ marginTop: 8 }}>
-            <div>
-              <div className="toggle-label">Remux to MP4</div>
-              <div className="toggle-desc">
-                Convert MKV and other formats to MP4 when organizing. Disable to move files without
-                converting.
-              </div>
-            </div>
-            <button
-              className={`toggle ${settings.organizeRemux !== false ? 'on' : ''}`}
-              onClick={() => updateSetting('organizeRemux', settings.organizeRemux === false)}
-            />
-          </div>
-        </div>
-
-        {/* View */}
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="card-title">View</div>
-
-          <div className="form-group" style={{ marginTop: 8 }}>
-            <label className="form-label">Storage View</label>
-            <div className="toggle-desc" style={{ marginBottom: 6 }}>
-              Choose how recordings and clips are displayed
-            </div>
-            <select
-              className="form-input"
-              value={settings.listView !== false ? 'list' : 'grid'}
-              onChange={(e) => updateSetting('listView', e.target.value === 'list')}
-            >
-              <option value="list">List</option>
-              <option value="grid">Grid</option>
-            </select>
-          </div>
-
-          <div className="form-group" style={{ marginTop: 16 }}>
-            <label className="form-label">Waveform Resolution</label>
-            <div className="toggle-desc" style={{ marginBottom: 6 }}>
-              Higher resolution shows more detail in audio waveforms but may take longer to load
-            </div>
-            <select
-              className="form-input"
-              value={settings.waveformResolution || 'default'}
-              onChange={(e) => updateSetting('waveformResolution', e.target.value)}
-            >
-              <option value="low">Low (faster loading)</option>
-              <option value="default">Standard (balanced)</option>
-              <option value="high">High (more detail)</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Clip Marker */}
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="card-title">Clip Marker Hotkey</div>
-          <div className="form-group" style={{ marginTop: 16 }}>
-            <label className="form-label">Hotkey</label>
-            <HotkeyCapture
-              value={settings.clipMarkerHotkey || 'F9'}
-              onChange={(v) => updateSetting('clipMarkerHotkey', v)}
-            />
-            <span
-              style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}
-            >
-              Press this key while gaming to mark a moment for clipping
-            </span>
-          </div>
-        </div>
-
-        {/* Auto-Clip */}
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="card-title">Auto-Clip</div>
-
-          <div className="toggle-row" style={{ marginTop: 8 }}>
-            <div>
-              <div className="toggle-label">Enable Auto-Clip</div>
-              <div className="toggle-desc">
-                Automatically create clips from markers when recording ends
-              </div>
-            </div>
-            <button
-              className={`toggle ${settings.autoClip?.enabled ? 'on' : ''}`}
-              onClick={() => updateSetting('autoClip.enabled', !settings.autoClip?.enabled)}
-            />
-          </div>
-
-          {settings.autoClip?.enabled && (
-            <>
-              <div className="form-group" style={{ marginTop: 12 }}>
-                <label className="form-label">Buffer Before Marker (seconds)</label>
-                <input
-                  type="number"
-                  className="form-input"
-                  value={settings.autoClip?.bufferBefore ?? 30}
-                  onChange={(e) =>
-                    updateSetting('autoClip.bufferBefore', parseInt(e.target.value) || 0)
-                  }
-                  style={{ width: 100 }}
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Buffer After Marker (seconds)</label>
-                <input
-                  type="number"
-                  className="form-input"
-                  value={settings.autoClip?.bufferAfter ?? 5}
-                  onChange={(e) =>
-                    updateSetting('autoClip.bufferAfter', parseInt(e.target.value) || 0)
-                  }
-                  style={{ width: 100 }}
-                />
-              </div>
-
-              <div className="toggle-row">
-                <div>
-                  <div className="toggle-label">Remove Markers After Clipping</div>
-                </div>
-                <button
-                  className={`toggle ${settings.autoClip?.removeMarkers ? 'on' : ''}`}
-                  onClick={() =>
-                    updateSetting('autoClip.removeMarkers', !settings.autoClip?.removeMarkers)
-                  }
-                />
-              </div>
-
-              <div className="toggle-row">
-                <div>
-                  <div className="toggle-label">Delete Full Recording</div>
-                  <div className="toggle-desc">
-                    Only keep the clips, delete the original recording
+              <div className="settings-sidebar-header">
+                <div className="settings-sidebar-row1">
+                  <span className="settings-sidebar-title">Settings</span>
+                  <div className="settings-sidebar-search">
+                    <label htmlFor="settings-sidebar-search-input" className="visually-hidden">
+                      Search settings
+                    </label>
+                    <span className="settings-sidebar-search-icon" aria-hidden>
+                      <Search size={13} strokeWidth={2} />
+                    </span>
+                    <input
+                      id="settings-sidebar-search-input"
+                      type="search"
+                      className="settings-sidebar-search-input"
+                      placeholder="Search settings…"
+                      value={sidebarSearch}
+                      onChange={(e) => setSidebarSearch(e.target.value)}
+                      autoComplete="off"
+                    />
                   </div>
                 </div>
-                <button
-                  className={`toggle ${settings.autoClip?.deleteFullRecording ? 'on' : ''}`}
-                  onClick={() =>
-                    updateSetting(
-                      'autoClip.deleteFullRecording',
-                      !settings.autoClip?.deleteFullRecording
-                    )
-                  }
-                />
               </div>
-            </>
-          )}
-        </div>
-
-        {/* Auto-Delete */}
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="card-title">Storage Management</div>
-
-          <div className="toggle-row" style={{ marginTop: 8 }}>
-            <div>
-              <div className="toggle-label">Auto-Delete Old Recordings</div>
-              <div className="toggle-desc">
-                Automatically clean up old recordings on watcher startup
-              </div>
-            </div>
-            <button
-              className={`toggle ${settings.autoDelete?.enabled ? 'on' : ''}`}
-              onClick={() => updateSetting('autoDelete.enabled', !settings.autoDelete?.enabled)}
-            />
-          </div>
-
-          {settings.autoDelete?.enabled && (
-            <>
-              <div className="form-group" style={{ marginTop: 12 }}>
-                <label className="form-label">Max Storage (GB)</label>
-                <input
-                  type="number"
-                  className="form-input"
-                  value={settings.autoDelete?.maxStorageGB ?? 50}
-                  onChange={(e) =>
-                    updateSetting('autoDelete.maxStorageGB', parseInt(e.target.value) || 0)
-                  }
-                  style={{ width: 100 }}
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Max Age (days)</label>
-                <input
-                  type="number"
-                  className="form-input"
-                  value={settings.autoDelete?.maxAgeDays ?? 30}
-                  onChange={(e) =>
-                    updateSetting('autoDelete.maxAgeDays', parseInt(e.target.value) || 0)
-                  }
-                  style={{ width: 100 }}
-                />
-              </div>
-
-              <div className="toggle-row">
-                <div>
-                  <div className="toggle-label">Exclude Clips from Auto-Delete</div>
-                </div>
-                <button
-                  className={`toggle ${settings.autoDelete?.excludeClips ? 'on' : ''}`}
-                  onClick={() =>
-                    updateSetting('autoDelete.excludeClips', !settings.autoDelete?.excludeClips)
-                  }
-                />
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* OBS Plugin */}
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="card-title">OBS Plugin</div>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 12px' }}>
-            The OpenClip native plugin controls recording and scene management inside OBS.
-          </p>
-
-          <div className="form-group" style={{ marginBottom: 12 }}>
-            <label className="form-label">OBS Install Folder</label>
-            <div className="form-input-row">
-              <input
-                className="form-input"
-                value={obsInstallPath}
-                onChange={(e) => setObsInstallPath(e.target.value)}
-                placeholder="e.g. C:\Program Files\obs-studio"
-              />
-              <button
-                className="btn btn-secondary btn-sm"
-                title="Auto-detect"
-                onClick={async () => {
-                  const p = await api.detectOBSInstallPath()
-                  if (p) setObsInstallPath(p)
-                }}
-              >
-                <RefreshCw size={13} />
-              </button>
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={async () => {
-                  const dir = await api.openDirectoryDialog()
-                  if (dir) setObsInstallPath(dir)
-                }}
-              >
-                <FolderOpen size={13} />
-              </button>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={installPlugin}
-              disabled={pluginBusy}
-            >
-              {pluginBusy && !pluginInstalled ? (
-                <Loader size={13} style={{ animation: 'spin 1s linear infinite' }} />
-              ) : (
-                <Package size={13} />
-              )}
-              {pluginInstalled ? 'Reinstall Plugin' : 'Install Plugin'}
-            </button>
-            {pluginInstalled && (
-              <button
-                className="btn btn-danger btn-sm"
-                onClick={removePlugin}
-                disabled={pluginBusy}
-              >
-                {pluginBusy ? (
-                  <Loader size={13} style={{ animation: 'spin 1s linear infinite' }} />
-                ) : (
-                  <Trash2 size={13} />
+              <div className="settings-filter-pills-wrap">
+                {canScrollFilterPillsLeft && (
+                  <button
+                    type="button"
+                    className="settings-filter-pills-scroll-btn settings-filter-pills-scroll-left"
+                    aria-label="Scroll filters left"
+                    onClick={() => scrollFilterPills(-1)}
+                  >
+                    <ChevronLeft size={12} />
+                  </button>
                 )}
-                Remove Plugin
-              </button>
-            )}
-            {pluginMsg && (
-              <span
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 5,
-                  fontSize: 13,
-                  color: pluginMsg.ok ? 'var(--text-muted)' : 'var(--color-error, #e55)',
-                }}
-              >
-                {pluginMsg.ok ? <CheckCircle size={13} /> : <AlertCircle size={13} />}
-                {pluginMsg.text}
-              </span>
-            )}
-            {pluginInstalled === null && (
-              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                <Loader
-                  size={13}
-                  style={{ animation: 'spin 1s linear infinite', verticalAlign: 'middle' }}
-                />{' '}
-                Checking…
-              </span>
-            )}
-            {pluginInstalled === false && !pluginMsg && (
-              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Not installed</span>
-            )}
-            {pluginInstalled === true && !pluginMsg && (
-              <span
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 5,
-                  fontSize: 13,
-                  color: 'var(--text-muted)',
-                }}
-              >
-                <CheckCircle size={13} /> Installed
-              </span>
-            )}
-          </div>
-        </div>
+                <div
+                  ref={filterPillsScrollRef}
+                  className="settings-filter-pills-track"
+                  role="group"
+                  aria-label="Filter by category"
+                  onScroll={updateFilterPillsScrollState}
+                >
+                  {SETTINGS_CHIP_IDS.map((id) => (
+                    <button
+                      key={id}
+                      type="button"
+                      className={`settings-filter-pill ${filterChip === id ? 'active' : ''}`}
+                      onClick={() => setFilterChip(id)}
+                    >
+                      {SETTINGS_CHIP_LABELS[id] ?? id}
+                    </button>
+                  ))}
+                </div>
+                {canScrollFilterPillsRight && (
+                  <button
+                    type="button"
+                    className="settings-filter-pills-scroll-btn settings-filter-pills-scroll-right"
+                    aria-label="Scroll filters right"
+                    onClick={() => scrollFilterPills(1)}
+                  >
+                    <ChevronRight size={12} />
+                  </button>
+                )}
+              </div>
 
-        {/* Updates */}
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="card-title">Updates</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={checkForUpdate}
-              disabled={checkingUpdate || updateStatus?.type === 'downloaded'}
-            >
-              <RefreshCw
-                size={13}
-                style={{ animation: checkingUpdate ? 'spin 1s linear infinite' : 'none' }}
+              <nav className="settings-nav-list" role="navigation" aria-label="Settings sections">
+                {filteredSections.length === 0 ? (
+                  <div className="settings-sidebar-empty">
+                    <strong>No sections match</strong>
+                    <span>Try another filter or clear the search box.</span>
+                  </div>
+                ) : (
+                  filteredSections.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      className={`settings-nav-item ${activeSection === s.id ? 'active' : ''}`}
+                      onClick={() => handleSectionSelect(s.id)}
+                      aria-current={activeSection === s.id ? 'page' : undefined}
+                    >
+                      <span className="settings-nav-item-title">{s.title}</span>
+                      <span className="settings-nav-item-sub">{s.blurb}</span>
+                    </button>
+                  ))
+                )}
+              </nav>
+              <div
+                className="sidebar-resizer"
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Resize settings sidebar"
+                onMouseDown={handleSettingsSidebarMouseDown}
               />
-              {checkingUpdate ? 'Checking…' : 'Check for Updates'}
-            </button>
-            {updateStatus?.type === 'available' && (
-              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                Version {updateStatus.version} available — downloading…
-              </span>
-            )}
-            {updateStatus?.type === 'progress' && (
-              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                Downloading… {Math.round(updateStatus.percent)}%
-              </span>
-            )}
-            {updateStatus?.type === 'downloaded' && (
-              <button className="btn btn-primary btn-sm" onClick={installUpdate}>
-                <Download size={13} /> Install &amp; Restart
-              </button>
-            )}
-            {updateStatus?.type === 'error' && (
-              <span style={{ fontSize: 13, color: 'var(--color-error, #e55)' }}>
-                Update failed: {updateStatus.message || 'unknown error'}
-              </span>
-            )}
+            </aside>
+
+            <div className="settings-detail">
+              <div className="settings-detail-topbar" aria-hidden="true" />
+              <div className="settings-detail-toolbar">
+                <div className="settings-detail-header-row">
+                  <h2 className="settings-detail-title">
+                    {activeSectionMeta?.title ?? 'Settings'}
+                  </h2>
+                  <div className="settings-detail-actions">
+                    {activeSection !== 'encoding' && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => setShowWizard(true)}
+                      >
+                        <Wand2 size={13} /> Setup Wizard
+                      </button>
+                    )}
+                    {showUnsavedHint && (
+                      <span className="settings-unsaved-hint">Unsaved changes</span>
+                    )}
+                    <button
+                      type="button"
+                      className={`btn btn-primary btn-sm settings-save-btn ${saveFlashActive ? 'settings-save-btn-flash' : ''}`}
+                      onClick={handleHeaderSave}
+                      disabled={headerSaveDisabled}
+                      style={{ opacity: headerSaveDisabled ? 0.4 : 1 }}
+                    >
+                      <Save size={13} /> Save Settings
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="settings-detail-scroll">
+                {activeSection === 'encoding' ? (
+                  <div className="settings-detail-inner settings-detail-inner--encoding">
+                    <EncodingSettingsPanel
+                      ref={encodingPanelRef}
+                      onEncodingStateChange={onEncodingStateChange}
+                    />
+                  </div>
+                ) : filteredSections.length === 0 ? (
+                  <div className="settings-detail-empty">
+                    <strong>No sections match</strong>
+                    <span>Try another filter or clear the search box.</span>
+                  </div>
+                ) : (
+                  <div className="settings-detail-inner">
+                    <GeneralSettingsSections
+                      sectionId={activeSection}
+                      settings={settings}
+                      updateSetting={updateSetting}
+                      detectOBSPath={detectOBSPath}
+                      browseDirectory={browseDirectory}
+                      obsInstallPath={obsInstallPath}
+                      setObsInstallPath={setObsInstallPath}
+                      pluginInstalled={pluginInstalled}
+                      pluginBusy={pluginBusy}
+                      pluginMsg={pluginMsg}
+                      installPlugin={installPlugin}
+                      removePlugin={removePlugin}
+                      updateStatus={updateStatus}
+                      checkingUpdate={checkingUpdate}
+                      checkForUpdate={checkForUpdate}
+                      installUpdate={installUpdate}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
-          </>
-        )}
       </div>
 
       {toast && <div className="toast">{toast}</div>}
