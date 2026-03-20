@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useState } from 'react'
+import {
+  createContext,
+  createElement,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useState,
+} from 'react'
 import { HashRouter, Routes, Route, NavLink, useLocation } from 'react-router-dom'
 import {
   AlertTriangle,
@@ -24,13 +32,15 @@ import { getTitleBarOverlayForPath } from './utils/titleBarOverlayDefaults'
 import './App.css'
 import './viewer/viewer.css'
 
-const navItems = [
-  { path: '/', icon: Gamepad2, label: 'Games' },
+const mainNavItems = [
   { path: '/recordings', icon: Video, label: 'Recordings' },
   { path: '/clips', icon: Film, label: 'Clips' },
   { path: '/storage', icon: HardDrive, label: 'Storage' },
   { path: '/settings', icon: Settings, label: 'Settings' },
 ]
+
+/** Game watcher — pinned to bottom of sidebar for a lighter primary nav. */
+const gamesNavItem = { path: '/', icon: Gamepad2, label: 'Games' }
 
 export const OrganizeErrorContext = createContext({
   organizeError: null,
@@ -120,7 +130,7 @@ function AppLayout({ sessionProgress, updateState, showOnboarding, setShowOnboar
             <img src={appIcon} alt="OpenClip logo" className="nav-brand-logo" />
             <span>OpenClip</span>
           </div>
-          {navItems.map(({ path, icon: Icon, label }) => (
+          {mainNavItems.map(({ path, icon: Icon, label }) => (
             <NavLink
               key={path}
               to={path}
@@ -137,6 +147,16 @@ function AppLayout({ sessionProgress, updateState, showOnboarding, setShowOnboar
               )}
             </NavLink>
           ))}
+          <div className="nav-nav-spacer" aria-hidden />
+          <NavLink
+            to={gamesNavItem.path}
+            end
+            className={({ isActive }) => `nav-item nav-item-games ${isActive ? 'active' : ''}`}
+            onClick={(e) => handleSidebarNavClick(e, gamesNavItem.path)}
+          >
+            {createElement(gamesNavItem.icon, { size: 18 })}
+            <span>{gamesNavItem.label}</span>
+          </NavLink>
           {updateState && (
             <div className="update-banner">
               <Download size={14} />

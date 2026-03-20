@@ -81,7 +81,11 @@
 /* Sidebar Navigation */
 .sidebar-nav {
   @apply relative z-[2] w-[200px] min-w-[200px] bg-[var(--bg-secondary)] border-r border-[var(--border)]
-    flex flex-col pt-12 px-2 pb-2 gap-[2px];
+    flex flex-col pt-12 px-2 pb-2 gap-[2px] min-h-0;
+}
+/** Eats vertical space so library/settings stay top-aligned and Games (watcher) sits at the bottom. */
+.nav-nav-spacer {
+  @apply flex-1 min-h-[12px] min-w-0;
 }
 .nav-brand {
   @apply text-[13px] font-semibold text-[var(--text-secondary)] px-3 pb-4
