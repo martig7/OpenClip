@@ -939,23 +939,16 @@
   margin-top: 2px;
 }
 
-/* ─────────────────────────────────────────────────────────────
-   Games Page Layout — Prototype 4 (Compact Table + Drawer)
-   ───────────────────────────────────────────────────────────── */
-
 .games-page-layout {
   @apply flex-1 flex flex-col overflow-hidden min-h-0;
   padding: 0;
-  /* Align table + toolbar chrome (title cluster, filters, Add Game) on the same horizontal rhythm */
   --games-inline-gutter: 16px;
 }
 
-/* Games chrome: caption row (aligned with native title bar) + hairline + filters/actions */
 .games-toolbar {
   @apply flex flex-col flex-shrink-0 border-b border-[var(--border)] bg-[var(--bg-primary)];
 }
 
-/* Same band as Electron titleBarOverlay height (36px); title + search vertically centered with system buttons */
 .games-caption-bar {
   display: flex;
   align-items: stretch;
@@ -963,7 +956,6 @@
   height: var(--main-content-topbar-strip-h, 36px);
   min-height: var(--main-content-topbar-strip-h, 36px);
   max-height: var(--main-content-topbar-strip-h, 36px);
-  /* Inset lives inside .games-caption-bar__cluster so bg-secondary reaches the left edge (no primary “strip”) */
   padding-left: 0;
   padding-right: calc(8px + var(--electron-titlebar-controls-inset, 138px));
   background: var(--bg-primary);
@@ -974,7 +966,6 @@
   z-index: 1;
 }
 
-/* Caps how wide title+search grow; max width set inline from useSidebarResize (fallback below) */
 .games-caption-bar__cluster {
   flex: 0 1 auto;
   width: 100%;
@@ -988,11 +979,9 @@
   background: var(--bg-secondary);
   border-radius: var(--radius-sm);
   padding: 5px 10px 5px var(--games-inline-gutter, 16px);
-  /* No margin-right — resizer sits on the colored edge (was leaving a primary “strip” gap) */
   margin-right: 0;
 }
 
-/* Centered on the right hairline, like .sidebar-resizer on MediaSidebar */
 .games-caption-bar__resizer {
   position: absolute;
   top: 0;
@@ -1012,7 +1001,6 @@
   background: var(--accent);
 }
 
-/* Fills remaining caption row so the window can still be dragged */
 .games-caption-bar__drag-fill {
   flex: 1;
   min-width: 0;
@@ -1020,7 +1008,6 @@
   -webkit-app-region: drag;
 }
 
-/* One continuous stroke: full caption height + through the topbar rule (matches .main-content-topbar-rule color) */
 .games-caption-bar__cluster::after {
   content: '';
   position: absolute;
@@ -1067,7 +1054,6 @@
   @apply flex flex-1 overflow-hidden min-h-0;
 }
 
-/* Full-bleed table (hairlines to edges); horizontal rhythm via .col-toggle / .col-actions padding */
 .games-table-wrap {
   @apply flex-1 overflow-y-auto min-h-0;
 }
@@ -1105,7 +1091,6 @@
   transform: translateY(-1px);
 }
 
-/* Trailing “add game” control — same gradient language as .games-add-btn */
 .games-table tbody tr.games-table-add-row {
   cursor: default;
   border-bottom: none;
@@ -1157,7 +1142,6 @@
   outline-offset: 2px;
 }
 
-/* Table */
 .games-table {
   width: 100%;
   border-collapse: collapse;
@@ -1203,7 +1187,6 @@
 
 .games-table thead th.col-actions,
 .games-table tbody td.col-actions {
-  /* Room for two btn-icons + gutters without clipping (was 72px → overflow past cell edge) */
   width: 84px;
 }
 
@@ -1237,7 +1220,6 @@
   text-overflow: ellipsis;
 }
 
-/* After generic td padding — match .games-toolbar-actions inline end (Add Game) */
 .games-table thead th.col-actions {
   padding: 8px var(--games-inline-gutter, 16px) 8px 8px;
 }
@@ -1246,7 +1228,6 @@
   padding: 9px var(--games-inline-gutter, 16px) 9px 8px;
 }
 
-/* Empty / single placeholder row — inset matches toolbar rhythm; row still full width */
 .games-table tbody tr:only-child > td[colspan] {
   padding-left: var(--games-inline-gutter, 16px);
   padding-right: var(--games-inline-gutter, 16px);
@@ -1495,7 +1476,6 @@
   color: var(--text-muted);
 }
 
-/* Light amber pill — single control to add scene source to master (replaces text + loose + icon) */
 .audio-source-not-master-pill {
   display: inline-flex;
   align-items: center;

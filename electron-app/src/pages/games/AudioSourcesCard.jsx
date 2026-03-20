@@ -10,16 +10,7 @@ import {
 } from './audioSourceUtils'
 import { TrackLabelHeader, TrackChips } from './TrackChips'
 
-/**
- * Unified audio sources card used in both master-list and per-scene contexts.
- *
- * mode="master" — master list on the Games page footer
- * mode="scene"  — per-scene sources in the game detail drawer / edit modal
- *
- * Mode only affects:
- *   master → "Edit Track Labels" button, no "Not in master" badges, no "Add from master" dropdown
- *   scene  → "Not in master" badges, "Add from master" dropdown, duplicate-window warning
- */
+/** Master list (Games footer) or per-scene list (drawer / edit modal). */
 export default function AudioSourcesCard({
   mode,
 

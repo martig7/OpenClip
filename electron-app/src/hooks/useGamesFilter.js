@@ -1,14 +1,8 @@
 import { useMemo, useState } from 'react'
 
-/**
- * Games toolbar state:
- * - filter: 'all' | 'enabled' | 'disabled'
- * - search: filters by (name OR selector)
- *
- * Returns filtered games + counts for the toolbar tabs.
- */
+/** Toolbar filter + search; returns filtered list and tab counts. */
 export function useGamesFilter(games) {
-  const [filter, setFilter] = useState('all') // 'all' | 'enabled' | 'disabled'
+  const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
 
   const filtered = useMemo(() => {

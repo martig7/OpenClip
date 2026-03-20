@@ -1,4 +1,4 @@
-/** Electron drag strip + optional body + hairline — shared with VideoPlayer, Settings detail, Games. */
+/** Drag strip, optional children, then rule. */
 export default function MainContentTopBar({ children = null }) {
   return (
     <>

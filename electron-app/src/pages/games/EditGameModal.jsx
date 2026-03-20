@@ -9,13 +9,7 @@ import api from '../../api'
 import AudioSourcesCard from './AudioSourcesCard'
 import WindowPicker from './WindowPicker'
 
-/**
- * EditGameModal — allows editing game name, selector, OBS scene, and per-scene audio sources.
- * Features:
- *  1. Duplicate-scene warning if the scene is already used by another game.
- *  2. Full audio-source add dropdown (same as master list) to add any source directly to this scene.
- *  3. Per-source track-routing toggles (tracks 1–6) via OBS WebSocket.
- */
+/** Edit game fields, scene, and per-scene audio (modal or drawer). */
 export default function EditGameModal({
   modal,
   masterAudioSources,

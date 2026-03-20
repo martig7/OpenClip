@@ -7,7 +7,6 @@
 :root {
   /* Space for native caption buttons (Windows titleBarOverlay) — keep interactive UI out from under min/max/close */
   --electron-titlebar-controls-inset: 138px;
-  /* Games caption: max width of title+search cluster (msb-search fills this, not full window) */
   --games-caption-cluster-max: 480px;
 
   /* ── Surfaces ── */

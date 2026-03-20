@@ -1,9 +1,6 @@
 import { RefreshCw } from 'lucide-react'
 
-/**
- * Header row of track labels that aligns with <TrackChips>.
- * Render once above a list of audio source rows.
- */
+/** Track label row aligned with TrackChips. */
 export function TrackLabelHeader({ trackLabels, className = '' }) {
   return (
     <div className={`track-label-header ${className}`}>
@@ -20,9 +17,7 @@ export function TrackLabelHeader({ trackLabels, className = '' }) {
   )
 }
 
-/**
- * Inline track routing chips (1–6) with optional loading spinner.
- */
+/** Per-source track 1–6 toggles. */
 export function TrackChips({ inputName, tracks, trackLabels, isLoading, onToggle }) {
   return (
     <div className="track-chips-col">

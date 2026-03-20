@@ -11,7 +11,7 @@ export const STORAGE_KEY_MEDIA_SIDEBAR = 'sidebarWidth'
 export const STORAGE_KEY_SETTINGS_SIDEBAR = 'settingsSidebarWidth'
 /** Games page detail drawer */
 export const STORAGE_KEY_GAMES_DRAWER = 'gamesDrawerWidth'
-/** Games caption: title + search cluster max width (drag handle on right edge of cluster) */
+/** Games caption cluster width */
 export const STORAGE_KEY_GAMES_CAPTION_CLUSTER = 'gamesCaptionClusterWidth'
 
 function readStoredWidth(storageKey, min, max, defaultW) {

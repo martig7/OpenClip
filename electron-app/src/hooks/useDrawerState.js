@@ -1,15 +1,7 @@
 import { useState, useMemo, useCallback } from 'react'
 import api from '../api'
 
-/**
- * Manages the game detail drawer state independently of the edit modal.
- *
- * The drawer has two modes:
- *   - View: shows game info + scene audio sources (read-only)
- *   - Edit: the EditGameModal form is displayed inside the drawer
- *
- * Scene audio sources are loaded when the drawer opens (for view mode).
- */
+/** Game detail drawer + scene audio when a row is selected. */
 export function useDrawerState(games) {
   const [drawerGameId, setDrawerGameId] = useState(null)
   const [isEditing, setIsEditing] = useState(false)

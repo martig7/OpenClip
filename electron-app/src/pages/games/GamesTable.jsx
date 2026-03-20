@@ -15,9 +15,7 @@ export function GamesToolbar({ filter, setFilter, search, setSearch, counts, onA
 
   return (
     <div className="games-toolbar">
-      {/* One row: same height as Electron titleBarOverlay (36px) + inset for Windows system buttons */}
       <header className="games-caption-bar" aria-label="Games">
-        {/* Bounded cluster: msb-search width:100% fills this box; max width persisted like drawer */}
         <div
           className="games-caption-bar__cluster"
           style={{ maxWidth: captionClusterMaxPx }}
