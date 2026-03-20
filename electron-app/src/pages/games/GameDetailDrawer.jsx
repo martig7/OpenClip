@@ -28,9 +28,9 @@ export function GameDetailDrawer({
   toggleTrack,
 }) {
   const { sidebarWidth, handleMouseDown } = useSidebarResize(STORAGE_KEY_GAMES_DRAWER, {
-    min: 340,
-    max: 800,
-    defaultW: 380,
+    min: 450,
+    max: 1200,
+    defaultW: 500,
     side: 'right',
   })
 

@@ -14,12 +14,16 @@ export const STORAGE_KEY_GAMES_DRAWER = 'gamesDrawerWidth'
 /** Games caption cluster width */
 export const STORAGE_KEY_GAMES_CAPTION_CLUSTER = 'gamesCaptionClusterWidth'
 
+function clampWidth(w, min, max) {
+  return Math.min(max, Math.max(min, w))
+}
+
 function readStoredWidth(storageKey, min, max, defaultW) {
   const saved = localStorage.getItem(storageKey)
-  if (!saved) return defaultW
+  if (!saved) return clampWidth(defaultW, min, max)
   const n = parseInt(saved, 10)
-  if (Number.isNaN(n)) return defaultW
-  return Math.min(max, Math.max(min, n))
+  if (Number.isNaN(n)) return clampWidth(defaultW, min, max)
+  return clampWidth(n, min, max)
 }
 
 /**
@@ -71,6 +75,11 @@ export function useSidebarResize(storageKey, opts = {}) {
       window.removeEventListener('mouseup', handleMouseUp)
     }
   }, [handleMouseMove, handleMouseUp])
+
+  // Keep width inside [min, max] when bounds or key change (e.g. caption min/max updated, HMR).
+  useEffect(() => {
+    setSidebarWidth((w) => clampWidth(w, min, max))
+  }, [min, max, storageKey])
 
   const handleMouseDown = useCallback(
     (e) => {

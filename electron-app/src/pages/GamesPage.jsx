@@ -395,7 +395,7 @@ export default function GamesPage() {
       )
       if (conflict) {
         showToast(
-          `⚠ OBS doesn't support two Application Audio sources for the same window — OBS will default to "${conflict.name}" (the first source added).`
+          `OBS doesn't support two Application Audio sources for the same window — OBS will default to "${conflict.name}" (the first source added).`
         )
       }
     }
