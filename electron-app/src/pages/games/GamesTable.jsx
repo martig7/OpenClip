@@ -110,79 +110,96 @@ export function GamesTable({
             </td>
           </tr>
         ) : (
-          games.map((game) => {
-            const selected = selectedId === game.id
-            const disabled = !game.enabled
+          <>
+            {games.map((game) => {
+              const selected = selectedId === game.id
+              const disabled = !game.enabled
 
-            return (
-              <tr
-                key={game.id}
-                className={`${selected ? 'selected' : ''} ${disabled ? 'is-disabled' : ''}`}
-                onClick={() => onRowClick(game)}
-              >
-                <td className="col-toggle">
-                  <button
-                    className={`toggle ${game.enabled ? 'on' : ''}`}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onToggle(game.id)
-                    }}
-                    title={game.enabled ? 'Enabled' : 'Disabled'}
-                    type="button"
-                  />
-                </td>
-
-                <td className="col-icon">
-                  <GameAvatar game={game} size={28} />
-                </td>
-
-                <td className="games-table-name">
-                  {game.name}
-                </td>
-                <td className="games-table-scene">{game.scene || '—'}</td>
-
-                <td className="col-status">
-                  <span className={`badge ${game.enabled ? 'badge-success' : 'badge-muted'}`}>
-                    <span
-                      className="badge-dot"
-                      style={{
-                        background: game.enabled ? 'var(--success)' : 'var(--text-muted)',
+              return (
+                <tr
+                  key={game.id}
+                  className={`${selected ? 'selected' : ''} ${disabled ? 'is-disabled' : ''}`}
+                  onClick={() => onRowClick(game)}
+                >
+                  <td className="col-toggle">
+                    <button
+                      className={`toggle ${game.enabled ? 'on' : ''}`}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onToggle(game.id)
                       }}
+                      title={game.enabled ? 'Enabled' : 'Disabled'}
+                      type="button"
                     />
-                    {game.enabled ? 'Active' : 'Off'}
-                  </span>
-                </td>
+                  </td>
 
-                <td className="col-actions">
-                  <div className="games-table-actions">
-                    <button
-                      className="btn-icon"
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onEdit(game)
-                      }}
-                      title="Edit game"
-                    >
-                      <Edit2 size={14} />
-                    </button>
-                    <button
-                      className="btn-icon"
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onDelete(game.id)
-                      }}
-                      title="Remove game"
-                      style={{ color: 'var(--danger)' }}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            )
-          })
+                  <td className="col-icon">
+                    <GameAvatar game={game} size={28} />
+                  </td>
+
+                  <td className="games-table-name">
+                    {game.name}
+                  </td>
+                  <td className="games-table-scene">{game.scene || '—'}</td>
+
+                  <td className="col-status">
+                    <span className={`badge ${game.enabled ? 'badge-success' : 'badge-muted'}`}>
+                      <span
+                        className="badge-dot"
+                        style={{
+                          background: game.enabled ? 'var(--success)' : 'var(--text-muted)',
+                        }}
+                      />
+                      {game.enabled ? 'Active' : 'Off'}
+                    </span>
+                  </td>
+
+                  <td className="col-actions">
+                    <div className="games-table-actions">
+                      <button
+                        className="btn-icon"
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onEdit(game)
+                        }}
+                        title="Edit game"
+                      >
+                        <Edit2 size={14} />
+                      </button>
+                      <button
+                        className="btn-icon"
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onDelete(game.id)
+                        }}
+                        title="Remove game"
+                        style={{ color: 'var(--danger)' }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
+            <tr className="games-table-add-row" key="games-table-add-slot">
+              <td colSpan={cols}>
+                <div className="games-table-add-slot">
+                  <button
+                    type="button"
+                    className="games-add-circle-btn"
+                    onClick={() => onAdd()}
+                    aria-label="Add game"
+                    title="Add game"
+                  >
+                    <Plus size={18} strokeWidth={2.25} aria-hidden />
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </>
         )}
       </tbody>
     </table>

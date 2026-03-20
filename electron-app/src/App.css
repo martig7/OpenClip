@@ -946,6 +946,8 @@
 .games-page-layout {
   @apply flex-1 flex flex-col overflow-hidden min-h-0;
   padding: 0;
+  /* Align table + toolbar chrome (title cluster, filters, Add Game) on the same horizontal rhythm */
+  --games-inline-gutter: 16px;
 }
 
 /* Games chrome: caption row (aligned with native title bar) + hairline + filters/actions */
@@ -985,7 +987,7 @@
   align-items: center;
   background: var(--bg-secondary);
   border-radius: var(--radius-sm);
-  padding: 5px 10px 5px 16px;
+  padding: 5px 10px 5px var(--games-inline-gutter, 16px);
   margin-right: 8px;
 }
 
@@ -1018,7 +1020,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 6px 16px 8px;
+  padding: 6px var(--games-inline-gutter, 16px) 8px;
   flex-shrink: 0;
   min-width: 0;
 }
@@ -1036,6 +1038,7 @@
   @apply flex flex-1 overflow-hidden min-h-0;
 }
 
+/* Full-bleed table (hairlines to edges); horizontal rhythm via .col-toggle / .col-actions padding */
 .games-table-wrap {
   @apply flex-1 overflow-y-auto min-h-0;
 }
@@ -1073,6 +1076,58 @@
   transform: translateY(-1px);
 }
 
+/* Trailing “add game” control — same gradient language as .games-add-btn */
+.games-table tbody tr.games-table-add-row {
+  cursor: default;
+  border-bottom: none;
+}
+
+.games-table tbody tr.games-table-add-row:hover {
+  background: transparent;
+}
+
+.games-table-add-row td {
+  padding: 14px 0 16px;
+  border-bottom: none;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.games-table-add-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.games-add-circle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%);
+  color: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.25);
+  transition:
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.games-add-circle-btn:hover {
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4);
+  transform: translateY(-1px);
+}
+
+.games-add-circle-btn:focus-visible {
+  outline: 2px solid var(--accent-light);
+  outline-offset: 2px;
+}
+
 /* Table */
 .games-table {
   width: 100%;
@@ -1098,10 +1153,11 @@
 
 .games-table thead th.col-toggle,
 .games-table tbody td.col-toggle {
-  width: 44px;
-  padding-left: 4px;
+  width: 60px;
+  padding-left: var(--games-inline-gutter, 16px);
   padding-right: 0;
-  text-align: center;
+  text-align: left;
+  vertical-align: middle;
 }
 
 .games-table thead th.col-icon,
@@ -1118,8 +1174,8 @@
 
 .games-table thead th.col-actions,
 .games-table tbody td.col-actions {
-  width: 64px;
-  padding-right: 12px;
+  /* Room for two btn-icons + gutters without clipping (was 72px → overflow past cell edge) */
+  width: 84px;
 }
 
 .games-table tbody tr {
@@ -1152,6 +1208,21 @@
   text-overflow: ellipsis;
 }
 
+/* After generic td padding — match .games-toolbar-actions inline end (Add Game) */
+.games-table thead th.col-actions {
+  padding: 8px var(--games-inline-gutter, 16px) 8px 8px;
+}
+
+.games-table tbody td.col-actions {
+  padding: 9px var(--games-inline-gutter, 16px) 9px 8px;
+}
+
+/* Empty / single placeholder row — inset matches toolbar rhythm; row still full width */
+.games-table tbody tr:only-child > td[colspan] {
+  padding-left: var(--games-inline-gutter, 16px);
+  padding-right: var(--games-inline-gutter, 16px);
+}
+
 .games-table-name {
   @apply text-[var(--text-primary)] font-medium;
 }
@@ -1161,7 +1232,7 @@
 }
 
 .games-table-actions {
-  @apply flex items-center gap-1;
+  @apply flex items-center justify-end gap-1;
 }
 
 .game-avatar {
