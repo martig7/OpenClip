@@ -7,23 +7,28 @@ import {
 
 describe('generalSectionConfig', () => {
   it('filterSettingsSections respects chip and search', () => {
-    const pathsOnly = filterSettingsSections('paths', '')
-    expect(pathsOnly.map((s) => s.id)).toEqual(['paths'])
+    const updatesOnly = filterSettingsSections('updates', '')
+    expect(updatesOnly.map((s) => s.id)).toEqual(['updates'])
 
     const auto = filterSettingsSections('automation', '')
     expect(auto.some((s) => s.id === 'watcher')).toBe(true)
-    expect(auto.some((s) => s.id === 'paths')).toBe(false)
+    expect(auto.some((s) => s.id === 'updates')).toBe(false)
 
     const enc = filterSettingsSections('encoding', '')
-    expect(enc.map((s) => s.id)).toEqual(['encoding'])
+    expect(enc.map((s) => s.id)).toEqual([
+      'encoding-profile',
+      'encoding-video',
+      'encoding-recording',
+      'encoding-encoder',
+    ])
 
     const searched = filterSettingsSections('all', 'plugin')
     expect(searched.some((s) => s.id === 'plugin')).toBe(true)
   })
 
-  it('isValidSectionId includes encoding', () => {
-    expect(isValidSectionId('paths')).toBe(true)
-    expect(isValidSectionId('encoding')).toBe(true)
+  it('isValidSectionId includes encoding subsections', () => {
+    expect(isValidSectionId('encoding-profile')).toBe(true)
+    expect(isValidSectionId('encoding')).toBe(false)
     expect(isValidSectionId('nope')).toBe(false)
   })
 

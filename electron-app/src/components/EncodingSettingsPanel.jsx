@@ -1,6 +1,15 @@
-import { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react'
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  forwardRef,
+  useImperativeHandle,
+} from 'react'
 import { RefreshCw, Undo2 } from 'lucide-react'
 import api from '../api'
+import { SettingsSectionCard } from '../settings/GeneralSettingsSections'
 
 const ENCODERS = [
   'obs_nvenc_hevc_tex',
@@ -39,7 +48,6 @@ const DEFAULT_SETTINGS = {
   preset: '',
 }
 
-/** Compare form values to baseline; coerces primitives so e.g. API number vs input string match */
 function encodingValuesEqual(a, b) {
   if (!a || !b) return false
   for (const k of Object.keys(DEFAULT_SETTINGS)) {
@@ -58,17 +66,24 @@ function isEncodingDirty(settings, baselineStr) {
   }
 }
 
-const EncodingSettingsPanel = forwardRef(function EncodingSettingsPanel(
-  { onEncodingStateChange },
+const EncodingSettingsContext = createContext(/** @type {null} */ (null))
+
+function useEncodingSettings() {
+  const ctx = useContext(EncodingSettingsContext)
+  if (!ctx) throw new Error('useEncodingSettings must be used under EncodingSettingsProvider')
+  return ctx
+}
+
+export const EncodingSettingsProvider = forwardRef(function EncodingSettingsProvider(
+  { onEncodingStateChange, children },
   ref
 ) {
   const [profiles, setProfiles] = useState([])
   const [profileDir, setProfileDir] = useState(null)
   const [settings, setSettings] = useState(DEFAULT_SETTINGS)
-  /** Serialized settings last saved or loaded; used for dirty detection */
   const [baselineStr, setBaselineStr] = useState(null)
   const [obsRunning, setObsRunning] = useState(false)
-  const [status, setStatus] = useState({ msg: '', type: '' }) // type: 'ok'|'err'|'warn'
+  const [status, setStatus] = useState({ msg: '', type: '' })
 
   useEffect(() => {
     const dirty =
@@ -81,7 +96,6 @@ const EncodingSettingsPanel = forwardRef(function EncodingSettingsPanel(
     load()
   }, [])
 
-  /** Keep OBS running state fresh so Save / warnings stay accurate if OBS is opened or closed */
   useEffect(() => {
     let cancelled = false
     const tick = async () => {
@@ -152,7 +166,7 @@ const EncodingSettingsPanel = forwardRef(function EncodingSettingsPanel(
         }
 
         const [cx, cy] = (settings.output_cx + 'x' + settings.output_cy).split('x')
-        if (!cx || !cy || isNaN(parseInt(cx)) || isNaN(parseInt(cy))) {
+        if (!cx || !cy || isNaN(parseInt(cx, 10)) || isNaN(parseInt(cy, 10))) {
           setStatus({ msg: 'Invalid resolution format.', type: 'err' })
           return false
         }
@@ -175,7 +189,6 @@ const EncodingSettingsPanel = forwardRef(function EncodingSettingsPanel(
     setSettings((s) => ({ ...s, [key]: value }))
   }
 
-  // Split resolution for display
   const resolution = `${settings.output_cx}x${settings.output_cy}`
 
   function onResolutionChange(val) {
@@ -186,263 +199,309 @@ const EncodingSettingsPanel = forwardRef(function EncodingSettingsPanel(
   const isDirty =
     !!profileDir && baselineStr !== null && isEncodingDirty(settings, baselineStr)
 
+  const value = {
+    profiles,
+    profileDir,
+    settings,
+    set,
+    load,
+    loadProfile,
+    resetToBaseline,
+    baselineStr,
+    obsRunning,
+    status,
+    setStatus,
+    isDirty,
+    resolution,
+    onResolutionChange,
+    ENCODERS,
+    FORMATS,
+    RESOLUTIONS,
+    FPS_OPTIONS,
+    RATE_CONTROLS,
+    PRESETS,
+  }
+
   return (
-    <>
-      {/* Profile selector */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-title">Profile</div>
-        <div className="form-group" style={{ marginTop: 12 }}>
-          <div className="form-input-row">
-            <select
-              className="form-input"
-              value={profileDir || ''}
-              onChange={(e) => loadProfile(e.target.value)}
-            >
-              {profiles.map((p) => (
-                <option key={p.dir} value={p.dir}>
-                  {p.name}
-                </option>
-              ))}
-              {profiles.length === 0 && <option value="">No profiles found</option>}
-            </select>
-            <button className="btn btn-secondary btn-sm" onClick={load} title="Reload profiles">
-              <RefreshCw size={13} />
-            </button>
-            {isDirty && baselineStr && (
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={resetToBaseline}
-                title="Discard changes and restore last loaded or saved values"
+    <EncodingSettingsContext.Provider value={value}>{children}</EncodingSettingsContext.Provider>
+  )
+})
+
+/**
+ * @param {object} props
+ * @param {string} props.sectionId
+ * @param {string} props.sectionTitle
+ */
+export function EncodingSettingsSection({ sectionId, sectionTitle }) {
+  const ctx = useEncodingSettings()
+
+  switch (sectionId) {
+    case 'encoding-profile':
+      return (
+        <SettingsSectionCard title={sectionTitle}>
+          <div className="form-group" style={{ marginTop: 0 }}>
+            <div className="form-input-row">
+              <select
+                className="form-input"
+                value={ctx.profileDir || ''}
+                onChange={(e) => ctx.loadProfile(e.target.value)}
               >
-                <Undo2 size={13} /> Reset to saved
+                {ctx.profiles.map((p) => (
+                  <option key={p.dir} value={p.dir}>
+                    {p.name}
+                  </option>
+                ))}
+                {ctx.profiles.length === 0 && <option value="">No profiles found</option>}
+              </select>
+              <button className="btn btn-secondary btn-sm" onClick={ctx.load} title="Reload profiles">
+                <RefreshCw size={13} />
               </button>
+              {ctx.isDirty && ctx.baselineStr && (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={ctx.resetToBaseline}
+                  title="Discard changes and restore last loaded or saved values"
+                >
+                  <Undo2 size={13} /> Reset to saved
+                </button>
+              )}
+            </div>
+            {ctx.profileDir && (
+              <span
+                style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, display: 'block' }}
+              >
+                Output mode: <strong>{ctx.settings.output_mode}</strong>
+                {ctx.obsRunning && (
+                  <span style={{ color: 'var(--accent-warn, #f5a623)', marginLeft: 12 }}>
+                    ⚠ OBS is running — close OBS to save encoding settings
+                  </span>
+                )}
+              </span>
             )}
           </div>
-          {profileDir && (
-            <span
-              style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, display: 'block' }}
-            >
-              Output mode: <strong>{settings.output_mode}</strong>
-              {obsRunning && (
-                <span style={{ color: 'var(--accent-warn, #f5a623)', marginLeft: 12 }}>
-                  ⚠ OBS is running — close OBS to save encoding settings
-                </span>
-              )}
-            </span>
+          {ctx.status.msg && (
+            <div style={{ marginTop: 12, fontSize: 12 }}>
+              <span
+                style={{
+                  color:
+                    ctx.status.type === 'ok'
+                      ? 'var(--accent-green, #4caf50)'
+                      : ctx.status.type === 'err'
+                        ? 'var(--accent-red,   #f44336)'
+                        : 'var(--accent-warn,  #f5a623)',
+                }}
+              >
+                {ctx.status.msg}
+              </span>
+            </div>
           )}
-        </div>
-      </div>
+        </SettingsSectionCard>
+      )
 
-      {/* Video */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-title">Video</div>
-
-        <div className="form-group" style={{ marginTop: 12 }}>
-          <label className="form-label">Output Resolution</label>
-          <div className="form-input-row">
+    case 'encoding-video':
+      return (
+        <SettingsSectionCard title={sectionTitle}>
+          <div className="form-group" style={{ marginTop: 0 }}>
+            <label className="form-label">Output Resolution</label>
+            <div className="form-input-row">
             <select
               className="form-input"
-              value={RESOLUTIONS.includes(resolution) ? resolution : ''}
-              onChange={(e) => onResolutionChange(e.target.value)}
+              value={ctx.RESOLUTIONS.includes(ctx.resolution) ? ctx.resolution : ''}
+              onChange={(e) => ctx.onResolutionChange(e.target.value)}
               style={{ width: 160 }}
             >
-              {!RESOLUTIONS.includes(resolution) && <option value="">{resolution}</option>}
-              {RESOLUTIONS.map((r) => (
+              {!ctx.RESOLUTIONS.includes(ctx.resolution) && (
+                <option value="">{ctx.resolution}</option>
+              )}
+              {ctx.RESOLUTIONS.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+              <input
+                className="form-input"
+                value={ctx.settings.output_cx}
+                onChange={(e) => ctx.set('output_cx', e.target.value)}
+                placeholder="W"
+                style={{ width: 70 }}
+              />
+              <span style={{ alignSelf: 'center', color: 'var(--text-muted)' }}>×</span>
+              <input
+                className="form-input"
+                value={ctx.settings.output_cy}
+                onChange={(e) => ctx.set('output_cy', e.target.value)}
+                placeholder="H"
+                style={{ width: 70 }}
+              />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">FPS</label>
+            <select
+              className="form-input"
+              value={ctx.settings.fps_common}
+              onChange={(e) => ctx.set('fps_common', e.target.value)}
+              style={{ width: 120 }}
+            >
+              {ctx.FPS_OPTIONS.map((f) => (
+                <option key={f} value={f}>
+                  {f}
+                </option>
+              ))}
+            </select>
+          </div>
+        </SettingsSectionCard>
+      )
+
+    case 'encoding-recording':
+      return (
+        <SettingsSectionCard title={sectionTitle}>
+          <div className="form-group" style={{ marginTop: 0 }}>
+            <div
+              className="form-input-row"
+              style={{ alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}
+            >
+              <div style={{ flex: '1 1 200px', minWidth: 0 }}>
+                <label className="form-label">Encoder</label>
+                <select
+                  className="form-input"
+                  value={ctx.settings.rec_encoder}
+                  onChange={(e) => ctx.set('rec_encoder', e.target.value)}
+                >
+                  {!ctx.ENCODERS.includes(ctx.settings.rec_encoder) && ctx.settings.rec_encoder && (
+                    <option value={ctx.settings.rec_encoder}>{ctx.settings.rec_encoder}</option>
+                  )}
+                  {ctx.ENCODERS.map((e) => (
+                    <option key={e} value={e}>
+                      {e}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ flex: '0 0 auto', width: 160 }}>
+                <label className="form-label">Container Format</label>
+                <select
+                  className="form-input"
+                  value={ctx.settings.rec_format}
+                  onChange={(e) => ctx.set('rec_format', e.target.value)}
+                  style={{ width: '100%' }}
+                >
+                  {ctx.FORMATS.map((f) => (
+                    <option key={f} value={f}>
+                      {f}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        </SettingsSectionCard>
+      )
+
+    case 'encoding-encoder':
+      return (
+        <SettingsSectionCard title={sectionTitle}>
+          <span
+            style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 12 }}
+          >
+            Written to recordEncoder.json in the OBS profile folder
+          </span>
+
+          <div className="form-group">
+            <label className="form-label">Rate Control</label>
+            <select
+              className="form-input"
+              value={ctx.settings.rate_control}
+              onChange={(e) => ctx.set('rate_control', e.target.value)}
+              style={{ width: 160 }}
+            >
+              <option value="">— unchanged —</option>
+              {RATE_CONTROLS.map((r) => (
                 <option key={r} value={r}>
                   {r}
                 </option>
               ))}
             </select>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Bitrate (kbps)</label>
             <input
+              type="number"
               className="form-input"
-              value={settings.output_cx}
-              onChange={(e) => set('output_cx', e.target.value)}
-              placeholder="W"
-              style={{ width: 70 }}
-            />
-            <span style={{ alignSelf: 'center', color: 'var(--text-muted)' }}>×</span>
-            <input
-              className="form-input"
-              value={settings.output_cy}
-              onChange={(e) => set('output_cy', e.target.value)}
-              placeholder="H"
-              style={{ width: 70 }}
+              value={ctx.settings.bitrate}
+              onChange={(e) => ctx.set('bitrate', e.target.value)}
+              placeholder="e.g. 20000"
+              style={{ width: 140 }}
             />
           </div>
-        </div>
 
-        <div className="form-group">
-          <label className="form-label">FPS</label>
-          <select
-            className="form-input"
-            value={settings.fps_common}
-            onChange={(e) => set('fps_common', e.target.value)}
-            style={{ width: 120 }}
-          >
-            {FPS_OPTIONS.map((f) => (
-              <option key={f} value={f}>
-                {f}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Recording output */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-title">Recording Output</div>
-
-        <div className="form-group" style={{ marginTop: 12 }}>
-          <label className="form-label">Encoder</label>
-          <select
-            className="form-input"
-            value={settings.rec_encoder}
-            onChange={(e) => set('rec_encoder', e.target.value)}
-          >
-            {!ENCODERS.includes(settings.rec_encoder) && settings.rec_encoder && (
-              <option value={settings.rec_encoder}>{settings.rec_encoder}</option>
-            )}
-            {ENCODERS.map((e) => (
-              <option key={e} value={e}>
-                {e}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">Container Format</label>
-          <select
-            className="form-input"
-            value={settings.rec_format}
-            onChange={(e) => set('rec_format', e.target.value)}
-            style={{ width: 160 }}
-          >
-            {FORMATS.map((f) => (
-              <option key={f} value={f}>
-                {f}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Encoder settings (recordEncoder.json) */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-title">Encoder Settings</div>
-        <span
-          style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 12 }}
-        >
-          Written to recordEncoder.json in the OBS profile folder
-        </span>
-
-        <div className="form-group">
-          <label className="form-label">Rate Control</label>
-          <select
-            className="form-input"
-            value={settings.rate_control}
-            onChange={(e) => set('rate_control', e.target.value)}
-            style={{ width: 160 }}
-          >
-            <option value="">— unchanged —</option>
-            {RATE_CONTROLS.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">Bitrate (kbps)</label>
-          <input
-            type="number"
-            className="form-input"
-            value={settings.bitrate}
-            onChange={(e) => set('bitrate', e.target.value)}
-            placeholder="e.g. 20000"
-            style={{ width: 140 }}
-          />
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">Max Bitrate (kbps)</label>
-          <input
-            type="number"
-            className="form-input"
-            value={settings.max_bitrate}
-            onChange={(e) => set('max_bitrate', e.target.value)}
-            placeholder="e.g. 30000"
-            style={{ width: 140 }}
-          />
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">CQP Level</label>
-          <input
-            type="number"
-            className="form-input"
-            value={settings.cqp}
-            onChange={(e) => set('cqp', e.target.value)}
-            placeholder="e.g. 18"
-            style={{ width: 100 }}
-          />
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">Target Quality</label>
-          <input
-            type="number"
-            className="form-input"
-            value={settings.target_quality}
-            onChange={(e) => set('target_quality', e.target.value)}
-            placeholder="e.g. 24"
-            style={{ width: 100 }}
-          />
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">Preset</label>
-          <div className="form-input-row">
-            <select
+          <div className="form-group">
+            <label className="form-label">Max Bitrate (kbps)</label>
+            <input
+              type="number"
               className="form-input"
-              value={settings.preset}
-              onChange={(e) => set('preset', e.target.value)}
-              style={{ width: 120 }}
-            >
-              <option value="">— unchanged —</option>
-              {PRESETS.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-            <span style={{ alignSelf: 'center', fontSize: 11, color: 'var(--text-muted)' }}>
-              p1 = fastest &nbsp;·&nbsp; p7 = best quality
-            </span>
+              value={ctx.settings.max_bitrate}
+              onChange={(e) => ctx.set('max_bitrate', e.target.value)}
+              placeholder="e.g. 30000"
+              style={{ width: 140 }}
+            />
           </div>
-        </div>
-      </div>
 
-      {status.msg && (
-        <div style={{ marginBottom: 24, fontSize: 12 }}>
-          <span
-            style={{
-              color:
-                status.type === 'ok'
-                  ? 'var(--accent-green, #4caf50)'
-                  : status.type === 'err'
-                    ? 'var(--accent-red,   #f44336)'
-                    : 'var(--accent-warn,  #f5a623)',
-            }}
-          >
-            {status.msg}
-          </span>
-        </div>
-      )}
-    </>
-  )
-})
+          <div className="form-group">
+            <label className="form-label">CQP Level</label>
+            <input
+              type="number"
+              className="form-input"
+              value={ctx.settings.cqp}
+              onChange={(e) => ctx.set('cqp', e.target.value)}
+              placeholder="e.g. 18"
+              style={{ width: 100 }}
+            />
+          </div>
 
-export default EncodingSettingsPanel
+          <div className="form-group">
+            <label className="form-label">Target Quality</label>
+            <input
+              type="number"
+              className="form-input"
+              value={ctx.settings.target_quality}
+              onChange={(e) => ctx.set('target_quality', e.target.value)}
+              placeholder="e.g. 24"
+              style={{ width: 100 }}
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Preset</label>
+            <div className="form-input-row">
+              <select
+                className="form-input"
+                value={ctx.settings.preset}
+                onChange={(e) => ctx.set('preset', e.target.value)}
+                style={{ width: 120 }}
+              >
+                <option value="">— unchanged —</option>
+                {ctx.PRESETS.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+              <span style={{ alignSelf: 'center', fontSize: 11, color: 'var(--text-muted)' }}>
+                p1 = fastest &nbsp;·&nbsp; p7 = best quality
+              </span>
+            </div>
+          </div>
+        </SettingsSectionCard>
+      )
+
+    default:
+      return null
+  }
+}
+
+export default EncodingSettingsProvider

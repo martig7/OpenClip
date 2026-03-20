@@ -160,16 +160,16 @@ test.describe('Storage Page', () => {
 test.describe('Settings — Encoding', () => {
   test('legacy /encoding URL redirects to settings encoding section', async ({ page }) => {
     await page.goto('/#/encoding')
-    await expect(page).toHaveURL(/settings\?section=encoding/)
-    await expect(page.locator('.settings-nav-item.active:has-text("Encoding")')).toBeVisible({
+    await expect(page).toHaveURL(/settings\?section=encoding-profile/)
+    await expect(page.locator('.settings-nav-item.active:has-text("OBS Profile")')).toBeVisible({
       timeout: 5000,
     })
-    await expect(page.locator('.settings-detail-title:has-text("Encoding")')).toBeVisible()
+    await expect(page.locator('.settings-section-card-title:has-text("OBS Profile")')).toBeVisible()
   })
 
   test('encoding section has encoder selector', async ({ page }) => {
-    await page.goto('/#/settings?section=encoding')
-    await expect(page.locator('.settings-detail-title:has-text("Encoding")')).toBeVisible({
+    await page.goto('/#/settings?section=encoding-recording')
+    await expect(page.locator('.settings-section-card-title:has-text("Recording Output")')).toBeVisible({
       timeout: 5000,
     })
     await expect(page.locator('label:has-text("Encoder")').first()).toBeVisible({ timeout: 5000 })

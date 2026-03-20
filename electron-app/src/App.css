@@ -757,7 +757,16 @@
   --settings-detail-toolbar-pt: 10px;
 }
 
+/* Above scroll content so outlines in the bento never paint over Setup Wizard / Save */
+.settings-detail > .main-content-topbar-strip,
+.settings-detail > .main-content-topbar-rule {
+  position: relative;
+  z-index: 3;
+}
+
 .settings-detail-toolbar {
+  position: relative;
+  z-index: 3;
   padding: var(--settings-detail-toolbar-pt) 20px 12px;
   background: var(--bg-primary);
   flex-shrink: 0;
@@ -768,6 +777,10 @@
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
+}
+
+.settings-detail-header-row--actions-only {
+  justify-content: flex-end;
 }
 
 /* Title lines up with filter pills row; actions stay top-aligned (row1 + pills pt — no rule between) */
@@ -794,10 +807,14 @@
 }
 
 .settings-detail-scroll {
+  position: relative;
+  z-index: 0;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 0 20px 24px;
+  /* Room for active bento outline + outline-offset so the top row isn’t clipped */
+  padding: 6px 20px 24px;
+  scroll-padding-top: 6px;
 }
 
 .settings-detail-inner {
@@ -806,6 +823,39 @@
 
 .settings-detail-inner--encoding {
   max-width: none;
+}
+
+.settings-detail-inner--bento {
+  max-width: none;
+}
+
+.settings-bento-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+
+.settings-bento-item {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  border-radius: var(--radius-lg);
+  transition: outline 0.15s ease;
+}
+
+.settings-bento-item--active {
+  outline: 2px solid var(--accent-light);
+  outline-offset: 2px;
+}
+
+.settings-bento-item > .card.settings-section-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .settings-detail-empty {
@@ -826,6 +876,27 @@
 
 .settings-section-card {
   margin-bottom: 0;
+}
+
+.settings-section-card-title {
+  margin: 0 0 16px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.settings-bento-item .settings-section-card-title {
+  flex-shrink: 0;
+}
+
+.settings-bento-item .settings-section-card-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  overflow-y: auto;
 }
 
 /* Compact toggle rows (variant B) */

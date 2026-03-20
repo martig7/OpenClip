@@ -13,9 +13,19 @@ import api from '../api'
 
 const tc = 'toggle-row settings-toggle-row--compact'
 
+export function SettingsSectionCard({ title, children }) {
+  return (
+    <div className="card settings-section-card">
+      <h2 className="settings-section-card-title">{title}</h2>
+      <div className="settings-section-card-body">{children}</div>
+    </div>
+  )
+}
+
 /**
  * @param {object} props
- * @param {string} props.sectionId
+ * @param {string} props.sectionTitle
+ * @param {string} props.sectionId — single section to render
  * @param {object} props.settings
  * @param {(path: string, value: unknown) => void} props.updateSetting
  * @param {() => Promise<void>} props.detectOBSPath
@@ -32,7 +42,8 @@ const tc = 'toggle-row settings-toggle-row--compact'
  * @param {() => Promise<void>} props.checkForUpdate
  * @param {() => Promise<void>} props.installUpdate
  */
-export default function GeneralSettingsSections({
+export default function GeneralSettingsSection({
+  sectionTitle,
   sectionId,
   settings,
   updateSetting,
@@ -51,57 +62,9 @@ export default function GeneralSettingsSections({
   installUpdate,
 }) {
   switch (sectionId) {
-    case 'paths':
-      return (
-        <div className="card settings-section-card">
-          <div className="form-group" style={{ marginTop: 0 }}>
-            <label className="form-label">OBS Recording Folder</label>
-            <div className="form-input-row">
-              <input
-                className="form-input"
-                value={settings.obsRecordingPath || ''}
-                onChange={(e) => updateSetting('obsRecordingPath', e.target.value)}
-                placeholder="Path to OBS recordings"
-              />
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={detectOBSPath}
-                title="Auto-detect"
-              >
-                <RefreshCw size={13} />
-              </button>
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => browseDirectory('obsRecordingPath')}
-              >
-                <FolderOpen size={13} />
-              </button>
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Organized Recordings Destination</label>
-            <div className="form-input-row">
-              <input
-                className="form-input"
-                value={settings.destinationPath || ''}
-                onChange={(e) => updateSetting('destinationPath', e.target.value)}
-                placeholder="Where to organize recordings"
-              />
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => browseDirectory('destinationPath')}
-              >
-                <FolderOpen size={13} />
-              </button>
-            </div>
-          </div>
-        </div>
-      )
-
     case 'watcher':
       return (
-        <div className="card settings-section-card">
+        <SettingsSectionCard title={sectionTitle}>
           <div className={tc} style={{ marginTop: 0 }}>
             <div>
               <div className="toggle-label">Start Watcher on Startup</div>
@@ -117,12 +80,12 @@ export default function GeneralSettingsSections({
               }
             />
           </div>
-        </div>
+        </SettingsSectionCard>
       )
 
     case 'organize':
       return (
-        <div className="card settings-section-card">
+        <SettingsSectionCard title={sectionTitle}>
           <div className={tc} style={{ marginTop: 0 }}>
             <div>
               <div className="toggle-label">Remux to MP4</div>
@@ -137,12 +100,12 @@ export default function GeneralSettingsSections({
               onClick={() => updateSetting('organizeRemux', settings.organizeRemux === false)}
             />
           </div>
-        </div>
+        </SettingsSectionCard>
       )
 
     case 'view':
       return (
-        <div className="card settings-section-card">
+        <SettingsSectionCard title={sectionTitle}>
           <div className="form-group" style={{ marginTop: 0 }}>
             <label className="form-label">Storage View</label>
             <div className="toggle-desc" style={{ marginBottom: 6 }}>
@@ -173,12 +136,12 @@ export default function GeneralSettingsSections({
               <option value="high">High (more detail)</option>
             </select>
           </div>
-        </div>
+        </SettingsSectionCard>
       )
 
     case 'hotkey':
       return (
-        <div className="card settings-section-card">
+        <SettingsSectionCard title={sectionTitle}>
           <div className="form-group" style={{ marginTop: 0 }}>
             <label className="form-label">Hotkey</label>
             <HotkeyCapture
@@ -191,12 +154,12 @@ export default function GeneralSettingsSections({
               Press this key while gaming to mark a moment for clipping
             </span>
           </div>
-        </div>
+        </SettingsSectionCard>
       )
 
     case 'autoclip':
       return (
-        <div className="card settings-section-card">
+        <SettingsSectionCard title={sectionTitle}>
           <div className={tc} style={{ marginTop: 0 }}>
             <div>
               <div className="toggle-label">Enable Auto-Clip</div>
@@ -271,13 +234,31 @@ export default function GeneralSettingsSections({
               </div>
             </>
           )}
-        </div>
+        </SettingsSectionCard>
       )
 
     case 'storage':
       return (
-        <div className="card settings-section-card">
-          <div className={tc} style={{ marginTop: 0 }}>
+        <SettingsSectionCard title={sectionTitle}>
+          <div className="form-group" style={{ marginTop: 0 }}>
+            <label className="form-label">Organized Recordings Destination</label>
+            <div className="form-input-row">
+              <input
+                className="form-input"
+                value={settings.destinationPath || ''}
+                onChange={(e) => updateSetting('destinationPath', e.target.value)}
+                placeholder="Where to organize recordings"
+              />
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => browseDirectory('destinationPath')}
+              >
+                <FolderOpen size={13} />
+              </button>
+            </div>
+          </div>
+
+          <div className={tc}>
             <div>
               <div className="toggle-label">Auto-Delete Old Recordings</div>
               <div className="toggle-desc">
@@ -332,15 +313,40 @@ export default function GeneralSettingsSections({
               </div>
             </>
           )}
-        </div>
+        </SettingsSectionCard>
       )
 
     case 'plugin':
       return (
-        <div className="card settings-section-card">
+        <SettingsSectionCard title={sectionTitle}>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 12px' }}>
             The OpenClip native plugin controls recording and scene management inside OBS.
           </p>
+
+          <div className="form-group" style={{ marginBottom: 12 }}>
+            <label className="form-label">OBS Recording Folder</label>
+            <div className="form-input-row">
+              <input
+                className="form-input"
+                value={settings.obsRecordingPath || ''}
+                onChange={(e) => updateSetting('obsRecordingPath', e.target.value)}
+                placeholder="Path to OBS recordings"
+              />
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={detectOBSPath}
+                title="Auto-detect"
+              >
+                <RefreshCw size={13} />
+              </button>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => browseDirectory('obsRecordingPath')}
+              >
+                <FolderOpen size={13} />
+              </button>
+            </div>
+          </div>
 
           <div className="form-group" style={{ marginBottom: 12 }}>
             <label className="form-label">OBS Install Folder</label>
@@ -440,12 +446,12 @@ export default function GeneralSettingsSections({
               </span>
             )}
           </div>
-        </div>
+        </SettingsSectionCard>
       )
 
     case 'updates':
       return (
-        <div className="card settings-section-card">
+        <SettingsSectionCard title={sectionTitle}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <button
               className="btn btn-secondary btn-sm"
@@ -479,7 +485,7 @@ export default function GeneralSettingsSections({
               </span>
             )}
           </div>
-        </div>
+        </SettingsSectionCard>
       )
 
     default:
