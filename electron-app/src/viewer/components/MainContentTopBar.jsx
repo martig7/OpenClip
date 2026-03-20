@@ -1,5 +1,5 @@
-/** Electron drag region + hairline — shared with VideoPlayer (Recordings/Clips main pane). */
-export default function MainContentTopBar() {
+/** Electron drag strip + optional body + hairline — shared with VideoPlayer, Settings detail, Games. */
+export default function MainContentTopBar({ children = null }) {
   return (
     <>
       <div
@@ -7,6 +7,7 @@ export default function MainContentTopBar() {
         style={{ WebkitAppRegion: 'drag', backgroundColor: 'var(--bg-primary)' }}
         aria-hidden
       />
+      {children}
       <div className="main-content-topbar-rule" aria-hidden />
     </>
   )

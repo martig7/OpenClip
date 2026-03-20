@@ -945,45 +945,91 @@
 
 .games-page-layout {
   @apply flex-1 flex flex-col overflow-hidden min-h-0;
+  padding: 0;
 }
 
+/* Games chrome: caption row (aligned with native title bar) + hairline + filters/actions */
 .games-toolbar {
-  @apply flex items-center gap-3 py-2 flex-shrink-0 border-b border-[var(--border)] bg-[var(--bg-primary)];
-  padding-left: 0;
-  padding-right: 0;
+  @apply flex flex-col flex-shrink-0 border-b border-[var(--border)] bg-[var(--bg-primary)];
 }
 
-.games-toolbar-title {
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
+/* Same band as Electron titleBarOverlay height (36px); title + search vertically centered with system buttons */
+.games-caption-bar {
+  display: flex;
+  align-items: stretch;
+  flex-shrink: 0;
+  height: var(--main-content-topbar-strip-h, 36px);
+  min-height: var(--main-content-topbar-strip-h, 36px);
+  max-height: var(--main-content-topbar-strip-h, 36px);
+  /* Inset lives inside .games-caption-bar__cluster so bg-secondary reaches the left edge (no primary “strip”) */
+  padding-left: 0;
+  padding-right: calc(8px + var(--electron-titlebar-controls-inset, 138px));
+  background: var(--bg-primary);
+  box-sizing: border-box;
+  -webkit-app-region: drag;
+  overflow: visible;
+  position: relative;
+  z-index: 1;
+}
+
+/* Caps how wide title+search grow; .msb-search { flex:1 } + input { width:100% } resolve inside this width */
+.games-caption-bar__cluster {
+  flex: 0 1 auto;
+  width: 100%;
+  max-width: min(var(--games-caption-cluster-max, 480px), 100%);
+  min-width: 0;
+  -webkit-app-region: no-drag;
+  position: relative;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  padding: 5px 10px 5px 16px;
+  margin-right: 8px;
+}
+
+/* One continuous stroke: full caption height + through the topbar rule (matches .main-content-topbar-rule color) */
+.games-caption-bar__cluster::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 1px;
+  bottom: calc(-1 * var(--main-content-topbar-rule-h, 1px));
+  background: var(--border);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.games-caption-bar__row {
+  width: 100%;
+  min-width: 0;
+}
+
+.games-toolbar-top-rule {
+  flex-shrink: 0;
+  position: relative;
+  z-index: 0;
+}
+
+.games-toolbar-actions {
+  background: var(--bg-secondary);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 16px 8px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.games-toolbar-actions .games-add-btn {
+  margin-left: auto;
   flex-shrink: 0;
 }
 
-.games-toolbar-right {
-  @apply flex items-center gap-3 ml-auto;
-}
-
-.filter-tabs {
-  @apply flex overflow-hidden border border-[var(--border)] rounded-[var(--radius-sm)];
-}
-
-.filter-tab {
-  @apply px-3 py-[5px] text-xs font-medium text-[var(--text-secondary)] bg-transparent border-none cursor-pointer transition-colors duration-[120ms];
-}
-
-.filter-tab + .filter-tab {
-  @apply border-l border-[var(--border)];
-}
-
-.filter-tab:hover {
-  @apply bg-[var(--bg-hover)] text-[var(--text-primary)];
-}
-
-.filter-tab.active {
-  @apply bg-[var(--accent-muted)] text-[var(--accent-light)];
+.games-table-thead {
+  background: var(--bg-secondary);
 }
 
 .games-content {
@@ -1001,11 +1047,6 @@
 .games-table-wrap::-webkit-scrollbar-thumb {
   background: var(--border-light);
   border-radius: 2px;
-}
-
-.games-search-box {
-  width: 180px;
-  flex-shrink: 0;
 }
 
 .games-add-btn {
@@ -1043,7 +1084,7 @@
   position: sticky;
   top: 0;
   z-index: 1;
-  background: var(--bg-primary);
+  background: var(--bg-secondary);
   padding: 8px 12px;
   text-align: left;
   font-size: 10px;
@@ -1058,7 +1099,7 @@
 .games-table thead th.col-toggle,
 .games-table tbody td.col-toggle {
   width: 44px;
-  padding-left: 0;
+  padding-left: 4px;
   padding-right: 0;
   text-align: center;
 }
@@ -1068,6 +1109,11 @@
   width: 44px;
   padding-left: 0;
   padding-right: 0;
+}
+
+.games-table thead th.col-status,
+.games-table tbody td.col-status {
+  width: 80px;
 }
 
 .games-table thead th.col-actions,
@@ -1232,6 +1278,25 @@
   border-radius: 0;
 }
 
+.edit-game-drawer-content h2 {
+  @apply text-base font-semibold mb-2;
+}
+
+.edit-game-drawer-content p {
+  @apply text-[13px] text-[var(--text-secondary)] mb-5;
+}
+
+/* ─── Audio Sources Card ─────────────────────────────────────────── */
+
+.audio-sources-card {
+  padding: 0;
+}
+
+.audio-sources-card > .card-header {
+  padding: 12px 16px;
+  margin-bottom: 0;
+}
+
 /* ─── Shared Track Grid & Audio Source Row ──────────────────────── */
 
 .track-label-header {
@@ -1347,8 +1412,8 @@
 
 .games-audio-toggle {
   @apply flex items-center justify-between w-full py-3 text-[12px] font-semibold text-[var(--text-secondary)] bg-transparent border-none cursor-pointer;
-  padding-left: 4px;
-  padding-right: 4px;
+  padding-left: 16px;
+  padding-right: 16px;
   transition: color 0.15s;
 }
 

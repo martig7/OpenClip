@@ -4,37 +4,46 @@ import { GameAvatar } from './GameAvatar'
 export function GamesToolbar({ filter, setFilter, search, setSearch, counts, onAdd }) {
   return (
     <div className="games-toolbar">
-      <span className="games-toolbar-title">Games</span>
+      {/* One row: same height as Electron titleBarOverlay (36px) + inset for Windows system buttons */}
+      <header className="games-caption-bar" aria-label="Games">
+        {/* Bounded cluster: msb-search width:100% fills this box only (same idea as msb-header width on other pages) */}
+        <div className="games-caption-bar__cluster">
+          <div className="msb-row1 games-caption-bar__row">
+            <span className="msb-title">Games</span>
+            <div className="msb-search">
+              <span className="msb-search-icon" aria-hidden>
+                <Search size={11} />
+              </span>
+              <input
+                type="search"
+                placeholder="Search games…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                autoComplete="off"
+              />
+            </div>
+          </div>
+        </div>
+      </header>
 
-      <div className="filter-tabs" aria-label="Game filter">
-        {[
-          { key: 'all', label: 'All', count: counts.all },
-          { key: 'enabled', label: 'Enabled', count: counts.enabled },
-          { key: 'disabled', label: 'Disabled', count: counts.disabled },
-        ].map((t) => (
-          <button
-            key={t.key}
-            className={`filter-tab ${filter === t.key ? 'active' : ''}`}
-            onClick={() => setFilter(t.key)}
-            type="button"
-          >
-            {t.label} ({t.count})
-          </button>
-        ))}
-      </div>
+      <div className="main-content-topbar-rule games-toolbar-top-rule" aria-hidden />
 
-      <div className="games-toolbar-right">
-        <div className="msb-search games-search-box">
-          <span className="msb-search-icon" aria-hidden>
-            <Search size={14} />
-          </span>
-          <input
-            type="search"
-            placeholder="Search games…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            autoComplete="off"
-          />
+      <div className="games-toolbar-actions">
+        <div className="msb-game-filter" aria-label="Game filter">
+          {[
+            { key: 'all', label: 'All', count: counts.all },
+            { key: 'enabled', label: 'Enabled', count: counts.enabled },
+            { key: 'disabled', label: 'Disabled', count: counts.disabled },
+          ].map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              className={`msb-game-pill${filter === t.key ? ' active' : ''}`}
+              onClick={() => setFilter(t.key)}
+            >
+              {t.label} ({t.count})
+            </button>
+          ))}
         </div>
 
         <button className="games-add-btn" type="button" onClick={onAdd}>
@@ -61,13 +70,13 @@ export function GamesTable({
 
   return (
     <table className="games-table">
-      <thead>
+      <thead className="games-table-thead">
         <tr>
           <th className="col-toggle" aria-label="Enabled toggle" />
           <th className="col-icon" aria-label="Game icon" />
           <th>Name</th>
           <th>Scene</th>
-          <th>Status</th>
+          <th className="col-status">Status</th>
           <th className="col-actions" aria-label="Actions" />
         </tr>
       </thead>
@@ -132,7 +141,7 @@ export function GamesTable({
                 </td>
                 <td className="games-table-scene">{game.scene || '—'}</td>
 
-                <td>
+                <td className="col-status">
                   <span className={`badge ${game.enabled ? 'badge-success' : 'badge-muted'}`}>
                     <span
                       className="badge-dot"

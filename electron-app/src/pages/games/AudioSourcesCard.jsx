@@ -155,7 +155,7 @@ export default function AudioSourcesCard({
 
   return (
     <>
-      <div className="card" style={{ marginTop: isMaster ? 16 : 0 }}>
+      <div className="card audio-sources-card" style={{ marginTop: isMaster ? 16 : 0 }}>
         <div className="card-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <span className="card-title">Scene Audio Sources</span>
