@@ -1,74 +1,22 @@
 import { X, Trash2, Edit2 } from 'lucide-react'
 import EditGameModal from './EditGameModal'
-import { SceneAudioSourcesSection } from './SceneAudioSourcesSection'
-
-const GAME_PALETTE = [
-  '#7c3aed',
-  '#3b82f6',
-  '#06b6d4',
-  '#6366f1',
-  '#8b5cf6',
-  '#0ea5e9',
-  '#a78bfa',
-  '#818cf8',
-  '#2dd4bf',
-  '#c084fc',
-  '#60a5fa',
-  '#22d3ee',
-  '#4f46e5',
-  '#7e22ce',
-  '#0284c7',
-  '#0891b2',
-]
-
-function getColor(id) {
-  const str = String(id || '')
-  if (!str) return GAME_PALETTE[0]
-  const sum = str.split('').reduce((a, c) => a + c.charCodeAt(0), 0)
-  return GAME_PALETTE[sum % GAME_PALETTE.length]
-}
-
-function GameAvatar({ game, size = 40 }) {
-  const bg = getColor(game?.id)
-  const letter = (game?.name || '?').trim().slice(0, 1).toUpperCase()
-
-  if (game?.icon_path) {
-    return (
-      <img
-        src={`localfile:///${game.icon_path.replace(/\\/g, '/')}`}
-        alt=""
-        style={{
-          width: size,
-          height: size,
-          objectFit: 'contain',
-          flexShrink: 0,
-          borderRadius: 6,
-        }}
-        onError={(e) => {
-          e.currentTarget.style.display = 'none'
-        }}
-      />
-    )
-  }
-
-  return (
-    <div className="drawer-avatar" style={{ width: size, height: size, background: bg }}>
-      {letter}
-    </div>
-  )
-}
+import AudioSourcesCard from './AudioSourcesCard'
+import { GameAvatar } from './GameAvatar'
+import { useSidebarResize, STORAGE_KEY_GAMES_DRAWER } from '../../hooks/useSidebarResize'
 
 export function GameDetailDrawer({
   gameId,
   game,
-  editGameModal,
+  isEditing,
+  sceneAudioSources,
+  audioLoading,
   onClose,
   onDelete,
-  isEditing,
   onStartEdit,
   onCancelEdit,
   onSave,
   onChangeGame,
+  editedGame,
   otherGameScenes,
   masterAudioSources,
   addSourceToScene,
@@ -79,17 +27,32 @@ export function GameDetailDrawer({
   trackLabels,
   toggleTrack,
 }) {
-  const drawerGame = editGameModal?.game || game
+  const { sidebarWidth, handleMouseDown } = useSidebarResize(STORAGE_KEY_GAMES_DRAWER, {
+    min: 340,
+    max: 800,
+    defaultW: 380,
+    side: 'right',
+  })
 
-  const loading = editGameModal?.loading || (game?.scene ? true : false)
-  const sceneAudioSources = editGameModal?.sceneAudioSources || []
+  const drawerGame = isEditing && editedGame ? editedGame : game
 
   return (
-    <div className={`game-detail-drawer ${gameId ? 'open' : ''}`} aria-hidden={!gameId}>
-      {gameId && drawerGame && (
+    <div
+      className={`game-detail-drawer ${gameId ? 'open' : ''}`}
+      style={gameId ? { '--sidebar-width': `${sidebarWidth}px` } : undefined}
+      aria-hidden={!gameId}
+    >
+      {gameId && game && (
         <div className="drawer-inner">
+          <div
+            className="sidebar-resizer drawer-resizer"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize game detail drawer"
+            onMouseDown={handleMouseDown}
+          />
           <div className="drawer-header">
-            <GameAvatar game={drawerGame} />
+            <GameAvatar game={drawerGame} size={40} />
 
             <div style={{ flex: 1, minWidth: 0 }}>
               <div className="drawer-name-row">
@@ -143,11 +106,6 @@ export function GameDetailDrawer({
                     </div>
 
                     <div className="drawer-info-cell">
-                      <div className="drawer-info-label">Clips</div>
-                      <div className="drawer-info-val">{drawerGame.clips ?? '—'}</div>
-                    </div>
-
-                    <div className="drawer-info-cell">
                       <div className="drawer-info-label">Status</div>
                       <div className="drawer-info-val">
                         {drawerGame.enabled ? 'Active' : 'Off'}
@@ -157,18 +115,20 @@ export function GameDetailDrawer({
                 </section>
 
                 <section className="drawer-section">
-                  <SceneAudioSourcesSection
-                    game={drawerGame}
-                    sceneAudioSources={sceneAudioSources}
-                    loading={loading}
-                    masterAudioSources={masterAudioSources}
-                    onAddSourceToScene={addSourceToScene}
-                    onRemoveSourceFromScene={removeSourceFromScene}
-                    onAddMasterSource={addMasterSource}
+                  <AudioSourcesCard
+                    mode="scene"
+                    sources={sceneAudioSources}
+                    loading={audioLoading}
+                    trackLabels={trackLabels}
                     trackData={trackData}
                     trackLoading={trackLoading}
-                    toggleTrack={toggleTrack}
-                    trackLabels={trackLabels}
+                    onToggleTrack={toggleTrack}
+                    onRemoveSource={removeSourceFromScene}
+                    onAddSource={addSourceToScene}
+                    game={drawerGame}
+                    masterAudioSources={masterAudioSources}
+                    onAddMasterSource={addMasterSource}
+                    sceneName={drawerGame.scene}
                   />
                 </section>
 
@@ -196,29 +156,31 @@ export function GameDetailDrawer({
                   </button>
                 </div>
               </>
+            ) : editedGame ? (
+              <EditGameModal
+                variant="drawer"
+                modal={{
+                  game: editedGame,
+                  sceneAudioSources,
+                  loading: audioLoading,
+                }}
+                masterAudioSources={masterAudioSources}
+                otherGameScenes={otherGameScenes}
+                onChangeGame={onChangeGame}
+                onSave={onSave}
+                onClose={onCancelEdit}
+                onAddSourceToScene={addSourceToScene}
+                onRemoveSourceFromScene={removeSourceFromScene}
+                onAddMasterSource={addMasterSource}
+                trackData={trackData}
+                trackLoading={trackLoading}
+                toggleTrack={toggleTrack}
+                trackLabels={trackLabels}
+              />
             ) : (
-              editGameModal ? (
-                <EditGameModal
-                  variant="drawer"
-                  modal={editGameModal}
-                  masterAudioSources={masterAudioSources}
-                  otherGameScenes={otherGameScenes}
-                  onChangeGame={onChangeGame}
-                  onSave={onSave}
-                  onClose={onCancelEdit}
-                  onAddSourceToScene={addSourceToScene}
-                  onRemoveSourceFromScene={removeSourceFromScene}
-                  onAddMasterSource={addMasterSource}
-                  trackData={trackData}
-                  trackLoading={trackLoading}
-                  toggleTrack={toggleTrack}
-                  trackLabels={trackLabels}
-                />
-              ) : (
-                <div style={{ paddingTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>
-                  Loading…
-                </div>
-              )
+              <div style={{ paddingTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+                Loading…
+              </div>
             )}
           </div>
         </div>
@@ -226,4 +188,3 @@ export function GameDetailDrawer({
     </div>
   )
 }
-

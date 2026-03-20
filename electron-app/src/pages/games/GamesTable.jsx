@@ -1,71 +1,11 @@
 import { Plus, Search, Edit2, Trash2, Gamepad2 } from 'lucide-react'
-
-const GAME_PALETTE = [
-  '#7c3aed',
-  '#3b82f6',
-  '#06b6d4',
-  '#6366f1',
-  '#8b5cf6',
-  '#0ea5e9',
-  '#a78bfa',
-  '#818cf8',
-  '#2dd4bf',
-  '#c084fc',
-  '#60a5fa',
-  '#22d3ee',
-  '#4f46e5',
-  '#7e22ce',
-  '#0284c7',
-  '#0891b2',
-]
-
-function getColor(id) {
-  const str = String(id || '')
-  if (!str) return GAME_PALETTE[0]
-  const sum = str.split('').reduce((a, c) => a + c.charCodeAt(0), 0)
-  return GAME_PALETTE[sum % GAME_PALETTE.length]
-}
-
-function GameAvatar({ game, size = 28 }) {
-  const bg = getColor(game?.id)
-  const letter = (game?.name || '?').trim().slice(0, 1).toUpperCase()
-
-  if (game?.icon_path) {
-    return (
-      <img
-        src={`localfile:///${game.icon_path.replace(/\\/g, '/')}`}
-        alt=""
-        style={{
-          width: size,
-          height: size,
-          objectFit: 'contain',
-          borderRadius: 4,
-          flexShrink: 0,
-        }}
-        onError={(e) => {
-          e.currentTarget.style.display = 'none'
-        }}
-      />
-    )
-  }
-
-  return (
-    <div
-      className="games-table-avatar"
-      style={{
-        width: size,
-        height: size,
-        background: bg,
-      }}
-    >
-      {letter}
-    </div>
-  )
-}
+import { GameAvatar } from './GameAvatar'
 
 export function GamesToolbar({ filter, setFilter, search, setSearch, counts, onAdd }) {
   return (
     <div className="games-toolbar">
+      <span className="games-toolbar-title">Games</span>
+
       <div className="filter-tabs" aria-label="Game filter">
         {[
           { key: 'all', label: 'All', count: counts.all },
@@ -84,8 +24,8 @@ export function GamesToolbar({ filter, setFilter, search, setSearch, counts, onA
       </div>
 
       <div className="games-toolbar-right">
-        <div className="search-box games-search-box">
-          <span className="search-icon" aria-hidden>
+        <div className="msb-search games-search-box">
+          <span className="msb-search-icon" aria-hidden>
             <Search size={14} />
           </span>
           <input
@@ -97,7 +37,7 @@ export function GamesToolbar({ filter, setFilter, search, setSearch, counts, onA
           />
         </div>
 
-        <button className="btn btn-primary btn-sm" type="button" onClick={onAdd}>
+        <button className="games-add-btn" type="button" onClick={onAdd}>
           <Plus size={13} /> Add Game
         </button>
       </div>
@@ -117,7 +57,7 @@ export function GamesTable({
   onEdit,
   onDelete,
 }) {
-  const cols = 7
+  const cols = 6
 
   return (
     <table className="games-table">
@@ -128,7 +68,6 @@ export function GamesTable({
           <th>Name</th>
           <th>Scene</th>
           <th>Status</th>
-          <th className="col-clips">Clips</th>
           <th className="col-actions" aria-label="Actions" />
         </tr>
       </thead>
@@ -165,7 +104,6 @@ export function GamesTable({
           games.map((game) => {
             const selected = selectedId === game.id
             const disabled = !game.enabled
-            const clips = game.clips ?? '—'
 
             return (
               <tr
@@ -206,8 +144,6 @@ export function GamesTable({
                   </span>
                 </td>
 
-                <td className="col-clips">{clips}</td>
-
                 <td className="col-actions">
                   <div className="games-table-actions">
                     <button
@@ -243,4 +179,3 @@ export function GamesTable({
     </table>
   )
 }
-

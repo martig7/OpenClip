@@ -1,23 +1,13 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Plus,
-  Trash2,
-  RefreshCw,
-  Gamepad2,
   AlertTriangle,
-  Music,
+  Gamepad2,
   Save,
 } from 'lucide-react'
 import api from '../../api'
-import {
-  AUDIO_KIND_META,
-  AudioIcon,
-  buildAvailableAudioInputs,
-  getAppAudioWindowKey,
-  isAppAudioKind,
-} from './audioSourceUtils'
+import AudioSourcesCard from './AudioSourcesCard'
 import WindowPicker from './WindowPicker'
-import { SceneAudioSourcesSection } from './SceneAudioSourcesSection'
 
 /**
  * EditGameModal — allows editing game name, selector, OBS scene, and per-scene audio sources.
@@ -40,20 +30,16 @@ export default function EditGameModal({
   trackLoading,
   toggleTrack,
   trackLabels,
-  setTrackLabels: _setTrackLabels,
   variant = 'modal',
 }) {
   const { game, sceneAudioSources, loading } = modal
-  const masterNames = new Set(masterAudioSources.map((s) => s.name))
 
-  // ── Feature 1: duplicate scene detection ─────────────────────────────────
   const isDuplicateScene = game.scene && otherGameScenes && otherGameScenes.has(game.scene)
 
   const [showWindowPicker, setShowWindowPicker] = useState(false)
   const [loadingWindows, setLoadingWindows] = useState(false)
   const [visibleWindows, setVisibleWindows] = useState([])
 
-  // Eagerly load data when the modal opens
   useEffect(() => {
     ;(async () => {
       setLoadingWindows(true)
@@ -68,8 +54,6 @@ export default function EditGameModal({
     })()
   }, [])
 
-  // ── Feature 4: video capture source picker ────────────────────────────────
-  // 'game_capture' | 'window_capture'
   const [editCapturePref, setEditCapturePref] = useState('game_capture')
 
   const modalBody = (
@@ -315,18 +299,20 @@ export default function EditGameModal({
         </div>
       )}
 
-      <SceneAudioSourcesSection
-        game={game}
-        sceneAudioSources={sceneAudioSources}
+      <AudioSourcesCard
+        mode="scene"
+        sources={sceneAudioSources}
         loading={loading}
-        masterAudioSources={masterAudioSources}
-        onAddSourceToScene={onAddSourceToScene}
-        onRemoveSourceFromScene={onRemoveSourceFromScene}
-        onAddMasterSource={onAddMasterSource}
+        trackLabels={trackLabels}
         trackData={trackData}
         trackLoading={trackLoading}
-        toggleTrack={toggleTrack}
-        trackLabels={trackLabels}
+        onToggleTrack={toggleTrack}
+        onRemoveSource={onRemoveSourceFromScene}
+        onAddSource={onAddSourceToScene}
+        game={game}
+        masterAudioSources={masterAudioSources}
+        onAddMasterSource={onAddMasterSource}
+        sceneName={game.scene}
       />
 
       <div className="modal-actions">
@@ -342,18 +328,7 @@ export default function EditGameModal({
 
   if (variant === 'drawer') {
     return (
-      <div
-        className="modal edit-game-drawer-content"
-        style={{
-          maxWidth: 'none',
-          width: '100%',
-          padding: 0,
-          border: 'none',
-          background: 'transparent',
-          borderRadius: 0,
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="edit-game-drawer-content">
         {modalBody}
       </div>
     )

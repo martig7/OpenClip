@@ -1,22 +1,22 @@
-import { useEffect, useMemo, useState } from 'react'
-import SceneAudioSourcesCard from './SceneAudioSourcesCard'
+import { useState, useMemo } from 'react'
+import AudioSourcesCard from './AudioSourcesCard'
 import { GamesTable, GamesToolbar } from './GamesTable'
 import { GameDetailDrawer } from './GameDetailDrawer'
 import { ChevronDown } from 'lucide-react'
 import { useGamesFilter } from '../../hooks/useGamesFilter'
+import { useDrawerState } from '../../hooks/useDrawerState'
+import api from '../../api'
+import {
+  getAppAudioWindowKey,
+  isAppAudioKind,
+} from './audioSourceUtils'
 
 export function GamesPageBody({
   games,
   openAddModal,
   toggleGame,
-  openEditModal,
   removeGame,
-  editGameModal,
-  closeEditModal,
-  onChangeEditGame,
-  onSaveEditGame,
-  addSourceToScene,
-  removeSourceFromScene,
+  saveGame,
   masterAudioSources,
   applyingSource,
   showAudioDropdown,
@@ -36,50 +36,136 @@ export function GamesPageBody({
   showToast,
 }) {
   const { filter, setFilter, search, setSearch, filtered, counts } = useGamesFilter(games)
+  const drawer = useDrawerState(games)
 
-  const [drawerGameId, setDrawerGameId] = useState(null)
-  const [isEditing, setIsEditing] = useState(false)
+  const [editedGame, setEditedGame] = useState(null)
   const [audioExpanded, setAudioExpanded] = useState(false)
 
-  const selectedGame = useMemo(() => {
-    if (!drawerGameId) return null
-    return games.find((g) => g.id === drawerGameId) || null
-  }, [drawerGameId, games])
-
-  useEffect(() => {
-    // When Edit state is cleared (e.g. Save/Cancel), ensure drawer selection is also cleared.
-    if (!editGameModal) {
-      setIsEditing(false)
-      setDrawerGameId(null)
-    }
-  }, [editGameModal])
-
   const otherGameScenes = useMemo(() => {
-    if (!editGameModal?.game?.id) return new Set()
+    if (!drawer.selectedGame?.id) return new Set()
     return new Set(
       games
-        .filter((g) => g.id !== editGameModal.game.id)
+        .filter((g) => g.id !== drawer.selectedGame.id)
         .map((g) => g.scene)
         .filter(Boolean)
     )
-  }, [games, editGameModal])
+  }, [games, drawer.selectedGame])
 
   function handleRowClick(game) {
-    setDrawerGameId(game.id)
-    setIsEditing(false)
-    openEditModal(game)
+    drawer.openDrawer(game)
   }
 
   function handleEditClick(game) {
-    setDrawerGameId(game.id)
-    setIsEditing(true)
-    openEditModal(game)
+    setEditedGame({ ...game })
+    drawer.openDrawerEditing(game)
+  }
+
+  function handleStartEdit(game) {
+    setEditedGame({ ...game })
+    drawer.startEditing()
+  }
+
+  function handleCancelEdit() {
+    setEditedGame(null)
+    drawer.stopEditing()
   }
 
   function handleDrawerClose() {
-    setIsEditing(false)
-    closeEditModal()
-    setDrawerGameId(null)
+    setEditedGame(null)
+    drawer.closeDrawer()
+  }
+
+  function handleChangeGame(updates) {
+    setEditedGame((prev) => (prev ? { ...prev, ...updates } : null))
+  }
+
+  async function handleSave() {
+    if (!editedGame) return
+    if (!editedGame.name || !editedGame.selector || !editedGame.scene) {
+      showToast('Game name, window selector, and scene are required.')
+      return
+    }
+    await saveGame(editedGame.id, {
+      name: editedGame.name,
+      selector: editedGame.selector,
+      scene: editedGame.scene,
+      exe: editedGame.exe,
+      windowClass: editedGame.windowClass,
+      windowMatchPriority: editedGame.windowMatchPriority,
+      ...(editedGame.icon_path !== undefined ? { icon_path: editedGame.icon_path } : {}),
+    })
+    setEditedGame(null)
+    drawer.stopEditing()
+  }
+
+  async function addSourceToScene(sceneName, source) {
+    if (!sceneName) return
+    try {
+      const isVideoCapture = source.kind === 'game_capture' || source.kind === 'window_capture'
+      const result = await api.addAudioSourceToScenes(
+        [sceneName],
+        source.kind,
+        source.name,
+        source.inputSettings || {},
+        isVideoCapture ? { fitToCanvas: true } : {}
+      )
+      if (result.success) {
+        if (isVideoCapture) {
+          showToast(`"${source.name}" added to scene`)
+        } else {
+          let conflictWarning = null
+          drawer.setSceneAudioSources((prev) => {
+            const already = prev.some((s) => s.inputName === source.name)
+            if (already) return prev
+            if (isAppAudioKind(source.kind)) {
+              const newKey = getAppAudioWindowKey(source.name, source.inputSettings?.window)
+              const duplicate = prev.find(
+                (s) =>
+                  isAppAudioKind(s.inputKind) &&
+                  getAppAudioWindowKey(s.inputName, s.inputSettings?.window) === newKey
+              )
+              if (duplicate) conflictWarning = duplicate.inputName
+            }
+            return [
+              ...prev,
+              {
+                inputName: source.name,
+                inputKind: source.kind,
+                inputSettings: source.inputSettings || {},
+              },
+            ]
+          })
+          if (conflictWarning) {
+            showToast(
+              `⚠ OBS doesn't support two Application Audio sources for the same window — OBS will default to "${conflictWarning}" (the first source added).`
+            )
+          } else {
+            showToast(`"${source.name}" added to scene`)
+          }
+        }
+      } else {
+        showToast(`Warning: ${result.message}`)
+      }
+    } catch (err) {
+      showToast(`Failed: ${err.message}`)
+    }
+  }
+
+  async function removeSourceFromScene(sceneName, inputName) {
+    if (!sceneName) return
+    try {
+      const result = await api.removeAudioSourceFromScenes([sceneName], inputName)
+      if (result.success) {
+        drawer.setSceneAudioSources((prev) =>
+          prev.filter((s) => s.inputName !== inputName)
+        )
+        showToast(`"${inputName}" removed from scene`)
+      } else {
+        showToast(`Warning: ${result.message}`)
+      }
+    } catch (err) {
+      showToast(`Failed: ${err.message}`)
+    }
   }
 
   return (
@@ -97,7 +183,7 @@ export function GamesPageBody({
         <div className="games-table-wrap">
           <GamesTable
             games={filtered}
-            selectedId={drawerGameId}
+            selectedId={drawer.drawerGameId}
             search={search}
             totalCount={counts.all}
             onClearSearch={() => setSearch('')}
@@ -110,16 +196,18 @@ export function GamesPageBody({
         </div>
 
         <GameDetailDrawer
-          gameId={drawerGameId}
-          game={selectedGame}
-          editGameModal={editGameModal}
+          gameId={drawer.drawerGameId}
+          game={drawer.selectedGame}
+          isEditing={drawer.isEditing}
+          sceneAudioSources={drawer.sceneAudioSources}
+          audioLoading={drawer.audioLoading}
+          editedGame={editedGame}
           onClose={handleDrawerClose}
           onDelete={removeGame}
-          isEditing={isEditing}
-          onStartEdit={() => setIsEditing(true)}
-          onCancelEdit={() => setIsEditing(false)}
-          onSave={onSaveEditGame}
-          onChangeGame={onChangeEditGame}
+          onStartEdit={handleStartEdit}
+          onCancelEdit={handleCancelEdit}
+          onSave={handleSave}
+          onChangeGame={handleChangeGame}
           otherGameScenes={otherGameScenes}
           masterAudioSources={masterAudioSources}
           addSourceToScene={addSourceToScene}
@@ -149,24 +237,26 @@ export function GamesPageBody({
         </button>
 
         {audioExpanded && (
-          <SceneAudioSourcesCard
-            masterAudioSources={masterAudioSources}
-            applyingSource={applyingSource}
+          <AudioSourcesCard
+            mode="master"
+            sources={masterAudioSources}
+            loading={false}
+            trackLabels={trackLabels}
+            trackData={trackData}
+            trackLoading={trackLoading}
+            onToggleTrack={toggleTrack}
+            onRemoveSource={removeMasterSource}
             showAudioDropdown={showAudioDropdown}
             setShowAudioDropdown={setShowAudioDropdown}
             audioDropdownRef={audioDropdownRef}
             availableAudioInputs={availableAudioInputs}
             loadingAudioInputs={loadingAudioInputs}
             audioDropdownError={audioDropdownError}
-            trackLabels={trackLabels}
-            setTrackLabels={setTrackLabels}
-            trackData={trackData}
-            trackLoading={trackLoading}
             onLoadAudioInputs={loadAudioInputsForDropdown}
             onAddSource={addMasterSource}
-            onRemoveSource={removeMasterSource}
-            onToggleTrack={toggleTrack}
+            setTrackLabels={setTrackLabels}
             showToast={showToast}
+            applyingSource={applyingSource}
           />
         )}
       </div>

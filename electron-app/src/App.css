@@ -953,8 +953,17 @@
   padding-right: 0;
 }
 
+.games-toolbar-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
 .games-toolbar-right {
-  @apply flex items-center gap-2 ml-auto;
+  @apply flex items-center gap-3 ml-auto;
 }
 
 .filter-tabs {
@@ -995,8 +1004,32 @@
 }
 
 .games-search-box {
-  width: 240px;
+  width: 180px;
   flex-shrink: 0;
+}
+
+.games-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%);
+  border: none;
+  border-radius: 5px;
+  height: 28px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.25);
+  flex-shrink: 0;
+}
+
+.games-add-btn:hover {
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4);
+  transform: translateY(-1px);
 }
 
 /* Table */
@@ -1035,11 +1068,6 @@
   width: 44px;
   padding-left: 0;
   padding-right: 0;
-}
-
-.games-table thead th.col-clips,
-.games-table tbody td.col-clips {
-  width: 60px;
 }
 
 .games-table thead th.col-actions,
@@ -1090,10 +1118,8 @@
   @apply flex items-center gap-1;
 }
 
-.games-table-avatar {
-  width: 28px;
-  height: 28px;
-  @apply rounded-[var(--radius-sm)] flex items-center justify-center text-[13px] font-bold text-white flex-shrink-0;
+.game-avatar {
+  @apply rounded-[var(--radius-sm)] flex items-center justify-center font-bold text-white flex-shrink-0 overflow-hidden;
 }
 
 .badge-dot {
@@ -1110,24 +1136,30 @@
   flex-shrink: 0;
   border-left: 0px solid var(--border);
   background: var(--bg-secondary);
-  transition: width 0.22s ease, border-left-width 0.22s ease;
+  transition: border-left-width 0.22s ease;
   display: flex;
   flex-direction: column;
   border-left-width: 0;
 }
 
 .game-detail-drawer.open {
-  width: 380px;
-  min-width: 380px;
+  width: var(--sidebar-width, 380px);
+  min-width: 340px;
   border-left-width: 1px;
 }
 
 .drawer-inner {
-  width: 380px;
+  width: 100%;
   display: flex;
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  position: relative;
+}
+
+.drawer-resizer {
+  left: -2px;
+  right: auto;
 }
 
 .drawer-header {
@@ -1138,11 +1170,7 @@
   @apply flex items-center gap-2;
 }
 
-.drawer-avatar {
-  width: 40px;
-  height: 40px;
-  @apply rounded-[var(--radius-md)] flex items-center justify-center text-[20px] font-bold text-white flex-shrink-0 overflow-hidden;
-}
+/* Drawer uses .game-avatar from GameAvatar.jsx (shared component) */
 
 .drawer-name {
   @apply text-[15px] font-semibold text-[var(--text-primary)];
@@ -1195,6 +1223,123 @@
   @apply flex items-center gap-2 pt-3 border-t border-[var(--border)];
 }
 
+.edit-game-drawer-content {
+  max-width: none;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 0;
+}
+
+/* ─── Shared Track Grid & Audio Source Row ──────────────────────── */
+
+.track-label-header {
+  display: flex;
+  align-items: flex-end;
+  padding: 5px 16px 2px;
+  border-bottom: 1px solid var(--border);
+  gap: 8px;
+}
+
+.track-label-spacer {
+  flex: 1;
+  min-width: 0;
+}
+
+.track-chips-col {
+  display: flex;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.track-label-cell {
+  width: 22px;
+  text-align: center;
+  font-size: 9px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.track-action-col {
+  width: 28px;
+  flex-shrink: 0;
+}
+
+.scene-audio-track-chip {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  border: 1.5px solid var(--border-light);
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+}
+
+.scene-audio-track-chip.active {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+}
+
+.audio-source-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.audio-source-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  flex-shrink: 0;
+}
+
+.audio-source-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.audio-source-name {
+  font-size: 12px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.audio-source-kind {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.audio-source-not-master {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  color: #f59e0b;
+  margin-top: 2px;
+}
+
 /* Collapsible footer */
 .games-audio-section {
   @apply flex-shrink-0 border-t border-[var(--border)] bg-[var(--bg-primary)];
@@ -1202,8 +1347,8 @@
 
 .games-audio-toggle {
   @apply flex items-center justify-between w-full py-3 text-[12px] font-semibold text-[var(--text-secondary)] bg-transparent border-none cursor-pointer;
-  padding-left: 0;
-  padding-right: 0;
+  padding-left: 4px;
+  padding-right: 4px;
   transition: color 0.15s;
 }
 

@@ -1,6 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Trash2, Edit2, Gamepad2 } from 'lucide-react'
 import api from '../api'
 import { useGameWatcherState } from '../hooks/useGameWatcherState'
 import { useAudioSourcesState } from '../hooks/useAudioSourcesState'
@@ -13,10 +12,7 @@ import {
   getAppAudioWindowKey,
   isAppAudioKind,
 } from './games/audioSourceUtils'
-import EditGameModal from './games/EditGameModal'
 import AddGameModal from './games/AddGameModal'
-import SceneAudioSourcesCard from './games/SceneAudioSourcesCard'
-import { GameList } from './games/GameList'
 import { GamesPageBody } from './games/GamesPageBody'
 import ConfirmDeleteDialog from '../components/ConfirmDeleteDialog'
 
@@ -28,8 +24,6 @@ export default function GamesPage() {
     setGames,
     confirmDeleteGame,
     setConfirmDeleteGame,
-    editGameModal,
-    setEditGameModal,
   } = useGameWatcherState()
 
   const {
@@ -84,13 +78,10 @@ export default function GamesPage() {
   const { trackLabels, setTrackLabels, trackData, setTrackData, trackLoading, setTrackLoading } =
     useTrackState()
 
-  // Guards the initial load of persisted track data — same pattern as masterAudioLoadedRef
   const trackDataLoadedRef = useRef(false)
 
-  // Load track info whenever scene audio sources or master audio sources change
   useEffect(() => {
     const allInputNames = new Set([
-      ...(editGameModal?.sceneAudioSources || []).map((s) => s.inputName),
       ...masterAudioSources.map((s) => s.name),
     ])
     const namesArray = Array.from(allInputNames)
@@ -100,13 +91,8 @@ export default function GamesPage() {
     ;(async () => {
       const results = await Promise.all(
         namesArray.map(async (name) => {
-          // 'Game Audio' track routing is stored locally — intentionally not fetched from
-          // OBS, because the source may not exist in every scene (user may have removed it
-          // from some games on purpose). The persisted value is loaded on mount.
           if (name === 'Game Audio') return null
           const tracks = await api.getInputAudioTracks(name).catch(() => ({}))
-          // Only use OBS data when it returns something — if OBS is closed or the source
-          // isn't found it returns {}, in which case we keep the persisted value.
           if (Object.keys(tracks).length === 0) return null
           return { name, tracks }
         })
@@ -123,13 +109,12 @@ export default function GamesPage() {
     return () => {
       cancelled = true
     }
-  }, [editGameModal?.sceneAudioSources, masterAudioSources])
+  }, [masterAudioSources])
 
   async function toggleTrack(inputName, trackNum) {
     const current = trackData[inputName] || {}
     const newVal = !current[String(trackNum)]
     const updated = { ...current, [String(trackNum)]: newVal }
-    // Optimistic update
     setTrackData((prev) => ({ ...prev, [inputName]: updated }))
     setTrackLoading((prev) => ({ ...prev, [inputName]: true }))
     try {
@@ -147,7 +132,6 @@ export default function GamesPage() {
         await api.setInputAudioTracks(inputName, updated)
       }
     } catch {
-      // Revert on failure
       setTrackData((prev) => ({ ...prev, [inputName]: current }))
     } finally {
       setTrackLoading((prev) => ({ ...prev, [inputName]: false }))
@@ -157,7 +141,6 @@ export default function GamesPage() {
   useEffect(() => {
     loadGames()
     loadTrackLabels()
-    // Restore persisted master audio sources
     api
       .getStore('masterAudioSources')
       .then((saved) => {
@@ -167,7 +150,6 @@ export default function GamesPage() {
       .catch(() => {
         masterAudioLoadedRef.current = true
       })
-    // Restore all persisted track routing so tracks appear even when OBS is closed
     api
       .getStore('audioTracks')
       .then((saved) => {
@@ -181,15 +163,13 @@ export default function GamesPage() {
       })
   }, [])
 
-  // Persist master audio sources whenever the list changes
   useEffect(() => {
-    if (!masterAudioLoadedRef.current) return // skip until initial load has resolved
+    if (!masterAudioLoadedRef.current) return
     api.setStore('masterAudioSources', masterAudioSources).catch(() => {})
   }, [masterAudioSources])
 
-  // Persist track data whenever it changes — covers both OBS-fetched and user-toggled values
   useEffect(() => {
-    if (!trackDataLoadedRef.current) return // skip until initial load has resolved
+    if (!trackDataLoadedRef.current) return
     api.setStore('audioTracks', trackData).catch(() => {})
   }, [trackData])
 
@@ -217,7 +197,6 @@ export default function GamesPage() {
       return
     }
 
-    // Auto-create the OBS scene before saving the game
     if (autoCreateScene && newGame.scene) {
       setSceneCreateStatus(null)
       try {
@@ -236,7 +215,7 @@ export default function GamesPage() {
         if (!result.success) {
           if (result.message?.includes('already exists')) {
             setSceneCreateStatus({ type: 'conflict', message: result.message })
-            return // wait for user to resolve
+            return
           }
           setSceneCreateStatus({ type: 'error', message: result.message })
           return
@@ -254,11 +233,6 @@ export default function GamesPage() {
     }
   }
 
-  /**
-   * Apply master audio sources + track routing to the new game's scene, show a toast,
-   * persist the game, and close the modal.
-   * @param {string|null} sceneMsg - Base message for the toast (null = no scene created)
-   */
   async function finalizeGameSave(sceneMsg) {
     const masterToAdd = masterAudioSources
     if (newGame.scene && masterToAdd.length > 0) {
@@ -295,7 +269,6 @@ export default function GamesPage() {
         })
       )
 
-      // Apply master-list track routing. Game Audio (GameName) is always fresh — must be set explicitly.
       await Promise.all(
         masterToAdd.map((source) => {
           const masterKey = source.kind === 'magic_game_audio' ? 'Game Audio' : source.name
@@ -382,7 +355,6 @@ export default function GamesPage() {
     loadGames()
   }
 
-  /** Collect all scene names from games that have a scene set. */
   function getGameSceneNames() {
     return games.map((g) => g.scene).filter(Boolean)
   }
@@ -401,7 +373,6 @@ export default function GamesPage() {
   }
 
   async function addMasterSource(entry) {
-    // Don't add duplicates (by name)
     if (masterAudioSources.some((s) => s.name === entry.name)) {
       setShowAudioDropdown(false)
       return
@@ -416,7 +387,6 @@ export default function GamesPage() {
     setMasterAudioSources((prev) => [...prev, newSource])
     setShowAudioDropdown(false)
 
-    // Warn if this new app audio source would duplicate another master source targeting the same window
     if (isAppAudioKind(entry.kind)) {
       const newKey = getAppAudioWindowKey(entry.name, entry.inputSettings?.window)
       const conflict = masterAudioSources.find(
@@ -430,7 +400,6 @@ export default function GamesPage() {
       }
     }
 
-    // Apply to all game scenes immediately, skipping any that already have this source
     const sceneNames = getGameSceneNames()
     if (sceneNames.length > 0) {
       setApplyingSource(entry.name)
@@ -480,126 +449,10 @@ export default function GamesPage() {
 
   async function removeMasterSource(sourceName) {
     setMasterAudioSources((prev) => prev.filter((s) => s.name !== sourceName))
-    // Optionally remove from all scenes — let user decide by removing individually per-scene
   }
 
-  async function openEditModal(game) {
-    setEditGameModal({ game: { ...game }, sceneAudioSources: [], loading: !!game.scene })
-    if (game.scene) {
-      try {
-        const sources = await api.getSceneAudioSources(game.scene)
-        setEditGameModal((prev) =>
-          prev ? { ...prev, sceneAudioSources: sources || [], loading: false } : null
-        )
-      } catch {
-        setEditGameModal((prev) =>
-          prev ? { ...prev, sceneAudioSources: [], loading: false } : null
-        )
-      }
-    }
-  }
-
-  async function addSourceToScene(sceneName, source) {
-    if (!sceneName) return
-    try {
-      const isVideoCapture = source.kind === 'game_capture' || source.kind === 'window_capture'
-      const result = await api.addAudioSourceToScenes(
-        [sceneName],
-        source.kind,
-        source.name,
-        source.inputSettings || {},
-        isVideoCapture ? { fitToCanvas: true } : {}
-      )
-      if (result.success) {
-        if (isVideoCapture) {
-          // Video sources are not audio — don't add them to the audio tracks list
-          showToast(`"${source.name}" added to scene`)
-        } else {
-          let conflictWarning = null
-          setEditGameModal((prev) => {
-            if (!prev) return null
-            const already = prev.sceneAudioSources.some((s) => s.inputName === source.name)
-            if (already) return prev
-            // Warn if this new app audio source duplicates an existing one for the same window in this scene
-            if (isAppAudioKind(source.kind)) {
-              const newKey = getAppAudioWindowKey(source.name, source.inputSettings?.window)
-              const duplicate = prev.sceneAudioSources.find(
-                (s) =>
-                  isAppAudioKind(s.inputKind) &&
-                  getAppAudioWindowKey(s.inputName, s.inputSettings?.window) === newKey
-              )
-              if (duplicate) conflictWarning = duplicate.inputName
-            }
-            return {
-              ...prev,
-              sceneAudioSources: [
-                ...prev.sceneAudioSources,
-                {
-                  inputName: source.name,
-                  inputKind: source.kind,
-                  inputSettings: source.inputSettings || {},
-                },
-              ],
-            }
-          })
-          if (conflictWarning) {
-            showToast(
-              `⚠ OBS doesn't support two Application Audio sources for the same window — OBS will default to "${conflictWarning}" (the first source added).`
-            )
-          } else {
-            showToast(`"${source.name}" added to scene`)
-          }
-        }
-      } else {
-        showToast(`Warning: ${result.message}`)
-      }
-    } catch (err) {
-      showToast(`Failed: ${err.message}`)
-    }
-  }
-
-  async function removeSourceFromScene(sceneName, inputName) {
-    if (!sceneName) return
-    try {
-      const result = await api.removeAudioSourceFromScenes([sceneName], inputName)
-      if (result.success) {
-        setEditGameModal((prev) =>
-          prev
-            ? {
-                ...prev,
-                sceneAudioSources: prev.sceneAudioSources.filter((s) => s.inputName !== inputName),
-              }
-            : null
-        )
-        showToast(`"${inputName}" removed from scene`)
-      } else {
-        showToast(`Warning: ${result.message}`)
-      }
-    } catch (err) {
-      showToast(`Failed: ${err.message}`)
-    }
-  }
-
-  async function saveEditModal() {
-    if (!editGameModal) return
-    const { game } = editGameModal
-    if (!game.name || !game.selector || !game.scene) {
-      showToast('Game name, window selector, and scene are required.')
-      return
-    }
-    const payload = {
-      name: game.name,
-      selector: game.selector,
-      scene: game.scene,
-      exe: game.exe,
-      windowClass: game.windowClass,
-      windowMatchPriority: game.windowMatchPriority,
-    }
-    if (game.icon_path !== undefined) {
-      payload.icon_path = game.icon_path
-    }
-    await api.updateGame(game.id, payload)
-    setEditGameModal(null)
+  async function saveGame(gameId, payload) {
+    await api.updateGame(gameId, payload)
     loadGames()
     showToast('Game saved')
   }
@@ -607,7 +460,6 @@ export default function GamesPage() {
   function openAddModal() {
     resetAddModal()
     setShowAddModal(true)
-    // Windows and OBS scenes are loaded by AddGameModal's useEffect on mount
   }
 
   function goToSettings() {
@@ -618,27 +470,12 @@ export default function GamesPage() {
 
   return (
     <>
-      <div className="page-header">
-        <h1>Games</h1>
-        <p>Manage games to automatically record with OBS</p>
-      </div>
-
       <GamesPageBody
         games={games}
         openAddModal={openAddModal}
         toggleGame={toggleGame}
-        openEditModal={openEditModal}
         removeGame={removeGame}
-        editGameModal={editGameModal}
-        closeEditModal={() => setEditGameModal(null)}
-        onChangeEditGame={(updates) =>
-          setEditGameModal((prev) =>
-            prev ? { ...prev, game: { ...prev.game, ...updates } } : null
-          )
-        }
-        onSaveEditGame={saveEditModal}
-        addSourceToScene={addSourceToScene}
-        removeSourceFromScene={removeSourceFromScene}
+        saveGame={saveGame}
         masterAudioSources={masterAudioSources}
         applyingSource={applyingSource}
         showAudioDropdown={showAudioDropdown}
