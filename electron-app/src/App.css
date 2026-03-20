@@ -120,6 +120,9 @@
 .sidebar-watcher-status-row {
   @apply flex items-center gap-1.5 text-[12px] font-medium mb-1;
 }
+.sidebar-watcher-status-text {
+  @apply min-w-0 truncate;
+}
 .sidebar-watcher-uptime {
   @apply ml-auto text-[11px] font-normal text-[var(--text-muted)] tabular-nums;
 }

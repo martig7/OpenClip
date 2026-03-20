@@ -14,10 +14,6 @@ export function useWatcherRuntime() {
 
 /** @typedef {null | 'obs_closed' | 'plugin_missing'} WatcherBannerKind */
 
-/**
- * Owns game-watcher IPC subscription, OBS/plugin banner state, and setup-guide modal
- * so the sidebar panel stays in sync without duplicating effects.
- */
 export function WatcherRuntimeProvider({ children }) {
   const [watcherStatus, setWatcherStatus] = useState({
     running: false,
@@ -25,7 +21,6 @@ export function WatcherRuntimeProvider({ children }) {
     startedAt: null,
     gameState: null,
   })
-  /** When the watcher is running: OBS not open vs plugin not reachable (OBS is open). */
   const [watcherBannerKind, setWatcherBannerKind] = useState(/** @type {WatcherBannerKind} */ (null))
   const [setupGuideOpen, setSetupGuideOpen] = useState(false)
   const [actionError, setActionError] = useState(null)
@@ -56,7 +51,9 @@ export function WatcherRuntimeProvider({ children }) {
         setWatcherStatus(s)
         if (s.running) evaluateWatcherBanner()
       })
-      .catch(() => {})
+      .catch(() => {
+        // Intentionally ignore: sidebar can still mount; push updates may arrive later.
+      })
     const unsub = api.onWatcherStatusPush((status) => {
       setWatcherStatus(status)
       if (!status.running) setWatcherBannerKind(null)
@@ -65,7 +62,6 @@ export function WatcherRuntimeProvider({ children }) {
     return () => unsub()
   }, [evaluateWatcherBanner])
 
-  // While the watcher is on, re-check OBS / plugin so the banner clears when OBS is launched.
   useEffect(() => {
     if (!watcherStatus.running) return undefined
     const id = setInterval(() => {

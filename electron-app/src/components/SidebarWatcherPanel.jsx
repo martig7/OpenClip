@@ -33,7 +33,10 @@ export default function SidebarWatcherPanel() {
           color={watcherStatus.running ? 'var(--success)' : 'var(--text-muted)'}
           className="shrink-0"
         />
-        <span className={watcherStatus.running ? 'text-[var(--success)]' : 'text-[var(--text-muted)]'}>
+        <span
+          className="sidebar-watcher-status-text"
+          style={{ color: watcherStatus.running ? 'var(--success)' : 'var(--text-muted)' }}
+        >
           {watcherStatus.running ? 'Running' : 'Stopped'}
         </span>
         {watcherStatus.running && watcherStatus.startedAt && (
