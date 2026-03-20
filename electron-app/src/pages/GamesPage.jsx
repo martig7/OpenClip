@@ -630,6 +630,13 @@ export default function GamesPage() {
         openEditModal={openEditModal}
         removeGame={removeGame}
         editGameModal={editGameModal}
+        closeEditModal={() => setEditGameModal(null)}
+        onChangeEditGame={(updates) =>
+          setEditGameModal((prev) =>
+            prev ? { ...prev, game: { ...prev.game, ...updates } } : null
+          )
+        }
+        onSaveEditGame={saveEditModal}
         addSourceToScene={addSourceToScene}
         removeSourceFromScene={removeSourceFromScene}
         masterAudioSources={masterAudioSources}
@@ -684,40 +691,6 @@ export default function GamesPage() {
           onSceneConflictUseExisting={handleSceneConflictUseExisting}
           onSceneConflictOverwrite={handleSceneConflictOverwrite}
           onGoToSettings={goToSettings}
-        />
-      )}
-
-      {/* Edit Game Modal */}
-      {editGameModal && (
-        <EditGameModal
-          modal={editGameModal}
-          masterAudioSources={masterAudioSources}
-          otherGameScenes={
-            new Set(
-              games
-                .filter((g) => g.id !== editGameModal.game.id)
-                .map((g) => g.scene)
-                .filter(Boolean)
-            )
-          }
-          onChangeGame={(updates) =>
-            setEditGameModal((prev) =>
-              prev ? { ...prev, game: { ...prev.game, ...updates } } : null
-            )
-          }
-          onSave={saveEditModal}
-          onClose={() => setEditGameModal(null)}
-          onAddSourceToScene={addSourceToScene}
-          onRemoveSourceFromScene={removeSourceFromScene}
-          onAddMasterSource={addMasterSource}
-          trackData={trackData}
-          trackLoading={trackLoading}
-          toggleTrack={toggleTrack}
-          trackLabels={trackLabels}
-          setTrackLabels={async (newLabels) => {
-            setTrackLabels(newLabels)
-            await api.setTrackNames(newLabels).catch(() => {})
-          }}
         />
       )}
 

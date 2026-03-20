@@ -1,5 +1,5 @@
-import { X, Edit2, Trash2 } from 'lucide-react'
-import { SceneAudioSourcesSection } from './SceneAudioSourcesSection'
+import { X, Trash2 } from 'lucide-react'
+import EditGameModal from './EditGameModal'
 
 const GAME_PALETTE = [
   '#7c3aed',
@@ -62,8 +62,10 @@ export function GameDetailDrawer({
   game,
   editGameModal,
   onClose,
-  onEditFull,
   onDelete,
+  onSave,
+  onChangeGame,
+  otherGameScenes,
   masterAudioSources,
   addSourceToScene,
   removeSourceFromScene,
@@ -73,30 +75,31 @@ export function GameDetailDrawer({
   trackLabels,
   toggleTrack,
 }) {
-  const loading = editGameModal?.loading || (game?.scene ? true : false)
-  const sceneAudioSources = editGameModal?.sceneAudioSources || []
+  const drawerGame = editGameModal?.game || game
 
   return (
     <div className={`game-detail-drawer ${gameId ? 'open' : ''}`} aria-hidden={!gameId}>
-      {gameId && game && (
+      {gameId && drawerGame && (
         <div className="drawer-inner">
           <div className="drawer-header">
-            <GameAvatar game={game} />
+            <GameAvatar game={drawerGame} />
 
             <div style={{ flex: 1, minWidth: 0 }}>
               <div className="drawer-name-row">
-                <div className="drawer-name">{game.name}</div>
-                <span className={`badge ${game.enabled ? 'badge-success' : 'badge-muted'}`}>
+                <div className="drawer-name">{drawerGame.name}</div>
+                <span
+                  className={`badge ${drawerGame.enabled ? 'badge-success' : 'badge-muted'}`}
+                >
                   <span
                     className="badge-dot"
                     style={{
-                      background: game.enabled ? 'var(--success)' : 'var(--text-muted)',
+                      background: drawerGame.enabled ? 'var(--success)' : 'var(--text-muted)',
                     }}
                   />
-                  {game.enabled ? 'Active' : 'Off'}
+                  {drawerGame.enabled ? 'Active' : 'Off'}
                 </span>
               </div>
-              <div className="drawer-scene">{game.scene || '—'}</div>
+              <div className="drawer-scene">{drawerGame.scene || '—'}</div>
             </div>
 
             <button
@@ -111,40 +114,15 @@ export function GameDetailDrawer({
           </div>
 
           <div className="drawer-body">
-            <section className="drawer-section">
-              <div className="drawer-section-title">Configuration</div>
-
-              <div className="drawer-info-grid">
-                <div className="drawer-info-cell">
-                  <div className="drawer-info-label">Selector</div>
-                  <div className="drawer-info-val" style={{ fontFamily: 'monospace', fontSize: 11 }}>
-                    {game.selector || '—'}
-                  </div>
-                </div>
-
-                <div className="drawer-info-cell">
-                  <div className="drawer-info-label">Scene</div>
-                  <div className="drawer-info-val">{game.scene || '—'}</div>
-                </div>
-
-                <div className="drawer-info-cell">
-                  <div className="drawer-info-label">Clips</div>
-                  <div className="drawer-info-val">{game.clips ?? '—'}</div>
-                </div>
-
-                <div className="drawer-info-cell">
-                  <div className="drawer-info-label">Status</div>
-                  <div className="drawer-info-val">{game.enabled ? 'Active' : 'Off'}</div>
-                </div>
-              </div>
-            </section>
-
-            <section className="drawer-section">
-              <SceneAudioSourcesSection
-                game={game}
-                sceneAudioSources={sceneAudioSources}
-                loading={loading}
+            {editGameModal && (
+              <EditGameModal
+                variant="drawer"
+                modal={editGameModal}
                 masterAudioSources={masterAudioSources}
+                otherGameScenes={otherGameScenes}
+                onChangeGame={onChangeGame}
+                onSave={onSave}
+                onClose={onClose}
                 onAddSourceToScene={addSourceToScene}
                 onRemoveSourceFromScene={removeSourceFromScene}
                 onAddMasterSource={addMasterSource}
@@ -153,23 +131,14 @@ export function GameDetailDrawer({
                 toggleTrack={toggleTrack}
                 trackLabels={trackLabels}
               />
-            </section>
+            )}
 
             <div className="drawer-actions">
-              <button
-                className="btn btn-primary btn-sm"
-                type="button"
-                style={{ flex: 1, justifyContent: 'center' }}
-                onClick={() => onEditFull(game)}
-              >
-                <Edit2 size={12} /> Edit Game
-              </button>
-
               <button
                 className="btn-icon"
                 type="button"
                 onClick={() => {
-                  onDelete(game.id)
+                  onDelete(drawerGame.id)
                   onClose()
                 }}
                 title="Remove game"

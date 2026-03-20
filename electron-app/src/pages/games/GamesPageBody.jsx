@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import SceneAudioSourcesCard from './SceneAudioSourcesCard'
 import { GamesTable, GamesToolbar } from './GamesTable'
 import { GameDetailDrawer } from './GameDetailDrawer'
@@ -12,6 +12,9 @@ export function GamesPageBody({
   openEditModal,
   removeGame,
   editGameModal,
+  closeEditModal,
+  onChangeEditGame,
+  onSaveEditGame,
   addSourceToScene,
   removeSourceFromScene,
   masterAudioSources,
@@ -42,12 +45,28 @@ export function GamesPageBody({
     return games.find((g) => g.id === drawerGameId) || null
   }, [drawerGameId, games])
 
+  useEffect(() => {
+    // When Edit state is cleared (e.g. Save/Cancel), ensure drawer selection is also cleared.
+    if (!editGameModal) setDrawerGameId(null)
+  }, [editGameModal])
+
+  const otherGameScenes = useMemo(() => {
+    if (!editGameModal?.game?.id) return new Set()
+    return new Set(
+      games
+        .filter((g) => g.id !== editGameModal.game.id)
+        .map((g) => g.scene)
+        .filter(Boolean)
+    )
+  }, [games, editGameModal])
+
   function handleRowClick(game) {
     setDrawerGameId(game.id)
     openEditModal(game)
   }
 
   function handleDrawerClose() {
+    closeEditModal()
     setDrawerGameId(null)
   }
 
@@ -83,8 +102,10 @@ export function GamesPageBody({
           game={selectedGame}
           editGameModal={editGameModal}
           onClose={handleDrawerClose}
-          onEditFull={openEditModal}
           onDelete={removeGame}
+          onSave={onSaveEditGame}
+          onChangeGame={onChangeEditGame}
+          otherGameScenes={otherGameScenes}
           masterAudioSources={masterAudioSources}
           addSourceToScene={addSourceToScene}
           removeSourceFromScene={removeSourceFromScene}
