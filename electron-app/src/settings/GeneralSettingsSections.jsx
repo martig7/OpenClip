@@ -7,18 +7,72 @@ import {
   CheckCircle,
   AlertCircle,
   Loader,
+  Undo2,
 } from 'lucide-react'
 import { HotkeyCapture } from '../components/OnboardingSteps'
 import api from '../api'
+import { isSettingsSectionDirty } from './settingsSectionRevert'
 
 const tc = 'toggle-row settings-toggle-row--compact'
 
-export function SettingsSectionCard({ title, children }) {
+/**
+ * @param {object} props
+ * @param {string} props.title
+ * @param {import('react').ReactNode} [props.children]
+ * @param {import('react').ReactNode} [props.titleAddon] — e.g. note under the title (encoding OBS warning)
+ * @param {import('react').ReactNode} [props.headerActions] — e.g. icon button (encoding revert)
+ */
+export function SettingsSectionCard({ title, children, titleAddon, headerActions }) {
   return (
     <div className="card settings-section-card">
-      <h2 className="settings-section-card-title">{title}</h2>
+      <div className="settings-section-card-header">
+        <div className="settings-section-card-heading">
+          <h2 className="settings-section-card-title">{title}</h2>
+          {titleAddon}
+        </div>
+        {headerActions ? (
+          <div className="settings-section-card-header-actions">{headerActions}</div>
+        ) : null}
+      </div>
       <div className="settings-section-card-body">{children}</div>
     </div>
+  )
+}
+
+/**
+ * @param {object} props
+ * @param {string} props.sectionId
+ * @param {string} props.sectionTitle
+ * @param {object} props.settings
+ * @param {string | null} props.settingsBaselineStr
+ * @param {(sectionId: string) => void} props.onRevertSection
+ * @param {import('react').ReactNode} props.children
+ */
+function AppSettingsSectionCard({
+  sectionId,
+  sectionTitle,
+  settings,
+  settingsBaselineStr,
+  onRevertSection,
+  children,
+}) {
+  const showRevert =
+    settingsBaselineStr && isSettingsSectionDirty(sectionId, settings, settingsBaselineStr)
+  const headerActions = showRevert ? (
+    <button
+      type="button"
+      className="btn btn-icon btn-sm"
+      onClick={() => onRevertSection(sectionId)}
+      title="Discard changes in this section and restore last saved values"
+      aria-label="Revert to saved"
+    >
+      <Undo2 size={16} />
+    </button>
+  ) : null
+  return (
+    <SettingsSectionCard title={sectionTitle} headerActions={headerActions}>
+      {children}
+    </SettingsSectionCard>
   )
 }
 
@@ -27,6 +81,8 @@ export function SettingsSectionCard({ title, children }) {
  * @param {string} props.sectionTitle
  * @param {string} props.sectionId — single section to render
  * @param {object} props.settings
+ * @param {string | null} props.settingsBaselineStr — JSON snapshot for per-section revert
+ * @param {(sectionId: string) => void} props.onRevertSection
  * @param {(path: string, value: unknown) => void} props.updateSetting
  * @param {() => Promise<void>} props.detectOBSPath
  * @param {(key: string) => Promise<void>} props.browseDirectory
@@ -46,6 +102,8 @@ export default function GeneralSettingsSection({
   sectionTitle,
   sectionId,
   settings,
+  settingsBaselineStr,
+  onRevertSection,
   updateSetting,
   detectOBSPath,
   browseDirectory,
@@ -64,7 +122,13 @@ export default function GeneralSettingsSection({
   switch (sectionId) {
     case 'watcher':
       return (
-        <SettingsSectionCard title={sectionTitle}>
+        <AppSettingsSectionCard
+          sectionId={sectionId}
+          sectionTitle={sectionTitle}
+          settings={settings}
+          settingsBaselineStr={settingsBaselineStr}
+          onRevertSection={onRevertSection}
+        >
           <div className={tc} style={{ marginTop: 0 }}>
             <div>
               <div className="toggle-label">Start Watcher on Startup</div>
@@ -80,12 +144,18 @@ export default function GeneralSettingsSection({
               }
             />
           </div>
-        </SettingsSectionCard>
+        </AppSettingsSectionCard>
       )
 
     case 'organize':
       return (
-        <SettingsSectionCard title={sectionTitle}>
+        <AppSettingsSectionCard
+          sectionId={sectionId}
+          sectionTitle={sectionTitle}
+          settings={settings}
+          settingsBaselineStr={settingsBaselineStr}
+          onRevertSection={onRevertSection}
+        >
           <div className={tc} style={{ marginTop: 0 }}>
             <div>
               <div className="toggle-label">Remux to MP4</div>
@@ -100,12 +170,18 @@ export default function GeneralSettingsSection({
               onClick={() => updateSetting('organizeRemux', settings.organizeRemux === false)}
             />
           </div>
-        </SettingsSectionCard>
+        </AppSettingsSectionCard>
       )
 
     case 'view':
       return (
-        <SettingsSectionCard title={sectionTitle}>
+        <AppSettingsSectionCard
+          sectionId={sectionId}
+          sectionTitle={sectionTitle}
+          settings={settings}
+          settingsBaselineStr={settingsBaselineStr}
+          onRevertSection={onRevertSection}
+        >
           <div className="form-group" style={{ marginTop: 0 }}>
             <label className="form-label">Storage View</label>
             <div className="toggle-desc" style={{ marginBottom: 6 }}>
@@ -136,12 +212,18 @@ export default function GeneralSettingsSection({
               <option value="high">High (more detail)</option>
             </select>
           </div>
-        </SettingsSectionCard>
+        </AppSettingsSectionCard>
       )
 
     case 'hotkey':
       return (
-        <SettingsSectionCard title={sectionTitle}>
+        <AppSettingsSectionCard
+          sectionId={sectionId}
+          sectionTitle={sectionTitle}
+          settings={settings}
+          settingsBaselineStr={settingsBaselineStr}
+          onRevertSection={onRevertSection}
+        >
           <div className="form-group" style={{ marginTop: 0 }}>
             <label className="form-label">Hotkey</label>
             <HotkeyCapture
@@ -154,12 +236,18 @@ export default function GeneralSettingsSection({
               Press this key while gaming to mark a moment for clipping
             </span>
           </div>
-        </SettingsSectionCard>
+        </AppSettingsSectionCard>
       )
 
     case 'autoclip':
       return (
-        <SettingsSectionCard title={sectionTitle}>
+        <AppSettingsSectionCard
+          sectionId={sectionId}
+          sectionTitle={sectionTitle}
+          settings={settings}
+          settingsBaselineStr={settingsBaselineStr}
+          onRevertSection={onRevertSection}
+        >
           <div className={tc} style={{ marginTop: 0 }}>
             <div>
               <div className="toggle-label">Enable Auto-Clip</div>
@@ -234,12 +322,18 @@ export default function GeneralSettingsSection({
               </div>
             </>
           )}
-        </SettingsSectionCard>
+        </AppSettingsSectionCard>
       )
 
     case 'storage':
       return (
-        <SettingsSectionCard title={sectionTitle}>
+        <AppSettingsSectionCard
+          sectionId={sectionId}
+          sectionTitle={sectionTitle}
+          settings={settings}
+          settingsBaselineStr={settingsBaselineStr}
+          onRevertSection={onRevertSection}
+        >
           <div className="form-group" style={{ marginTop: 0 }}>
             <label className="form-label">Organized Recordings Destination</label>
             <div className="form-input-row">
@@ -313,12 +407,18 @@ export default function GeneralSettingsSection({
               </div>
             </>
           )}
-        </SettingsSectionCard>
+        </AppSettingsSectionCard>
       )
 
     case 'plugin':
       return (
-        <SettingsSectionCard title={sectionTitle}>
+        <AppSettingsSectionCard
+          sectionId={sectionId}
+          sectionTitle={sectionTitle}
+          settings={settings}
+          settingsBaselineStr={settingsBaselineStr}
+          onRevertSection={onRevertSection}
+        >
           <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 12px' }}>
             The OpenClip native plugin controls recording and scene management inside OBS.
           </p>
@@ -446,12 +546,18 @@ export default function GeneralSettingsSection({
               </span>
             )}
           </div>
-        </SettingsSectionCard>
+        </AppSettingsSectionCard>
       )
 
     case 'updates':
       return (
-        <SettingsSectionCard title={sectionTitle}>
+        <AppSettingsSectionCard
+          sectionId={sectionId}
+          sectionTitle={sectionTitle}
+          settings={settings}
+          settingsBaselineStr={settingsBaselineStr}
+          onRevertSection={onRevertSection}
+        >
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <button
               className="btn btn-secondary btn-sm"
@@ -485,7 +591,7 @@ export default function GeneralSettingsSection({
               </span>
             )}
           </div>
-        </SettingsSectionCard>
+        </AppSettingsSectionCard>
       )
 
     default:

@@ -12,6 +12,7 @@ import { useTitleBarOverlayOverride } from '../context/TitleBarOverlayContext'
 import { TITLEBAR_SETTINGS_WARNING } from '../utils/titleBarOverlayDefaults'
 import GeneralSettingsSection from '../settings/GeneralSettingsSections'
 import { computeBentoSpans, settingsSectionDomId } from '../settings/bentoLayout'
+import { applySectionRevert, isSettingsSectionDirty } from '../settings/settingsSectionRevert'
 import {
   SETTINGS_CHIP_IDS,
   SETTINGS_CHIP_LABELS,
@@ -49,6 +50,8 @@ export default function SettingsPage() {
   const [encodingMeta, setEncodingMeta] = useState({ dirty: false, canSave: false })
   /** Snapshot of last loaded/saved app settings — used so Save enables only when values differ */
   const settingsBaselineRef = useRef('')
+  /** Mirrors `settingsBaselineRef` so section cards get a reliable string prop (refs alone don’t re-subscribe children). */
+  const [appSettingsBaselineStr, setAppSettingsBaselineStr] = useState(/** @type {string | null} */ (null))
 
   const [sidebarSearch, setSidebarSearch] = useState('')
   const [filterChip, setFilterChip] = useState(
@@ -238,8 +241,10 @@ export default function SettingsPage() {
 
   async function loadSettings() {
     const s = await api.getStore('settings')
+    const bl = stableStringify(s ?? {})
+    settingsBaselineRef.current = bl
+    setAppSettingsBaselineStr(bl)
     setSettings(s)
-    settingsBaselineRef.current = stableStringify(s)
     setIsDirty(false)
     setIsLoading(false)
   }
@@ -260,7 +265,9 @@ export default function SettingsPage() {
   async function saveSettings() {
     await api.setStore('settings', settings)
     await api.registerHotkey()
-    settingsBaselineRef.current = stableStringify(settings)
+    const bl = stableStringify(settings)
+    settingsBaselineRef.current = bl
+    setAppSettingsBaselineStr(bl)
     setIsDirty(false)
     showToast('Settings saved')
   }
@@ -279,10 +286,6 @@ export default function SettingsPage() {
 
   const showUnsavedHint = isDirty || encodingMeta.dirty
 
-  function hasUnsavedChanges() {
-    return isDirty || encodingMeta.dirty
-  }
-
   function scrollSectionIntoView(sectionId) {
     suppressOutlineScrollClearFor(950)
     document
@@ -299,8 +302,32 @@ export default function SettingsPage() {
       /* ignore */
     }
     setIsDirty(false)
+    setAppSettingsBaselineStr(settingsBaselineRef.current || null)
     encodingPanelRef.current?.resetToBaseline?.()
   }, [])
+
+  const revertAppSection = useCallback(
+    (sectionId) => {
+      const baselineStr = settingsBaselineRef.current
+      if (!baselineStr) return
+      const next = applySectionRevert(settings, baselineStr, sectionId)
+      setSettings(next)
+      setIsDirty(stableStringify(next) !== baselineStr)
+      if (sectionId === 'plugin') {
+        api.getOBSInstallPath().then((p) => setObsInstallPath(p || ''))
+      }
+    },
+    [settings]
+  )
+
+  const bentoSectionDirty = useCallback(
+    (sectionId) => {
+      if (sectionId.startsWith('encoding-')) return encodingMeta.dirty
+      if (!settings || !appSettingsBaselineStr) return false
+      return isSettingsSectionDirty(sectionId, settings, appSettingsBaselineStr)
+    },
+    [settings, appSettingsBaselineStr, encodingMeta.dirty]
+  )
 
   const handleNavigateAway = useCallback(
     (targetPath) => {
@@ -319,33 +346,17 @@ export default function SettingsPage() {
     [navigate, discardAllUnsaved]
   )
 
+  /** In-settings section nav: always allowed while dirty. Leave/discard only applies to main app nav (see guard). */
   function handleSectionSelect(nextId) {
     if (nextId === sectionParam) {
       setOutlineClearedByScroll(false)
       setSidebarNavHighlightId(nextId)
       return
     }
-    if (!hasUnsavedChanges()) {
-      setOutlineClearedByScroll(false)
-      setSidebarNavHighlightId(nextId)
-      setSearchParams({ section: nextId })
-      requestAnimationFrame(() => scrollSectionIntoView(nextId))
-      return
-    }
-    if (leaveWarnArmedRef.current) {
-      discardAllUnsaved()
-      setOutlineClearedByScroll(false)
-      setSidebarNavHighlightId(nextId)
-      setSearchParams({ section: nextId })
-      leaveWarnArmedRef.current = false
-      setLeaveBannerVisible(false)
-      requestAnimationFrame(() => scrollSectionIntoView(nextId))
-      return
-    }
-    leaveWarnArmedRef.current = true
-    setLeaveBannerVisible(true)
-    setSaveFlashActive(true)
-    window.setTimeout(() => setSaveFlashActive(false), 900)
+    setOutlineClearedByScroll(false)
+    setSidebarNavHighlightId(nextId)
+    setSearchParams({ section: nextId })
+    requestAnimationFrame(() => scrollSectionIntoView(nextId))
   }
 
   function handleLeaveBannerClick() {
@@ -602,7 +613,7 @@ export default function SettingsPage() {
                                 <div
                                   key={s.id}
                                   id={settingsSectionDomId(s.id)}
-                                  className={`settings-bento-item${outlineSectionId === s.id ? ' settings-bento-item--active' : ''}`}
+                                  className={`settings-bento-item${outlineSectionId === s.id ? ' settings-bento-item--active' : ''}${bentoSectionDirty(s.id) ? ' settings-bento-item--dirty' : ''}`}
                                   style={colStyle}
                                 >
                                   <EncodingSettingsSection
@@ -616,13 +627,15 @@ export default function SettingsPage() {
                               <div
                                 key={s.id}
                                 id={settingsSectionDomId(s.id)}
-                                className={`settings-bento-item${outlineSectionId === s.id ? ' settings-bento-item--active' : ''}`}
-                                style={colStyle}
-                              >
+                                  className={`settings-bento-item${outlineSectionId === s.id ? ' settings-bento-item--active' : ''}${bentoSectionDirty(s.id) ? ' settings-bento-item--dirty' : ''}`}
+                                  style={colStyle}
+                                >
                                 <GeneralSettingsSection
                                   sectionTitle={s.title}
                                   sectionId={s.id}
                                   settings={settings}
+                                  settingsBaselineStr={appSettingsBaselineStr ?? ''}
+                                  onRevertSection={revertAppSection}
                                   updateSetting={updateSetting}
                                   detectOBSPath={detectOBSPath}
                                   browseDirectory={browseDirectory}
@@ -652,13 +665,15 @@ export default function SettingsPage() {
                             <div
                               key={s.id}
                               id={settingsSectionDomId(s.id)}
-                              className={`settings-bento-item${outlineSectionId === s.id ? ' settings-bento-item--active' : ''}`}
+                              className={`settings-bento-item${outlineSectionId === s.id ? ' settings-bento-item--active' : ''}${bentoSectionDirty(s.id) ? ' settings-bento-item--dirty' : ''}`}
                               style={colStyle}
                             >
                               <GeneralSettingsSection
                                 sectionTitle={s.title}
                                 sectionId={s.id}
                                 settings={settings}
+                                settingsBaselineStr={appSettingsBaselineStr ?? ''}
+                                onRevertSection={revertAppSection}
                                 updateSetting={updateSetting}
                                 detectOBSPath={detectOBSPath}
                                 browseDirectory={browseDirectory}

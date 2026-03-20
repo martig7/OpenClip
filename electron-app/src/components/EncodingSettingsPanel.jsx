@@ -227,6 +227,28 @@ export const EncodingSettingsProvider = forwardRef(function EncodingSettingsProv
   )
 })
 
+function encodingCardHeaderExtras(ctx) {
+  return {
+    titleAddon: ctx.obsRunning ? (
+      <p className="encoding-section-obs-warn" role="status">
+        OBS is running — close OBS to save encoding settings
+      </p>
+    ) : null,
+    headerActions:
+      ctx.isDirty && ctx.baselineStr ? (
+        <button
+          type="button"
+          className="btn btn-icon btn-sm"
+          onClick={ctx.resetToBaseline}
+          title="Discard changes and restore last loaded or saved values"
+          aria-label="Revert to saved"
+        >
+          <Undo2 size={16} />
+        </button>
+      ) : null,
+  }
+}
+
 /**
  * @param {object} props
  * @param {string} props.sectionId
@@ -234,11 +256,12 @@ export const EncodingSettingsProvider = forwardRef(function EncodingSettingsProv
  */
 export function EncodingSettingsSection({ sectionId, sectionTitle }) {
   const ctx = useEncodingSettings()
+  const { titleAddon, headerActions } = encodingCardHeaderExtras(ctx)
 
   switch (sectionId) {
     case 'encoding-profile':
       return (
-        <SettingsSectionCard title={sectionTitle}>
+        <SettingsSectionCard title={sectionTitle} titleAddon={titleAddon} headerActions={headerActions}>
           <div className="form-group" style={{ marginTop: 0 }}>
             <div className="form-input-row">
               <select
@@ -256,27 +279,12 @@ export function EncodingSettingsSection({ sectionId, sectionTitle }) {
               <button className="btn btn-secondary btn-sm" onClick={ctx.load} title="Reload profiles">
                 <RefreshCw size={13} />
               </button>
-              {ctx.isDirty && ctx.baselineStr && (
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={ctx.resetToBaseline}
-                  title="Discard changes and restore last loaded or saved values"
-                >
-                  <Undo2 size={13} /> Reset to saved
-                </button>
-              )}
             </div>
             {ctx.profileDir && (
               <span
                 style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, display: 'block' }}
               >
                 Output mode: <strong>{ctx.settings.output_mode}</strong>
-                {ctx.obsRunning && (
-                  <span style={{ color: 'var(--accent-warn, #f5a623)', marginLeft: 12 }}>
-                    ⚠ OBS is running — close OBS to save encoding settings
-                  </span>
-                )}
               </span>
             )}
           </div>
@@ -301,7 +309,7 @@ export function EncodingSettingsSection({ sectionId, sectionTitle }) {
 
     case 'encoding-video':
       return (
-        <SettingsSectionCard title={sectionTitle}>
+        <SettingsSectionCard title={sectionTitle} titleAddon={titleAddon} headerActions={headerActions}>
           <div className="form-group" style={{ marginTop: 0 }}>
             <label className="form-label">Output Resolution</label>
             <div className="form-input-row">
@@ -358,7 +366,7 @@ export function EncodingSettingsSection({ sectionId, sectionTitle }) {
 
     case 'encoding-recording':
       return (
-        <SettingsSectionCard title={sectionTitle}>
+        <SettingsSectionCard title={sectionTitle} titleAddon={titleAddon} headerActions={headerActions}>
           <div className="form-group" style={{ marginTop: 0 }}>
             <div
               className="form-input-row"
@@ -403,7 +411,7 @@ export function EncodingSettingsSection({ sectionId, sectionTitle }) {
 
     case 'encoding-encoder':
       return (
-        <SettingsSectionCard title={sectionTitle}>
+        <SettingsSectionCard title={sectionTitle} titleAddon={titleAddon} headerActions={headerActions}>
           <span
             style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 12 }}
           >
