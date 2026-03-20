@@ -101,6 +101,8 @@ function VideoPlayer({
   const waveformQueueRef = useRef(null)
   const waveformNumChunksRef = useRef(0)
   const viewportChunkRef = useRef(null)
+  const pauseWaveformFetchRef = useRef(false)
+  const resumeWaveformTimerRef = useRef(null)
 
   // Organize state
   const [organizeMode, setOrganizeMode] = useState(false)
@@ -135,6 +137,11 @@ function VideoPlayer({
     waveformQueueRef.current = null
     waveformNumChunksRef.current = 0
     viewportChunkRef.current = null
+    pauseWaveformFetchRef.current = false
+    if (resumeWaveformTimerRef.current) {
+      clearTimeout(resumeWaveformTimerRef.current)
+      resumeWaveformTimerRef.current = null
+    }
   }, [media])
 
   // Fetch waveform resolution setting
@@ -223,6 +230,10 @@ function VideoPlayer({
             let inFlight = 0
 
             function fetchNext() {
+              if (pauseWaveformFetchRef.current) {
+                setTimeout(fetchNext, 150)
+                return
+              }
               while (inFlight < WAVEFORM_MAX_INFLIGHT && queue.length > 0) {
                 const chunkIdx = queue.shift()
                 inFlight++
@@ -281,7 +292,7 @@ function VideoPlayer({
                   }
                   inFlight--
                   if (queue.length === 0 && inFlight === 0) resolve()
-                  else fetchNext()
+                  else setTimeout(fetchNext, 0)
                 })
               }
 
@@ -387,6 +398,15 @@ function VideoPlayer({
   const handlePlay = useCallback(() => setIsPlaying(true), [])
   const handlePause = useCallback(() => setIsPlaying(false), [])
 
+  const deprioritizeWaveforms = useCallback((delayMs = 900) => {
+    pauseWaveformFetchRef.current = true
+    if (resumeWaveformTimerRef.current) clearTimeout(resumeWaveformTimerRef.current)
+    resumeWaveformTimerRef.current = setTimeout(() => {
+      pauseWaveformFetchRef.current = false
+      resumeWaveformTimerRef.current = null
+    }, delayMs)
+  }, [])
+
   const togglePlay = useCallback(() => {
     if (videoRef.current) {
       if (isPlaying) {
@@ -399,6 +419,7 @@ function VideoPlayer({
 
   const handleSeek = useCallback((time) => {
     if (videoRef.current) {
+      deprioritizeWaveforms(1300)
       videoRef.current.currentTime = time
       setCurrentTime(time)
       // Reprioritize chunk queue based on seek target
@@ -408,7 +429,7 @@ function VideoPlayer({
         reprioritizeQueue(waveformQueueRef.current, waveformNumChunksRef.current, chunkIdx)
       }
     }
-  }, [])
+  }, [deprioritizeWaveforms])
 
   const handleVolumeChange = useCallback((newVolume) => {
     if (videoRef.current) {
@@ -498,7 +519,9 @@ function VideoPlayer({
 
   // Cleanup on unmount
   useEffect(() => {
-    return () => {}
+    return () => {
+      if (resumeWaveformTimerRef.current) clearTimeout(resumeWaveformTimerRef.current)
+    }
   }, [])
 
   const handleMarkerClick = useCallback(
@@ -658,6 +681,8 @@ function VideoPlayer({
           onLoadedMetadata={handleLoadedMetadata}
           onPlay={handlePlay}
           onPause={handlePause}
+          onSeeking={() => deprioritizeWaveforms(1200)}
+          onWaiting={() => deprioritizeWaveforms(1800)}
           onClick={togglePlay}
         />
 
