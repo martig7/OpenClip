@@ -19,7 +19,7 @@ import ViewerClipsPage from './viewer/pages/ClipsPage'
 import ViewerStoragePage from './viewer/pages/StoragePage'
 import OnboardingModal from './components/OnboardingModal'
 import SidebarWatcherPanel from './components/SidebarWatcherPanel'
-import { WatcherRuntimeProvider } from './context/WatcherRuntimeContext'
+import { WatcherRuntimeProvider, useWatcherRuntime } from './context/WatcherRuntimeContext'
 import { SettingsNavGuardProvider, useSettingsNavGuard } from './context/SettingsNavGuardContext'
 import { TitleBarOverlayProvider, useTitleBarOverlayOverride } from './context/TitleBarOverlayContext'
 import { getTitleBarOverlayForPath } from './utils/titleBarOverlayDefaults'
@@ -70,6 +70,53 @@ function getProgressWidth(p, isManual = false) {
     return 50 + (((p.clipIndex ?? 0) + 1) / (p.clipTotal ?? 1)) * 45
   }
   return 100
+}
+
+// ── Sidebar watcher messages (above the compact watcher panel) ──
+
+function SidebarWatcherBanner() {
+  const { watcherStatus, watcherBannerKind, dismissWatcherBanner, openSetupGuide } =
+    useWatcherRuntime()
+
+  if (!watcherStatus.running || !watcherBannerKind) return null
+
+  if (watcherBannerKind === 'obs_closed') {
+    return (
+      <div className="sidebar-nav-watcher-banner" role="status">
+        <span className="sidebar-nav-watcher-banner-text">
+          OBS is closed. Start OBS to start recording.
+        </span>
+        <button
+          type="button"
+          className="sidebar-nav-watcher-banner-dismiss"
+          onClick={dismissWatcherBanner}
+          title="Dismiss"
+        >
+          <X size={11} />
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="sidebar-nav-watcher-banner" role="status">
+      <span className="sidebar-nav-watcher-banner-text">
+        OBS plugin not detected.{' '}
+        <button type="button" className="sidebar-watcher-guide-link" onClick={openSetupGuide}>
+          <Settings size={10} />
+          Setup
+        </button>
+      </span>
+      <button
+        type="button"
+        className="sidebar-nav-watcher-banner-dismiss"
+        onClick={dismissWatcherBanner}
+        title="Dismiss"
+      >
+        <X size={11} />
+      </button>
+    </div>
+  )
 }
 
 // ── Inner layout component — needs useLocation() so it lives inside HashRouter ──
@@ -140,6 +187,7 @@ function AppLayout({ sessionProgress, updateState, showOnboarding, setShowOnboar
             </NavLink>
           ))}
           <div className="nav-nav-spacer" aria-hidden />
+          <SidebarWatcherBanner />
           <SidebarWatcherPanel />
           {updateState && (
             <div className="update-banner">

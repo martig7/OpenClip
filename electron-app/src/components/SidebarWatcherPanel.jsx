@@ -1,27 +1,10 @@
 import { useEffect, useState } from 'react'
-import {
-  ExternalLink,
-  Square,
-  Play,
-  Circle,
-  AlertTriangle,
-  X,
-  Settings,
-} from 'lucide-react'
+import { ExternalLink, Square, Play, Circle, X } from 'lucide-react'
 import { useWatcherRuntime } from '../context/WatcherRuntimeContext'
 import { formatWatcherUptime, parseWatcherGameState } from '../pages/games/watcherStatusUtils'
 
 export default function SidebarWatcherPanel() {
-  const {
-    watcherStatus,
-    scriptWarning,
-    actionError,
-    setActionError,
-    toggleWatcher,
-    openOBS,
-    dismissScriptWarning,
-    openSetupGuide,
-  } = useWatcherRuntime()
+  const { watcherStatus, actionError, setActionError, toggleWatcher, openOBS } = useWatcherRuntime()
 
   const [, setTick] = useState(0)
   const state = parseWatcherGameState(watcherStatus.gameState)
@@ -34,29 +17,11 @@ export default function SidebarWatcherPanel() {
 
   return (
     <div className="sidebar-watcher-panel">
-      <div className="sidebar-watcher-panel-title">Watcher</div>
-
       {actionError && (
         <div className="sidebar-watcher-error">
           <span>{actionError}</span>
           <button type="button" className="sidebar-watcher-error-dismiss" onClick={() => setActionError(null)} title="Dismiss">
             <X size={12} />
-          </button>
-        </div>
-      )}
-
-      {scriptWarning && watcherStatus.running && (
-        <div className="sidebar-watcher-warning">
-          <AlertTriangle size={12} className="shrink-0" />
-          <span className="sidebar-watcher-warning-text">
-            OBS plugin not detected.
-            <button type="button" className="sidebar-watcher-guide-link" onClick={openSetupGuide}>
-              <Settings size={10} />
-              Setup
-            </button>
-          </span>
-          <button type="button" className="btn-icon" onClick={dismissScriptWarning} title="Dismiss">
-            <X size={11} />
           </button>
         </div>
       )}
