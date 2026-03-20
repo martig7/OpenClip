@@ -1,34 +1,6 @@
 import { memo, useState, useEffect } from 'react'
 import { ExternalLink, Square, Play, Circle, AlertTriangle, X, Settings } from 'lucide-react'
-
-function formatUptime(startedAt) {
-  if (!startedAt) return ''
-  const seconds = Math.floor((Date.now() - startedAt) / 1000)
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  const s = seconds % 60
-  if (h > 0) return `${h}h ${m}m ${s}s`
-  if (m > 0) return `${m}m ${s}s`
-  return `${s}s`
-}
-
-function parseGameState(gameState) {
-  if (!gameState) return { label: 'No state file', color: 'var(--text-muted)' }
-  if (gameState.startsWith('RECORDING')) {
-    const parts = gameState.split('|')
-    const game = parts[1] || 'Unknown'
-    const scene = parts[2] || ''
-    return {
-      label: `Recording ${game}${scene ? ` (Scene: ${scene})` : ''}`,
-      color: 'var(--danger)',
-      recording: true,
-      game,
-    }
-  }
-  if (gameState === 'IDLE')
-    return { label: 'Idle - watching for games', color: 'var(--text-secondary)' }
-  return { label: gameState, color: 'var(--text-muted)' }
-}
+import { formatWatcherUptime, parseWatcherGameState } from './watcherStatusUtils'
 
 const WatcherStatusCard = memo(function WatcherStatusCard({
   status,
@@ -39,7 +11,7 @@ const WatcherStatusCard = memo(function WatcherStatusCard({
   onOpenOBS,
 }) {
   const [, setTick] = useState(0)
-  const state = parseGameState(status.gameState)
+  const state = parseWatcherGameState(status.gameState)
 
   useEffect(() => {
     if (!status.running) return
@@ -148,7 +120,7 @@ const WatcherStatusCard = memo(function WatcherStatusCard({
         <div>
           <div style={{ color: 'var(--text-muted)', fontSize: 11, marginBottom: 2 }}>UPTIME</div>
           <span style={{ color: 'var(--text-secondary)' }}>
-            {status.running && status.startedAt ? formatUptime(status.startedAt) : '--'}
+            {status.running && status.startedAt ? formatWatcherUptime(status.startedAt) : '--'}
           </span>
         </div>
 

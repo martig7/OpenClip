@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Trash2, Edit2, Gamepad2 } from 'lucide-react'
 import api from '../api'
@@ -13,14 +13,12 @@ import {
   getAppAudioWindowKey,
   isAppAudioKind,
 } from './games/audioSourceUtils'
-import WatcherStatusCard from './games/WatcherStatusCard'
 import EditGameModal from './games/EditGameModal'
 import AddGameModal from './games/AddGameModal'
 import SceneAudioSourcesCard from './games/SceneAudioSourcesCard'
 import { GameList } from './games/GameList'
 import { GamesPageBody } from './games/GamesPageBody'
 import ConfirmDeleteDialog from '../components/ConfirmDeleteDialog'
-import OnboardingModal from '../components/OnboardingModal'
 
 export default function GamesPage() {
   const navigate = useNavigate()
@@ -28,10 +26,6 @@ export default function GamesPage() {
   const {
     games,
     setGames,
-    watcherStatus,
-    setWatcherStatus,
-    scriptWarning,
-    setScriptWarning,
     confirmDeleteGame,
     setConfirmDeleteGame,
     editGameModal,
@@ -185,22 +179,6 @@ export default function GamesPage() {
       .catch(() => {
         trackDataLoadedRef.current = true
       })
-    api
-      .getWatcherStatus()
-      .then((s) => {
-        setWatcherStatus(s)
-        if (s.running) {
-          api
-            .isOBSScriptLoaded()
-            .then((loaded) => {
-              if (!loaded) setScriptWarning(true)
-            })
-            .catch(() => {})
-        }
-      })
-      .catch(() => {})
-    const unsub = api.onWatcherStatusPush((status) => setWatcherStatus(status))
-    return () => unsub()
   }, [])
 
   // Persist master audio sources whenever the list changes
@@ -229,14 +207,6 @@ export default function GamesPage() {
       if (labels && labels.length === 6) setTrackLabels(labels)
     } catch (err) {
       showToast(err?.message || 'Failed to load track labels')
-    }
-  }
-
-  async function loadWatcherStatus() {
-    try {
-      setWatcherStatus(await api.getWatcherStatus())
-    } catch (err) {
-      showToast(err?.message || 'Failed to load watcher status')
     }
   }
 
@@ -646,29 +616,6 @@ export default function GamesPage() {
     navigate('/settings')
   }
 
-  const toggleWatcher = useCallback(async () => {
-    try {
-      if (watcherStatus.running) {
-        await api.stopWatcher()
-        setScriptWarning(null)
-      } else {
-        await api.startWatcher()
-        // Check if the OBS script is loaded (non-blocking)
-        api.isOBSScriptLoaded().then((loaded) => {
-          if (!loaded) setScriptWarning(true)
-        })
-      }
-    } catch (err) {
-      showToast(err?.message || 'Failed to toggle watcher')
-    }
-    loadWatcherStatus()
-  }, [watcherStatus.running, showToast])
-
-  const [showOnboarding, setShowOnboarding] = useState(false)
-  const handleDismissWarning = useCallback(() => setScriptWarning(null), [setScriptWarning])
-  const handleGoToSettings = useCallback(() => setShowOnboarding(true), [])
-  const handleOpenOBS = useCallback(() => api.launchOBS(), [])
-
   return (
     <>
       <div className="page-header">
@@ -677,12 +624,6 @@ export default function GamesPage() {
       </div>
 
       <GamesPageBody
-        watcherStatus={watcherStatus}
-        toggleWatcher={toggleWatcher}
-        scriptWarning={scriptWarning}
-        handleDismissWarning={handleDismissWarning}
-        handleGoToSettings={handleGoToSettings}
-        handleOpenOBS={handleOpenOBS}
         games={games}
         openAddModal={openAddModal}
         toggleGame={toggleGame}
@@ -784,7 +725,6 @@ export default function GamesPage() {
         onConfirm={doRemoveGame}
         onCancel={() => setConfirmDeleteGame(null)}
       />
-      <OnboardingModal open={showOnboarding} onClose={() => setShowOnboarding(false)} />
     </>
   )
 }
