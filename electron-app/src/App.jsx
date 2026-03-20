@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useState } from 'react'
-import { HashRouter, Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom'
+import { HashRouter, Routes, Route, NavLink, useLocation } from 'react-router-dom'
 import {
   AlertTriangle,
   Gamepad2,
@@ -169,10 +169,6 @@ function AppLayout({ sessionProgress, updateState, showOnboarding, setShowOnboar
             <Route path="/recordings" element={<ViewerRecordingsPage />} />
             <Route path="/clips" element={<ViewerClipsPage />} />
             <Route path="/storage" element={<ViewerStoragePage />} />
-            <Route
-              path="/encoding"
-              element={<Navigate to="/settings?section=encoding-profile" replace />}
-            />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </main>

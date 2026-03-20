@@ -68,7 +68,7 @@ test('shows recordings', async ({ page }) => {
 - `navigation.spec.js` — Navigation and page loading tests
 - `games.spec.js` — Games page: mock data rendering, toggle, delete dialog, add modal
 - `settings.spec.js` — Settings page: hotkey, toggles, dirty-state save button
-- `pages.spec.js` — Recordings, Clips, Storage, Settings (encoding tab): data rendering tests
+- `pages.spec.js` — Recordings, Clips, Storage, Settings (encoding section): data rendering tests
 - `interactions.spec.js` — Cross-page user interaction flows
 - `fixtures/testData.js` — Mock data for both `window.api` and API route responses
 - `fixtures/routes.js` — `setupApiRoutes(page)` helper using `page.route()`
