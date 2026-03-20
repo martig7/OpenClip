@@ -157,14 +157,12 @@ test.describe('Storage Page', () => {
   })
 })
 
-test.describe('Encoding Page', () => {
-  test('encoding page loads with correct heading', async ({ page }) => {
-    await page.goto('/#/encoding')
-    await expect(page.locator('h1:has-text("OBS Encoding")')).toBeVisible({ timeout: 5000 })
-  })
-
-  test('encoding page has encoder selector', async ({ page }) => {
-    await page.goto('/#/encoding')
+test.describe('Settings — Encoding', () => {
+  test('encoding section has encoder selector', async ({ page }) => {
+    await page.goto('/#/settings?section=encoding-recording')
+    await expect(page.locator('.settings-section-card-title:has-text("Recording Output")')).toBeVisible({
+      timeout: 5000,
+    })
     await expect(page.locator('label:has-text("Encoder")').first()).toBeVisible({ timeout: 5000 })
   })
 })

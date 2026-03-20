@@ -60,6 +60,7 @@ function registerUpdateHandlers() {}
 function registerIpcHandlers(store, appState) {
   appState.registerHotkey = () => {}
 
+  ipcMain.handle('window:setTitleBarOverlay', () => {})
   ipcMain.handle('store:get', (_event, key) => store.get(key))
   ipcMain.handle('store:set', (_event, key, value) => store.set(key, value))
 

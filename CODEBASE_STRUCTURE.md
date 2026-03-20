@@ -58,7 +58,7 @@ Testing stubs (required by Jest module mapping — not imported by production co
 | `pages/games/GamesPageBody.jsx` | 92 |
 | `pages/games/EditGameModal.jsx` | 327 |
 | `pages/games/SceneAudioSourcesSection.jsx` | 602 |
-| `pages/SettingsPage.jsx` | 621 |
+| `pages/SettingsPage.jsx` | 664 |
 | `viewer/components/VideoPlayer.jsx` | 727 |
 | `pages/games/AddGameModal.jsx` | 619 |
 | `viewer/components/StorageTreemap.jsx` | 520 |
@@ -66,7 +66,7 @@ Testing stubs (required by Jest module mapping — not imported by production co
 | `viewer/components/StorageList.jsx` | 480 |
 | `viewer/components/ZoomTimeline.jsx` | 398 |
 | `pages/games/SceneAudioSourcesCard.jsx` | 656 |
-| `pages/EncodingPage.jsx` | 331 |
+| `components/EncodingSettingsPanel.jsx` | 370 |
 | `viewer/components/Sidebar.jsx` | 191 |
 | `viewer/pages/ClipsPage.jsx` | 177 |
 | `pages/games/audioSourceUtils.jsx` | 153 |

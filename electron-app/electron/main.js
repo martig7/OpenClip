@@ -145,9 +145,10 @@ function createWindow() {
     backgroundColor: '#0f0f0f',
     icon: path.join(__dirname, '..', 'assets', 'icon.ico'),
     titleBarStyle: 'hidden',
+    // Defaults match src/index.css :root — renderer syncs via window:setTitleBarOverlay on load
     titleBarOverlay: {
-      color: '#181818',
-      symbolColor: '#a0a0a0',
+      color: '#0f0f0f',
+      symbolColor: '#aaaaaa',
       height: 36,
     },
     webPreferences: {

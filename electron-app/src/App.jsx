@@ -1,5 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react'
-import { HashRouter, Routes, Route, NavLink } from 'react-router-dom'
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useState } from 'react'
+import { HashRouter, Routes, Route, NavLink, useLocation } from 'react-router-dom'
 import {
   AlertTriangle,
   Gamepad2,
@@ -7,7 +7,6 @@ import {
   Film,
   HardDrive,
   Settings,
-  Sliders,
   Download,
   X,
 } from 'lucide-react'
@@ -15,11 +14,13 @@ import appIcon from '../assets/icon.png'
 import api from './api'
 import GamesPage from './pages/GamesPage'
 import SettingsPage from './pages/SettingsPage'
-import EncodingPage from './pages/EncodingPage'
 import ViewerRecordingsPage from './viewer/pages/RecordingsPage'
 import ViewerClipsPage from './viewer/pages/ClipsPage'
 import ViewerStoragePage from './viewer/pages/StoragePage'
 import OnboardingModal from './components/OnboardingModal'
+import { SettingsNavGuardProvider, useSettingsNavGuard } from './context/SettingsNavGuardContext'
+import { TitleBarOverlayProvider, useTitleBarOverlayOverride } from './context/TitleBarOverlayContext'
+import { getTitleBarOverlayForPath } from './utils/titleBarOverlayDefaults'
 import './App.css'
 import './viewer/viewer.css'
 
@@ -28,7 +29,6 @@ const navItems = [
   { path: '/recordings', icon: Video, label: 'Recordings' },
   { path: '/clips', icon: Film, label: 'Clips' },
   { path: '/storage', icon: HardDrive, label: 'Storage' },
-  { path: '/encoding', icon: Sliders, label: 'Encoding' },
   { path: '/settings', icon: Settings, label: 'Settings' },
 ]
 
@@ -73,8 +73,31 @@ function getProgressWidth(p, isManual = false) {
 // ── Inner layout component — needs useLocation() so it lives inside HashRouter ──
 
 function AppLayout({ sessionProgress, updateState, showOnboarding, setShowOnboarding }) {
+  const location = useLocation()
+  const { guard } = useSettingsNavGuard()
+  const { overlayOverride } = useTitleBarOverlayOverride()
   const { organizeError, clearOrganizeError } = useOrganizeError()
   const { isManualOrganizing, organizeProgress } = useOrganizeProgress()
+
+  // Native caption buttons: match route-specific top strip (e.g. Storage toolbar) and page overrides (e.g. Settings warning banner)
+  useLayoutEffect(() => {
+    if (!api.setTitleBarOverlay) return
+    const base = getTitleBarOverlayForPath(location.pathname)
+    const merged = overlayOverride ? { ...base, ...overlayOverride } : base
+    api.setTitleBarOverlay({
+      color: merged.color,
+      symbolColor: merged.symbolColor,
+      height: 36,
+    })
+  }, [location.pathname, overlayOverride])
+
+  function handleSidebarNavClick(e, path) {
+    if (location.pathname !== '/settings' || path === '/settings') return
+    const hasUnsaved = guard?.hasUnsaved?.() === true
+    if (!hasUnsaved) return
+    e.preventDefault()
+    guard.handleNavigateAway?.(path)
+  }
 
   // Show session progress on all pages; fall back to manual organize progress.
   const isManual = !sessionProgress && isManualOrganizing
@@ -103,6 +126,7 @@ function AppLayout({ sessionProgress, updateState, showOnboarding, setShowOnboar
               to={path}
               end={path === '/'}
               className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+              onClick={(e) => handleSidebarNavClick(e, path)}
             >
               <Icon size={18} />
               <span>{label}</span>
@@ -146,7 +170,6 @@ function AppLayout({ sessionProgress, updateState, showOnboarding, setShowOnboar
             <Route path="/recordings" element={<ViewerRecordingsPage />} />
             <Route path="/clips" element={<ViewerClipsPage />} />
             <Route path="/storage" element={<ViewerStoragePage />} />
-            <Route path="/encoding" element={<EncodingPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </main>
@@ -279,12 +302,16 @@ export default function App() {
         value={{ isManualOrganizing, setIsManualOrganizing, organizeProgress, setOrganizeProgress }}
       >
         <HashRouter>
-          <AppLayout
-            sessionProgress={sessionProgress}
-            updateState={updateState}
-            showOnboarding={showOnboarding}
-            setShowOnboarding={setShowOnboarding}
-          />
+          <TitleBarOverlayProvider>
+            <SettingsNavGuardProvider>
+              <AppLayout
+                sessionProgress={sessionProgress}
+                updateState={updateState}
+                showOnboarding={showOnboarding}
+                setShowOnboarding={setShowOnboarding}
+              />
+            </SettingsNavGuardProvider>
+          </TitleBarOverlayProvider>
         </HashRouter>
       </OrganizeProgressContext.Provider>
     </OrganizeErrorContext.Provider>

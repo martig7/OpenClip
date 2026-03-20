@@ -16,6 +16,7 @@ import {
 import Timeline from './Timeline'
 import ZoomTimeline from './ZoomTimeline'
 import VideoPlayerInfoBar from './VideoPlayerInfoBar'
+import MainContentTopBar from './MainContentTopBar'
 import { apiFetch, apiPost, getBase } from '../apiBase'
 import { formatTime } from '../utils'
 import api from '../../api'
@@ -628,10 +629,7 @@ function VideoPlayer({
   if (!media) {
     return (
       <div className="flex-1 flex flex-col bg-[var(--bg-primary)] w-full h-full overflow-hidden">
-        <div
-          className="h-[36px] w-full shrink-0 border-b border-[var(--border)]"
-          style={{ WebkitAppRegion: 'drag', backgroundColor: 'var(--bg-primary)' }}
-        />
+        <MainContentTopBar />
         <div className="player-container">
           <div className="player-placeholder">
             <div className="icon">
@@ -646,10 +644,7 @@ function VideoPlayer({
 
   return (
     <div className="flex-1 flex flex-col bg-[var(--bg-primary)] w-full h-full overflow-hidden">
-      <div
-        className="h-[36px] w-full shrink-0 border-b border-[var(--border)] relative z-50"
-        style={{ WebkitAppRegion: 'drag', backgroundColor: 'var(--bg-primary)' }}
-      />
+      <MainContentTopBar />
       <div
         className="player-container"
         onMouseEnter={handleVideoMouseEnter}

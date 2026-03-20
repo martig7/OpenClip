@@ -3,8 +3,9 @@
   @apply flex h-screen overflow-hidden;
 }
 
+/* Below main UI so settings/viewer content paints on top; native caption buttons still use window:setTitleBarOverlay */
 .titlebar-drag {
-  @apply fixed top-0 left-0 right-0 z-[100] pointer-events-none;
+  @apply fixed top-0 left-0 right-0 z-[1] pointer-events-none;
   height: 36px;
   -webkit-app-region: drag;
 }
@@ -79,7 +80,7 @@
 
 /* Sidebar Navigation */
 .sidebar-nav {
-  @apply w-[200px] min-w-[200px] bg-[var(--bg-secondary)] border-r border-[var(--border)]
+  @apply relative z-[2] w-[200px] min-w-[200px] bg-[var(--bg-secondary)] border-r border-[var(--border)]
     flex flex-col pt-12 px-2 pb-2 gap-[2px];
 }
 .nav-brand {
@@ -103,7 +104,7 @@
 
 /* Main Content */
 .main-content {
-  @apply flex-1 overflow-hidden flex flex-col;
+  @apply relative z-[2] flex-1 overflow-hidden flex flex-col;
 }
 
 /* Page Header */
@@ -115,6 +116,73 @@
 }
 .page-header p {
   @apply text-[13px] text-[var(--text-secondary)] mt-1;
+}
+
+.settings-subnav {
+  display: flex;
+  gap: 4px;
+  margin-top: 16px;
+  margin-left: -4px;
+  border-bottom: 1px solid var(--border);
+}
+.settings-subnav-tab {
+  position: relative;
+  padding: 8px 14px 10px;
+  margin-bottom: -1px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.settings-subnav-tab:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+.settings-subnav-tab.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent);
+}
+
+.settings-leave-warning-banner {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 10px 16px;
+  border: none;
+  background: var(--danger, #c62828);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: center;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+.settings-leave-warning-banner:hover {
+  filter: brightness(1.06);
+}
+
+.settings-save-btn.settings-save-btn-flash {
+  animation: settings-save-flash 0.85s ease-in-out 2;
+}
+
+@keyframes settings-save-flash {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(198, 40, 40, 0);
+    filter: none;
+  }
+  35% {
+    box-shadow: 0 0 0 3px rgba(198, 40, 40, 0.85);
+    filter: brightness(1.15);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(198, 40, 40, 0.25);
+  }
 }
 
 /* Page Body */
@@ -566,4 +634,328 @@
 }
 .onboarding-divider {
   @apply border-0 border-t border-solid border-[var(--border)] my-4;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Settings — Option 2 (sidebar + search), locked component variants */
+.settings-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.settings-page-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+.settings-split {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Settings sidebar chrome uses viewer.css: .sidebar, .msb-header, .msb-search, .msb-game-* */
+
+.settings-nav-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text-secondary);
+  transition:
+    background 0.12s ease,
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.settings-nav-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.settings-nav-item.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.settings-nav-item-title {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.settings-nav-item-sub {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.settings-nav-item.active .settings-nav-item-sub {
+  color: var(--text-secondary);
+}
+
+.settings-sidebar-empty {
+  padding: 20px 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 8px;
+}
+
+.settings-sidebar-empty strong {
+  display: block;
+  color: var(--text-primary);
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.settings-detail {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+  /* Top chrome = MainContentTopBar (viewer.css --main-content-topbar-strip-h + rule); used to align title with sidebar pills */
+  --settings-detail-topbar-total: calc(
+    var(--main-content-topbar-strip-h, 36px) + var(--main-content-topbar-rule-h, 1px)
+  );
+  --settings-detail-toolbar-pt: 10px;
+}
+
+/* Above scroll content so outlines in the bento never paint over Setup Wizard / Save */
+.settings-detail > .main-content-topbar-strip,
+.settings-detail > .main-content-topbar-rule {
+  position: relative;
+  z-index: 3;
+}
+
+.settings-detail-toolbar {
+  position: relative;
+  z-index: 3;
+  padding: var(--settings-detail-toolbar-pt) 20px 12px;
+  background: var(--bg-primary);
+  flex-shrink: 0;
+}
+
+.settings-detail-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.settings-detail-header-row--actions-only {
+  justify-content: flex-end;
+}
+
+/* Title lines up with filter pills row; actions stay top-aligned (row1 + pills pt — no rule between) */
+.settings-detail-title {
+  margin: 0;
+  margin-top: calc(
+    8px + 26px + 8px + 6px - var(--settings-detail-topbar-total) - var(--settings-detail-toolbar-pt)
+  );
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.settings-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.settings-unsaved-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.settings-detail-scroll {
+  position: relative;
+  z-index: 0;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* Room for active bento outline + outline-offset so the top row isn’t clipped */
+  padding: 6px 20px 24px;
+  scroll-padding-top: 6px;
+}
+
+.settings-detail-inner {
+  max-width: 720px;
+}
+
+.settings-detail-inner--encoding {
+  max-width: none;
+}
+
+.settings-detail-inner--bento {
+  max-width: none;
+}
+
+.settings-bento-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+
+.settings-bento-item {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  border-radius: var(--radius-lg);
+  transition:
+    outline 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+/* Selected (sidebar) — purple ring */
+.settings-bento-item--active:not(.settings-bento-item--dirty) {
+  outline: 2px solid var(--accent-light);
+  outline-offset: 2px;
+}
+
+/* Unsaved app settings or encoding — amber ring */
+.settings-bento-item--dirty:not(.settings-bento-item--active) {
+  outline: 2px solid var(--accent-warn, #f59e0b);
+  outline-offset: 2px;
+}
+
+/* Selected + unsaved: inner amber, outer purple (box-shadow paints outer band) */
+.settings-bento-item--active.settings-bento-item--dirty {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--accent-warn, #f59e0b),
+    0 0 0 4px var(--accent-light);
+}
+
+.settings-bento-item > .card.settings-section-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-detail-empty {
+  padding: 24px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-secondary);
+  max-width: 420px;
+}
+
+.settings-detail-empty strong {
+  display: block;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.settings-section-card {
+  margin-bottom: 0;
+}
+
+.settings-section-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+  margin-bottom: 16px;
+}
+
+.settings-section-card-heading {
+  min-width: 0;
+  flex: 1;
+}
+
+.settings-section-card-header-actions {
+  flex-shrink: 0;
+}
+
+.settings-section-card-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.settings-bento-item .settings-section-card-header {
+  flex-shrink: 0;
+}
+
+.settings-bento-item .settings-section-card-title {
+  flex-shrink: 0;
+}
+
+.encoding-section-obs-warn {
+  margin: 6px 0 0;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent-warn, #f5a623);
+  line-height: 1.35;
+}
+
+.settings-bento-item .settings-section-card-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+/* Compact toggle rows (variant B) */
+.settings-toggle-row--compact {
+  padding: 6px 0 !important;
+}
+
+.settings-toggle-row--compact .toggle-label {
+  font-size: 12px;
+}
+
+.settings-toggle-row--compact .toggle-desc {
+  font-size: 10px;
+  margin-top: 2px;
 }

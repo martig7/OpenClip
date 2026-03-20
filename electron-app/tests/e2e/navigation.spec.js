@@ -15,7 +15,6 @@ test.describe('Navigation', () => {
     await expect(page.getByRole('link', { name: 'Recordings' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Clips' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Storage' })).toBeVisible()
-    await expect(page.getByRole('link', { name: 'Encoding' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Settings' })).toBeVisible()
   })
 })
@@ -28,9 +27,9 @@ test.describe('Navigation - Edge Cases', () => {
 
   test('page refresh maintains route', async ({ page }) => {
     await page.goto('/#/settings')
-    await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('.settings-page .msb-title')).toHaveText('Settings', { timeout: 5000 })
     await page.reload()
-    await expect(page.locator('h1:has-text("Settings")')).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('.settings-page .msb-title')).toHaveText('Settings', { timeout: 5000 })
   })
 
   test('navigation via browser back/forward works', async ({ page }) => {
