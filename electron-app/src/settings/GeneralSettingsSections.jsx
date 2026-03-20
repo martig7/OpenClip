@@ -15,6 +15,25 @@ import { isSettingsSectionDirty } from './settingsSectionRevert'
 
 const tc = 'toggle-row settings-toggle-row--compact'
 
+const LOADER_SPIN_STYLE = { animation: 'spin 1s linear infinite' }
+
+/** @param {(v: string) => void} setPath */
+async function detectObsInstallPathToState(setPath) {
+  const p = await api.detectOBSInstallPath()
+  if (p) setPath(p)
+}
+
+/** @param {(v: string) => void} setPath */
+async function browseObsInstallPathToState(setPath) {
+  const dir = await api.openDirectoryDialog()
+  if (dir) setPath(dir)
+}
+
+/** @param {import('react').ChangeEvent<HTMLInputElement>} e */
+function parseIntInputOrZero(e) {
+  return parseInt(e.target.value, 10) || 0
+}
+
 /**
  * @param {object} props
  * @param {string} props.title
@@ -119,16 +138,18 @@ export default function GeneralSettingsSection({
   checkForUpdate,
   installUpdate,
 }) {
+  const sectionCardProps = {
+    sectionId,
+    sectionTitle,
+    settings,
+    settingsBaselineStr,
+    onRevertSection,
+  }
+
   switch (sectionId) {
     case 'watcher':
       return (
-        <AppSettingsSectionCard
-          sectionId={sectionId}
-          sectionTitle={sectionTitle}
-          settings={settings}
-          settingsBaselineStr={settingsBaselineStr}
-          onRevertSection={onRevertSection}
-        >
+        <AppSettingsSectionCard {...sectionCardProps}>
           <div className={tc} style={{ marginTop: 0 }}>
             <div>
               <div className="toggle-label">Start Watcher on Startup</div>
@@ -149,13 +170,7 @@ export default function GeneralSettingsSection({
 
     case 'organize':
       return (
-        <AppSettingsSectionCard
-          sectionId={sectionId}
-          sectionTitle={sectionTitle}
-          settings={settings}
-          settingsBaselineStr={settingsBaselineStr}
-          onRevertSection={onRevertSection}
-        >
+        <AppSettingsSectionCard {...sectionCardProps}>
           <div className={tc} style={{ marginTop: 0 }}>
             <div>
               <div className="toggle-label">Remux to MP4</div>
@@ -175,13 +190,7 @@ export default function GeneralSettingsSection({
 
     case 'view':
       return (
-        <AppSettingsSectionCard
-          sectionId={sectionId}
-          sectionTitle={sectionTitle}
-          settings={settings}
-          settingsBaselineStr={settingsBaselineStr}
-          onRevertSection={onRevertSection}
-        >
+        <AppSettingsSectionCard {...sectionCardProps}>
           <div className="form-group" style={{ marginTop: 0 }}>
             <label className="form-label">Storage View</label>
             <div className="toggle-desc" style={{ marginBottom: 6 }}>
@@ -217,13 +226,7 @@ export default function GeneralSettingsSection({
 
     case 'hotkey':
       return (
-        <AppSettingsSectionCard
-          sectionId={sectionId}
-          sectionTitle={sectionTitle}
-          settings={settings}
-          settingsBaselineStr={settingsBaselineStr}
-          onRevertSection={onRevertSection}
-        >
+        <AppSettingsSectionCard {...sectionCardProps}>
           <div className="form-group" style={{ marginTop: 0 }}>
             <label className="form-label">Hotkey</label>
             <HotkeyCapture
@@ -241,13 +244,7 @@ export default function GeneralSettingsSection({
 
     case 'autoclip':
       return (
-        <AppSettingsSectionCard
-          sectionId={sectionId}
-          sectionTitle={sectionTitle}
-          settings={settings}
-          settingsBaselineStr={settingsBaselineStr}
-          onRevertSection={onRevertSection}
-        >
+        <AppSettingsSectionCard {...sectionCardProps}>
           <div className={tc} style={{ marginTop: 0 }}>
             <div>
               <div className="toggle-label">Enable Auto-Clip</div>
@@ -271,7 +268,7 @@ export default function GeneralSettingsSection({
                   className="form-input"
                   value={settings.autoClip?.bufferBefore ?? 30}
                   onChange={(e) =>
-                    updateSetting('autoClip.bufferBefore', parseInt(e.target.value, 10) || 0)
+                    updateSetting('autoClip.bufferBefore', parseIntInputOrZero(e))
                   }
                   style={{ width: 100 }}
                 />
@@ -283,7 +280,7 @@ export default function GeneralSettingsSection({
                   className="form-input"
                   value={settings.autoClip?.bufferAfter ?? 5}
                   onChange={(e) =>
-                    updateSetting('autoClip.bufferAfter', parseInt(e.target.value, 10) || 0)
+                    updateSetting('autoClip.bufferAfter', parseIntInputOrZero(e))
                   }
                   style={{ width: 100 }}
                 />
@@ -327,13 +324,7 @@ export default function GeneralSettingsSection({
 
     case 'storage':
       return (
-        <AppSettingsSectionCard
-          sectionId={sectionId}
-          sectionTitle={sectionTitle}
-          settings={settings}
-          settingsBaselineStr={settingsBaselineStr}
-          onRevertSection={onRevertSection}
-        >
+        <AppSettingsSectionCard {...sectionCardProps}>
           <div className="form-group" style={{ marginTop: 0 }}>
             <label className="form-label">Organized Recordings Destination</label>
             <div className="form-input-row">
@@ -375,7 +366,7 @@ export default function GeneralSettingsSection({
                   className="form-input"
                   value={settings.autoDelete?.maxStorageGB ?? 50}
                   onChange={(e) =>
-                    updateSetting('autoDelete.maxStorageGB', parseInt(e.target.value, 10) || 0)
+                    updateSetting('autoDelete.maxStorageGB', parseIntInputOrZero(e))
                   }
                   style={{ width: 100 }}
                 />
@@ -387,7 +378,7 @@ export default function GeneralSettingsSection({
                   className="form-input"
                   value={settings.autoDelete?.maxAgeDays ?? 30}
                   onChange={(e) =>
-                    updateSetting('autoDelete.maxAgeDays', parseInt(e.target.value, 10) || 0)
+                    updateSetting('autoDelete.maxAgeDays', parseIntInputOrZero(e))
                   }
                   style={{ width: 100 }}
                 />
@@ -412,13 +403,7 @@ export default function GeneralSettingsSection({
 
     case 'plugin':
       return (
-        <AppSettingsSectionCard
-          sectionId={sectionId}
-          sectionTitle={sectionTitle}
-          settings={settings}
-          settingsBaselineStr={settingsBaselineStr}
-          onRevertSection={onRevertSection}
-        >
+        <AppSettingsSectionCard {...sectionCardProps}>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 12px' }}>
             The OpenClip native plugin controls recording and scene management inside OBS.
           </p>
@@ -460,19 +445,13 @@ export default function GeneralSettingsSection({
               <button
                 className="btn btn-secondary btn-sm"
                 title="Auto-detect"
-                onClick={async () => {
-                  const p = await api.detectOBSInstallPath()
-                  if (p) setObsInstallPath(p)
-                }}
+                onClick={() => detectObsInstallPathToState(setObsInstallPath)}
               >
                 <RefreshCw size={13} />
               </button>
               <button
                 className="btn btn-secondary btn-sm"
-                onClick={async () => {
-                  const dir = await api.openDirectoryDialog()
-                  if (dir) setObsInstallPath(dir)
-                }}
+                onClick={() => browseObsInstallPathToState(setObsInstallPath)}
               >
                 <FolderOpen size={13} />
               </button>
@@ -486,7 +465,7 @@ export default function GeneralSettingsSection({
               disabled={pluginBusy}
             >
               {pluginBusy && !pluginInstalled ? (
-                <Loader size={13} style={{ animation: 'spin 1s linear infinite' }} />
+                <Loader size={13} style={LOADER_SPIN_STYLE} />
               ) : (
                 <Package size={13} />
               )}
@@ -499,7 +478,7 @@ export default function GeneralSettingsSection({
                 disabled={pluginBusy}
               >
                 {pluginBusy ? (
-                  <Loader size={13} style={{ animation: 'spin 1s linear infinite' }} />
+                  <Loader size={13} style={LOADER_SPIN_STYLE} />
                 ) : (
                   <Trash2 size={13} />
                 )}
@@ -524,7 +503,7 @@ export default function GeneralSettingsSection({
               <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
                 <Loader
                   size={13}
-                  style={{ animation: 'spin 1s linear infinite', verticalAlign: 'middle' }}
+                  style={{ ...LOADER_SPIN_STYLE, verticalAlign: 'middle' }}
                 />{' '}
                 Checking…
               </span>
@@ -551,13 +530,7 @@ export default function GeneralSettingsSection({
 
     case 'updates':
       return (
-        <AppSettingsSectionCard
-          sectionId={sectionId}
-          sectionTitle={sectionTitle}
-          settings={settings}
-          settingsBaselineStr={settingsBaselineStr}
-          onRevertSection={onRevertSection}
-        >
+        <AppSettingsSectionCard {...sectionCardProps}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <button
               className="btn btn-secondary btn-sm"

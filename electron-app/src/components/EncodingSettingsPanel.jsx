@@ -66,6 +66,18 @@ function isEncodingDirty(settings, baselineStr) {
   }
 }
 
+/** @param {string} type */
+function encodingStatusMessageColor(type) {
+  switch (type) {
+    case 'ok':
+      return 'var(--accent-green, #4caf50)'
+    case 'err':
+      return 'var(--accent-red,   #f44336)'
+    default:
+      return 'var(--accent-warn,  #f5a623)'
+  }
+}
+
 const EncodingSettingsContext = createContext(/** @type {null} */ (null))
 
 function useEncodingSettings() {
@@ -85,12 +97,13 @@ export const EncodingSettingsProvider = forwardRef(function EncodingSettingsProv
   const [obsRunning, setObsRunning] = useState(false)
   const [status, setStatus] = useState({ msg: '', type: '' })
 
+  const isDirty =
+    !!profileDir && baselineStr !== null && isEncodingDirty(settings, baselineStr)
+
   useEffect(() => {
-    const dirty =
-      !!profileDir && baselineStr !== null && isEncodingDirty(settings, baselineStr)
     const canSave = !!profileDir && baselineStr !== null && !obsRunning
-    onEncodingStateChange?.({ dirty, canSave })
-  }, [settings, baselineStr, profileDir, obsRunning, onEncodingStateChange])
+    onEncodingStateChange?.({ dirty: isDirty, canSave })
+  }, [isDirty, profileDir, baselineStr, obsRunning, onEncodingStateChange])
 
   useEffect(() => {
     load()
@@ -196,9 +209,6 @@ export const EncodingSettingsProvider = forwardRef(function EncodingSettingsProv
     setSettings((s) => ({ ...s, output_cx: cx || s.output_cx, output_cy: cy || s.output_cy }))
   }
 
-  const isDirty =
-    !!profileDir && baselineStr !== null && isEncodingDirty(settings, baselineStr)
-
   const value = {
     profiles,
     profileDir,
@@ -228,24 +238,27 @@ export const EncodingSettingsProvider = forwardRef(function EncodingSettingsProv
 })
 
 function encodingCardHeaderExtras(ctx) {
+  let headerActions = null
+  if (ctx.isDirty && ctx.baselineStr) {
+    headerActions = (
+      <button
+        type="button"
+        className="btn btn-icon btn-sm"
+        onClick={ctx.resetToBaseline}
+        title="Discard changes and restore last loaded or saved values"
+        aria-label="Revert to saved"
+      >
+        <Undo2 size={16} />
+      </button>
+    )
+  }
   return {
     titleAddon: ctx.obsRunning ? (
       <p className="encoding-section-obs-warn" role="status">
         OBS is running — close OBS to save encoding settings
       </p>
     ) : null,
-    headerActions:
-      ctx.isDirty && ctx.baselineStr ? (
-        <button
-          type="button"
-          className="btn btn-icon btn-sm"
-          onClick={ctx.resetToBaseline}
-          title="Discard changes and restore last loaded or saved values"
-          aria-label="Revert to saved"
-        >
-          <Undo2 size={16} />
-        </button>
-      ) : null,
+    headerActions,
   }
 }
 
@@ -290,16 +303,7 @@ export function EncodingSettingsSection({ sectionId, sectionTitle }) {
           </div>
           {ctx.status.msg && (
             <div style={{ marginTop: 12, fontSize: 12 }}>
-              <span
-                style={{
-                  color:
-                    ctx.status.type === 'ok'
-                      ? 'var(--accent-green, #4caf50)'
-                      : ctx.status.type === 'err'
-                        ? 'var(--accent-red,   #f44336)'
-                        : 'var(--accent-warn,  #f5a623)',
-                }}
-              >
+              <span style={{ color: encodingStatusMessageColor(ctx.status.type) }}>
                 {ctx.status.msg}
               </span>
             </div>
@@ -313,16 +317,16 @@ export function EncodingSettingsSection({ sectionId, sectionTitle }) {
           <div className="form-group" style={{ marginTop: 0 }}>
             <label className="form-label">Output Resolution</label>
             <div className="form-input-row">
-            <select
-              className="form-input"
-              value={ctx.RESOLUTIONS.includes(ctx.resolution) ? ctx.resolution : ''}
-              onChange={(e) => ctx.onResolutionChange(e.target.value)}
-              style={{ width: 160 }}
-            >
-              {!ctx.RESOLUTIONS.includes(ctx.resolution) && (
-                <option value="">{ctx.resolution}</option>
-              )}
-              {ctx.RESOLUTIONS.map((r) => (
+              <select
+                className="form-input"
+                value={ctx.RESOLUTIONS.includes(ctx.resolution) ? ctx.resolution : ''}
+                onChange={(e) => ctx.onResolutionChange(e.target.value)}
+                style={{ width: 160 }}
+              >
+                {!ctx.RESOLUTIONS.includes(ctx.resolution) && (
+                  <option value="">{ctx.resolution}</option>
+                )}
+                {ctx.RESOLUTIONS.map((r) => (
                   <option key={r} value={r}>
                     {r}
                   </option>
@@ -427,7 +431,7 @@ export function EncodingSettingsSection({ sectionId, sectionTitle }) {
               style={{ width: 160 }}
             >
               <option value="">— unchanged —</option>
-              {RATE_CONTROLS.map((r) => (
+              {ctx.RATE_CONTROLS.map((r) => (
                 <option key={r} value={r}>
                   {r}
                 </option>
