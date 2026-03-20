@@ -48,7 +48,7 @@
 
 /* Update Banner */
 .update-banner {
-  @apply flex items-center gap-2 px-3 py-[10px] mt-auto border-t border-[var(--border)]
+  @apply flex items-center gap-2 px-3 py-[10px] border-t border-[var(--border)]
     text-xs text-[var(--text-secondary)];
 }
 .update-banner span {
@@ -81,7 +81,57 @@
 /* Sidebar Navigation */
 .sidebar-nav {
   @apply relative z-[2] w-[200px] min-w-[200px] bg-[var(--bg-secondary)] border-r border-[var(--border)]
-    flex flex-col pt-12 px-2 pb-2 gap-[2px];
+    flex flex-col pt-12 px-2 pb-2 gap-[2px] min-h-0;
+}
+/** Flex spacer: pushes watcher panel + footers to the bottom under main nav links. */
+.nav-nav-spacer {
+  @apply flex-1 min-h-[8px] min-w-0;
+}
+
+/* Bottom-left game watcher (sidebar) */
+.sidebar-watcher-panel {
+  @apply mx-0 mb-1 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)]
+    px-2.5 py-2 shrink-0;
+}
+.sidebar-watcher-panel-title {
+  @apply text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--text-muted)] mb-1.5;
+}
+.sidebar-watcher-error {
+  @apply flex items-start gap-1 rounded-[var(--radius-sm)] px-1.5 py-1 mb-1.5 text-[11px] leading-snug
+    text-[var(--danger)] bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)];
+}
+.sidebar-watcher-error-dismiss {
+  @apply shrink-0 mt-0.5 p-0 border-0 bg-transparent cursor-pointer text-[var(--text-muted)]
+    hover:text-[var(--text-primary)];
+}
+.sidebar-watcher-warning {
+  @apply flex items-start gap-1 rounded-[var(--radius-sm)] px-1.5 py-1 mb-1.5 text-[11px] leading-snug
+    text-[var(--warning,#f59e0b)] bg-[rgba(245,158,11,0.1)] border border-[rgba(245,158,11,0.25)];
+}
+.sidebar-watcher-warning-text {
+  @apply flex-1 flex flex-wrap items-center gap-1;
+}
+.sidebar-watcher-guide-link {
+  @apply inline-flex items-center gap-0.5 border-0 bg-transparent p-0 cursor-pointer text-[var(--primary)] underline;
+  font: inherit;
+}
+.sidebar-watcher-status-row {
+  @apply flex items-center gap-1.5 text-[12px] font-medium mb-1;
+}
+.sidebar-watcher-uptime {
+  @apply ml-auto text-[11px] font-normal text-[var(--text-muted)] tabular-nums;
+}
+.sidebar-watcher-state {
+  @apply text-[11px] leading-snug mb-2 line-clamp-2;
+}
+.sidebar-watcher-actions {
+  @apply flex gap-1.5;
+}
+.sidebar-watcher-btn {
+  @apply flex-1 justify-center gap-1 min-h-0 py-1.5 text-[11px] font-medium;
+}
+.sidebar-watcher-btn span {
+  @apply truncate;
 }
 .nav-brand {
   @apply text-[13px] font-semibold text-[var(--text-secondary)] px-3 pb-4

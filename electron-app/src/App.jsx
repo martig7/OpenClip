@@ -18,6 +18,8 @@ import ViewerRecordingsPage from './viewer/pages/RecordingsPage'
 import ViewerClipsPage from './viewer/pages/ClipsPage'
 import ViewerStoragePage from './viewer/pages/StoragePage'
 import OnboardingModal from './components/OnboardingModal'
+import SidebarWatcherPanel from './components/SidebarWatcherPanel'
+import { WatcherRuntimeProvider } from './context/WatcherRuntimeContext'
 import { SettingsNavGuardProvider, useSettingsNavGuard } from './context/SettingsNavGuardContext'
 import { TitleBarOverlayProvider, useTitleBarOverlayOverride } from './context/TitleBarOverlayContext'
 import { getTitleBarOverlayForPath } from './utils/titleBarOverlayDefaults'
@@ -137,6 +139,8 @@ function AppLayout({ sessionProgress, updateState, showOnboarding, setShowOnboar
               )}
             </NavLink>
           ))}
+          <div className="nav-nav-spacer" aria-hidden />
+          <SidebarWatcherPanel />
           {updateState && (
             <div className="update-banner">
               <Download size={14} />
@@ -302,16 +306,18 @@ export default function App() {
         value={{ isManualOrganizing, setIsManualOrganizing, organizeProgress, setOrganizeProgress }}
       >
         <HashRouter>
-          <TitleBarOverlayProvider>
-            <SettingsNavGuardProvider>
-              <AppLayout
-                sessionProgress={sessionProgress}
-                updateState={updateState}
-                showOnboarding={showOnboarding}
-                setShowOnboarding={setShowOnboarding}
-              />
-            </SettingsNavGuardProvider>
-          </TitleBarOverlayProvider>
+          <WatcherRuntimeProvider>
+            <TitleBarOverlayProvider>
+              <SettingsNavGuardProvider>
+                <AppLayout
+                  sessionProgress={sessionProgress}
+                  updateState={updateState}
+                  showOnboarding={showOnboarding}
+                  setShowOnboarding={setShowOnboarding}
+                />
+              </SettingsNavGuardProvider>
+            </TitleBarOverlayProvider>
+          </WatcherRuntimeProvider>
         </HashRouter>
       </OrganizeProgressContext.Provider>
     </OrganizeErrorContext.Provider>
