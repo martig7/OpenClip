@@ -161,3 +161,62 @@ test.describe('Settings Page - Hotkey Capture', () => {
     await expect(hotkeyBtn).not.toHaveText(initialText)
   })
 })
+
+test.describe('Settings Page - New Settings Navigation Features', () => {
+  test('legacy encoding tab query redirects to encoding profile section', async ({ page }) => {
+    await page.goto('/#/settings?tab=encoding')
+    await expect(page).toHaveURL(/\/#\/settings\?section=encoding-profile/)
+  })
+
+  test('encoding filter shows only encoding sections in sidebar', async ({ page }) => {
+    await page.goto('/#/settings')
+    await expect(page.locator('.settings-page .msb-title')).toHaveText('Settings', { timeout: 5000 })
+
+    await page.locator('.msb-game-pill', { hasText: 'Encoding' }).click()
+
+    const navItems = page.locator('.settings-nav-list .settings-nav-item')
+    await expect(navItems).toHaveCount(4)
+    await expect(navItems.filter({ hasText: 'OBS Profile' })).toHaveCount(1)
+    await expect(navItems.filter({ hasText: 'Video' })).toHaveCount(1)
+    await expect(navItems.filter({ hasText: 'Recording Output' })).toHaveCount(1)
+    await expect(navItems.filter({ hasText: 'Encoder Settings' })).toHaveCount(1)
+    await expect(navItems.filter({ hasText: 'Watcher' })).toHaveCount(0)
+  })
+
+  test('sidebar search can show empty state for unmatched query', async ({ page }) => {
+    await page.goto('/#/settings')
+    await expect(page.locator('.settings-page .msb-title')).toHaveText('Settings', { timeout: 5000 })
+
+    await page.locator('#settings-sidebar-search-input').fill('no-such-section-xyz')
+    await expect(page.locator('.settings-sidebar-empty strong')).toHaveText('No sections match')
+  })
+})
+
+test.describe('Settings Page - Bento Active/Dirty States', () => {
+  test('clicking a sidebar section marks its bento tile active', async ({ page }) => {
+    await page.goto('/#/settings')
+    await expect(page.locator('.settings-page .msb-title')).toHaveText('Settings', { timeout: 5000 })
+
+    await page
+      .locator('.settings-nav-item', {
+        has: page.locator('.settings-nav-item-title:has-text("View")'),
+      })
+      .click()
+
+    await expect(page.locator('#settings-section-view')).toHaveClass(/settings-bento-item--active/)
+  })
+
+  test('changing a setting marks that bento tile dirty', async ({ page }) => {
+    await page.goto('/#/settings?section=watcher')
+    await expect(page.locator('.settings-page .msb-title')).toHaveText('Settings', { timeout: 5000 })
+
+    const watcherToggle = page
+      .locator('.toggle-row', {
+        has: page.locator('.toggle-label:has-text("Start Watcher on Startup")'),
+      })
+      .locator('.toggle')
+
+    await watcherToggle.click()
+    await expect(page.locator('#settings-section-watcher')).toHaveClass(/settings-bento-item--dirty/)
+  })
+})
