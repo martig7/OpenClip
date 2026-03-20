@@ -5,6 +5,10 @@
 }
 
 :root {
+  /* Space for native caption buttons (Windows titleBarOverlay) — keep interactive UI out from under min/max/close */
+  --electron-titlebar-controls-inset: 138px;
+  --games-caption-cluster-max: 480px;
+
   /* ── Surfaces ── */
   --bg-primary: #0f0f0f;
   --bg-secondary: #181818;

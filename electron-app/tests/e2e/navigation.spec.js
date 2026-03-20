@@ -42,7 +42,9 @@ test.describe('Navigation - Edge Cases', () => {
 
   test('direct deep-link URL loads correct page without redirect', async ({ page }) => {
     await page.goto('/')
-    await expect(page.locator('h1:has-text("Games")')).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('.games-caption-bar .msb-title')).toHaveText('Games', {
+      timeout: 5000,
+    })
     await page.goto('/#/recordings')
     await expect(page.locator('.msb-title:has-text("Recordings")')).toBeVisible({ timeout: 5000 })
     await page.goto('/#/clips')

@@ -54,10 +54,9 @@ Testing stubs (required by Jest module mapping — not imported by production co
 | File | Lines |
 |------|------:|
 | `pages/GamesPage.jsx` | 790 |
-| `pages/games/GameList.jsx` | 59 |
-| `pages/games/GamesPageBody.jsx` | 92 |
+| `pages/games/GamesPageBody.jsx` | 185 |
+| `hooks/useDrawerState.js` | 107 |
 | `pages/games/EditGameModal.jsx` | 327 |
-| `pages/games/SceneAudioSourcesSection.jsx` | 602 |
 | `pages/SettingsPage.jsx` | 664 |
 | `viewer/components/VideoPlayer.jsx` | 727 |
 | `pages/games/AddGameModal.jsx` | 619 |
@@ -65,7 +64,8 @@ Testing stubs (required by Jest module mapping — not imported by production co
 | `viewer/pages/StoragePage.jsx` | 501 |
 | `viewer/components/StorageList.jsx` | 480 |
 | `viewer/components/ZoomTimeline.jsx` | 398 |
-| `pages/games/SceneAudioSourcesCard.jsx` | 656 |
+| `pages/games/GameEnabledBadge.jsx` | 15 |
+| `hooks/useSceneAudioMutations.js` | 86 |
 | `components/EncodingSettingsPanel.jsx` | 370 |
 | `viewer/components/Sidebar.jsx` | 191 |
 | `viewer/pages/ClipsPage.jsx` | 177 |
