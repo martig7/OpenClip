@@ -629,6 +629,9 @@ export default function GamesPage() {
         toggleGame={toggleGame}
         openEditModal={openEditModal}
         removeGame={removeGame}
+        editGameModal={editGameModal}
+        addSourceToScene={addSourceToScene}
+        removeSourceFromScene={removeSourceFromScene}
         masterAudioSources={masterAudioSources}
         applyingSource={applyingSource}
         showAudioDropdown={showAudioDropdown}
