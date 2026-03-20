@@ -25,6 +25,8 @@ import { useSidebarResize, STORAGE_KEY_SETTINGS_SIDEBAR } from '../hooks/useSide
 import { useHorizontalScrollStrip } from '../hooks/useHorizontalScrollStrip'
 import MainContentTopBar from '../viewer/components/MainContentTopBar'
 
+const LOADER_SPIN_STYLE = { animation: 'spin 1s linear infinite' }
+
 export default function SettingsPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -348,13 +350,9 @@ export default function SettingsPage() {
 
   /** In-settings section nav: always allowed while dirty. Leave/discard only applies to main app nav (see guard). */
   function handleSectionSelect(nextId) {
-    if (nextId === sectionParam) {
-      setOutlineClearedByScroll(false)
-      setSidebarNavHighlightId(nextId)
-      return
-    }
     setOutlineClearedByScroll(false)
     setSidebarNavHighlightId(nextId)
+    if (nextId === sectionParam) return
     setSearchParams({ section: nextId })
     requestAnimationFrame(() => scrollSectionIntoView(nextId))
   }
@@ -401,32 +399,40 @@ export default function SettingsPage() {
     setTimeout(() => setToast(null), 4000)
   }
 
+  function finishPluginMutation(result, installedAfterSuccess, successText, failText) {
+    if (result?.success) {
+      setPluginInstalled(installedAfterSuccess)
+      setPluginMsg({ ok: true, text: successText })
+    } else {
+      setPluginMsg({ ok: false, text: result?.message || failText })
+    }
+    setPluginBusy(false)
+  }
+
   async function installPlugin() {
     setPluginBusy(true)
     setPluginMsg(null)
     const savedPath = obsInstallPath.trim() || null
     if (savedPath) await api.setOBSInstallPath(savedPath)
     const result = await api.installOBSPlugin(savedPath)
-    if (result?.success) {
-      setPluginInstalled(true)
-      setPluginMsg({ ok: true, text: 'Plugin installed. Restart OBS to apply.' })
-    } else {
-      setPluginMsg({ ok: false, text: result?.message || 'Installation failed.' })
-    }
-    setPluginBusy(false)
+    finishPluginMutation(
+      result,
+      true,
+      'Plugin installed. Restart OBS to apply.',
+      'Installation failed.'
+    )
   }
 
   async function removePlugin() {
     setPluginBusy(true)
     setPluginMsg(null)
     const result = await api.removeOBSPlugin()
-    if (result?.success) {
-      setPluginInstalled(false)
-      setPluginMsg({ ok: true, text: 'Plugin removed. Restart OBS to apply.' })
-    } else {
-      setPluginMsg({ ok: false, text: result?.message || 'Removal failed.' })
-    }
-    setPluginBusy(false)
+    finishPluginMutation(
+      result,
+      false,
+      'Plugin removed. Restart OBS to apply.',
+      'Removal failed.'
+    )
   }
 
   async function checkForUpdate() {
@@ -446,12 +452,67 @@ export default function SettingsPage() {
       <div
         style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}
       >
-        <Loader size={24} style={{ animation: 'spin 1s linear infinite' }} />
+        <Loader size={24} style={LOADER_SPIN_STYLE} />
       </div>
     )
   }
 
   if (!settings) return null
+
+  const generalSettingsSharedProps = {
+    settings,
+    settingsBaselineStr: appSettingsBaselineStr ?? '',
+    onRevertSection: revertAppSection,
+    updateSetting,
+    detectOBSPath,
+    browseDirectory,
+    obsInstallPath,
+    setObsInstallPath,
+    pluginInstalled,
+    pluginBusy,
+    pluginMsg,
+    installPlugin,
+    removePlugin,
+    updateStatus,
+    checkingUpdate,
+    checkForUpdate,
+    installUpdate,
+  }
+
+  const noSectionsMatchBody = (
+    <>
+      <strong>No sections match</strong>
+      <span>Try another filter or clear the search box.</span>
+    </>
+  )
+
+  const settingsBentoGrid = (
+    <div className="settings-bento-grid">
+      {filteredSections.map((s, i) => {
+        const span = bentoSpans[i]
+        const colStyle = { gridRow: span.gridRow, gridColumn: span.gridColumn }
+        const itemClass = `settings-bento-item${outlineSectionId === s.id ? ' settings-bento-item--active' : ''}${bentoSectionDirty(s.id) ? ' settings-bento-item--dirty' : ''}`
+        return (
+          <div
+            key={s.id}
+            id={settingsSectionDomId(s.id)}
+            className={itemClass}
+            style={colStyle}
+          >
+            {s.id.startsWith('encoding-') ? (
+              <EncodingSettingsSection sectionId={s.id} sectionTitle={s.title} />
+            ) : (
+              <GeneralSettingsSection
+                sectionTitle={s.title}
+                sectionId={s.id}
+                {...generalSettingsSharedProps}
+              />
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
 
   return (
     <>
@@ -535,10 +596,7 @@ export default function SettingsPage() {
 
               <nav className="settings-nav-list" role="navigation" aria-label="Settings sections">
                 {filteredSections.length === 0 ? (
-                  <div className="settings-sidebar-empty">
-                    <strong>No sections match</strong>
-                    <span>Try another filter or clear the search box.</span>
-                  </div>
+                  <div className="settings-sidebar-empty">{noSectionsMatchBody}</div>
                 ) : (
                   filteredSections.map((s) => (
                     <button
@@ -593,10 +651,7 @@ export default function SettingsPage() {
 
               <div ref={settingsMainScrollRef} className="settings-detail-scroll">
                 {filteredSections.length === 0 ? (
-                  <div className="settings-detail-empty">
-                    <strong>No sections match</strong>
-                    <span>Try another filter or clear the search box.</span>
-                  </div>
+                  <div className="settings-detail-empty">{noSectionsMatchBody}</div>
                 ) : (
                   <div className="settings-detail-inner settings-detail-inner--bento">
                     {hasEncodingSections ? (
@@ -604,95 +659,10 @@ export default function SettingsPage() {
                         ref={encodingPanelRef}
                         onEncodingStateChange={onEncodingStateChange}
                       >
-                        <div className="settings-bento-grid">
-                          {filteredSections.map((s, i) => {
-                            const span = bentoSpans[i]
-                            const colStyle = { gridRow: span.gridRow, gridColumn: span.gridColumn }
-                            if (s.id.startsWith('encoding-')) {
-                              return (
-                                <div
-                                  key={s.id}
-                                  id={settingsSectionDomId(s.id)}
-                                  className={`settings-bento-item${outlineSectionId === s.id ? ' settings-bento-item--active' : ''}${bentoSectionDirty(s.id) ? ' settings-bento-item--dirty' : ''}`}
-                                  style={colStyle}
-                                >
-                                  <EncodingSettingsSection
-                                    sectionId={s.id}
-                                    sectionTitle={s.title}
-                                  />
-                                </div>
-                              )
-                            }
-                            return (
-                              <div
-                                key={s.id}
-                                id={settingsSectionDomId(s.id)}
-                                  className={`settings-bento-item${outlineSectionId === s.id ? ' settings-bento-item--active' : ''}${bentoSectionDirty(s.id) ? ' settings-bento-item--dirty' : ''}`}
-                                  style={colStyle}
-                                >
-                                <GeneralSettingsSection
-                                  sectionTitle={s.title}
-                                  sectionId={s.id}
-                                  settings={settings}
-                                  settingsBaselineStr={appSettingsBaselineStr ?? ''}
-                                  onRevertSection={revertAppSection}
-                                  updateSetting={updateSetting}
-                                  detectOBSPath={detectOBSPath}
-                                  browseDirectory={browseDirectory}
-                                  obsInstallPath={obsInstallPath}
-                                  setObsInstallPath={setObsInstallPath}
-                                  pluginInstalled={pluginInstalled}
-                                  pluginBusy={pluginBusy}
-                                  pluginMsg={pluginMsg}
-                                  installPlugin={installPlugin}
-                                  removePlugin={removePlugin}
-                                  updateStatus={updateStatus}
-                                  checkingUpdate={checkingUpdate}
-                                  checkForUpdate={checkForUpdate}
-                                  installUpdate={installUpdate}
-                                />
-                              </div>
-                            )
-                          })}
-                        </div>
+                        {settingsBentoGrid}
                       </EncodingSettingsProvider>
                     ) : (
-                      <div className="settings-bento-grid">
-                        {filteredSections.map((s, i) => {
-                          const span = bentoSpans[i]
-                          const colStyle = { gridRow: span.gridRow, gridColumn: span.gridColumn }
-                          return (
-                            <div
-                              key={s.id}
-                              id={settingsSectionDomId(s.id)}
-                              className={`settings-bento-item${outlineSectionId === s.id ? ' settings-bento-item--active' : ''}${bentoSectionDirty(s.id) ? ' settings-bento-item--dirty' : ''}`}
-                              style={colStyle}
-                            >
-                              <GeneralSettingsSection
-                                sectionTitle={s.title}
-                                sectionId={s.id}
-                                settings={settings}
-                                settingsBaselineStr={appSettingsBaselineStr ?? ''}
-                                onRevertSection={revertAppSection}
-                                updateSetting={updateSetting}
-                                detectOBSPath={detectOBSPath}
-                                browseDirectory={browseDirectory}
-                                obsInstallPath={obsInstallPath}
-                                setObsInstallPath={setObsInstallPath}
-                                pluginInstalled={pluginInstalled}
-                                pluginBusy={pluginBusy}
-                                pluginMsg={pluginMsg}
-                                installPlugin={installPlugin}
-                                removePlugin={removePlugin}
-                                updateStatus={updateStatus}
-                                checkingUpdate={checkingUpdate}
-                                checkForUpdate={checkForUpdate}
-                                installUpdate={installUpdate}
-                              />
-                            </div>
-                          )
-                        })}
-                      </div>
+                      settingsBentoGrid
                     )}
                   </div>
                 )}
