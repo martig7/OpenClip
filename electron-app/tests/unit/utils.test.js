@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatTime } from '../../src/viewer/utils.js'
+import { formatTime } from '../../src/viewer/formatTime.js'
 
 describe('formatTime', () => {
   it('formats 0 as 0:00', () => {
