@@ -258,17 +258,15 @@ export default function AudioSourcesCard({
                     <div className="audio-source-name">{displayName}</div>
                     <div className="audio-source-kind">{meta?.label || kind}</div>
                     {isScene && !isInMaster && (
-                      <span className="audio-source-not-master">
-                        Not in master
-                        <button
-                          className="btn-icon"
-                          onClick={() => onAddMasterSource({ name, kind })}
-                          title="Add to Master List"
-                          style={{ color: '#d97706', padding: 0, width: 14, height: 14 }}
-                        >
-                          <Plus size={11} strokeWidth={3} />
-                        </button>
-                      </span>
+                      <button
+                        type="button"
+                        className="audio-source-not-master-pill"
+                        onClick={() => onAddMasterSource({ name, kind })}
+                        title="Add to Master List"
+                      >
+                        <span>Not in master</span>
+                        <Plus className="audio-source-not-master-pill__icon" size={11} strokeWidth={2.5} aria-hidden />
+                      </button>
                     )}
                   </div>
                   <TrackChips

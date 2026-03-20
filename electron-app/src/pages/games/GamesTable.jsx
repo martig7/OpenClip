@@ -1,13 +1,27 @@
 import { Plus, Search, Edit2, Trash2, Gamepad2 } from 'lucide-react'
 import { GameAvatar } from './GameAvatar'
+import {
+  useSidebarResize,
+  STORAGE_KEY_GAMES_CAPTION_CLUSTER,
+} from '../../hooks/useSidebarResize'
 
 export function GamesToolbar({ filter, setFilter, search, setSearch, counts, onAdd }) {
+  const { sidebarWidth: captionClusterMaxPx, handleMouseDown: onCaptionClusterResizeMouseDown } =
+    useSidebarResize(STORAGE_KEY_GAMES_CAPTION_CLUSTER, {
+      min: 260,
+      max: 920,
+      defaultW: 480,
+    })
+
   return (
     <div className="games-toolbar">
       {/* One row: same height as Electron titleBarOverlay (36px) + inset for Windows system buttons */}
       <header className="games-caption-bar" aria-label="Games">
-        {/* Bounded cluster: msb-search width:100% fills this box only (same idea as msb-header width on other pages) */}
-        <div className="games-caption-bar__cluster">
+        {/* Bounded cluster: msb-search width:100% fills this box; max width persisted like drawer */}
+        <div
+          className="games-caption-bar__cluster"
+          style={{ maxWidth: captionClusterMaxPx }}
+        >
           <div className="msb-row1 games-caption-bar__row">
             <span className="msb-title">Games</span>
             <div className="msb-search">
@@ -23,7 +37,15 @@ export function GamesToolbar({ filter, setFilter, search, setSearch, counts, onA
               />
             </div>
           </div>
+          <div
+            className="games-caption-bar__resizer"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize Games search section"
+            onMouseDown={onCaptionClusterResizeMouseDown}
+          />
         </div>
+        <div className="games-caption-bar__drag-fill" aria-hidden />
       </header>
 
       <div className="main-content-topbar-rule games-toolbar-top-rule" aria-hidden />

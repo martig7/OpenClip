@@ -432,44 +432,15 @@ export function SceneAudioSourcesSection({
                       </div>
                     </div>
                     {!isInMaster && (
-                      <span
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 500,
-                          color: '#f59e0b',
-                          background: 'rgba(245,158,11,0.12)',
-                          border: '1px solid rgba(245,158,11,0.3)',
-                          borderRadius: 4,
-                          padding: '1px 6px',
-                          flexShrink: 0,
-                          whiteSpace: 'nowrap',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 4,
-                        }}
+                      <button
+                        type="button"
+                        className="audio-source-not-master-pill"
+                        onClick={() => onAddMasterSource({ name: src.inputName, kind: src.inputKind })}
+                        title="Add to Master List"
                       >
-                        Not in master list
-                        <button
-                          className="btn-icon"
-                          onClick={() => {
-                            onAddMasterSource({ name: src.inputName, kind: src.inputKind })
-                          }}
-                          title="Add to Master List"
-                          style={{
-                            color: '#d97706',
-                            padding: 0,
-                            marginLeft: 2,
-                            marginRight: -2,
-                            width: 14,
-                            height: 14,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
-                        >
-                          <Plus size={11} strokeWidth={3} />
-                        </button>
-                      </span>
+                        <span>Not in master list</span>
+                        <Plus className="audio-source-not-master-pill__icon" size={11} strokeWidth={2.5} aria-hidden />
+                      </button>
                     )}
 
                     {/* Track routing chips — inline */}

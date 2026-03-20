@@ -974,7 +974,7 @@
   z-index: 1;
 }
 
-/* Caps how wide title+search grow; .msb-search { flex:1 } + input { width:100% } resolve inside this width */
+/* Caps how wide title+search grow; max width set inline from useSidebarResize (fallback below) */
 .games-caption-bar__cluster {
   flex: 0 1 auto;
   width: 100%;
@@ -988,7 +988,36 @@
   background: var(--bg-secondary);
   border-radius: var(--radius-sm);
   padding: 5px 10px 5px var(--games-inline-gutter, 16px);
-  margin-right: 8px;
+  /* No margin-right — resizer sits on the colored edge (was leaving a primary “strip” gap) */
+  margin-right: 0;
+}
+
+/* Centered on the right hairline, like .sidebar-resizer on MediaSidebar */
+.games-caption-bar__resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  -webkit-app-region: no-drag;
+  background: transparent;
+  z-index: 4;
+  margin: 0;
+  transition: background 0.15s ease;
+}
+
+.games-caption-bar__resizer:hover,
+.games-caption-bar__resizer:active {
+  background: var(--accent);
+}
+
+/* Fills remaining caption row so the window can still be dragged */
+.games-caption-bar__drag-fill {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  -webkit-app-region: drag;
 }
 
 /* One continuous stroke: full caption height + through the topbar rule (matches .main-content-topbar-rule color) */
@@ -1466,14 +1495,51 @@
   color: var(--text-muted);
 }
 
-.audio-source-not-master {
+/* Light amber pill — single control to add scene source to master (replaces text + loose + icon) */
+.audio-source-not-master-pill {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
+  margin-top: 0;
+  padding: 4px 11px;
+  border-radius: 9999px;
+  border: 1px solid var(--amber-border);
+  background: var(--amber-muted);
+  color: var(--amber);
   font-size: 10px;
-  font-weight: 500;
-  color: #f59e0b;
-  margin-top: 2px;
+  font-weight: 600;
+  font-family: inherit;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease,
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.audio-source-not-master-pill:hover {
+  background: rgba(245, 158, 11, 0.2);
+  color: var(--amber-light);
+  border-color: rgba(245, 158, 11, 0.45);
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.12);
+}
+
+.audio-source-not-master-pill:focus-visible {
+  outline: 2px solid var(--amber-light);
+  outline-offset: 2px;
+}
+
+.audio-source-not-master-pill__icon {
+  flex-shrink: 0;
+  opacity: 0.95;
+}
+
+.audio-source-info .audio-source-not-master-pill {
+  margin-top: 4px;
 }
 
 /* Collapsible footer */
