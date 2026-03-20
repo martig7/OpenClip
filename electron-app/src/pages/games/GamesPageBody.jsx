@@ -38,6 +38,7 @@ export function GamesPageBody({
   const { filter, setFilter, search, setSearch, filtered, counts } = useGamesFilter(games)
 
   const [drawerGameId, setDrawerGameId] = useState(null)
+  const [isEditing, setIsEditing] = useState(false)
   const [audioExpanded, setAudioExpanded] = useState(false)
 
   const selectedGame = useMemo(() => {
@@ -47,7 +48,10 @@ export function GamesPageBody({
 
   useEffect(() => {
     // When Edit state is cleared (e.g. Save/Cancel), ensure drawer selection is also cleared.
-    if (!editGameModal) setDrawerGameId(null)
+    if (!editGameModal) {
+      setIsEditing(false)
+      setDrawerGameId(null)
+    }
   }, [editGameModal])
 
   const otherGameScenes = useMemo(() => {
@@ -62,10 +66,18 @@ export function GamesPageBody({
 
   function handleRowClick(game) {
     setDrawerGameId(game.id)
+    setIsEditing(false)
+    openEditModal(game)
+  }
+
+  function handleEditClick(game) {
+    setDrawerGameId(game.id)
+    setIsEditing(true)
     openEditModal(game)
   }
 
   function handleDrawerClose() {
+    setIsEditing(false)
     closeEditModal()
     setDrawerGameId(null)
   }
@@ -92,7 +104,7 @@ export function GamesPageBody({
             onAdd={openAddModal}
             onRowClick={handleRowClick}
             onToggle={toggleGame}
-            onEdit={openEditModal}
+            onEdit={handleEditClick}
             onDelete={removeGame}
           />
         </div>
@@ -103,6 +115,9 @@ export function GamesPageBody({
           editGameModal={editGameModal}
           onClose={handleDrawerClose}
           onDelete={removeGame}
+          isEditing={isEditing}
+          onStartEdit={() => setIsEditing(true)}
+          onCancelEdit={() => setIsEditing(false)}
           onSave={onSaveEditGame}
           onChangeGame={onChangeEditGame}
           otherGameScenes={otherGameScenes}

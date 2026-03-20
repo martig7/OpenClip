@@ -1,5 +1,6 @@
-import { X, Trash2 } from 'lucide-react'
+import { X, Trash2, Edit2 } from 'lucide-react'
 import EditGameModal from './EditGameModal'
+import { SceneAudioSourcesSection } from './SceneAudioSourcesSection'
 
 const GAME_PALETTE = [
   '#7c3aed',
@@ -63,6 +64,9 @@ export function GameDetailDrawer({
   editGameModal,
   onClose,
   onDelete,
+  isEditing,
+  onStartEdit,
+  onCancelEdit,
   onSave,
   onChangeGame,
   otherGameScenes,
@@ -76,6 +80,9 @@ export function GameDetailDrawer({
   toggleTrack,
 }) {
   const drawerGame = editGameModal?.game || game
+
+  const loading = editGameModal?.loading || (game?.scene ? true : false)
+  const sceneAudioSources = editGameModal?.sceneAudioSources || []
 
   return (
     <div className={`game-detail-drawer ${gameId ? 'open' : ''}`} aria-hidden={!gameId}>
@@ -114,39 +121,105 @@ export function GameDetailDrawer({
           </div>
 
           <div className="drawer-body">
-            {editGameModal && (
-              <EditGameModal
-                variant="drawer"
-                modal={editGameModal}
-                masterAudioSources={masterAudioSources}
-                otherGameScenes={otherGameScenes}
-                onChangeGame={onChangeGame}
-                onSave={onSave}
-                onClose={onClose}
-                onAddSourceToScene={addSourceToScene}
-                onRemoveSourceFromScene={removeSourceFromScene}
-                onAddMasterSource={addMasterSource}
-                trackData={trackData}
-                trackLoading={trackLoading}
-                toggleTrack={toggleTrack}
-                trackLabels={trackLabels}
-              />
-            )}
+            {!isEditing ? (
+              <>
+                <section className="drawer-section">
+                  <div className="drawer-section-title">Configuration</div>
 
-            <div className="drawer-actions">
-              <button
-                className="btn-icon"
-                type="button"
-                onClick={() => {
-                  onDelete(drawerGame.id)
-                  onClose()
-                }}
-                title="Remove game"
-                style={{ color: 'var(--danger)' }}
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
+                  <div className="drawer-info-grid">
+                    <div className="drawer-info-cell">
+                      <div className="drawer-info-label">Selector</div>
+                      <div
+                        className="drawer-info-val"
+                        style={{ fontFamily: 'monospace', fontSize: 11 }}
+                      >
+                        {drawerGame.selector || '—'}
+                      </div>
+                    </div>
+
+                    <div className="drawer-info-cell">
+                      <div className="drawer-info-label">Scene</div>
+                      <div className="drawer-info-val">{drawerGame.scene || '—'}</div>
+                    </div>
+
+                    <div className="drawer-info-cell">
+                      <div className="drawer-info-label">Clips</div>
+                      <div className="drawer-info-val">{drawerGame.clips ?? '—'}</div>
+                    </div>
+
+                    <div className="drawer-info-cell">
+                      <div className="drawer-info-label">Status</div>
+                      <div className="drawer-info-val">
+                        {drawerGame.enabled ? 'Active' : 'Off'}
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="drawer-section">
+                  <SceneAudioSourcesSection
+                    game={drawerGame}
+                    sceneAudioSources={sceneAudioSources}
+                    loading={loading}
+                    masterAudioSources={masterAudioSources}
+                    onAddSourceToScene={addSourceToScene}
+                    onRemoveSourceFromScene={removeSourceFromScene}
+                    onAddMasterSource={addMasterSource}
+                    trackData={trackData}
+                    trackLoading={trackLoading}
+                    toggleTrack={toggleTrack}
+                    trackLabels={trackLabels}
+                  />
+                </section>
+
+                <div className="drawer-actions">
+                  <button
+                    className="btn btn-primary btn-sm"
+                    type="button"
+                    style={{ flex: 1, justifyContent: 'center' }}
+                    onClick={() => onStartEdit(drawerGame)}
+                  >
+                    <Edit2 size={12} /> Edit Game
+                  </button>
+
+                  <button
+                    className="btn-icon"
+                    type="button"
+                    onClick={() => {
+                      onDelete(drawerGame.id)
+                      onClose()
+                    }}
+                    title="Remove game"
+                    style={{ color: 'var(--danger)' }}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </>
+            ) : (
+              editGameModal ? (
+                <EditGameModal
+                  variant="drawer"
+                  modal={editGameModal}
+                  masterAudioSources={masterAudioSources}
+                  otherGameScenes={otherGameScenes}
+                  onChangeGame={onChangeGame}
+                  onSave={onSave}
+                  onClose={onCancelEdit}
+                  onAddSourceToScene={addSourceToScene}
+                  onRemoveSourceFromScene={removeSourceFromScene}
+                  onAddMasterSource={addMasterSource}
+                  trackData={trackData}
+                  trackLoading={trackLoading}
+                  toggleTrack={toggleTrack}
+                  trackLabels={trackLabels}
+                />
+              ) : (
+                <div style={{ paddingTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+                  Loading…
+                </div>
+              )
+            )}
           </div>
         </div>
       )}
