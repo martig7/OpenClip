@@ -1,7 +1,7 @@
 // When running inside Electron, window.api is injected by preload.js.
 // When running in a browser (vite dev without electron), provide a mock.
 
-import { defaultSettings, mockGames, mockRecordings, mockClips, mockStorageStats } from './mockData'
+import { defaultSettings, mockGames, mockRecordings, mockClips, mockStorageStats } from './browserMockData'
 
 const noop = () => {}
 const asyncNoop = async () => null

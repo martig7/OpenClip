@@ -1,3 +1,10 @@
+/**
+ * Test-only sidebar mock for Vitest (see `tests/components/TestMediaSidebar.test.jsx`).
+ *
+ * Not used in the shipped app — recordings/clips use `MediaSidebar.jsx`. This component exists so
+ * unit tests can exercise sort/group/search/list UI and DOM assertions without importing production
+ * sidebar code that pulls in canvas-heavy or hard-to-mock paths that jsdom handles poorly.
+ */
 import { useState, useMemo } from 'react'
 import { Search, FileVideo, Calendar, HardDrive, Folder, AlertTriangle } from 'lucide-react'
 
@@ -96,9 +103,7 @@ function orderGroups(groups, sortKey) {
   })
 }
 
-// ── Component ────────────────────────────────────────────────────────────────
-
-function Sidebar({ items, selectedItem, onSelect, title, emptyMessage }) {
+function TestMediaSidebar({ items, selectedItem, onSelect, title, emptyMessage }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [sortKey, setSortKey] = useState('time-desc')
 
@@ -212,4 +217,4 @@ function Sidebar({ items, selectedItem, onSelect, title, emptyMessage }) {
   )
 }
 
-export default Sidebar
+export default TestMediaSidebar

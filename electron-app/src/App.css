@@ -46,49 +46,7 @@
   }
 }
 
-/* Update Banner */
-.update-banner {
-  @apply flex items-center gap-2 px-3 py-[10px] border-t border-[var(--border)]
-    text-xs text-[var(--text-secondary)];
-}
-.update-banner span {
-  @apply flex-1 whitespace-nowrap overflow-hidden text-ellipsis;
-}
-
-/* Organize Error Sidebar Banner */
-.organize-error-banner {
-  @apply flex items-center gap-[7px] px-3 py-[9px] border-t border-[var(--border)]
-    text-xs text-[var(--danger)];
-  background: rgba(239, 68, 68, 0.08);
-}
-.organize-error-banner span {
-  @apply flex-1 leading-snug;
-}
-.organize-error-close {
-  @apply flex items-center justify-center shrink-0 w-5 h-5 rounded
-    text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)];
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-}
-
-/* Nav error badge */
-.nav-error-badge {
-  @apply ml-auto flex items-center text-[var(--danger)];
-}
-
-/* Sidebar Navigation */
-.sidebar-nav {
-  @apply relative z-[2] w-[200px] min-w-[200px] bg-[var(--bg-secondary)] border-r border-[var(--border)]
-    flex flex-col pt-12 px-2 pb-2 gap-[2px] min-h-0;
-}
-/** Flex spacer: pushes watcher panel + footers to the bottom under main nav links. */
-.nav-nav-spacer {
-  @apply flex-1 min-h-[8px] min-w-0;
-}
-
-/* Bottom-left game watcher (sidebar) */
+/* Bottom-left game watcher (sidebar — panel lives inside AppSidebarNav) */
 .sidebar-watcher-panel {
   @apply mx-0 mb-1 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)]
     px-2.5 py-2 shrink-0;
@@ -100,22 +58,6 @@
 .sidebar-watcher-error-dismiss {
   @apply shrink-0 mt-0.5 p-0 border-0 bg-transparent cursor-pointer text-[var(--text-muted)]
     hover:text-[var(--text-primary)];
-}
-/* Above the watcher panel (sidebar nav) */
-.sidebar-nav-watcher-banner {
-  @apply flex items-start gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 mb-1 text-[11px] leading-snug shrink-0
-    text-[var(--warning,#f59e0b)] bg-[rgba(245,158,11,0.1)] border border-[rgba(245,158,11,0.25)];
-}
-.sidebar-nav-watcher-banner-text {
-  @apply flex-1 flex flex-wrap items-center gap-1 min-w-0;
-}
-.sidebar-nav-watcher-banner-dismiss {
-  @apply flex items-center justify-center shrink-0 w-5 h-5 rounded p-0 border-0 bg-transparent cursor-pointer
-    text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)];
-}
-.sidebar-watcher-guide-link {
-  @apply inline-flex items-center gap-0.5 border-0 bg-transparent p-0 cursor-pointer text-[var(--primary)] underline;
-  font: inherit;
 }
 .sidebar-watcher-status-row {
   @apply flex items-center gap-1.5 text-[12px] font-medium mb-1;
@@ -138,31 +80,13 @@
 .sidebar-watcher-btn span {
   @apply truncate;
 }
-.nav-brand {
-  @apply text-[13px] font-semibold text-[var(--text-secondary)] px-3 pb-4
-    tracking-[0.02em] flex items-center gap-2;
-}
-.nav-brand-logo {
-  @apply w-6 h-6 rounded-[5px] shrink-0;
-}
-.nav-item {
-  @apply flex items-center gap-[10px] px-3 py-[10px] rounded-[var(--radius-md)]
-    text-[var(--text-secondary)] no-underline text-[13px] font-medium;
-  transition: all 0.15s ease;
-}
-.nav-item:hover {
-  @apply bg-[var(--bg-hover)] text-[var(--text-primary)];
-}
-.nav-item.active {
-  @apply bg-[var(--accent-muted)] text-[var(--accent-hover)];
-}
 
 /* Main Content */
 .main-content {
   @apply relative z-[2] flex-1 overflow-hidden flex flex-col;
 }
 
-/* Page Header */
+/* Page Header — full-width routes (e.g. Games): generous pt clears title-bar region; sidebar brand uses AppSidebarNav padding for Recordings alignment */
 .page-header {
   @apply pt-12 px-8 pb-6 border-b border-[var(--border)] bg-[var(--bg-primary)];
 }

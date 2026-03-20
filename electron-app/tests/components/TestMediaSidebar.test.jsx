@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
+// Exercises TestMediaSidebar: a test-only sidebar mock for sort/group/list behavior in jsdom without
+// production MediaSidebar / canvas-heavy paths (see AGENTS.md → Frontend / viewer testing note).
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import '@testing-library/jest-dom'
-import Sidebar from '../../src/viewer/components/Sidebar.jsx'
+import TestMediaSidebar from '../../src/viewer/components/TestMediaSidebar.jsx'
 
 // Fixed timestamp: 2025-01-15 12:00:00 UTC (avoids flaky bucket assignments at day boundaries)
 const NOW = 1736942400
@@ -44,9 +46,9 @@ const alpha = makeItem({ filename: 'Alpha.mp4', mtime: NOW - 1 * HOUR, size_byte
 const mid = makeItem({ filename: 'Mid.mp4', mtime: NOW - 2 * HOUR, size_bytes: 1_000_000 })
 const zeta = makeItem({ filename: 'Zeta.mp4', mtime: NOW - 3 * HOUR, size_bytes: 2_000_000 })
 
-function renderSidebar(props = {}) {
+function renderTestMediaSidebar(props = {}) {
   return render(
-    <Sidebar
+    <TestMediaSidebar
       items={[alpha, mid, zeta]}
       selectedItem={null}
       onSelect={() => {}}
@@ -67,23 +69,23 @@ function getGroupHeaders() {
 
 // ── Default sort ─────────────────────────────────────────────────────────────
 
-describe('Sidebar — default sort (newest first)', () => {
+describe('TestMediaSidebar — default sort (newest first)', () => {
   it('renders a sort dropdown defaulting to Newest first', () => {
-    renderSidebar()
+    renderTestMediaSidebar()
     expect(screen.getByRole('combobox', { name: /sort/i }).value).toBe('time-desc')
   })
 
   it('orders items newest → oldest', () => {
-    renderSidebar()
+    renderTestMediaSidebar()
     expect(getItemOrder()).toEqual(['Alpha.mp4', 'Mid.mp4', 'Zeta.mp4'])
   })
 })
 
 // ── Time grouping ─────────────────────────────────────────────────────────────
 
-describe('Sidebar — time sort groups by period', () => {
+describe('TestMediaSidebar — time sort groups by period', () => {
   it('groups today/this-week/older items into separate buckets', () => {
-    renderSidebar({ items: [todayItem, thisWeekItem, olderItem] })
+    renderTestMediaSidebar({ items: [todayItem, thisWeekItem, olderItem] })
     const headers = getGroupHeaders()
     expect(headers.some((h) => h.startsWith('Today'))).toBe(true)
     expect(headers.some((h) => h.startsWith('This Week'))).toBe(true)
@@ -98,7 +100,7 @@ describe('Sidebar — time sort groups by period', () => {
       mtime: NOW - 2 * HOUR,
       path: '/cs',
     })
-    renderSidebar({ items: [haloToday, csToday] })
+    renderTestMediaSidebar({ items: [haloToday, csToday] })
     const headers = getGroupHeaders()
     expect(headers.some((h) => h.startsWith('Today'))).toBe(true)
     expect(headers.every((h) => h !== 'Halo (1)' && h !== 'CS (1)')).toBe(true)
@@ -106,12 +108,12 @@ describe('Sidebar — time sort groups by period', () => {
 
   it('shows game name in item meta when not grouping by game', () => {
     const haloToday = makeItem({ filename: 'Halo.mp4', game_name: 'Halo', mtime: NOW - HOUR })
-    renderSidebar({ items: [haloToday] })
+    renderTestMediaSidebar({ items: [haloToday] })
     expect(screen.getByText('Halo')).toBeInTheDocument()
   })
 
   it('time-desc: Today group appears before Older group', () => {
-    renderSidebar({ items: [todayItem, olderItem] })
+    renderTestMediaSidebar({ items: [todayItem, olderItem] })
     const headers = getGroupHeaders()
     const todayIndex = headers.findIndex((h) => h.startsWith('Today'))
     const olderIndex = headers.findIndex((h) => h.startsWith('Older'))
@@ -121,7 +123,7 @@ describe('Sidebar — time sort groups by period', () => {
   })
 
   it('time-asc: Older group appears before Today group', () => {
-    renderSidebar({ items: [todayItem, olderItem] })
+    renderTestMediaSidebar({ items: [todayItem, olderItem] })
     fireEvent.change(screen.getByRole('combobox', { name: /sort/i }), {
       target: { value: 'time-asc' },
     })
@@ -136,11 +138,11 @@ describe('Sidebar — time sort groups by period', () => {
 
 // ── Name sort — still groups by game ─────────────────────────────────────────
 
-describe('Sidebar — name sort groups by game', () => {
+describe('TestMediaSidebar — name sort groups by game', () => {
   it('name-asc groups by game name', () => {
     const halo = makeItem({ filename: 'Halo.mp4', game_name: 'Halo', path: '/halo' })
     const cs = makeItem({ filename: 'CS.mp4', game_name: 'CS', path: '/cs' })
-    renderSidebar({ items: [halo, cs] })
+    renderTestMediaSidebar({ items: [halo, cs] })
     fireEvent.change(screen.getByRole('combobox', { name: /sort/i }), {
       target: { value: 'name-asc' },
     })
@@ -150,7 +152,7 @@ describe('Sidebar — name sort groups by game', () => {
   })
 
   it('name-asc sorts items alphabetically within each group', () => {
-    renderSidebar()
+    renderTestMediaSidebar()
     fireEvent.change(screen.getByRole('combobox', { name: /sort/i }), {
       target: { value: 'name-asc' },
     })
@@ -158,7 +160,7 @@ describe('Sidebar — name sort groups by game', () => {
   })
 
   it('name-desc sorts items reverse-alphabetically within each group', () => {
-    renderSidebar()
+    renderTestMediaSidebar()
     fireEvent.change(screen.getByRole('combobox', { name: /sort/i }), {
       target: { value: 'name-desc' },
     })
@@ -166,7 +168,7 @@ describe('Sidebar — name sort groups by game', () => {
   })
 
   it('does NOT show game name in item meta when grouping by game', () => {
-    renderSidebar()
+    renderTestMediaSidebar()
     fireEvent.change(screen.getByRole('combobox', { name: /sort/i }), {
       target: { value: 'name-asc' },
     })
@@ -180,14 +182,14 @@ describe('Sidebar — name sort groups by game', () => {
 
 // ── Size grouping ─────────────────────────────────────────────────────────────
 
-describe('Sidebar — size sort groups by size range', () => {
+describe('TestMediaSidebar — size sort groups by size range', () => {
   const huge = makeItem({ filename: 'Huge.mp4', size_bytes: 15 * 1_073_741_824, path: '/huge' })
   const large = makeItem({ filename: 'Large.mp4', size_bytes: 2 * 1_073_741_824, path: '/large' })
   const medium = makeItem({ filename: 'Medium.mp4', size_bytes: 500_000_000, path: '/medium' })
   const small = makeItem({ filename: 'Small.mp4', size_bytes: 50_000_000, path: '/small' })
 
   it('size-desc: groups items into correct size buckets', () => {
-    renderSidebar({ items: [huge, large, medium, small] })
+    renderTestMediaSidebar({ items: [huge, large, medium, small] })
     fireEvent.change(screen.getByRole('combobox', { name: /sort/i }), {
       target: { value: 'size-desc' },
     })
@@ -199,7 +201,7 @@ describe('Sidebar — size sort groups by size range', () => {
   })
 
   it('size-desc: Huge bucket appears before Small bucket', () => {
-    renderSidebar({ items: [huge, small] })
+    renderTestMediaSidebar({ items: [huge, small] })
     fireEvent.change(screen.getByRole('combobox', { name: /sort/i }), {
       target: { value: 'size-desc' },
     })
@@ -212,7 +214,7 @@ describe('Sidebar — size sort groups by size range', () => {
   })
 
   it('size-asc: Small bucket appears before Huge bucket', () => {
-    renderSidebar({ items: [huge, small] })
+    renderTestMediaSidebar({ items: [huge, small] })
     fireEvent.change(screen.getByRole('combobox', { name: /sort/i }), {
       target: { value: 'size-asc' },
     })
@@ -227,7 +229,7 @@ describe('Sidebar — size sort groups by size range', () => {
   it('size-desc: items within a bucket ordered largest first', () => {
     const big = makeItem({ filename: 'Big.mp4', size_bytes: 3 * 1_073_741_824, path: '/big' })
     const small2 = makeItem({ filename: 'Small2.mp4', size_bytes: 1_073_741_824, path: '/small2' })
-    renderSidebar({ items: [small2, big] })
+    renderTestMediaSidebar({ items: [small2, big] })
     fireEvent.change(screen.getByRole('combobox', { name: /sort/i }), {
       target: { value: 'size-desc' },
     })
@@ -238,9 +240,9 @@ describe('Sidebar — size sort groups by size range', () => {
 
 // ── Search + sort interaction ─────────────────────────────────────────────────
 
-describe('Sidebar — search filters before sort/group', () => {
+describe('TestMediaSidebar — search filters before sort/group', () => {
   it('filtered results are still grouped correctly', () => {
-    renderSidebar({ items: [todayItem, thisWeekItem, olderItem] })
+    renderTestMediaSidebar({ items: [todayItem, thisWeekItem, olderItem] })
     fireEvent.change(screen.getByPlaceholderText('Search...'), { target: { value: 'Today' } })
     const headers = getGroupHeaders()
     expect(headers.some((h) => h.startsWith('Today'))).toBe(true)
@@ -250,7 +252,7 @@ describe('Sidebar — search filters before sort/group', () => {
 
 // ── Unorganized items ─────────────────────────────────────────────────────────
 
-describe('Sidebar — unorganized item styling', () => {
+describe('TestMediaSidebar — unorganized item styling', () => {
   it('unorganized items have amber card class regardless of sort mode', () => {
     const unorg = makeItem({
       filename: 'Raw.mp4',
@@ -258,7 +260,7 @@ describe('Sidebar — unorganized item styling', () => {
       mtime: NOW - HOUR,
       path: '/raw',
     })
-    renderSidebar({ items: [unorg] })
+    renderTestMediaSidebar({ items: [unorg] })
     expect(document.querySelector('.item-card--unorganized')).toBeInTheDocument()
   })
 
@@ -269,7 +271,7 @@ describe('Sidebar — unorganized item styling', () => {
       mtime: NOW - HOUR,
       path: '/raw',
     })
-    renderSidebar({ items: [unorg] })
+    renderTestMediaSidebar({ items: [unorg] })
     fireEvent.change(screen.getByRole('combobox', { name: /sort/i }), {
       target: { value: 'name-asc' },
     })
@@ -283,7 +285,7 @@ describe('Sidebar — unorganized item styling', () => {
       mtime: NOW - HOUR,
       path: '/raw',
     })
-    renderSidebar({ items: [unorg] })
+    renderTestMediaSidebar({ items: [unorg] })
     // Default is time-desc
     expect(document.querySelector('.group-header--unorganized')).not.toBeInTheDocument()
   })

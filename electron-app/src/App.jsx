@@ -1,16 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useState } from 'react'
-import { HashRouter, Routes, Route, NavLink, useLocation } from 'react-router-dom'
-import {
-  AlertTriangle,
-  Gamepad2,
-  Video,
-  Film,
-  HardDrive,
-  Settings,
-  Download,
-  X,
-} from 'lucide-react'
-import appIcon from '../assets/icon.png'
+import { HashRouter, Routes, Route, useLocation } from 'react-router-dom'
 import api from './api'
 import GamesPage from './pages/GamesPage'
 import SettingsPage from './pages/SettingsPage'
@@ -18,21 +7,13 @@ import ViewerRecordingsPage from './viewer/pages/RecordingsPage'
 import ViewerClipsPage from './viewer/pages/ClipsPage'
 import ViewerStoragePage from './viewer/pages/StoragePage'
 import OnboardingModal from './components/OnboardingModal'
-import SidebarWatcherPanel from './components/SidebarWatcherPanel'
-import { WatcherRuntimeProvider, useWatcherRuntime } from './context/WatcherRuntimeContext'
+import AppSidebarNav from './components/AppSidebarNav'
+import { WatcherRuntimeProvider } from './context/WatcherRuntimeContext'
 import { SettingsNavGuardProvider, useSettingsNavGuard } from './context/SettingsNavGuardContext'
 import { TitleBarOverlayProvider, useTitleBarOverlayOverride } from './context/TitleBarOverlayContext'
 import { getTitleBarOverlayForPath } from './utils/titleBarOverlayDefaults'
 import './App.css'
 import './viewer/viewer.css'
-
-const navItems = [
-  { path: '/', icon: Gamepad2, label: 'Games' },
-  { path: '/recordings', icon: Video, label: 'Recordings' },
-  { path: '/clips', icon: Film, label: 'Clips' },
-  { path: '/storage', icon: HardDrive, label: 'Storage' },
-  { path: '/settings', icon: Settings, label: 'Settings' },
-]
 
 export const OrganizeErrorContext = createContext({
   organizeError: null,
@@ -72,53 +53,6 @@ function getProgressWidth(p, isManual = false) {
   return 100
 }
 
-// ── Sidebar watcher messages (above the compact watcher panel) ──
-
-function SidebarWatcherBanner() {
-  const { watcherStatus, watcherBannerKind, dismissWatcherBanner, openSetupGuide } =
-    useWatcherRuntime()
-
-  if (!watcherStatus.running || !watcherBannerKind) return null
-
-  if (watcherBannerKind === 'obs_closed') {
-    return (
-      <div className="sidebar-nav-watcher-banner" role="status">
-        <span className="sidebar-nav-watcher-banner-text">
-          OBS is closed. Start OBS to start recording.
-        </span>
-        <button
-          type="button"
-          className="sidebar-nav-watcher-banner-dismiss"
-          onClick={dismissWatcherBanner}
-          title="Dismiss"
-        >
-          <X size={11} />
-        </button>
-      </div>
-    )
-  }
-
-  return (
-    <div className="sidebar-nav-watcher-banner" role="status">
-      <span className="sidebar-nav-watcher-banner-text">
-        OBS plugin not detected.{' '}
-        <button type="button" className="sidebar-watcher-guide-link" onClick={openSetupGuide}>
-          <Settings size={10} />
-          Setup
-        </button>
-      </span>
-      <button
-        type="button"
-        className="sidebar-nav-watcher-banner-dismiss"
-        onClick={dismissWatcherBanner}
-        title="Dismiss"
-      >
-        <X size={11} />
-      </button>
-    </div>
-  )
-}
-
 // ── Inner layout component — needs useLocation() so it lives inside HashRouter ──
 
 function AppLayout({ sessionProgress, updateState, showOnboarding, setShowOnboarding }) {
@@ -148,6 +82,13 @@ function AppLayout({ sessionProgress, updateState, showOnboarding, setShowOnboar
     guard.handleNavigateAway?.(path)
   }
 
+  const sidebarNavProps = {
+    organizeError,
+    clearOrganizeError,
+    updateState,
+    onNavClick: handleSidebarNavClick,
+  }
+
   // Show session progress on all pages; fall back to manual organize progress.
   const isManual = !sessionProgress && isManualOrganizing
   const activeProgress = sessionProgress ?? (isManualOrganizing ? organizeProgress : null)
@@ -164,58 +105,7 @@ function AppLayout({ sessionProgress, updateState, showOnboarding, setShowOnboar
       <OnboardingModal open={showOnboarding} onClose={() => setShowOnboarding(false)} />
       <div className="app-layout">
         <div className="titlebar-drag" />
-        <nav className="sidebar-nav">
-          <div className="nav-brand">
-            <img src={appIcon} alt="OpenClip logo" className="nav-brand-logo" />
-            <span>OpenClip</span>
-          </div>
-          {navItems.map(({ path, icon: Icon, label }) => (
-            <NavLink
-              key={path}
-              to={path}
-              end={path === '/'}
-              className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-              onClick={(e) => handleSidebarNavClick(e, path)}
-            >
-              <Icon size={18} />
-              <span>{label}</span>
-              {label === 'Recordings' && organizeError && (
-                <span className="nav-error-badge" title={organizeError}>
-                  <AlertTriangle size={12} />
-                </span>
-              )}
-            </NavLink>
-          ))}
-          <div className="nav-nav-spacer" aria-hidden />
-          <SidebarWatcherBanner />
-          <SidebarWatcherPanel />
-          {updateState && (
-            <div className="update-banner">
-              <Download size={14} />
-              {updateState.status === 'available' && <span>v{updateState.version} available</span>}
-              {updateState.status === 'downloading' && (
-                <span>Downloading… {updateState.percent}%</span>
-              )}
-              {updateState.status === 'ready' && (
-                <>
-                  <span>Update ready</span>
-                  <button className="btn btn-primary btn-sm" onClick={() => api.installUpdate()}>
-                    Restart
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-          {organizeError && (
-            <div className="organize-error-banner">
-              <AlertTriangle size={13} />
-              <span>Organize failed — see Recordings</span>
-              <button className="organize-error-close" onClick={clearOrganizeError} title="Dismiss">
-                <X size={12} />
-              </button>
-            </div>
-          )}
-        </nav>
+        <AppSidebarNav {...sidebarNavProps} />
         <main className="main-content">
           <Routes>
             <Route path="/" element={<GamesPage />} />

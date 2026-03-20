@@ -18,7 +18,7 @@ import ZoomTimeline from './ZoomTimeline'
 import VideoPlayerInfoBar from './VideoPlayerInfoBar'
 import MainContentTopBar from './MainContentTopBar'
 import { apiFetch, apiPost, getBase } from '../apiBase'
-import { formatTime } from '../utils'
+import { formatTime } from '../formatTime'
 import api from '../../api'
 import { useOrganizeProgress } from '../../App'
 

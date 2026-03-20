@@ -25,3 +25,7 @@ All commands run from `electron-app/`:
 - **Electron cannot launch headless on this VM** (no display + Windows-only features). Use `npx vite` alone for frontend dev, or run Playwright E2E tests which start their own Chromium.
 - The Playwright E2E tests use mocked data and route interception, so they work fully on Linux without OBS or Electron.
 - **Passing test scope on Linux:** 41 vitest suites pass (385 tests), 110 Playwright E2E tests pass. The 12 failing vitest suites (47 tests) all fail due to the koffi/Windows dependency, not code bugs.
+
+### Frontend / viewer testing note
+
+- **`electron-app/src/viewer/components/TestMediaSidebar.jsx`** is a **test-only** sidebar mock (used by `tests/components/TestMediaSidebar.test.jsx`). The real recordings/clips UI uses **`MediaSidebar.jsx`**. The mock exists so Vitest can assert sort/group/search/list behavior in jsdom without importing production sidebar code that is awkward to test when **canvas** (and related APIs) are involved or poorly supported in the test environment.

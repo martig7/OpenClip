@@ -12,7 +12,7 @@ import {
   Minus,
   Maximize,
 } from 'lucide-react'
-import { formatTime } from '../utils'
+import { formatTime } from '../formatTime'
 
 export default function VideoPlayerInfoBar({
   media,

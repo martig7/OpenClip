@@ -1,0 +1,88 @@
+/* App primary sidebar — shell (no padding; compose with __padding / __inner) */
+.app-sidebar-nav {
+  @apply relative z-[2] w-[200px] min-w-[200px] bg-[var(--bg-secondary)] border-r border-[var(--border)]
+    flex flex-col min-h-0;
+}
+
+/* Scroll/flex column for everything below the shell; gap between rows */
+.app-sidebar-nav__inner {
+  @apply flex flex-col flex-1 min-h-0 gap-[2px];
+}
+
+/* Inset from window edges — matches viewer .msb-header (8px) for title alignment */
+.app-sidebar-nav__padding {
+  @apply pt-2 px-2 pb-2;
+}
+
+.app-sidebar-nav__spacer {
+  @apply flex-1 min-h-[8px] min-w-0;
+}
+
+/* Nav error badge */
+.nav-error-badge {
+  @apply ml-auto flex items-center text-[var(--danger)];
+}
+
+/* Row height matches viewer .msb-row1 (26px search) so logo aligns vertically with .msb-title (e.g. RECORDINGS); left-aligned like .nav-item */
+.nav-brand {
+  @apply flex min-h-[26px] items-center px-3 pb-4;
+}
+.nav-brand-logo {
+  @apply block h-4 w-4 shrink-0 rounded-[5px] translate-y-[4px];
+  
+}
+.nav-item {
+  @apply flex items-center gap-2 px-3 py-[10px] rounded-[var(--radius-md)]
+    text-[var(--text-secondary)] no-underline text-[13px] font-medium;
+  transition: all 0.15s ease;
+}
+.nav-item:hover {
+  @apply bg-[var(--bg-hover)] text-[var(--text-primary)];
+}
+.nav-item.active {
+  @apply bg-[var(--accent-muted)] text-[var(--accent-hover)];
+}
+
+/* Update Banner */
+.update-banner {
+  @apply flex items-center gap-2 px-3 py-[10px] border-t border-[var(--border)]
+    text-xs text-[var(--text-secondary)];
+}
+.update-banner span {
+  @apply flex-1 whitespace-nowrap overflow-hidden text-ellipsis;
+}
+
+/* Organize Error Sidebar Banner */
+.organize-error-banner {
+  @apply flex items-center gap-[7px] px-3 py-[9px] border-t border-[var(--border)]
+    text-xs text-[var(--danger)];
+  background: rgba(239, 68, 68, 0.08);
+}
+.organize-error-banner span {
+  @apply flex-1 leading-snug;
+}
+.organize-error-close {
+  @apply flex items-center justify-center shrink-0 w-5 h-5 rounded
+    text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)];
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+/* Above the watcher panel (sidebar nav) */
+.sidebar-nav-watcher-banner {
+  @apply flex items-start gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 mb-1 text-[11px] leading-snug shrink-0
+    text-[var(--warning,#f59e0b)] bg-[rgba(245,158,11,0.1)] border border-[rgba(245,158,11,0.25)];
+}
+.sidebar-nav-watcher-banner-text {
+  @apply flex-1 flex flex-wrap items-center gap-1 min-w-0;
+}
+.sidebar-nav-watcher-banner-dismiss {
+  @apply flex items-center justify-center shrink-0 w-5 h-5 rounded p-0 border-0 bg-transparent cursor-pointer
+    text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)];
+}
+.sidebar-watcher-guide-link {
+  @apply inline-flex items-center gap-0.5 border-0 bg-transparent p-0 cursor-pointer text-[var(--primary)] underline;
+  font: inherit;
+}
