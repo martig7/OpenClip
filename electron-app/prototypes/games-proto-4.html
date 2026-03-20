@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Games — Prototype 4: Compact Table + Side Drawer</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    :root {
+      --bg-primary: #0f0f0f;
+      --bg-secondary: #181818;
+      --bg-tertiary: #212121;
+      --bg-hover: #2a2a2a;
+      --bg-active: #333333;
+      --border: #333333;
+      --border-light: #3d3d3d;
+      --text-primary: #ffffff;
+      --text-secondary: #aaaaaa;
+      --text-muted: #666666;
+      --accent: #7c3aed;
+      --accent-hover: #8b5cf6;
+      --accent-light: #a78bfa;
+      --accent-muted: rgba(124,58,237,0.15);
+      --accent-dim: rgba(124,58,237,0.2);
+      --success: #22c55e;
+      --danger: #ef4444;
+      --danger-hover: #dc2626;
+      --warning: #f59e0b;
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg-primary); color: var(--text-primary);
+      height: 100vh; overflow: hidden; -webkit-font-smoothing: antialiased;
+    }
+    .app { display: flex; flex-direction: column; height: 100vh; }
+
+    /* Topbar drag region */
+    .topbar { height: 37px; flex-shrink: 0; background: var(--bg-secondary); border-bottom: 1px solid var(--border); }
+
+    /* Page header */
+    .page-header {
+      padding: 16px 24px 14px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 16px; flex-shrink: 0;
+    }
+    .page-header h1 { font-size: 18px; font-weight: 600; }
+
+    /* Toolbar row */
+    .toolbar {
+      padding: 10px 24px; display: flex; align-items: center; gap: 10px;
+      border-bottom: 1px solid var(--border); flex-shrink: 0; background: var(--bg-primary);
+    }
+    .filter-tabs { display: flex; gap: 0; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+    .filter-tab {
+      padding: 5px 14px; font-size: 12px; font-weight: 500;
+      background: transparent; border: none; color: var(--text-secondary);
+      cursor: pointer; transition: background 0.12s, color 0.12s;
+    }
+    .filter-tab + .filter-tab { border-left: 1px solid var(--border); }
+    .filter-tab:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .filter-tab.active { background: var(--accent-muted); color: var(--accent-light); }
+    .spacer { flex: 1; }
+    .search-wrap { position: relative; }
+    .search-wrap svg { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: var(--text-muted); }
+    .search-input {
+      width: 200px; padding: 6px 9px 6px 29px;
+      background: var(--bg-tertiary); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); color: var(--text-primary); font-size: 12px; outline: none;
+    }
+    .search-input:focus { border-color: var(--accent); }
+    .search-input::placeholder { color: var(--text-muted); }
+
+    /* Main content area (table + drawer) */
+    .content-area { flex: 1; display: flex; overflow: hidden; }
+
+    /* Table container */
+    .table-area { flex: 1; overflow-y: auto; }
+    .table-area::-webkit-scrollbar { width: 4px; }
+    .table-area::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 2px; }
+
+    /* Table */
+    .games-table { width: 100%; border-collapse: collapse; }
+    .games-table thead th {
+      padding: 9px 12px; text-align: left;
+      font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+      color: var(--text-muted); border-bottom: 1px solid var(--border);
+      background: var(--bg-primary); position: sticky; top: 0; z-index: 1;
+      white-space: nowrap;
+    }
+    .games-table thead th:first-child { padding-left: 24px; }
+    .games-table thead th:last-child { padding-right: 24px; }
+    .games-table tbody tr {
+      border-bottom: 1px solid var(--border); cursor: pointer;
+      transition: background 0.1s;
+    }
+    .games-table tbody tr:hover { background: var(--bg-hover); }
+    .games-table tbody tr.selected { background: var(--accent-muted); }
+    .games-table tbody td { padding: 10px 12px; font-size: 12px; vertical-align: middle; }
+    .games-table tbody td:first-child { padding-left: 24px; }
+    .games-table tbody td:last-child { padding-right: 24px; }
+
+    /* Table cell types */
+    .cell-toggle { width: 40px; }
+    .cell-icon { width: 42px; }
+    .game-avatar {
+      width: 28px; height: 28px; border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 700; color: white;
+    }
+    .cell-name { font-weight: 500; }
+    .cell-scene { color: var(--text-muted); font-size: 11px; }
+    .cell-clips { font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+    .cell-last { color: var(--text-muted); font-size: 11px; }
+    .cell-actions { width: 70px; white-space: nowrap; }
+    .icon-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 26px; height: 26px; border-radius: var(--radius-sm);
+      background: transparent; border: none; cursor: pointer;
+      color: var(--text-muted); transition: background 0.12s, color 0.12s;
+    }
+    .icon-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .icon-btn.danger:hover { color: var(--danger); background: rgba(239,68,68,0.1); }
+
+    /* Toggle */
+    .toggle-mini {
+      width: 30px; height: 17px; border-radius: 9px;
+      background: var(--bg-active); border: none; cursor: pointer;
+      position: relative; flex-shrink: 0; transition: background 0.2s;
+    }
+    .toggle-mini.on { background: var(--accent); }
+    .toggle-mini::after {
+      content: ''; position: absolute; top: 2px; left: 2px;
+      width: 13px; height: 13px; background: white; border-radius: 50%; transition: transform 0.2s;
+    }
+    .toggle-mini.on::after { transform: translateX(13px); }
+
+    /* Badge */
+    .badge { display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 10px; font-size: 10px; font-weight: 500; }
+    .badge-success { background: rgba(34,197,94,0.15); color: var(--success); }
+    .badge-muted { background: var(--bg-active); color: var(--text-muted); }
+    .badge-dot { width: 4px; height: 4px; border-radius: 50%; }
+
+    /* Side drawer */
+    .drawer {
+      width: 0; overflow: hidden;
+      border-left: 0 solid var(--border);
+      background: var(--bg-secondary);
+      transition: width 0.22s ease, border-left-width 0.22s ease;
+      display: flex; flex-direction: column;
+    }
+    .drawer.open {
+      width: 360px; min-width: 360px;
+      border-left-width: 1px;
+    }
+    .drawer-inner { width: 360px; display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+    .drawer-header {
+      padding: 16px 18px 12px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: flex-start; gap: 12px; flex-shrink: 0;
+    }
+    .drawer-avatar {
+      width: 40px; height: 40px; border-radius: var(--radius-md);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; font-weight: 700; color: white; flex-shrink: 0;
+    }
+    .drawer-name { font-size: 15px; font-weight: 600; }
+    .drawer-scene { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .drawer-close {
+      margin-left: auto; display: flex; align-items: center; justify-content: center;
+      width: 26px; height: 26px; border-radius: var(--radius-sm);
+      background: transparent; border: none; cursor: pointer; color: var(--text-muted);
+      transition: background 0.12s, color 0.12s;
+    }
+    .drawer-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .drawer-body { flex: 1; overflow-y: auto; padding: 14px 18px; }
+    .drawer-body::-webkit-scrollbar { width: 3px; }
+    .drawer-body::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 2px; }
+    .drawer-section { margin-bottom: 18px; }
+    .drawer-section-title {
+      font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em;
+      color: var(--text-muted); margin-bottom: 8px;
+    }
+
+    /* Info grid */
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .info-cell { padding: 8px 10px; background: var(--bg-tertiary); border-radius: var(--radius-sm); }
+    .info-cell-label { font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px; }
+    .info-cell-val { font-size: 12px; font-weight: 500; }
+
+    /* Audio chips */
+    .audio-chip {
+      display: flex; align-items: center; gap: 7px;
+      padding: 6px 10px; background: var(--bg-tertiary);
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      font-size: 11px; margin-bottom: 5px;
+    }
+    .audio-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .audio-kind { font-size: 10px; color: var(--text-muted); margin-left: auto; }
+
+    /* Track table */
+    .track-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .track-table th { text-align: left; padding: 4px 6px; color: var(--text-muted); font-weight: 500; border-bottom: 1px solid var(--border); }
+    .track-table td { padding: 5px 6px; border-bottom: 1px solid var(--border); color: var(--text-secondary); }
+    .track-table tr:last-child td { border-bottom: none; }
+    .track-pip { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+    .track-pip.on { background: var(--accent); }
+    .track-pip.off { background: var(--bg-active); }
+
+    /* Buttons */
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 500; border: none; cursor: pointer; transition: all 0.15s; }
+    .btn-primary { background: var(--accent); color: white; }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-sm { padding: 5px 10px; font-size: 11px; }
+    .btn-ghost { background: transparent; color: var(--text-secondary); }
+    .btn-ghost:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+    /* Empty state */
+    .empty-row td { padding: 48px 24px; text-align: center; color: var(--text-muted); font-size: 13px; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useMemo } = React;
+
+const GAME_PALETTE = ['#7c3aed','#3b82f6','#06b6d4','#6366f1','#8b5cf6','#0ea5e9'];
+const MOCK_GAMES = [
+  { id:1, name:'Valorant',       selector:'VALORANT.exe',  scene:'Valorant Scene',  enabled:true,  color:GAME_PALETTE[0], emoji:'V', clips:24, lastActive:'2h ago' },
+  { id:2, name:'Minecraft',      selector:'javaw.exe',     scene:'MC Scene',        enabled:true,  color:GAME_PALETTE[1], emoji:'M', clips:12, lastActive:'1d ago' },
+  { id:3, name:'CS2',            selector:'cs2.exe',       scene:'CS2 Scene',       enabled:false, color:GAME_PALETTE[2], emoji:'C', clips:47, lastActive:'3d ago' },
+  { id:4, name:'Apex Legends',   selector:'r5apex.exe',    scene:'Apex Scene',      enabled:true,  color:GAME_PALETTE[3], emoji:'A', clips:8,  lastActive:'5h ago' },
+  { id:5, name:'League of Legends', selector:'LoL.exe',   scene:'LoL Scene',       enabled:false, color:GAME_PALETTE[4], emoji:'L', clips:31, lastActive:'1w ago' },
+  { id:6, name:'Overwatch 2',    selector:'Overwatch.exe', scene:'OW2 Scene',       enabled:true,  color:GAME_PALETTE[5], emoji:'O', clips:5,  lastActive:'30m ago' },
+];
+const MOCK_AUDIO = [
+  { name:'Desktop Audio', kind:'wasapi_output', color:'#7c3aed' },
+  { name:'Mic / Aux',     kind:'wasapi_input',  color:'#3b82f6' },
+  { name:'Game Audio',    kind:'wasapi_process',color:'#06b6d4' },
+];
+const MOCK_TRACKS = [
+  { source:'Desktop Audio', tracks:[true, false, true, false, false, false] },
+  { source:'Mic / Aux',     tracks:[true, true,  false, false, false, false] },
+  { source:'Game Audio',    tracks:[false, false, true,  true,  false, false] },
+];
+
+function SearchIcon() { return <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>; }
+function PlusIcon() { return <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>; }
+function EditIcon() { return <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/></svg>; }
+function TrashIcon() { return <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>; }
+function CloseIcon() { return <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>; }
+
+function App() {
+  const [games, setGames] = useState(MOCK_GAMES);
+  const [selected, setSelected] = useState(null);
+  const [filter, setFilter] = useState('all');
+  const [search, setSearch] = useState('');
+
+  const filtered = useMemo(() => games.filter(g => {
+    const matchFilter = filter === 'all' || (filter === 'enabled' ? g.enabled : !g.enabled);
+    const matchSearch = g.name.toLowerCase().includes(search.toLowerCase());
+    return matchFilter && matchSearch;
+  }), [games, filter, search]);
+
+  const selectedGame = games.find(g => g.id === selected);
+
+  function toggleGame(id, e) {
+    e.stopPropagation();
+    setGames(prev => prev.map(g => g.id === id ? { ...g, enabled: !g.enabled } : g));
+  }
+
+  function selectRow(id) {
+    setSelected(prev => prev === id ? null : id);
+  }
+
+  return (
+    <div className="app">
+      <div className="topbar" />
+
+      <div className="page-header">
+        <h1>Games</h1>
+        <span style={{ fontSize:12, color:'var(--text-muted)' }}>{games.length} total · {games.filter(g=>g.enabled).length} active</span>
+        <div style={{ marginLeft:'auto', display:'flex', gap:8 }}>
+          <button className="btn btn-primary btn-sm"><PlusIcon /> Add Game</button>
+        </div>
+      </div>
+
+      <div className="toolbar">
+        <div className="filter-tabs">
+          {['all','enabled','disabled'].map(f => (
+            <button key={f} className={`filter-tab ${filter===f?'active':''}`} onClick={() => setFilter(f)}>
+              {f.charAt(0).toUpperCase()+f.slice(1)}
+            </button>
+          ))}
+        </div>
+        <div className="spacer" />
+        <div className="search-wrap">
+          <SearchIcon />
+          <input className="search-input" placeholder="Search games…" value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+      </div>
+
+      <div className="content-area">
+        {/* Table */}
+        <div className="table-area">
+          <table className="games-table">
+            <thead>
+              <tr>
+                <th className="cell-toggle"></th>
+                <th className="cell-icon"></th>
+                <th>Game Name</th>
+                <th>OBS Scene</th>
+                <th>Status</th>
+                <th>Clips</th>
+                <th>Last Active</th>
+                <th className="cell-actions"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <tr className="empty-row"><td colSpan="8">No games match your filter</td></tr>
+              ) : filtered.map(game => (
+                <tr
+                  key={game.id}
+                  className={selected === game.id ? 'selected' : ''}
+                  onClick={() => selectRow(game.id)}
+                >
+                  <td className="cell-toggle">
+                    <button className={`toggle-mini ${game.enabled?'on':''}`} onClick={e => toggleGame(game.id, e)} />
+                  </td>
+                  <td className="cell-icon">
+                    <div className="game-avatar" style={{ background: game.color }}>{game.emoji}</div>
+                  </td>
+                  <td className="cell-name">{game.name}</td>
+                  <td className="cell-scene">{game.scene}</td>
+                  <td>
+                    <span className={`badge ${game.enabled?'badge-success':'badge-muted'}`}>
+                      <span className="badge-dot" style={{ background: game.enabled?'var(--success)':'var(--text-muted)', borderRadius:'50%', display:'inline-block', width:4, height:4 }}/>
+                      {game.enabled?'Active':'Off'}
+                    </span>
+                  </td>
+                  <td className="cell-clips">{game.clips}</td>
+                  <td className="cell-last">{game.lastActive}</td>
+                  <td className="cell-actions" onClick={e => e.stopPropagation()}>
+                    <button className="icon-btn"><EditIcon /></button>
+                    <button className="icon-btn danger"><TrashIcon /></button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Side drawer */}
+        <div className={`drawer ${selected ? 'open' : ''}`}>
+          {selectedGame && (
+            <div className="drawer-inner">
+              <div className="drawer-header">
+                <div className="drawer-avatar" style={{ background: selectedGame.color }}>{selectedGame.emoji}</div>
+                <div style={{ flex:1 }}>
+                  <div className="drawer-name">{selectedGame.name}</div>
+                  <div className="drawer-scene">{selectedGame.scene}</div>
+                </div>
+                <button className="drawer-close" onClick={() => setSelected(null)}><CloseIcon /></button>
+              </div>
+              <div className="drawer-body">
+                {/* Config */}
+                <div className="drawer-section">
+                  <div className="drawer-section-title">Configuration</div>
+                  <div className="info-grid">
+                    <div className="info-cell"><div className="info-cell-label">Selector</div><div className="info-cell-val" style={{ fontSize:10, fontFamily:'monospace' }}>{selectedGame.selector}</div></div>
+                    <div className="info-cell"><div className="info-cell-label">Scene</div><div className="info-cell-val">{selectedGame.scene}</div></div>
+                    <div className="info-cell"><div className="info-cell-label">Clips</div><div className="info-cell-val">{selectedGame.clips}</div></div>
+                    <div className="info-cell"><div className="info-cell-label">Last Active</div><div className="info-cell-val">{selectedGame.lastActive}</div></div>
+                  </div>
+                </div>
+
+                {/* Audio sources */}
+                <div className="drawer-section">
+                  <div className="drawer-section-title">Audio Sources</div>
+                  {MOCK_AUDIO.map(src => (
+                    <div key={src.name} className="audio-chip">
+                      <span className="audio-dot" style={{ background: src.color }} />
+                      <span>{src.name}</span>
+                      <span className="audio-kind">{src.kind}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Track routing */}
+                <div className="drawer-section">
+                  <div className="drawer-section-title">Track Routing</div>
+                  <table className="track-table">
+                    <thead>
+                      <tr><th>Source</th>{['T1','T2','T3','T4','T5','T6'].map(t => <th key={t}>{t}</th>)}</tr>
+                    </thead>
+                    <tbody>
+                      {MOCK_TRACKS.map(row => (
+                        <tr key={row.source}>
+                          <td style={{ color:'var(--text-primary)', fontWeight:500 }}>{row.source}</td>
+                          {row.tracks.map((on, i) => <td key={i}><span className={`track-pip ${on?'on':'off'}`}/></td>)}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Actions */}
+                <div style={{ display:'flex', gap:8, paddingTop:4 }}>
+                  <button className="btn btn-primary btn-sm" style={{ flex:1, justifyContent:'center' }}>
+                    <EditIcon /> Edit Game
+                  </button>
+                  <button className="btn btn-ghost btn-sm" style={{ color:'var(--danger)', border:'1px solid rgba(239,68,68,0.3)' }}>
+                    <TrashIcon />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
