@@ -11,7 +11,7 @@ export const TITLEBAR_OVERLAY_DEFAULTS = {
   '/clips': { color: '#0f0f0f', symbolColor: '#aaaaaa' },
   /** sv2-topbar uses --bg-secondary */
   '/storage': { color: '#181818', symbolColor: '#aaaaaa' },
-  /** Match settings sidebar (--bg-secondary) so native caption strip blends with left rail */
+  /** Matches recordings and clips topbar */
   '/settings': { color: '#0f0f0f', symbolColor: '#aaaaaa' },
 }
 
