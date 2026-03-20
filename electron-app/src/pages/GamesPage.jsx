@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api'
 import { useGameWatcherState } from '../hooks/useGameWatcherState'
@@ -468,6 +468,47 @@ export default function GamesPage() {
     navigate('/settings')
   }
 
+  const gamesAudioProps = useMemo(
+    () => ({
+      masterAudioSources,
+      applyingSource,
+      showAudioDropdown,
+      setShowAudioDropdown,
+      audioDropdownRef,
+      availableAudioInputs,
+      loadingAudioInputs,
+      audioDropdownError,
+      trackLabels,
+      setTrackLabels,
+      trackData,
+      trackLoading,
+      loadAudioInputsForDropdown,
+      addMasterSource,
+      removeMasterSource,
+      toggleTrack,
+      showToast,
+    }),
+    [
+      masterAudioSources,
+      applyingSource,
+      showAudioDropdown,
+      setShowAudioDropdown,
+      audioDropdownRef,
+      availableAudioInputs,
+      loadingAudioInputs,
+      audioDropdownError,
+      trackLabels,
+      setTrackLabels,
+      trackData,
+      trackLoading,
+      loadAudioInputsForDropdown,
+      addMasterSource,
+      removeMasterSource,
+      toggleTrack,
+      showToast,
+    ]
+  )
+
   return (
     <>
       <GamesPageBody
@@ -476,23 +517,7 @@ export default function GamesPage() {
         toggleGame={toggleGame}
         removeGame={removeGame}
         saveGame={saveGame}
-        masterAudioSources={masterAudioSources}
-        applyingSource={applyingSource}
-        showAudioDropdown={showAudioDropdown}
-        setShowAudioDropdown={setShowAudioDropdown}
-        audioDropdownRef={audioDropdownRef}
-        availableAudioInputs={availableAudioInputs}
-        loadingAudioInputs={loadingAudioInputs}
-        audioDropdownError={audioDropdownError}
-        trackLabels={trackLabels}
-        setTrackLabels={setTrackLabels}
-        trackData={trackData}
-        trackLoading={trackLoading}
-        loadAudioInputsForDropdown={loadAudioInputsForDropdown}
-        addMasterSource={addMasterSource}
-        removeMasterSource={removeMasterSource}
-        toggleTrack={toggleTrack}
-        showToast={showToast}
+        gamesAudioProps={gamesAudioProps}
       />
 
       {showAddModal && (

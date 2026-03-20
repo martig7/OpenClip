@@ -2,6 +2,7 @@ import { X, Trash2, Edit2 } from 'lucide-react'
 import EditGameModal from './EditGameModal'
 import AudioSourcesCard from './AudioSourcesCard'
 import { GameAvatar } from './GameAvatar'
+import { GameEnabledBadge } from './GameEnabledBadge'
 import { useSidebarResize, STORAGE_KEY_GAMES_DRAWER } from '../../hooks/useSidebarResize'
 
 export function GameDetailDrawer({
@@ -57,17 +58,7 @@ export function GameDetailDrawer({
             <div style={{ flex: 1, minWidth: 0 }}>
               <div className="drawer-name-row">
                 <div className="drawer-name">{drawerGame.name}</div>
-                <span
-                  className={`badge ${drawerGame.enabled ? 'badge-success' : 'badge-muted'}`}
-                >
-                  <span
-                    className="badge-dot"
-                    style={{
-                      background: drawerGame.enabled ? 'var(--success)' : 'var(--text-muted)',
-                    }}
-                  />
-                  {drawerGame.enabled ? 'Active' : 'Off'}
-                </span>
+                <GameEnabledBadge enabled={drawerGame.enabled} />
               </div>
               <div className="drawer-scene">{drawerGame.scene || '—'}</div>
             </div>

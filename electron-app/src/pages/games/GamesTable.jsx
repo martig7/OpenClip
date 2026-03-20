@@ -1,5 +1,6 @@
 import { Plus, Search, Edit2, Trash2, Gamepad2 } from 'lucide-react'
 import { GameAvatar } from './GameAvatar'
+import { GameEnabledBadge } from './GameEnabledBadge'
 import {
   useSidebarResize,
   STORAGE_KEY_GAMES_CAPTION_CLUSTER,
@@ -163,15 +164,7 @@ export function GamesTable({
                   <td className="games-table-scene">{game.scene || '—'}</td>
 
                   <td className="col-status">
-                    <span className={`badge ${game.enabled ? 'badge-success' : 'badge-muted'}`}>
-                      <span
-                        className="badge-dot"
-                        style={{
-                          background: game.enabled ? 'var(--success)' : 'var(--text-muted)',
-                        }}
-                      />
-                      {game.enabled ? 'Active' : 'Off'}
-                    </span>
+                    <GameEnabledBadge enabled={game.enabled} />
                   </td>
 
                   <td className="col-actions">

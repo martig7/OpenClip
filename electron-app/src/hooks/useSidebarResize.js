@@ -55,7 +55,7 @@ export function useSidebarResize(storageKey, opts = {}) {
   const handleMouseMove = useCallback((e) => {
     if (!isDraggingRef.current) return
     const delta = e.clientX - startXRef.current
-    const newWidth = Math.max(min, Math.min(max, prevWidthRef.current + delta * sign))
+    const newWidth = clampWidth(prevWidthRef.current + delta * sign, min, max)
     widthRef.current = newWidth
     setSidebarWidth(newWidth)
   }, [min, max, sign])

@@ -2,7 +2,7 @@ import { useState } from 'react'
 
 /**
  * Manages the game library list and the confirm-delete dialog.
- * Drawer and edit state are now handled by useDrawerState.
+ * Drawer, scene audio, and in-drawer edit draft are handled by useDrawerState.
  */
 export function useGameWatcherState() {
   const [games, setGames] = useState([])
