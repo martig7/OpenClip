@@ -93,7 +93,8 @@ function AppLayout({ sessionProgress, updateState, showOnboarding, setShowOnboar
 
   function handleSidebarNavClick(e, path) {
     if (location.pathname !== '/settings' || path === '/settings') return
-    if (!guard?.hasUnsaved?.()) return
+    const hasUnsaved = guard?.hasUnsaved?.() === true
+    if (!hasUnsaved) return
     e.preventDefault()
     guard.handleNavigateAway?.(path)
   }
