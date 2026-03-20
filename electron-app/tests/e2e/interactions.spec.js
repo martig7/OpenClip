@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { setupApiRoutes } from './fixtures/routes.js'
+import { gamesCaptionTitle, gameRow, gameNameCell } from './fixtures/gamesUi.js'
 
 // Interaction tests verify user flows across pages.
 // GamesPage / SettingsPage use window.api → mockApi (no route mock needed).
@@ -8,9 +9,9 @@ import { setupApiRoutes } from './fixtures/routes.js'
 test.describe('Games Page Interactions', () => {
   test('displays games list from mock data', async ({ page }) => {
     await page.goto('/')
-    await expect(page.locator('h1')).toContainText('Games')
-    await expect(page.locator('.list-item-title:has-text("Valorant")')).toBeVisible()
-    await expect(page.locator('.list-item-title:has-text("Counter-Strike 2")')).toBeVisible()
+    await expect(gamesCaptionTitle(page)).toHaveText('Games')
+    await expect(gameNameCell(page, 'Valorant')).toBeVisible()
+    await expect(gameNameCell(page, 'Counter-Strike 2')).toBeVisible()
   })
 
   test('can open add game modal', async ({ page }) => {
@@ -22,7 +23,7 @@ test.describe('Games Page Interactions', () => {
 
   test('can fill and submit add game form', async ({ page }) => {
     await page.goto('/')
-    await expect(page.locator('.list-item-title:has-text("Valorant")')).toBeVisible()
+    await expect(gameNameCell(page, 'Valorant')).toBeVisible()
     await page.click('button:has-text("Add Game")')
     await page.locator('input[placeholder="e.g. Valorant"]').fill('Minecraft')
     await page.locator('input[placeholder="e.g. VALORANT or valorant.exe"]').fill('javaw.exe')
@@ -33,21 +34,18 @@ test.describe('Games Page Interactions', () => {
     await addBtn.click()
     // Modal closes and new game appears in the list
     await expect(page.locator('h2:has-text("Add Game")')).not.toBeVisible()
-    await expect(page.locator('.list-item-title:has-text("Minecraft")')).toBeVisible()
+    await expect(gameNameCell(page, 'Minecraft')).toBeVisible()
   })
 
   test('removing a game removes it from the list', async ({ page }) => {
     await page.goto('/')
-    await expect(page.locator('.list-item-title:has-text("Counter-Strike 2")')).toBeVisible()
+    await expect(gameNameCell(page, 'Counter-Strike 2')).toBeVisible()
     // CS2 has a scene, so confirm dialog will appear
-    const cs2Item = page.locator('.list-item', {
-      has: page.locator('.list-item-title:has-text("Counter-Strike 2")'),
-    })
-    await cs2Item.locator('[title="Remove game"]').click()
+    await gameRow(page, 'Counter-Strike 2').locator('[title="Remove game"]').click()
     await expect(page.locator('h2:has-text("Remove Game")')).toBeVisible()
     // Remove game only (no scene deletion)
     await page.locator('button:has-text("Game only")').click()
-    await expect(page.locator('.list-item-title:has-text("Counter-Strike 2")')).not.toBeVisible()
+    await expect(gameNameCell(page, 'Counter-Strike 2')).not.toBeVisible()
   })
 })
 
