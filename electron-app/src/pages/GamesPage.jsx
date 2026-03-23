@@ -541,9 +541,6 @@ export default function GamesPage() {
         gamesAudioProps={gamesAudioProps}
         fsConfig={fsConfig}
         onFsConfigChange={saveFsConfig}
-        obsScenes={obsScenes}
-        setObsScenes={setObsScenes}
-        showToast={showToast}
       />
 
       {showAddModal && (

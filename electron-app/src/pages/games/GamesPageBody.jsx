@@ -18,9 +18,6 @@ export function GamesPageBody({
   gamesAudioProps,
   fsConfig,
   onFsConfigChange,
-  obsScenes,
-  setObsScenes,
-  showToast,
 }) {
   const {
     masterAudioSources,
@@ -142,8 +139,6 @@ export function GamesPageBody({
             onDelete={removeGame}
             fsConfig={fsConfig}
             onFsConfigChange={onFsConfigChange}
-            obsScenes={obsScenes}
-            setObsScenes={setObsScenes}
           />
         </div>
 
