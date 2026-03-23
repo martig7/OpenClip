@@ -34,6 +34,8 @@ export default function AddGameModal({
   setScenesError,
   templateScene,
   setTemplateScene,
+  applyMasterAudioSources,
+  setApplyMasterAudioSources,
   sceneCreateStatus,
   onClose,
   onAddGame,
@@ -480,6 +482,17 @@ export default function AddGameModal({
                     </span>
                   </div>
                 )}
+
+                <div style={{ marginTop: 10 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                    <input
+                      type="checkbox"
+                      checked={applyMasterAudioSources}
+                      onChange={(e) => setApplyMasterAudioSources(e.target.checked)}
+                    />
+                    Apply master audio sources after scene creation
+                  </label>
+                </div>
               </div>
             )}
 

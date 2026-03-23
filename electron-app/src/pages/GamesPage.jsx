@@ -71,6 +71,8 @@ export default function GamesPage() {
     setScenesError,
     templateScene,
     setTemplateScene,
+    applyMasterAudioSources,
+    setApplyMasterAudioSources,
     sceneCreateStatus,
     setSceneCreateStatus,
     resetAddModal,
@@ -81,7 +83,7 @@ export default function GamesPage() {
 
   const trackDataLoadedRef = useRef(false)
   const [advancedGameAddition, setAdvancedGameAddition] = useState(false)
-  const [fsConfig, setFsConfig] = useState({ enabled: false, defaultScene: '' })
+  const [fsConfig, setFsConfig] = useState({ enabled: false, defaultScene: '', gameAudioEnabled: true })
 
   useEffect(() => {
     const allInputNames = new Set([
@@ -150,7 +152,16 @@ export default function GamesPage() {
   useEffect(() => {
     loadGames()
     loadTrackLabels()
-    api.getFullscreenRecording().then(setFsConfig).catch(() => {})
+    api
+      .getFullscreenRecording()
+      .then((cfg) =>
+        setFsConfig({
+          enabled: !!cfg?.enabled,
+          defaultScene: cfg?.defaultScene || '',
+          gameAudioEnabled: cfg?.gameAudioEnabled !== false,
+        })
+      )
+      .catch(() => {})
     api
       .getStore('settings')
       .then((s) => {
@@ -251,7 +262,7 @@ export default function GamesPage() {
 
   async function finalizeGameSave(sceneMsg) {
     const masterToAdd = masterAudioSources
-    if (newGame.scene && masterToAdd.length > 0) {
+    if (applyMasterAudioSources && newGame.scene && masterToAdd.length > 0) {
       await Promise.all(
         masterToAdd.map((source) => {
           if (source.kind === 'magic_game_audio') {
@@ -299,7 +310,7 @@ export default function GamesPage() {
 
     if (sceneMsg) {
       const sourceNote =
-        newGame.scene && masterToAdd.length > 0
+        applyMasterAudioSources && newGame.scene && masterToAdd.length > 0
           ? ` + ${masterToAdd.length} master source${masterToAdd.length > 1 ? 's' : ''}`
           : ''
       showToast(sceneMsg + sourceNote)
@@ -474,8 +485,13 @@ export default function GamesPage() {
   }
 
   async function saveFsConfig(updated) {
-    setFsConfig(updated)
-    await api.setFullscreenRecording(updated).catch(() => {})
+    const next = {
+      enabled: !!updated?.enabled,
+      defaultScene: updated?.defaultScene || '',
+      gameAudioEnabled: updated?.gameAudioEnabled !== false,
+    }
+    setFsConfig(next)
+    await api.setFullscreenRecording(next).catch(() => {})
   }
 
   function openAddModal() {
@@ -568,6 +584,8 @@ export default function GamesPage() {
             setScenesError={setScenesError}
             templateScene={templateScene}
             setTemplateScene={setTemplateScene}
+            applyMasterAudioSources={applyMasterAudioSources}
+            setApplyMasterAudioSources={setApplyMasterAudioSources}
             sceneCreateStatus={sceneCreateStatus}
             onClose={() => {
               resetAddModal()

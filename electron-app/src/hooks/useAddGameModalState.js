@@ -31,6 +31,7 @@ export function useAddGameModalState() {
   const [loadingScenes, setLoadingScenes] = useState(false)
   const [scenesError, setScenesError] = useState(null)
   const [templateScene, setTemplateScene] = useState('')
+  const [applyMasterAudioSources, setApplyMasterAudioSources] = useState(true)
   const [sceneCreateStatus, setSceneCreateStatus] = useState(null) // { type: 'success'|'error'|'conflict'|'loading', message }
 
   function resetAddModal() {
@@ -47,6 +48,7 @@ export function useAddGameModalState() {
     setCreateMode('scratch')
     setCapturePref('game_capture')
     setTemplateScene('')
+    setApplyMasterAudioSources(true)
     setObsScenes([])
     setScenesError(null)
     setSceneCreateStatus(null)
@@ -77,6 +79,8 @@ export function useAddGameModalState() {
     setScenesError,
     templateScene,
     setTemplateScene,
+    applyMasterAudioSources,
+    setApplyMasterAudioSources,
     sceneCreateStatus,
     setSceneCreateStatus,
     resetAddModal,

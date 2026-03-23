@@ -30,6 +30,8 @@ export function GameDetailDrawer({
   toggleTrack,
   onCreateScene,
   creatingScene,
+  applyMasterOnCreateScene,
+  setApplyMasterOnCreateScene,
   // fullscreen-config drawer
   fsDrawerOpen,
   fsConfig,
@@ -233,6 +235,23 @@ export function GameDetailDrawer({
                     <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 8px' }}>
                       This game was auto-detected. Create a dedicated OBS scene to customize its sources and audio independently.
                     </p>
+                    <label
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        fontSize: 12,
+                        color: 'var(--text-muted)',
+                        margin: '0 0 8px',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={!!applyMasterOnCreateScene}
+                        onChange={(e) => setApplyMasterOnCreateScene?.(e.target.checked)}
+                      />
+                      Apply master audio sources after scene creation
+                    </label>
                     <button
                       className="btn btn-secondary btn-sm"
                       type="button"

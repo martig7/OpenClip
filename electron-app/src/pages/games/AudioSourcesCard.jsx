@@ -129,6 +129,12 @@ export default function AudioSourcesCard({
             game.windowMatchPriority !== undefined ? game.windowMatchPriority : 0,
         },
       })
+    } else if (isScene && entry.kind === 'magic_game_audio') {
+      onAddSource(sceneName, {
+        name: 'Game Audio',
+        kind: 'magic_game_audio',
+        inputSettings: {},
+      })
     } else if (isScene) {
       onAddSource(sceneName, {
         name: entry.name,

@@ -56,6 +56,11 @@ export function GamesPageBody({
     stopEditing,
   } = useDrawerState(games)
 
+  // ── Fullscreen-config drawer state ──────────────────────────────────────
+  const [fsDrawerOpen, setFsDrawerOpen] = useState(false)
+  const [fsSceneAudioSources, setFsSceneAudioSources] = useState([])
+  const [fsAudioLoading, setFsAudioLoading] = useState(false)
+
   const { addSourceToScene, removeSourceFromScene } = useSceneAudioMutations({
     showToast,
     setSceneAudioSources,
@@ -65,11 +70,17 @@ export function GamesPageBody({
 
   const [audioExpanded, setAudioExpanded] = useState(false)
   const [creatingScene, setCreatingScene] = useState(false)
+  const [applyMasterOnCreateScene, setApplyMasterOnCreateScene] = useState(true)
 
-  // ── Fullscreen-config drawer state ──────────────────────────────────────
-  const [fsDrawerOpen, setFsDrawerOpen] = useState(false)
-  const [fsSceneAudioSources, setFsSceneAudioSources] = useState([])
-  const [fsAudioLoading, setFsAudioLoading] = useState(false)
+  const fsSceneAudioSourcesForDisplay = useMemo(() => {
+    const hasManagedGameAudio = fsSceneAudioSources.some((s) =>
+      (s.inputName || '').startsWith('Game Audio (Fullscreen')
+    )
+    if (fsConfig?.gameAudioEnabled && !hasManagedGameAudio) {
+      return [...fsSceneAudioSources, { inputName: 'Game Audio', inputKind: 'magic_game_audio' }]
+    }
+    return fsSceneAudioSources
+  }, [fsSceneAudioSources, fsConfig?.gameAudioEnabled])
 
   const loadFsSceneAudio = useCallback(async (sceneName) => {
     if (!sceneName) { setFsSceneAudioSources([]); return }
@@ -118,6 +129,26 @@ export function GamesPageBody({
     try {
       const result = await api.createOBSScene(game.name, fsConfig.defaultScene)
       if (result?.success) {
+        if (applyMasterOnCreateScene && masterAudioSources.length > 0) {
+          await Promise.all(
+            masterAudioSources
+              .filter((source) => source.kind !== 'magic_game_audio')
+              .map((source) =>
+                api
+                  .addAudioSourceToScenes([game.name], source.kind, source.name, source.inputSettings || {})
+                  .catch(() => {})
+              )
+          )
+          await Promise.all(
+            masterAudioSources
+              .filter((source) => source.kind !== 'magic_game_audio')
+              .map((source) => {
+                const tracks = trackData[source.name]
+                if (!tracks || Object.keys(tracks).length === 0) return Promise.resolve()
+                return api.setInputAudioTracks(source.name, tracks).catch(() => {})
+              })
+          )
+        }
         await saveGame(game.id, { scene: game.name, isAutoDetected: false })
         showToast(`Scene "${game.name}" created.`)
       } else {
@@ -148,6 +179,79 @@ export function GamesPageBody({
     stopEditing()
   }
 
+  async function handleCreateFullscreenScene({
+    sceneName,
+    createMode,
+    templateScene,
+    applyMasterAudioSources,
+  }) {
+    if (!sceneName) return { success: false, message: 'Scene name is required.' }
+    let result
+    if (createMode === 'scratch') {
+      result = await api.createOBSSceneFromScratch(sceneName, {
+        addWindowCapture: true,
+        captureKind: 'game_capture',
+      })
+    } else {
+      result = await api.createOBSScene(sceneName, templateScene || null)
+    }
+    if (!result?.success) return result || { success: false, message: 'Could not create scene.' }
+
+    if (applyMasterAudioSources && masterAudioSources.length > 0) {
+      await Promise.all(
+        masterAudioSources
+          .filter((source) => source.kind !== 'magic_game_audio')
+          .map((source) =>
+            api
+              .addAudioSourceToScenes([sceneName], source.kind, source.name, source.inputSettings || {})
+              .catch(() => {})
+          )
+      )
+      await Promise.all(
+        masterAudioSources
+          .filter((source) => source.kind !== 'magic_game_audio')
+          .map((source) => {
+            const tracks = trackData[source.name]
+            if (!tracks || Object.keys(tracks).length === 0) return Promise.resolve()
+            return api.setInputAudioTracks(source.name, tracks).catch(() => {})
+          })
+      )
+    }
+
+    return { success: true, message: result.message }
+  }
+
+  async function handleAddFsSource(sceneName, source) {
+    if (source?.kind === 'magic_game_audio') {
+      await onFsConfigChange({ ...fsConfig, gameAudioEnabled: true })
+      showToast('Fullscreen Game Audio enabled.')
+      return
+    }
+    await addFsSource(sceneName, source)
+  }
+
+  async function handleRemoveFsSource(sceneName, inputName) {
+    const isFullscreenGameAudio =
+      inputName === 'Game Audio' || (inputName || '').startsWith('Game Audio (Fullscreen')
+    if (isFullscreenGameAudio) {
+      const toRemove = fsSceneAudioSources
+        .map((s) => s.inputName)
+        .filter((name) => (name || '').startsWith('Game Audio (Fullscreen'))
+      await Promise.all(
+        toRemove.map((name) =>
+          api.removeAudioSourceFromScenes([sceneName], name).catch(() => {})
+        )
+      )
+      setFsSceneAudioSources((prev) =>
+        prev.filter((s) => !(s.inputName || '').startsWith('Game Audio (Fullscreen'))
+      )
+      await onFsConfigChange({ ...fsConfig, gameAudioEnabled: false })
+      showToast('Fullscreen Game Audio disabled.')
+      return
+    }
+    await removeFsSource(sceneName, inputName)
+  }
+
   return (
     <div className="page-body games-page-layout">
       <GamesToolbar
@@ -176,6 +280,7 @@ export function GamesPageBody({
             onFsConfigChange={onFsConfigChange}
             onFullscreenRowClick={openFsDrawer}
             fsDrawerOpen={fsDrawerOpen}
+            onCreateFullscreenScene={handleCreateFullscreenScene}
           />
         </div>
 
@@ -203,14 +308,16 @@ export function GamesPageBody({
           toggleTrack={toggleTrack}
           onCreateScene={handleCreateScene}
           creatingScene={creatingScene}
+          applyMasterOnCreateScene={applyMasterOnCreateScene}
+          setApplyMasterOnCreateScene={setApplyMasterOnCreateScene}
           fsDrawerOpen={fsDrawerOpen}
           fsConfig={fsConfig}
           onFsConfigChange={onFsConfigChange}
           onCloseFsDrawer={closeFsDrawer}
-          fsSceneAudioSources={fsSceneAudioSources}
+          fsSceneAudioSources={fsSceneAudioSourcesForDisplay}
           fsAudioLoading={fsAudioLoading}
-          addFsSource={addFsSource}
-          removeFsSource={removeFsSource}
+          addFsSource={handleAddFsSource}
+          removeFsSource={handleRemoveFsSource}
         />
       </div>
 
