@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Plus, Search, Edit2, Trash2, Gamepad2, Monitor, ChevronDown, X } from 'lucide-react'
 import { GameAvatar } from './GameAvatar'
 import { GameEnabledBadge } from './GameEnabledBadge'
@@ -77,15 +78,18 @@ export function GamesToolbar({ filter, setFilter, search, setSearch, counts, onA
   )
 }
 
-/** Inline scene picker used in the "Any Fullscreen App" row. */
-function FullscreenScenePicker({ currentScene, onSelect }) {
+/** Scene picker used in the "Any Fullscreen App" row. Dropdown is rendered via a
+ *  portal to avoid clipping by `overflow-y: auto` on the table scroll container. */
+export function FullscreenScenePicker({ currentScene, onSelect }) {
   const [open, setOpen] = useState(false)
   const [scenes, setScenes] = useState([])
   const [loading, setLoading] = useState(false)
   const [creating, setCreating] = useState(false)
   const [newSceneName, setNewSceneName] = useState('')
   const [createError, setCreateError] = useState('')
-  const containerRef = useRef(null)
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 })
+  const triggerRef = useRef(null)
+  const dropdownRef = useRef(null)
 
   useEffect(() => {
     if (!open) return
@@ -101,7 +105,10 @@ function FullscreenScenePicker({ currentScene, onSelect }) {
   useEffect(() => {
     if (!open) return
     function handleClick(e) {
-      if (containerRef.current && !containerRef.current.contains(e.target)) {
+      if (
+        dropdownRef.current && !dropdownRef.current.contains(e.target) &&
+        triggerRef.current && !triggerRef.current.contains(e.target)
+      ) {
         setOpen(false)
         setCreating(false)
       }
@@ -109,6 +116,16 @@ function FullscreenScenePicker({ currentScene, onSelect }) {
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [open])
+
+  function handleToggle(e) {
+    e.stopPropagation()
+    if (!open && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect()
+      setDropdownPos({ top: rect.bottom + 4, left: rect.left })
+    }
+    setOpen((o) => !o)
+    setCreating(false)
+  }
 
   async function handleCreate() {
     const name = newSceneName.trim()
@@ -128,22 +145,13 @@ function FullscreenScenePicker({ currentScene, onSelect }) {
     setNewSceneName('')
   }
 
-  return (
-    <div className="fs-scene-picker" ref={containerRef}>
-      <button
-        type="button"
-        className="fs-scene-picker__trigger"
-        onClick={() => setOpen((o) => !o)}
-        title="Choose default scene"
-      >
-        <span className={currentScene ? undefined : 'fs-scene-picker__placeholder'}>
-          {currentScene || 'No scene set'}
-        </span>
-        <ChevronDown size={11} />
-      </button>
-
-      {open && (
-        <div className="fs-scene-picker__dropdown">
+  const dropdown = open
+    ? createPortal(
+        <div
+          ref={dropdownRef}
+          className="fs-scene-picker__dropdown"
+          style={{ position: 'fixed', top: dropdownPos.top, left: dropdownPos.left }}
+        >
           {creating ? (
             <div className="fs-scene-picker__create">
               <input
@@ -158,9 +166,7 @@ function FullscreenScenePicker({ currentScene, onSelect }) {
                   if (e.key === 'Escape') setCreating(false)
                 }}
               />
-              {createError && (
-                <div className="fs-scene-picker__create-error">{createError}</div>
-              )}
+              {createError && <div className="fs-scene-picker__create-error">{createError}</div>}
               <div className="fs-scene-picker__create-actions">
                 <button type="button" className="btn btn-primary btn-sm" onClick={handleCreate}>
                   Create
@@ -177,9 +183,7 @@ function FullscreenScenePicker({ currentScene, onSelect }) {
           ) : (
             <>
               <div className="fs-scene-picker__list">
-                {loading && (
-                  <div className="fs-scene-picker__empty">Loading scenes…</div>
-                )}
+                {loading && <div className="fs-scene-picker__empty">Loading scenes…</div>}
                 {!loading && scenes.length === 0 && (
                   <div className="fs-scene-picker__empty">No OBS scenes found</div>
                 )}
@@ -208,8 +212,26 @@ function FullscreenScenePicker({ currentScene, onSelect }) {
               </div>
             </>
           )}
-        </div>
-      )}
+        </div>,
+        document.body
+      )
+    : null
+
+  return (
+    <div className="fs-scene-picker">
+      <button
+        ref={triggerRef}
+        type="button"
+        className="fs-scene-picker__trigger"
+        onClick={handleToggle}
+        title="Choose default scene"
+      >
+        <span className={currentScene ? undefined : 'fs-scene-picker__placeholder'}>
+          {currentScene || 'No scene set'}
+        </span>
+        <ChevronDown size={11} />
+      </button>
+      {dropdown}
     </div>
   )
 }
@@ -227,6 +249,8 @@ export function GamesTable({
   onDelete,
   fsConfig,
   onFsConfigChange,
+  onFullscreenRowClick,
+  fsDrawerOpen,
 }) {
   const cols = 6
 
@@ -245,13 +269,17 @@ export function GamesTable({
       <tbody>
         {/* Pinned catch-all row — always visible regardless of filter/search */}
         {fsConfig && (
-          <tr className={`games-table-fullscreen-row${fsConfig.enabled ? ' is-enabled' : ''}`}>
+          <tr
+            className={`games-table-fullscreen-row${fsConfig.enabled ? ' is-enabled' : ''}${fsDrawerOpen ? ' selected' : ''}`}
+            onClick={() => onFullscreenRowClick?.()}
+            style={{ cursor: 'pointer' }}
+          >
             <td className="col-toggle">
               <button
                 className={`toggle ${fsConfig.enabled ? 'on' : ''}`}
                 type="button"
                 title={fsConfig.enabled ? 'Fullscreen recording on' : 'Fullscreen recording off'}
-                onClick={() => onFsConfigChange({ ...fsConfig, enabled: !fsConfig.enabled })}
+                onClick={(e) => { e.stopPropagation(); onFsConfigChange({ ...fsConfig, enabled: !fsConfig.enabled }) }}
               />
             </td>
             <td className="col-icon">
@@ -260,7 +288,7 @@ export function GamesTable({
             <td className="games-table-name" style={{ color: 'var(--text-muted)' }}>
               Any Fullscreen App
             </td>
-            <td className="games-table-scene">
+            <td className="games-table-scene" onClick={(e) => e.stopPropagation()}>
               <FullscreenScenePicker
                 currentScene={fsConfig.defaultScene}
                 onSelect={(scene) => onFsConfigChange({ ...fsConfig, defaultScene: scene })}

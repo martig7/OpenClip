@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import api from '../../api'
 import AudioSourcesCard from './AudioSourcesCard'
 import { GamesTable, GamesToolbar } from './GamesTable'
@@ -60,9 +60,44 @@ export function GamesPageBody({
     showToast,
     setSceneAudioSources,
   })
+  const { addSourceToScene: addFsSource, removeSourceFromScene: removeFsSource } =
+    useSceneAudioMutations({ showToast, setSceneAudioSources: setFsSceneAudioSources })
 
   const [audioExpanded, setAudioExpanded] = useState(false)
   const [creatingScene, setCreatingScene] = useState(false)
+
+  // ── Fullscreen-config drawer state ──────────────────────────────────────
+  const [fsDrawerOpen, setFsDrawerOpen] = useState(false)
+  const [fsSceneAudioSources, setFsSceneAudioSources] = useState([])
+  const [fsAudioLoading, setFsAudioLoading] = useState(false)
+
+  const loadFsSceneAudio = useCallback(async (sceneName) => {
+    if (!sceneName) { setFsSceneAudioSources([]); return }
+    setFsAudioLoading(true)
+    try {
+      setFsSceneAudioSources((await api.getSceneAudioSources(sceneName)) || [])
+    } catch {
+      setFsSceneAudioSources([])
+    } finally {
+      setFsAudioLoading(false)
+    }
+  }, [])
+
+  const openFsDrawer = useCallback(() => {
+    closeDrawer()           // close any game drawer first
+    setFsDrawerOpen(true)
+    loadFsSceneAudio(fsConfig?.defaultScene)
+  }, [closeDrawer, fsConfig, loadFsSceneAudio])
+
+  const closeFsDrawer = useCallback(() => {
+    setFsDrawerOpen(false)
+    setFsSceneAudioSources([])
+  }, [])
+
+  // Reload fs scene audio when the scene changes while the drawer is open
+  useEffect(() => {
+    if (fsDrawerOpen) loadFsSceneAudio(fsConfig?.defaultScene)
+  }, [fsConfig?.defaultScene]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const otherGameScenes = useMemo(() => {
     if (!selectedGame?.id) return new Set()
@@ -133,12 +168,14 @@ export function GamesPageBody({
             totalCount={counts.all}
             onClearSearch={() => setSearch('')}
             onAdd={openAddModal}
-            onRowClick={openDrawer}
+            onRowClick={(game) => { closeFsDrawer(); openDrawer(game) }}
             onToggle={toggleGame}
             onEdit={enterEditMode}
             onDelete={removeGame}
             fsConfig={fsConfig}
             onFsConfigChange={onFsConfigChange}
+            onFullscreenRowClick={openFsDrawer}
+            fsDrawerOpen={fsDrawerOpen}
           />
         </div>
 
@@ -166,6 +203,14 @@ export function GamesPageBody({
           toggleTrack={toggleTrack}
           onCreateScene={handleCreateScene}
           creatingScene={creatingScene}
+          fsDrawerOpen={fsDrawerOpen}
+          fsConfig={fsConfig}
+          onFsConfigChange={onFsConfigChange}
+          onCloseFsDrawer={closeFsDrawer}
+          fsSceneAudioSources={fsSceneAudioSources}
+          fsAudioLoading={fsAudioLoading}
+          addFsSource={addFsSource}
+          removeFsSource={removeFsSource}
         />
       </div>
 

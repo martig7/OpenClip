@@ -1,8 +1,9 @@
-import { X, Trash2, Edit2, Plus } from 'lucide-react'
+import { X, Trash2, Edit2, Plus, Monitor } from 'lucide-react'
 import EditGameModal from './EditGameModal'
 import AudioSourcesCard from './AudioSourcesCard'
 import { GameAvatar } from './GameAvatar'
 import { GameEnabledBadge } from './GameEnabledBadge'
+import { FullscreenScenePicker } from './GamesTable'
 import { useSidebarResize, STORAGE_KEY_GAMES_DRAWER } from '../../hooks/useSidebarResize'
 
 export function GameDetailDrawer({
@@ -29,6 +30,15 @@ export function GameDetailDrawer({
   toggleTrack,
   onCreateScene,
   creatingScene,
+  // fullscreen-config drawer
+  fsDrawerOpen,
+  fsConfig,
+  onFsConfigChange,
+  onCloseFsDrawer,
+  fsSceneAudioSources,
+  fsAudioLoading,
+  addFsSource,
+  removeFsSource,
 }) {
   const { sidebarWidth, handleMouseDown } = useSidebarResize(STORAGE_KEY_GAMES_DRAWER, {
     min: 450,
@@ -38,13 +48,105 @@ export function GameDetailDrawer({
   })
 
   const drawerGame = isEditing && editedGame ? editedGame : game
+  const isOpen = !!(gameId || fsDrawerOpen)
 
   return (
     <div
-      className={`game-detail-drawer ${gameId ? 'open' : ''}`}
-      style={gameId ? { '--sidebar-width': `${sidebarWidth}px` } : undefined}
-      aria-hidden={!gameId}
+      className={`game-detail-drawer ${isOpen ? 'open' : ''}`}
+      style={isOpen ? { '--sidebar-width': `${sidebarWidth}px` } : undefined}
+      aria-hidden={!isOpen}
     >
+      {/* ── Fullscreen-config drawer ─────────────────────────────────── */}
+      {fsDrawerOpen && !gameId && (
+        <div className="drawer-inner">
+          <div
+            className="sidebar-resizer drawer-resizer"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize game detail drawer"
+            onMouseDown={handleMouseDown}
+          />
+          <div className="drawer-header">
+            <div
+              style={{
+                width: 40, height: 40, borderRadius: 8,
+                background: 'var(--bg-tertiary)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <Monitor size={20} style={{ color: 'var(--text-muted)' }} />
+            </div>
+
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="drawer-name-row">
+                <div className="drawer-name">Any Fullscreen App</div>
+                <GameEnabledBadge enabled={!!fsConfig?.enabled} />
+              </div>
+              <div className="drawer-scene">{fsConfig?.defaultScene || '—'}</div>
+            </div>
+
+            <button
+              className="btn-icon"
+              type="button"
+              onClick={onCloseFsDrawer}
+              title="Close drawer"
+              style={{ marginLeft: 'auto' }}
+            >
+              <X size={15} />
+            </button>
+          </div>
+
+          <div className="drawer-body">
+            <section className="drawer-section">
+              <div className="drawer-section-title">Configuration</div>
+              <div className="drawer-info-grid">
+                <div className="drawer-info-cell">
+                  <div className="drawer-info-label">Scene</div>
+                  <div className="drawer-info-val" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <FullscreenScenePicker
+                      currentScene={fsConfig?.defaultScene}
+                      onSelect={(scene) => onFsConfigChange({ ...fsConfig, defaultScene: scene })}
+                    />
+                  </div>
+                </div>
+                <div className="drawer-info-cell">
+                  <div className="drawer-info-label">Status</div>
+                  <div className="drawer-info-val">
+                    <button
+                      type="button"
+                      className={`toggle ${fsConfig?.enabled ? 'on' : ''}`}
+                      onClick={() => onFsConfigChange({ ...fsConfig, enabled: !fsConfig?.enabled })}
+                      title={fsConfig?.enabled ? 'Enabled' : 'Disabled'}
+                    />
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {fsConfig?.defaultScene && (
+              <section className="drawer-section">
+                <AudioSourcesCard
+                  mode="scene"
+                  sources={fsSceneAudioSources}
+                  loading={fsAudioLoading}
+                  trackLabels={trackLabels}
+                  trackData={trackData}
+                  trackLoading={trackLoading}
+                  onToggleTrack={toggleTrack}
+                  onRemoveSource={removeFsSource}
+                  onAddSource={addFsSource}
+                  masterAudioSources={masterAudioSources}
+                  onAddMasterSource={addMasterSource}
+                  sceneName={fsConfig.defaultScene}
+                />
+              </section>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Per-game drawer ──────────────────────────────────────────── */}
       {gameId && game && (
         <div className="drawer-inner">
           <div
