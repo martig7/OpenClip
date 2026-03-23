@@ -40,6 +40,9 @@ const mockApi = {
     store.games = store.games.map((g) => (g.id === id ? { ...g, ...updates } : g))
     return store.games
   },
+  onGamesUpdated: () => noop,
+  getFullscreenRecording: async () => ({ enabled: false, defaultScene: '' }),
+  setFullscreenRecording: asyncNoop,
   getVisibleWindows: asyncArr,
   extractWindowIcon: asyncNoop,
   startWatcher: async () => ({ running: false }),

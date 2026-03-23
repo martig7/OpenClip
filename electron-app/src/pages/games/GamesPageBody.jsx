@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import api from '../../api'
 import AudioSourcesCard from './AudioSourcesCard'
 import { GamesTable, GamesToolbar } from './GamesTable'
 import { GameDetailDrawer } from './GameDetailDrawer'
@@ -15,6 +16,11 @@ export function GamesPageBody({
   removeGame,
   saveGame,
   gamesAudioProps,
+  fsConfig,
+  onFsConfigChange,
+  obsScenes,
+  setObsScenes,
+  showToast,
 }) {
   const {
     masterAudioSources,
@@ -59,6 +65,7 @@ export function GamesPageBody({
   })
 
   const [audioExpanded, setAudioExpanded] = useState(false)
+  const [creatingScene, setCreatingScene] = useState(false)
 
   const otherGameScenes = useMemo(() => {
     if (!selectedGame?.id) return new Set()
@@ -69,6 +76,27 @@ export function GamesPageBody({
         .filter(Boolean)
     )
   }, [games, selectedGame])
+
+  async function handleCreateScene(game) {
+    if (!fsConfig?.defaultScene) {
+      showToast('Set a default scene before creating a dedicated one.')
+      return
+    }
+    setCreatingScene(true)
+    try {
+      const result = await api.createOBSScene(game.name, fsConfig.defaultScene)
+      if (result?.success) {
+        await saveGame(game.id, { scene: game.name, isAutoDetected: false })
+        showToast(`Scene "${game.name}" created.`)
+      } else {
+        showToast(result?.message || 'Could not create scene.')
+      }
+    } catch (err) {
+      showToast(err?.message || 'Could not create scene.')
+    } finally {
+      setCreatingScene(false)
+    }
+  }
 
   async function handleSave() {
     if (!editedGame) return
@@ -112,6 +140,10 @@ export function GamesPageBody({
             onToggle={toggleGame}
             onEdit={enterEditMode}
             onDelete={removeGame}
+            fsConfig={fsConfig}
+            onFsConfigChange={onFsConfigChange}
+            obsScenes={obsScenes}
+            setObsScenes={setObsScenes}
           />
         </div>
 
@@ -137,6 +169,8 @@ export function GamesPageBody({
           trackLoading={trackLoading}
           trackLabels={trackLabels}
           toggleTrack={toggleTrack}
+          onCreateScene={handleCreateScene}
+          creatingScene={creatingScene}
         />
       </div>
 

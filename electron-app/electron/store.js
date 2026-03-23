@@ -18,6 +18,7 @@ const electronConfigDefaults = {
   onboardingComplete: false,
   obsInstallPath: '',
   advancedGameAddition: false,
+  fullscreenRecording: { enabled: false, defaultScene: '' },
 }
 
 // Defaults for Python JSON files
@@ -213,6 +214,8 @@ const store = {
     }
     if (key === 'windowBounds')
       return this._electron().windowBounds || electronConfigDefaults.windowBounds
+    if (key === 'fullscreenRecording')
+      return this._electron().fullscreenRecording || electronConfigDefaults.fullscreenRecording
     if (key === 'masterAudioSources') return this._electron().masterAudioSources || []
     if (key === 'audioTracks') return this._electron().audioTracks || {}
     if (key === 'clipMarkers') return loadElectronMarkers()
@@ -246,6 +249,11 @@ const store = {
     }
     if (key === 'windowBounds') {
       this._electron().windowBounds = value
+      this._saveElectron()
+      return
+    }
+    if (key === 'fullscreenRecording') {
+      this._electron().fullscreenRecording = value
       this._saveElectron()
       return
     }

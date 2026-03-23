@@ -47,7 +47,40 @@ function detectRunningGame(games) {
   return null
 }
 
-function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}) {
+/**
+ * Catch-all fallback: if no configured game matched, look for a fullscreen window.
+ * Returns a synthetic game object (with _isFullscreenFallback flag) or null.
+ * Skips any exe already covered by an enabled configured game.
+ */
+function detectFullscreenFallback(games, fsConfig) {
+  if (!fsConfig?.enabled || !fsConfig?.defaultScene) return null
+
+  const { getFullscreenProcesses } = require('./winUtils')
+  const fullscreen = getFullscreenProcesses()
+  if (fullscreen.length === 0) return null
+
+  const fw = fullscreen[0]
+  const exeLower = (fw.exe || '').toLowerCase()
+
+  const alreadyCovered = games.some(
+    (g) => g.enabled && (g.exe || '').toLowerCase() === exeLower
+  )
+  if (alreadyCovered) return null
+
+  return {
+    _isFullscreenFallback: true,
+    name: fw.process,
+    exe: fw.exe,
+    windowClass: fw.windowClass,
+    selector: fw.title,
+    windowMatchPriority: 2,
+    scene: fsConfig.defaultScene,
+    isAutoDetected: true,
+    enabled: true,
+  }
+}
+
+function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}, onGamesUpdate = () => {}) {
   let lastGame = null
   let stopped = false
   const organizeQueue = []
@@ -94,7 +127,37 @@ function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}) {
     if (stopped) return
 
     const games = store.get('games') || []
-    const detected = detectRunningGame(games)
+    let detected = detectRunningGame(games)
+
+    if (!detected) {
+      const fsConfig = store.get('fullscreenRecording')
+      const fallback = detectFullscreenFallback(games, fsConfig)
+      if (fallback) {
+        // Auto-register this exe if not already in the games list
+        const exeLower = (fallback.exe || '').toLowerCase()
+        const existing = games.find((g) => (g.exe || '').toLowerCase() === exeLower)
+        if (!existing) {
+          const newId = Date.now().toString(36) + Math.random().toString(36).slice(2, 5)
+          const newGame = {
+            id: newId,
+            name: fallback.name,
+            exe: fallback.exe,
+            windowClass: fallback.windowClass,
+            selector: fallback.selector,
+            windowMatchPriority: 2,
+            scene: fallback.scene,
+            isAutoDetected: true,
+            enabled: true,
+          }
+          store.set('games', [...games, newGame])
+          log(`Auto-registered fullscreen app: ${fallback.name}`)
+          onGamesUpdate()
+          detected = newGame
+        } else {
+          detected = existing
+        }
+      }
+    }
 
     if (detected && !lastGame) {
       lastGame = detected
@@ -189,4 +252,4 @@ function writeGameState(state) {
   }
 }
 
-module.exports = { setupGameWatcher, detectRunningGame }
+module.exports = { setupGameWatcher, detectRunningGame, detectFullscreenFallback }

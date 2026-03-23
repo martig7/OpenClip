@@ -1,6 +1,8 @@
-import { Plus, Search, Edit2, Trash2, Gamepad2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Plus, Search, Edit2, Trash2, Gamepad2, Monitor, ChevronDown, X } from 'lucide-react'
 import { GameAvatar } from './GameAvatar'
 import { GameEnabledBadge } from './GameEnabledBadge'
+import api from '../../api'
 import {
   useSidebarResize,
   STORAGE_KEY_GAMES_CAPTION_CLUSTER,
@@ -75,6 +77,143 @@ export function GamesToolbar({ filter, setFilter, search, setSearch, counts, onA
   )
 }
 
+/** Inline scene picker used in the "Any Fullscreen App" row. */
+function FullscreenScenePicker({ currentScene, onSelect }) {
+  const [open, setOpen] = useState(false)
+  const [scenes, setScenes] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [newSceneName, setNewSceneName] = useState('')
+  const [createError, setCreateError] = useState('')
+  const containerRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    setLoading(true)
+    api
+      .getOBSWSScenes()
+      .then((s) => setScenes(Array.isArray(s) ? s : []))
+      .catch(() => setScenes([]))
+      .finally(() => setLoading(false))
+  }, [open])
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return
+    function handleClick(e) {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setOpen(false)
+        setCreating(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [open])
+
+  async function handleCreate() {
+    const name = newSceneName.trim()
+    if (!name) return
+    setCreateError('')
+    const result = await api.createOBSSceneFromScratch(name).catch((err) => ({
+      success: false,
+      message: err.message,
+    }))
+    if (result?.success === false) {
+      setCreateError(result.message || 'Could not create scene.')
+      return
+    }
+    onSelect(name)
+    setOpen(false)
+    setCreating(false)
+    setNewSceneName('')
+  }
+
+  return (
+    <div className="fs-scene-picker" ref={containerRef}>
+      <button
+        type="button"
+        className="fs-scene-picker__trigger"
+        onClick={() => setOpen((o) => !o)}
+        title="Choose default scene"
+      >
+        <span className={currentScene ? undefined : 'fs-scene-picker__placeholder'}>
+          {currentScene || 'No scene set'}
+        </span>
+        <ChevronDown size={11} />
+      </button>
+
+      {open && (
+        <div className="fs-scene-picker__dropdown">
+          {creating ? (
+            <div className="fs-scene-picker__create">
+              <input
+                autoFocus
+                type="text"
+                className="fs-scene-picker__create-input"
+                placeholder="New scene name…"
+                value={newSceneName}
+                onChange={(e) => setNewSceneName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleCreate()
+                  if (e.key === 'Escape') setCreating(false)
+                }}
+              />
+              {createError && (
+                <div className="fs-scene-picker__create-error">{createError}</div>
+              )}
+              <div className="fs-scene-picker__create-actions">
+                <button type="button" className="btn btn-primary btn-sm" onClick={handleCreate}>
+                  Create
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => { setCreating(false); setCreateError('') }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="fs-scene-picker__list">
+                {loading && (
+                  <div className="fs-scene-picker__empty">Loading scenes…</div>
+                )}
+                {!loading && scenes.length === 0 && (
+                  <div className="fs-scene-picker__empty">No OBS scenes found</div>
+                )}
+                {scenes.map((scene) => {
+                  const name = typeof scene === 'string' ? scene : scene.sceneName
+                  return (
+                    <button
+                      key={name}
+                      type="button"
+                      className={`fs-scene-picker__item${name === currentScene ? ' active' : ''}`}
+                      onClick={() => { onSelect(name); setOpen(false) }}
+                    >
+                      {name}
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="fs-scene-picker__footer">
+                <button
+                  type="button"
+                  className="fs-scene-picker__create-btn"
+                  onClick={() => { setCreating(true); setNewSceneName('') }}
+                >
+                  <Plus size={11} /> Create new scene…
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function GamesTable({
   games,
   selectedId,
@@ -86,6 +225,8 @@ export function GamesTable({
   onToggle,
   onEdit,
   onDelete,
+  fsConfig,
+  onFsConfigChange,
 }) {
   const cols = 6
 
@@ -102,6 +243,34 @@ export function GamesTable({
         </tr>
       </thead>
       <tbody>
+        {/* Pinned catch-all row — always visible regardless of filter/search */}
+        {fsConfig && (
+          <tr className={`games-table-fullscreen-row${fsConfig.enabled ? ' is-enabled' : ''}`}>
+            <td className="col-toggle">
+              <button
+                className={`toggle ${fsConfig.enabled ? 'on' : ''}`}
+                type="button"
+                title={fsConfig.enabled ? 'Fullscreen recording on' : 'Fullscreen recording off'}
+                onClick={() => onFsConfigChange({ ...fsConfig, enabled: !fsConfig.enabled })}
+              />
+            </td>
+            <td className="col-icon">
+              <Monitor size={18} style={{ color: 'var(--text-muted)', display: 'block' }} />
+            </td>
+            <td className="games-table-name" style={{ color: 'var(--text-muted)' }}>
+              Any Fullscreen App
+            </td>
+            <td className="games-table-scene">
+              <FullscreenScenePicker
+                currentScene={fsConfig.defaultScene}
+                onSelect={(scene) => onFsConfigChange({ ...fsConfig, defaultScene: scene })}
+              />
+            </td>
+            <td className="col-status" />
+            <td className="col-actions" />
+          </tr>
+        )}
+
         {games.length === 0 ? (
           <tr>
             <td colSpan={cols}>
@@ -160,6 +329,9 @@ export function GamesTable({
 
                   <td className="games-table-name">
                     {game.name}
+                    {game.isAutoDetected && (
+                      <span className="game-default-pill">Default</span>
+                    )}
                   </td>
                   <td className="games-table-scene">{game.scene || '—'}</td>
 

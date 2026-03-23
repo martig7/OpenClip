@@ -81,6 +81,7 @@ export default function GamesPage() {
 
   const trackDataLoadedRef = useRef(false)
   const [advancedGameAddition, setAdvancedGameAddition] = useState(false)
+  const [fsConfig, setFsConfig] = useState({ enabled: false, defaultScene: '' })
 
   useEffect(() => {
     const allInputNames = new Set([
@@ -140,9 +141,16 @@ export default function GamesPage() {
     }
   }
 
+  // Subscribe to games:updated push (fired when the watcher auto-registers a new game)
+  useEffect(() => {
+    const unsub = api.onGamesUpdated(() => loadGames())
+    return unsub
+  }, [])
+
   useEffect(() => {
     loadGames()
     loadTrackLabels()
+    api.getFullscreenRecording().then(setFsConfig).catch(() => {})
     api
       .getStore('settings')
       .then((s) => {
@@ -465,6 +473,11 @@ export default function GamesPage() {
     showToast('Game saved')
   }
 
+  async function saveFsConfig(updated) {
+    setFsConfig(updated)
+    await api.setFullscreenRecording(updated).catch(() => {})
+  }
+
   function openAddModal() {
     resetAddModal()
     setShowAddModal(true)
@@ -526,6 +539,11 @@ export default function GamesPage() {
         removeGame={removeGame}
         saveGame={saveGame}
         gamesAudioProps={gamesAudioProps}
+        fsConfig={fsConfig}
+        onFsConfigChange={saveFsConfig}
+        obsScenes={obsScenes}
+        setObsScenes={setObsScenes}
+        showToast={showToast}
       />
 
       {showAddModal && (

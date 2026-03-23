@@ -1,4 +1,4 @@
-import { X, Trash2, Edit2 } from 'lucide-react'
+import { X, Trash2, Edit2, Plus } from 'lucide-react'
 import EditGameModal from './EditGameModal'
 import AudioSourcesCard from './AudioSourcesCard'
 import { GameAvatar } from './GameAvatar'
@@ -27,6 +27,8 @@ export function GameDetailDrawer({
   trackLoading,
   trackLabels,
   toggleTrack,
+  onCreateScene,
+  creatingScene,
 }) {
   const { sidebarWidth, handleMouseDown } = useSidebarResize(STORAGE_KEY_GAMES_DRAWER, {
     min: 450,
@@ -122,6 +124,24 @@ export function GameDetailDrawer({
                     sceneName={drawerGame.scene}
                   />
                 </section>
+
+                {drawerGame.isAutoDetected && (
+                  <section className="drawer-section">
+                    <div className="drawer-section-title">Dedicated Scene</div>
+                    <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 8px' }}>
+                      This game was auto-detected. Create a dedicated OBS scene to customize its sources and audio independently.
+                    </p>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      type="button"
+                      disabled={creatingScene}
+                      onClick={() => onCreateScene(drawerGame)}
+                    >
+                      <Plus size={12} />
+                      {creatingScene ? 'Creating…' : 'Create OBS Scene'}
+                    </button>
+                  </section>
+                )}
 
                 <div className="drawer-actions">
                   <button
