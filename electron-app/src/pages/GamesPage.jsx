@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api'
 import { useGameWatcherState } from '../hooks/useGameWatcherState'
@@ -13,6 +13,7 @@ import {
   isAppAudioKind,
 } from './games/audioSourceUtils'
 import AddGameModal from './games/AddGameModal'
+import SimpleAddGameModal from './games/SimpleAddGameModal'
 import { GamesPageBody } from './games/GamesPageBody'
 import ConfirmDeleteDialog from '../components/ConfirmDeleteDialog'
 
@@ -79,6 +80,7 @@ export default function GamesPage() {
     useTrackState()
 
   const trackDataLoadedRef = useRef(false)
+  const [advancedGameAddition, setAdvancedGameAddition] = useState(false)
 
   useEffect(() => {
     const allInputNames = new Set([
@@ -141,6 +143,12 @@ export default function GamesPage() {
   useEffect(() => {
     loadGames()
     loadTrackLabels()
+    api
+      .getStore('settings')
+      .then((s) => {
+        if (s?.advancedGameAddition) setAdvancedGameAddition(true)
+      })
+      .catch(() => {})
     api
       .getStore('masterAudioSources')
       .then((saved) => {
@@ -521,39 +529,51 @@ export default function GamesPage() {
       />
 
       {showAddModal && (
-        <AddGameModal
-          newGame={newGame}
-          setNewGame={setNewGame}
-          showWindowPicker={showWindowPicker}
-          setShowWindowPicker={setShowWindowPicker}
-          visibleWindows={visibleWindows}
-          setVisibleWindows={setVisibleWindows}
-          loadingWindows={loadingWindows}
-          setLoadingWindows={setLoadingWindows}
-          autoCreateScene={autoCreateScene}
-          setAutoCreateScene={setAutoCreateScene}
-          createMode={createMode}
-          setCreateMode={setCreateMode}
-          capturePref={capturePref}
-          setCapturePref={setCapturePref}
-          obsScenes={obsScenes}
-          setObsScenes={setObsScenes}
-          loadingScenes={loadingScenes}
-          setLoadingScenes={setLoadingScenes}
-          scenesError={scenesError}
-          setScenesError={setScenesError}
-          templateScene={templateScene}
-          setTemplateScene={setTemplateScene}
-          sceneCreateStatus={sceneCreateStatus}
-          onClose={() => {
-            resetAddModal()
-            setShowAddModal(false)
-          }}
-          onAddGame={addGame}
-          onSceneConflictUseExisting={handleSceneConflictUseExisting}
-          onSceneConflictOverwrite={handleSceneConflictOverwrite}
-          onGoToSettings={goToSettings}
-        />
+        advancedGameAddition ? (
+          <AddGameModal
+            newGame={newGame}
+            setNewGame={setNewGame}
+            showWindowPicker={showWindowPicker}
+            setShowWindowPicker={setShowWindowPicker}
+            visibleWindows={visibleWindows}
+            setVisibleWindows={setVisibleWindows}
+            loadingWindows={loadingWindows}
+            setLoadingWindows={setLoadingWindows}
+            autoCreateScene={autoCreateScene}
+            setAutoCreateScene={setAutoCreateScene}
+            createMode={createMode}
+            setCreateMode={setCreateMode}
+            capturePref={capturePref}
+            setCapturePref={setCapturePref}
+            obsScenes={obsScenes}
+            setObsScenes={setObsScenes}
+            loadingScenes={loadingScenes}
+            setLoadingScenes={setLoadingScenes}
+            scenesError={scenesError}
+            setScenesError={setScenesError}
+            templateScene={templateScene}
+            setTemplateScene={setTemplateScene}
+            sceneCreateStatus={sceneCreateStatus}
+            onClose={() => {
+              resetAddModal()
+              setShowAddModal(false)
+            }}
+            onAddGame={addGame}
+            onSceneConflictUseExisting={handleSceneConflictUseExisting}
+            onSceneConflictOverwrite={handleSceneConflictOverwrite}
+            onGoToSettings={goToSettings}
+          />
+        ) : (
+          <SimpleAddGameModal
+            newGame={newGame}
+            setNewGame={setNewGame}
+            onClose={() => {
+              resetAddModal()
+              setShowAddModal(false)
+            }}
+            onAddGame={addGame}
+          />
+        )
       )}
 
       {toast && <div className="toast">{toast}</div>}

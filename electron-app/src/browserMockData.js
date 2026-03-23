@@ -18,6 +18,7 @@ export const defaultSettings = {
     excludeClips: true,
   },
   waveformResolution: 'default',
+  advancedGameAddition: false,
 }
 
 export const mockGames = [

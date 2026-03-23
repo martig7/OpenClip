@@ -165,6 +165,22 @@ export default function GeneralSettingsSection({
               }
             />
           </div>
+          <div className={tc}>
+            <div>
+              <div className="toggle-label">Advanced Game Addition</div>
+              <div className="toggle-desc">
+                Show the full game configuration form when adding a new game, including manual OBS
+                scene setup and window match priority controls
+              </div>
+            </div>
+            <button
+              type="button"
+              className={`toggle ${settings.advancedGameAddition ? 'on' : ''}`}
+              onClick={() =>
+                updateSetting('advancedGameAddition', !settings.advancedGameAddition)
+              }
+            />
+          </div>
         </AppSettingsSectionCard>
       )
 
