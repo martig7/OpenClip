@@ -57,6 +57,142 @@ function probeVideoCodec(filePath) {
   return out.trim()
 }
 
+function readAudioPcmPeak(filePath, streamIndex, startSec, durationSec) {
+  const pcm = execFileSync(
+    ffmpegPath,
+    [
+      '-v',
+      'error',
+      '-ss',
+      String(startSec),
+      '-t',
+      String(durationSec),
+      '-i',
+      filePath,
+      '-map',
+      `0:a:${streamIndex}`,
+      '-ac',
+      '1',
+      '-ar',
+      '48000',
+      '-f',
+      's16le',
+      'pipe:1',
+    ],
+    { timeout: 20_000 }
+  )
+  if (!pcm || pcm.length < 2) return 0
+  let peak = 0
+  for (let i = 0; i + 1 < pcm.length; i += 2) {
+    const sample = Math.abs(pcm.readInt16LE(i))
+    if (sample > peak) peak = sample
+  }
+  return peak
+}
+
+function countUniqueGrayFrames(filePath, startSec, durationSec, fps = 12) {
+  const width = 32
+  const height = 32
+  const frameSize = width * height
+  const raw = execFileSync(
+    ffmpegPath,
+    [
+      '-v',
+      'error',
+      '-ss',
+      String(startSec),
+      '-t',
+      String(durationSec),
+      '-i',
+      filePath,
+      '-vf',
+      `fps=${fps},scale=${width}:${height},format=gray`,
+      '-f',
+      'rawvideo',
+      'pipe:1',
+    ],
+    { timeout: 20_000 }
+  )
+  const unique = new Set()
+  for (let off = 0; off + frameSize <= raw.length; off += frameSize) {
+    unique.add(raw.subarray(off, off + frameSize).toString('base64'))
+  }
+  return unique.size
+}
+
+function firstAudioOnsetSec(filePath, streamIndex, searchWindowSec = 1.5) {
+  const sampleRate = 48000
+  const pcm = execFileSync(
+    ffmpegPath,
+    [
+      '-v',
+      'error',
+      '-ss',
+      '0',
+      '-t',
+      String(searchWindowSec),
+      '-i',
+      filePath,
+      '-map',
+      `0:a:${streamIndex}`,
+      '-ac',
+      '1',
+      '-ar',
+      String(sampleRate),
+      '-f',
+      's16le',
+      'pipe:1',
+    ],
+    { timeout: 20_000 }
+  )
+  if (!pcm || pcm.length < 2) return Infinity
+  const windowSamples = Math.floor(sampleRate * 0.02) // 20 ms
+  const totalSamples = Math.floor(pcm.length / 2)
+  for (let sampleIdx = 0; sampleIdx + windowSamples <= totalSamples; sampleIdx += windowSamples) {
+    let peak = 0
+    for (let i = 0; i < windowSamples; i++) {
+      const s = Math.abs(pcm.readInt16LE((sampleIdx + i) * 2))
+      if (s > peak) peak = s
+    }
+    if (peak > 900) return sampleIdx / sampleRate
+  }
+  return Infinity
+}
+
+function firstBrightFrameSec(filePath, searchWindowSec = 1.5, fps = 50) {
+  const width = 64
+  const height = 36
+  const frameSize = width * height
+  const raw = execFileSync(
+    ffmpegPath,
+    [
+      '-v',
+      'error',
+      '-ss',
+      '0',
+      '-t',
+      String(searchWindowSec),
+      '-i',
+      filePath,
+      '-vf',
+      `fps=${fps},scale=${width}:${height},format=gray`,
+      '-f',
+      'rawvideo',
+      'pipe:1',
+    ],
+    { timeout: 20_000 }
+  )
+  const frameCount = Math.floor(raw.length / frameSize)
+  for (let frameIdx = 0; frameIdx < frameCount; frameIdx++) {
+    const off = frameIdx * frameSize
+    let sum = 0
+    for (let i = 0; i < frameSize; i++) sum += raw[off + i]
+    const mean = sum / frameSize
+    if (mean > 170) return frameIdx / fps
+  }
+  return Infinity
+}
+
 // ── Store factory ─────────────────────────────────────────────────────────────
 
 function makeStore(obsDir, destDir) {
@@ -76,11 +212,13 @@ function makeStore(obsDir, destDir) {
 
 let fixtureSilentMp4 // 3-second MP4, no audio track (clips & reencode tests)
 let fixtureAudioMp4 // 3-second MP4, video + 440 Hz sine audio (waveform & tracks tests)
+let fixturePulseTracksMp4 // 24-second MP4, moving video + pulsed flash/audio markers
 
 beforeAll(() => {
   const tmp = os.tmpdir()
   fixtureSilentMp4 = path.join(tmp, 'openclip-api-silent.mp4')
   fixtureAudioMp4 = path.join(tmp, 'openclip-api-audio.mp4')
+  fixturePulseTracksMp4 = path.join(tmp, 'openclip-api-pulse-tracks.mp4')
 
   // Silent video — stream-copy-safe for clip extraction
   execFileSync(
@@ -130,6 +268,54 @@ beforeAll(() => {
     ],
     { timeout: 30_000 }
   )
+
+  // Moving video + 3 pulsed audio tracks. Pulses happen at the start of each
+  // second so we can assert clip-start audio alignment after track selection.
+  execFileSync(
+    ffmpegPath,
+    [
+      '-y',
+      '-f',
+      'lavfi',
+      '-i',
+      "testsrc2=duration=24:size=128x72:rate=30,drawbox=x=0:y=0:w=iw:h=ih:color=white@0.9:t=fill:enable='lt(mod(t,1),0.12)'",
+      '-f',
+      'lavfi',
+      '-i',
+      'aevalsrc=if(lt(mod(t\\,1)\\,0.12)\\,0.85*sin(2*PI*440*t)\\,0):s=48000:d=24',
+      '-f',
+      'lavfi',
+      '-i',
+      'aevalsrc=if(lt(mod(t\\,1)\\,0.12)\\,0.85*sin(2*PI*880*t)\\,0):s=48000:d=24',
+      '-f',
+      'lavfi',
+      '-i',
+      'aevalsrc=if(lt(mod(t\\,1)\\,0.12)\\,0.85*sin(2*PI*1760*t)\\,0):s=48000:d=24',
+      '-map',
+      '0:v:0',
+      '-map',
+      '1:a:0',
+      '-map',
+      '2:a:0',
+      '-map',
+      '3:a:0',
+      '-c:v',
+      'libx264',
+      '-preset',
+      'ultrafast',
+      '-g',
+      '90',
+      '-pix_fmt',
+      'yuv420p',
+      '-c:a',
+      'aac',
+      '-b:a',
+      '96k',
+      '-shortest',
+      fixturePulseTracksMp4,
+    ],
+    { timeout: 45_000 }
+  )
 }, 60_000)
 
 afterAll(() => {
@@ -138,6 +324,9 @@ afterAll(() => {
   } catch {}
   try {
     fs.unlinkSync(fixtureAudioMp4)
+  } catch {}
+  try {
+    fs.unlinkSync(fixturePulseTracksMp4)
   } catch {}
 })
 
@@ -196,6 +385,61 @@ describe('POST /api/clips/create — real ffmpeg', () => {
     const duration = probeDuration(path.join(clipsDir, clips[0]))
     expect(duration).toBeGreaterThan(0)
     expect(duration).toBeLessThan(3) // requested 1.5 s; allow rounding
+  })
+
+  it('keeps clip-start audio aligned and avoids frozen opening frames when selecting tracks', async () => {
+    const src = path.join(obsDir, 'session-selected-tracks.mp4')
+    fs.copyFileSync(fixturePulseTracksMp4, src)
+    const clipStart = 2.0
+    const clipEnd = 22.0
+    const clipDurationSec = clipEnd - clipStart
+
+    const t0 = Date.now()
+    const res = await request(server).post('/api/clips/create').send({
+      source_path: src,
+      start_time: clipStart,
+      end_time: clipEnd,
+      game_name: 'ClipGame',
+      audio_tracks: [0, 1],
+    })
+    const elapsedMs = Date.now() - t0
+
+    expect(res.status).toBe(200)
+    const outPath = res.body.path
+    expect(typeof outPath).toBe('string')
+    expect(fs.existsSync(outPath)).toBe(true)
+
+    // Track 0 in output is the mixed selected-track output.
+    // It should have audible content right near clip start (not 1s muted).
+    const earlyPeak = readAudioPcmPeak(outPath, 0, 0.02, 0.18)
+    expect(earlyPeak).toBeGreaterThan(900)
+
+    // Video should not be frozen at start: early segment must contain several
+    // unique frames from the moving source.
+    const uniqueEarlyFrames = countUniqueGrayFrames(outPath, 0, 0.8, 12)
+    expect(uniqueEarlyFrames).toBeGreaterThanOrEqual(4)
+
+    // A/V sync check: first bright visual pulse and first audio pulse should
+    // be close at clip start.
+    const audioOnsetSec = firstAudioOnsetSec(outPath, 0, 1.5)
+    const videoOnsetSec = firstBrightFrameSec(outPath, 1.5, 50)
+    expect(audioOnsetSec).toBeLessThan(1.5)
+    expect(videoOnsetSec).toBeLessThan(1.5)
+    expect(Math.abs(audioOnsetSec - videoOnsetSec)).toBeLessThan(0.2)
+
+    // Tail-audio check: the final second should still contain audible signal
+    // (guards against regressions where the clip end is muted).
+    const tailPeak = readAudioPcmPeak(outPath, 0, clipDurationSec - 0.98, 0.2)
+    expect(tailPeak).toBeGreaterThan(900)
+
+    // Performance indicator (non-blocking): log ratio for trend tracking.
+    // Keep only a very loose ceiling to catch hangs/regressions without
+    // introducing flaky hardware-dependent failures.
+    const ratio = elapsedMs / (clipDurationSec * 1000)
+    console.log(
+      `[test-perf] selected-track-create elapsed_ms=${elapsedMs} clip_seconds=${clipDurationSec} ratio=${ratio.toFixed(4)}`
+    )
+    expect(ratio).toBeLessThan(1.0)
   })
 })
 

@@ -18,6 +18,26 @@ function init(appStore) {
 // Map<ChildProcess, outputPath|null> — outputPath is deleted on kill if it exists
 const activeFFmpeg = new Map()
 
+function nowMs() {
+  return Number(process.hrtime.bigint() / 1000000n)
+}
+
+function shouldLogClipPerf() {
+  return (
+    process.env.OPENCLIP_CLIP_PERF === '1' ||
+    process.env.OPENCLIP_CLIP_PERF === 'true' ||
+    process.env.OPENCLIP_TEST_MODE === 'true' ||
+    process.env.NODE_ENV !== 'production'
+  )
+}
+
+function logClipPerf(message, fields = {}) {
+  if (!shouldLogClipPerf()) return
+  const parts = Object.entries(fields).map(([k, v]) => `${k}=${v}`)
+  const suffix = parts.length > 0 ? ` ${parts.join(' ')}` : ''
+  console.log(`[clip-perf] ${message}${suffix}`)
+}
+
 function killAllProcesses() {
   for (const [proc, outPath] of activeFFmpeg) {
     try {
@@ -319,64 +339,207 @@ function createClip(sourcePath, startTime, endTime, gameName = 'Unknown', audioT
     }
     const duration = endTime - startTime
 
-    // Build audio args: when multiple specific tracks are selected, produce:
-    //   Track 1: amix of all selected tracks (for universal playback)
-    //   Track 2+: each selected track individually (preserving original order/titles)
-    let audioArgs, codecArgs
-    if (!Array.isArray(audioTracks) || audioTracks.length === 0) {
-      // No specific tracks requested – explicitly map all streams to preserve them all
-      audioArgs = ['-map', '0']
-      codecArgs = ['-c', 'copy']
-    } else if (audioTracks.length === 1) {
-      // Single track – map it directly, stream copy is fine
-      audioArgs = ['-map', '0:v:0', '-map', `0:a:${audioTracks[0]}`]
-      codecArgs = ['-c', 'copy']
-    } else {
-      // Multiple tracks – mix into one combined track, then keep individual tracks
-      const filterInputs = audioTracks.map((i) => `[0:a:${i}]`).join('')
-      const filterComplex = `${filterInputs}amix=inputs=${audioTracks.length}:duration=longest:normalize=0[mixed]`
-      const individualMaps = audioTracks.map((i) => ['-map', `0:a:${i}`]).flat()
-      audioArgs = [
-        '-map',
-        '0:v:0',
-        '-filter_complex',
-        filterComplex,
-        '-map',
-        '[mixed]',
-        ...individualMaps,
-      ]
-      codecArgs = ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k']
-    }
+    const usingExplicitAudioSelection = Array.isArray(audioTracks) && audioTracks.length > 0
 
-    const args = [
-      '-y',
-      '-ss',
-      String(startTime),
-      '-i',
-      sourcePath,
-      '-t',
-      String(duration),
-      ...audioArgs,
-      ...codecArgs,
-      '-avoid_negative_ts',
-      'make_zero',
-      outputPath,
-    ]
+    const runFfmpeg = (args, outPathToTrack) =>
+      new Promise((res, rej) => {
+        const proc = execFile(FFMPEG_PATH, args, { timeout: 120000 }, (error, _stdout, stderr) => {
+          activeFFmpeg.delete(proc)
+          if (error) return rej(new Error(stderr || error.message))
+          res()
+        })
+        activeFFmpeg.set(proc, outPathToTrack || null)
+      })
 
-    const proc = execFile(FFMPEG_PATH, args, { timeout: 120000 }, (error, _stdout, stderr) => {
-      activeFFmpeg.delete(proc)
-      if (error) {
-        // Remove partial output so a corrupt file isn't left in the clips folder
+    ;(async () => {
+      const totalStartMs = nowMs()
+      try {
+        if (!usingExplicitAudioSelection) {
+          const cutStartMs = nowMs()
+          const args = [
+            '-y',
+            '-ss',
+            String(startTime),
+            '-i',
+            sourcePath,
+            '-t',
+            String(duration),
+            '-map',
+            '0',
+            '-c',
+            'copy',
+            '-avoid_negative_ts',
+            'make_zero',
+            outputPath,
+          ]
+          await runFfmpeg(args, outputPath)
+          logClipPerf('createClip-simple-cut', {
+            duration_ms: nowMs() - cutStartMs,
+            clip_seconds: duration.toFixed(3),
+          })
+        } else {
+          // Fast selected-track path:
+          // 1) copy-cut full segment once (fast seek),
+          // 2) split out video copy + selected-track audio build from that same segment,
+          // 3) mux copy.
+          // Using the same intermediate source for both streams keeps A/V aligned.
+          const tmpBase = `${outputPath}.tmp-${Date.now()}-${Math.random().toString(16).slice(2)}`
+          const tempBasePath = `${tmpBase}.base.mp4`
+          const tempVideoPath = `${tmpBase}.video.mp4`
+          const tempAudioPath = `${tmpBase}.audio.m4a`
+
+          try {
+            const baseStepStartMs = nowMs()
+            const baseArgs = [
+              '-y',
+              '-ss',
+              String(startTime),
+              '-i',
+              sourcePath,
+              '-t',
+              String(duration),
+              '-map',
+              '0',
+              '-c',
+              'copy',
+              '-avoid_negative_ts',
+              'make_zero',
+              tempBasePath,
+            ]
+            await runFfmpeg(baseArgs, tempBasePath)
+            logClipPerf('createClip-step-base-cut', {
+              duration_ms: nowMs() - baseStepStartMs,
+              clip_seconds: duration.toFixed(3),
+            })
+
+            const videoStepStartMs = nowMs()
+            const videoArgs = [
+              '-y',
+              '-i',
+              tempBasePath,
+              '-map',
+              '0:v:0',
+              '-c:v',
+              'copy',
+              '-an',
+              '-avoid_negative_ts',
+              'make_zero',
+              tempVideoPath,
+            ]
+            await runFfmpeg(videoArgs, tempVideoPath)
+            logClipPerf('createClip-step-video-cut', {
+              duration_ms: nowMs() - videoStepStartMs,
+              clip_seconds: duration.toFixed(3),
+            })
+
+            let audioArgs
+            if (audioTracks.length === 1) {
+              const audioFilter = `[0:a:${audioTracks[0]}]asetpts=PTS-STARTPTS,aresample=async=1:first_pts=0[a0]`
+              audioArgs = [
+                '-y',
+                '-i',
+                tempBasePath,
+                '-filter_complex',
+                audioFilter,
+                '-map',
+                '[a0]',
+                '-c:a',
+                'aac',
+                '-b:a',
+                '192k',
+                tempAudioPath,
+              ]
+            } else {
+              const trimmed = audioTracks.map((i, idx) => ({
+                source: `[0:a:${i}]`,
+                trimmed: `[t${idx}]`,
+                mix: `[m${idx}]`,
+                indiv: `[a${idx}]`,
+              }))
+              const trimFilters = trimmed
+                .map(
+                  ({ source, trimmed: t }) =>
+                    `${source}asetpts=PTS-STARTPTS,aresample=async=1:first_pts=0${t}`
+                )
+                .join(';')
+              const splitFilters = trimmed
+                .map(({ trimmed: t, mix, indiv }) => `${t}asplit=2${mix}${indiv}`)
+                .join(';')
+              const mixInputs = trimmed.map(({ mix }) => mix).join('')
+              const filterComplex = `${trimFilters};${splitFilters};${mixInputs}amix=inputs=${audioTracks.length}:duration=longest:normalize=0[mixed]`
+              const individualMaps = trimmed.map(({ indiv }) => ['-map', indiv]).flat()
+              audioArgs = [
+                '-y',
+                '-i',
+                tempBasePath,
+                '-filter_complex',
+                filterComplex,
+                '-map',
+                '[mixed]',
+                ...individualMaps,
+                '-c:a',
+                'aac',
+                '-b:a',
+                '192k',
+                tempAudioPath,
+              ]
+            }
+            const audioStepStartMs = nowMs()
+            await runFfmpeg(audioArgs, tempAudioPath)
+            logClipPerf('createClip-step-audio-build', {
+              duration_ms: nowMs() - audioStepStartMs,
+              tracks: audioTracks.length,
+            })
+
+            const muxStepStartMs = nowMs()
+            const muxArgs = [
+              '-y',
+              '-i',
+              tempVideoPath,
+              '-i',
+              tempAudioPath,
+              '-map',
+              '0:v:0',
+              '-map',
+              '1:a',
+              '-c',
+              'copy',
+              '-movflags',
+              '+faststart',
+              outputPath,
+            ]
+            await runFfmpeg(muxArgs, outputPath)
+            logClipPerf('createClip-step-mux', {
+              duration_ms: nowMs() - muxStepStartMs,
+            })
+          } finally {
+            try {
+              if (fs.existsSync(tempBasePath)) fs.unlinkSync(tempBasePath)
+            } catch {}
+            try {
+              if (fs.existsSync(tempVideoPath)) fs.unlinkSync(tempVideoPath)
+            } catch {}
+            try {
+              if (fs.existsSync(tempAudioPath)) fs.unlinkSync(tempAudioPath)
+            } catch {}
+          }
+        }
+
+        logClipPerf('createClip-total', {
+          duration_ms: nowMs() - totalStartMs,
+          clip_seconds: duration.toFixed(3),
+          selected_tracks: usingExplicitAudioSelection ? audioTracks.length : 0,
+        })
+        invalidateClipsCache()
+        const info = parseRecordingInfo(outputPath, gameName)
+        resolve(info || { filename: outputFilename, path: outputPath })
+      } catch (err) {
         try {
           if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath)
         } catch {}
-        return reject(new Error(`FFmpeg error: ${stderr || error.message}`))
+        reject(new Error(`FFmpeg error: ${err.message}`))
       }
-      invalidateClipsCache()
-      const info = parseRecordingInfo(outputPath, gameName)
-      resolve(info || { filename: outputFilename, path: outputPath })
-    })
-    activeFFmpeg.set(proc, outputPath)
+    })()
   })
 }
 
