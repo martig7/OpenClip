@@ -42,6 +42,7 @@ obs-plugin/build/
 .vscode/
 playwright-report/
 playwright-report-integration/
+playwright-report-electron-integration/
 test-results/
 coverage/
 electron-app/.superpowers/
