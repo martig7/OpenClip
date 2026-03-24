@@ -21,6 +21,15 @@ contextBridge.exposeInMainWorld('api', {
   removeGame: (id) => ipcRenderer.invoke('games:remove', id),
   toggleGame: (id) => ipcRenderer.invoke('games:toggle', id),
   updateGame: (id, updates) => ipcRenderer.invoke('games:update', id, updates),
+  onGamesUpdated: (callback) => {
+    const handler = () => callback()
+    ipcRenderer.on('games:updated', handler)
+    return () => ipcRenderer.removeListener('games:updated', handler)
+  },
+
+  // Fullscreen recording
+  getFullscreenRecording: () => ipcRenderer.invoke('fullscreen-recording:get'),
+  setFullscreenRecording: (config) => ipcRenderer.invoke('fullscreen-recording:set', config),
 
   // Windows
   getVisibleWindows: () => ipcRenderer.invoke('windows:list'),

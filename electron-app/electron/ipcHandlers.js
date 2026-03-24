@@ -150,6 +150,12 @@ function registerIpcHandlers(store, appState) {
     return games
   })
 
+  // --- Fullscreen recording config ---
+  ipcMain.handle('fullscreen-recording:get', () => store.get('fullscreenRecording'))
+  ipcMain.handle('fullscreen-recording:set', (_event, config) => {
+    store.set('fullscreenRecording', config)
+  })
+
   // Extract the icon for a running process and save it as a PNG.
   ipcMain.handle('windows:extractIcon', async (_event, processName) => {
     if (!processName || !/^[\w\-. ]+$/.test(processName)) return null
@@ -271,6 +277,11 @@ function registerIpcHandlers(store, appState) {
       (progress) => {
         try {
           appState.mainWindow?.webContents.send('session:process-progress', progress)
+        } catch {}
+      },
+      () => {
+        try {
+          appState.mainWindow?.webContents.send('games:updated')
         } catch {}
       }
     )

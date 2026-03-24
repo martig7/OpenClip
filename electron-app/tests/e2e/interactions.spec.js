@@ -1,6 +1,12 @@
 import { test, expect } from '@playwright/test'
 import { setupApiRoutes } from './fixtures/routes.js'
-import { gamesCaptionTitle, gameRow, gameNameCell } from './fixtures/gamesUi.js'
+import {
+  gamesCaptionTitle,
+  gameRow,
+  gameNameCell,
+  openAdvancedAddGameModal,
+  fillNewObsSceneNameInAddGameModal,
+} from './fixtures/gamesUi.js'
 
 // Interaction tests verify user flows across pages.
 // GamesPage / SettingsPage use window.api → mockApi (no route mock needed).
@@ -16,22 +22,21 @@ test.describe('Games Page Interactions', () => {
 
   test('can open add game modal', async ({ page }) => {
     await page.goto('/')
-    await page.click('button:has-text("Add Game")')
-    await expect(page.locator('h2:has-text("Add Game")')).toBeVisible()
-    await expect(page.locator('input[placeholder="e.g. Valorant"]')).toBeVisible()
+    await openAdvancedAddGameModal(page)
   })
 
   test('can fill and submit add game form', async ({ page }) => {
     await page.goto('/')
     await expect(gameNameCell(page, 'Valorant')).toBeVisible()
-    await page.click('button:has-text("Add Game")')
+    await openAdvancedAddGameModal(page)
     await page.locator('input[placeholder="e.g. Valorant"]').fill('Minecraft')
     await page.locator('input[placeholder="e.g. VALORANT or valorant.exe"]').fill('javaw.exe')
-    await page.locator('input[placeholder="e.g. Gaming Scene (required)"]').fill('Minecraft Scene')
+    await fillNewObsSceneNameInAddGameModal(page, 'Minecraft Scene')
     // Add Game button should now be enabled (scene is filled)
-    const addBtn = page.locator('.modal button:has-text("Add Game")')
+    const addBtn = page.locator('.modal .modal-actions button.btn-primary:has-text("Add Game")')
     await expect(addBtn).toBeEnabled()
-    await addBtn.click()
+    // Tall advanced modal: footer can be clipped in default 720p-ish viewport — use DOM click.
+    await addBtn.evaluate((el) => el.click())
     // Modal closes and new game appears in the list
     await expect(page.locator('h2:has-text("Add Game")')).not.toBeVisible()
     await expect(gameNameCell(page, 'Minecraft')).toBeVisible()

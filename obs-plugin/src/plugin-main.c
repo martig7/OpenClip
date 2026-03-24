@@ -46,6 +46,16 @@ static void build_runtime_paths(void)
 	snprintf(marker_file_path, sizeof(marker_file_path),
 		 "%s/.config/open-clip/runtime/plugin_loaded", home);
 #endif
+
+	/* Test/CI override: allow the loader to write the port to a deterministic
+	 * file path controlled by the test harness. */
+	const char *port_override = getenv("OPENCLIP_PLUGIN_PORT_FILE");
+	if (port_override && port_override[0] != '\0')
+		snprintf(port_file_path, sizeof(port_file_path), "%s", port_override);
+
+	const char *marker_override = getenv("OPENCLIP_PLUGIN_MARKER_FILE");
+	if (marker_override && marker_override[0] != '\0')
+		snprintf(marker_file_path, sizeof(marker_file_path), "%s", marker_override);
 }
 
 /* Ensure parent directory of filepath exists, creating intermediate directories

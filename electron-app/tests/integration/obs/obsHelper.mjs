@@ -44,7 +44,15 @@
  */
 
 import { spawnSync, spawn } from 'child_process'
-import { existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs'
+import {
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  readFileSync,
+  copyFileSync,
+} from 'fs'
 import { tmpdir } from 'os'
 import path, { join } from 'path'
 import { fileURLToPath } from 'url'
@@ -86,13 +94,35 @@ export function isOBSAvailable() {
  *   required; OBS will not start cleanly with an empty collection.
  * @param {number}   [options.startupTimeoutMs=45000]
  *   How long (ms) to wait for the WebSocket server to become reachable.
+ * @param {boolean}  [options.installOpenClipPlugin=false]
+ *   When true, copy the native OpenClip plugin DLL into the repo-local OBS
+ *   install tree so it can be loaded by headless OBS.
+ * @param {string}   [options.openClipPluginDllPath]
+ *   Path to `openclip-obs.dll` to install (defaults to
+ *   `electron-app/resources/obs-plugin/openclip-obs.dll`).
+ * @param {string}   [options.openClipPluginPortFilePath]
+ *   Absolute path that the native plugin should write its `plugin_port` file
+ *   to (passed via `OPENCLIP_PLUGIN_PORT_FILE` env var).
+ * @param {string}   [options.openClipPluginMarkerFilePath]
+ *   Optional marker-file override (passed via `OPENCLIP_PLUGIN_MARKER_FILE`).
+ * @param {(ctx: any) => Promise<void>|void} [options.beforeSpawn]
+ *   Hook invoked after configuration + optional plugin install, but before
+ *   spawning OBS.
  *
  * @returns {Promise<{
  *   wsSettings: { host: string, port: number },
  *   stop: () => void
  * }>}
  */
-export async function startOBS({ initialScenes = ['Scene'], startupTimeoutMs = 45_000 } = {}) {
+export async function startOBS({
+  initialScenes = ['Scene'],
+  startupTimeoutMs = 45_000,
+  installOpenClipPlugin = false,
+  openClipPluginDllPath = null,
+  openClipPluginPortFilePath = null,
+  openClipPluginMarkerFilePath = null,
+  beforeSpawn = null,
+} = {}) {
   // On Windows, --portable is the only reliable way to isolate the OBS config,
   // and --portable derives the config root from the binary's location.  If
   // OBS_BINARY is not an absolute path (e.g. just "obs64"), we cannot derive
@@ -119,15 +149,26 @@ export async function startOBS({ initialScenes = ['Scene'], startupTimeoutMs = 4
   // not the parent config/ directory which may have been pre-existing.
   let tmpBase, obsConfigDir, cleanupDir, obsArgs, extraEnv
 
+  /** @type {string | null} */
+  let obsInstallRoot = null
+
   if (isWindows) {
     const binDir = path.dirname(OBS_BINARY)
+    obsInstallRoot = path.resolve(binDir, '..', '..')
     tmpBase = path.resolve(binDir, '..', '..', 'config')
     obsConfigDir = join(tmpBase, 'obs-studio')
     // Only remove the obs-studio subtree we wrote, not the pre-existing
     // portable config root (tmpBase), to avoid data loss on existing installs.
     cleanupDir = obsConfigDir
     obsArgs = ['--headless', '--portable']
-    extraEnv = {}
+    extraEnv = {
+      ...(openClipPluginPortFilePath
+        ? { OPENCLIP_PLUGIN_PORT_FILE: openClipPluginPortFilePath }
+        : {}),
+      ...(openClipPluginMarkerFilePath
+        ? { OPENCLIP_PLUGIN_MARKER_FILE: openClipPluginMarkerFilePath }
+        : {}),
+    }
   } else {
     tmpBase = mkdtempSync(join(tmpdir(), 'openclip-obs-test-'))
     obsConfigDir = join(tmpBase, 'obs-studio')
@@ -136,7 +177,23 @@ export async function startOBS({ initialScenes = ['Scene'], startupTimeoutMs = 4
     obsArgs = ['--headless']
     // When no X display is available (e.g. CI without Xvfb), tell Qt to use
     // the offscreen platform so OBS does not abort on startup.
-    extraEnv = process.env.DISPLAY ? {} : { QT_QPA_PLATFORM: 'offscreen' }
+    obsInstallRoot = path.isAbsolute(OBS_BINARY)
+      ? path.resolve(path.dirname(OBS_BINARY), '..', '..')
+      : null
+    extraEnv = process.env.DISPLAY
+      ? {
+          ...(openClipPluginPortFilePath ? { OPENCLIP_PLUGIN_PORT_FILE: openClipPluginPortFilePath } : {}),
+          ...(openClipPluginMarkerFilePath
+            ? { OPENCLIP_PLUGIN_MARKER_FILE: openClipPluginMarkerFilePath }
+            : {}),
+        }
+      : {
+          QT_QPA_PLATFORM: 'offscreen',
+          ...(openClipPluginPortFilePath ? { OPENCLIP_PLUGIN_PORT_FILE: openClipPluginPortFilePath } : {}),
+          ...(openClipPluginMarkerFilePath
+            ? { OPENCLIP_PLUGIN_MARKER_FILE: openClipPluginMarkerFilePath }
+            : {}),
+        }
   }
 
   // Wipe any leftover obsConfigDir from a previous run before writing a fresh
@@ -149,6 +206,85 @@ export async function startOBS({ initialScenes = ['Scene'], startupTimeoutMs = 4
   _rmTemp(obsConfigDir)
 
   _writeOBSConfig(obsConfigDir, wsPort, initialScenes)
+
+  // ── Optional: install real OpenClip native plugin ──────────────────────
+  const defaultDllPath = path.resolve(__dirname, '../../../resources/obs-plugin/openclip-obs.dll')
+  if (installOpenClipPlugin) {
+    if (!obsInstallRoot) {
+      throw new Error(
+        'installOpenClipPlugin=true requires obsInstallRoot to be resolvable from OBS_BINARY. ' +
+          'Provide OPENCLIP_REAL_PLUGIN_SMOKE on Windows or pass an absolute OBS_BINARY.'
+      )
+    }
+    const dllSrc = openClipPluginDllPath || defaultDllPath
+    if (!existsSync(dllSrc)) {
+      throw new Error(`OpenClip plugin DLL not found at ${dllSrc}`)
+    }
+
+    const pluginDst = join(obsInstallRoot, 'obs-plugins', '64bit', 'openclip-obs.dll')
+    mkdirSync(join(obsInstallRoot, 'obs-plugins', '64bit'), { recursive: true })
+    copyFileSync(dllSrc, pluginDst)
+
+    // Create empty locale file so OBS can load default locale safely.
+    const localeIni = join(
+      obsInstallRoot,
+      'data',
+      'obs-plugins',
+      'openclip-obs',
+      'locale',
+      'en-US.ini'
+    )
+    mkdirSync(path.dirname(localeIni), { recursive: true })
+    if (!existsSync(localeIni)) writeFileSync(localeIni, '')
+
+    // OBS v32+ plugin manager state: ensure our module is enabled in the
+    // portable config so the module is loaded consistently in headless runs.
+    const modulesJsonPath = join(obsConfigDir, 'plugin_manager', 'modules.json')
+    let modules = []
+    try {
+      if (existsSync(modulesJsonPath)) {
+        modules = JSON.parse(readFileSync(modulesJsonPath, 'utf8'))
+      }
+    } catch {
+      modules = []
+    }
+    const existing = (modules || []).find((m) => m.module_name === 'openclip-obs')
+    if (existing) {
+      existing.enabled = true
+      if (!existing.display_name) existing.display_name = 'OpenClip'
+      if (!('id' in existing)) existing.id = ''
+      if (!('version' in existing)) existing.version = ''
+      if (!Array.isArray(existing.encoders)) existing.encoders = []
+      if (!Array.isArray(existing.outputs)) existing.outputs = []
+      if (!Array.isArray(existing.services)) existing.services = []
+      if (!Array.isArray(existing.sources)) existing.sources = []
+    } else {
+      modules.push({
+        display_name: 'OpenClip',
+        enabled: true,
+        encoders: [],
+        id: '',
+        module_name: 'openclip-obs',
+        outputs: [],
+        services: [],
+        sources: [],
+        version: '',
+      })
+    }
+    mkdirSync(path.dirname(modulesJsonPath), { recursive: true })
+    writeFileSync(modulesJsonPath, JSON.stringify(modules, null, 2))
+  }
+
+  // Allow callers to do additional setup without needing to patch obsHelper.
+  if (typeof beforeSpawn === 'function') {
+    await beforeSpawn({
+      wsPort,
+      obsConfigDir,
+      obsInstallRoot,
+      openClipPluginPortFilePath,
+      openClipPluginMarkerFilePath,
+    })
+  }
 
   let stopping = false
   let exited = false

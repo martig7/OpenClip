@@ -1,17 +1,15 @@
 /**
- * OBS WebSocket integration tests — Playwright E2E layer.
+ * OpenClip OBS plugin integration — Playwright E2E layer (Node test workers).
  *
- * These exercise obsWebSocket.js against the real headless OBS instance
- * started by global-setup.js.  Playwright test bodies run in Node.js (not
- * the browser), so direct Node.js imports work fine here.
+ * Exercises `electron/obsPlugin.js` against the real headless OBS instance
+ * started by global-setup.js (native plugin DLL + HTTP API).
  *
  * OBS is fully isolated:
  *   - Started with --headless --portable, isolated config in a temp dir
  *   - Recordings go to a temp folder set by OBS_RECORDING_PATH
- *   - Port is random (passed via OBS_PORT env var from globalSetup)
+ *   - WebSocket port random (OBS_PORT from globalSetup); plugin port via env
  *
- * For equivalent vitest-based OBS tests (same obsWebSocket.js, full lifecycle
- * control) see tests/integration/obs/obsOrchestration.test.js.
+ * Vitest OBS orchestration / harness tests: tests/integration/obs/obsOrchestration.test.js
  */
 
 import { test, expect } from '@playwright/test'
@@ -28,15 +26,13 @@ import {
   createSceneFromScratch,
   createSceneFromTemplate,
   deleteOBSScene,
-} from '../../../electron/obsWebSocket.js'
-import {
   getOBSAudioInputs,
   getTrackNames,
   setTrackNames,
   getSceneAudioSources,
-} from '../../../electron/obsWsAudio.js'
+} from '../../../electron/obsPlugin.js'
 
-test.describe('obsWebSocket.js — real headless OBS', () => {
+test.describe('obsPlugin.js — real headless OBS plugin', () => {
   const ws = wsSettings() // reads OBS_HOST / OBS_PORT from env (set by globalSetup)
 
   test.beforeEach(async () => {
@@ -52,7 +48,7 @@ test.describe('obsWebSocket.js — real headless OBS', () => {
   test('testOBSConnection succeeds against headless OBS', async () => {
     const result = await testOBSConnection(ws)
     expect(result.success).toBe(true)
-    expect(result.version).toMatch(/^OBS .+ \(ws .+\)$/)
+    expect(result.version).toMatch(/^OBS .+ \(plugin v.+\)$/)
   })
 
   // ── Scene list ────────────────────────────────────────────────────────────
@@ -96,11 +92,11 @@ test.describe('obsWebSocket.js — real headless OBS', () => {
     expect(await getScenes()).toContain(name)
   })
 
-  test('createSceneFromTemplate with missing template still creates empty scene', async () => {
+  test('createSceneFromTemplate with missing template returns failure', async () => {
     const name = `${TEST_PREFIX}MissingTemplate`
     const result = await createSceneFromTemplate(ws, name, 'NoSuchScene_XYZ')
-    expect(result.success).toBe(true)
-    expect(await getScenes()).toContain(name)
+    expect(result.success).toBe(false)
+    expect(result.message).toMatch(/template|not found|scene/i)
   })
 
   // ── Scene deletion ────────────────────────────────────────────────────────

@@ -1,7 +1,23 @@
 const fs = require('fs')
-const { RUNTIME_DIR, STATE_FILE, PID_FILE, LOG_FILE } = require('./constants')
+const path = require('path')
+const { RUNTIME_DIR, STATE_FILE, PID_FILE, LOG_FILE, ICONS_DIR } = require('./constants')
 const { getRunningProcessNames, getWindowTitles } = require('./processDetector')
-const { startRecording, stopRecording } = require('./obsPlugin')
+const {
+  startRecording,
+  stopRecording,
+  addAudioSourceToScenes,
+  removeAudioSourceFromScenes,
+  setInputAudioTracks,
+} = require('./obsPlugin')
+
+const FULLSCREEN_AUDIO_SOURCE_PREFIX = 'Game Audio (Fullscreen'
+
+function buildWindowBinding(game) {
+  const exe = game?.exe || ''
+  const windowClass = game?.windowClass || game?.selector || ''
+  const title = game?.selector || game?.name || game?.exe || ''
+  return `${title}:${windowClass}:${exe}`
+}
 
 function log(message) {
   const line = `[${new Date().toISOString()}] ${message}\n`
@@ -47,11 +63,105 @@ function detectRunningGame(games) {
   return null
 }
 
-function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}) {
+function detectFullscreenFallback(games, fsConfig) {
+  if (!fsConfig?.enabled || !fsConfig?.defaultScene) return null
+
+  const { getFullscreenProcesses } = require('./winUtils')
+  const fullscreen = getFullscreenProcesses()
+  if (fullscreen.length === 0) return null
+
+  const fw = fullscreen[0]
+  const exeLower = (fw.exe || '').toLowerCase()
+
+  const alreadyCovered = games.some((g) => (g.exe || '').toLowerCase() === exeLower)
+  if (alreadyCovered) return null
+
+  return {
+    _isFullscreenFallback: true,
+    name: fw.process,
+    exe: fw.exe,
+    windowClass: fw.windowClass,
+    selector: fw.title,
+    windowMatchPriority: 2,
+    scene: fsConfig.defaultScene,
+    isAutoDetected: true,
+    enabled: true,
+  }
+}
+
+function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}, onGamesUpdate = () => {}) {
   let lastGame = null
+  let lastFullscreenAudioKey = null
+  let lastFullscreenAudioSourceName = null
+  let lastFullscreenAudioScene = null
   let stopped = false
   const organizeQueue = []
   let organizing = false
+
+  async function syncFullscreenProcessAudio(game) {
+    const fsConfig = store.get('fullscreenRecording')
+    if (!fsConfig?.enabled || !fsConfig?.defaultScene) return
+    if (fsConfig?.gameAudioEnabled === false) return
+    if (!game?.scene || game.scene !== fsConfig.defaultScene) return
+    const masterAudioSources = store.get('masterAudioSources') || []
+    const wantsGameAudio = masterAudioSources.some((s) => s?.kind === 'magic_game_audio')
+    if (!wantsGameAudio) return
+
+    const window = buildWindowBinding(game)
+    const exeKey = (game.exe || game.name || 'unknown').toLowerCase()
+    const nextKey = `${fsConfig.defaultScene}|${window}|${exeKey}`
+    if (nextKey === lastFullscreenAudioKey) return
+    const sourceName = `${FULLSCREEN_AUDIO_SOURCE_PREFIX} ${exeKey})`
+
+    if (lastFullscreenAudioSourceName && lastFullscreenAudioSourceName !== sourceName) {
+      await removeAudioSourceFromScenes(
+        undefined,
+        [lastFullscreenAudioScene || fsConfig.defaultScene],
+        lastFullscreenAudioSourceName
+      ).catch(() => {})
+    }
+
+    const addResult = await addAudioSourceToScenes(
+      undefined,
+      [fsConfig.defaultScene],
+      'wasapi_process_output_capture',
+      sourceName,
+      {
+        window,
+        window_match_priority: 2,
+      }
+    )
+
+    if (!addResult?.success) {
+      throw new Error(addResult?.message || 'Failed to sync fullscreen process audio')
+    }
+
+    const savedTracks = store.get('audioTracks') || {}
+    const perSourceTracks = savedTracks[sourceName]
+    const gameAudioTracks =
+      perSourceTracks && typeof perSourceTracks === 'object' && Object.keys(perSourceTracks).length > 0
+        ? perSourceTracks
+        : savedTracks['Game Audio']
+    if (gameAudioTracks && typeof gameAudioTracks === 'object') {
+      await setInputAudioTracks(undefined, sourceName, gameAudioTracks).catch(() => {})
+    }
+
+    lastFullscreenAudioKey = nextKey
+    lastFullscreenAudioSourceName = sourceName
+    lastFullscreenAudioScene = fsConfig.defaultScene
+  }
+
+  async function cleanupFullscreenProcessAudio() {
+    if (!lastFullscreenAudioSourceName || !lastFullscreenAudioScene) return
+    await removeAudioSourceFromScenes(
+      undefined,
+      [lastFullscreenAudioScene],
+      lastFullscreenAudioSourceName
+    ).catch(() => {})
+    lastFullscreenAudioKey = null
+    lastFullscreenAudioSourceName = null
+    lastFullscreenAudioScene = null
+  }
 
   function drainOrganizeQueue() {
     if (organizing || organizeQueue.length === 0) return
@@ -94,7 +204,55 @@ function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}) {
     if (stopped) return
 
     const games = store.get('games') || []
-    const detected = detectRunningGame(games)
+    let detected = detectRunningGame(games)
+
+    if (!detected) {
+      const fsConfig = store.get('fullscreenRecording')
+      const fallback = detectFullscreenFallback(games, fsConfig)
+      if (fallback) {
+        const exeLower = (fallback.exe || '').toLowerCase()
+        const existing = games.find((g) => (g.exe || '').toLowerCase() === exeLower)
+        if (!existing) {
+          const newId = Date.now().toString(36) + Math.random().toString(36).slice(2, 5)
+          const newGame = {
+            id: newId,
+            name: fallback.name,
+            exe: fallback.exe,
+            windowClass: fallback.windowClass,
+            selector: fallback.selector,
+            windowMatchPriority: 2,
+            scene: fallback.scene,
+            isAutoDetected: true,
+            enabled: true,
+          }
+          store.set('games', [...games, newGame])
+          log(`Auto-registered fullscreen app: ${fallback.name}`)
+          onGamesUpdate()
+          Promise.resolve()
+            .then(async () => {
+              const { extractProcessIcon } = require('./winUtils')
+              fs.mkdirSync(ICONS_DIR, { recursive: true })
+              const processName = fallback.exe || fallback.name
+              const outPath = path.join(ICONS_DIR, `${path.basename(processName)}.png`)
+              const iconPath = await extractProcessIcon(processName, outPath)
+              if (!iconPath) return
+
+              const latestGames = store.get('games') || []
+              const idx = latestGames.findIndex((g) => g.id === newId)
+              if (idx < 0) return
+              latestGames[idx] = { ...latestGames[idx], icon_path: iconPath }
+              store.set('games', latestGames)
+              onGamesUpdate()
+            })
+            .catch((err) => {
+              log(`Fullscreen icon extraction failed: ${err.message}`)
+            })
+          detected = newGame
+        } else {
+          detected = existing
+        }
+      }
+    }
 
     if (detected && !lastGame) {
       lastGame = detected
@@ -102,15 +260,22 @@ function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}) {
       log(`Game detected: ${detected.name}`)
       onStateChange({ currentGame: detected.name, status: 'recording' })
       // Tell the OBS plugin to start recording (best-effort, OBS may not be running)
-      startRecording(detected.scene || undefined).catch((err) =>
-        log(`Plugin startRecording failed: ${err.message}`)
-      )
+      syncFullscreenProcessAudio(detected)
+        .catch((err) => log(`Fullscreen process audio sync failed: ${err.message}`))
+        .finally(() => {
+          startRecording(detected.scene || undefined).catch((err) =>
+            log(`Plugin startRecording failed: ${err.message}`)
+          )
+        })
     } else if (!detected && lastGame) {
       const stoppedGame = lastGame.name
       lastGame = null
       writeGameState('IDLE')
       log(`Game stopped: ${stoppedGame}`)
       onStateChange({ currentGame: null, status: 'idle' })
+      cleanupFullscreenProcessAudio().catch((err) =>
+        log(`Fullscreen process audio cleanup failed: ${err.message}`)
+      )
       onOrganizeProgress({
         phase: 'recording',
         stage: 'waiting',
@@ -127,6 +292,9 @@ function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}) {
       writeGameState('IDLE')
       log(`Game switched: ${stoppedGame} → ${detected.name}`)
       onStateChange({ currentGame: null, status: 'idle' })
+      cleanupFullscreenProcessAudio().catch((err) =>
+        log(`Fullscreen process audio cleanup failed: ${err.message}`)
+      )
       onOrganizeProgress({
         phase: 'recording',
         stage: 'waiting',
@@ -147,9 +315,13 @@ function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}) {
             if (!lastGame || lastGame.name !== targetName) return // game changed again during delay
             writeGameState(`RECORDING|${targetName}|${targetScene}`)
             onStateChange({ currentGame: targetName, status: 'recording' })
-            startRecording(targetScene || undefined).catch((err) =>
-              log(`Plugin startRecording failed: ${err.message}`)
-            )
+            syncFullscreenProcessAudio(lastGame)
+              .catch((err) => log(`Fullscreen process audio sync failed: ${err.message}`))
+              .finally(() => {
+                startRecording(targetScene || undefined).catch((err) =>
+                  log(`Plugin startRecording failed: ${err.message}`)
+                )
+              })
           }, 500)
         })
 
@@ -168,6 +340,9 @@ function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}) {
       stopped = true
       writeGameState('STOPPED')
       log('Watcher stopped')
+      cleanupFullscreenProcessAudio().catch((err) =>
+        log(`Fullscreen process audio cleanup failed: ${err.message}`)
+      )
       stopRecording().catch(() => {}) // best-effort stop
       try {
         fs.unlinkSync(PID_FILE)
@@ -189,4 +364,4 @@ function writeGameState(state) {
   }
 }
 
-module.exports = { setupGameWatcher, detectRunningGame }
+module.exports = { setupGameWatcher, detectRunningGame, detectFullscreenFallback }

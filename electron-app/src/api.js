@@ -40,6 +40,9 @@ const mockApi = {
     store.games = store.games.map((g) => (g.id === id ? { ...g, ...updates } : g))
     return store.games
   },
+  onGamesUpdated: () => noop,
+  getFullscreenRecording: async () => ({ enabled: false, defaultScene: '' }),
+  setFullscreenRecording: asyncNoop,
   getVisibleWindows: asyncArr,
   extractWindowIcon: asyncNoop,
   startWatcher: async () => ({ running: false }),
@@ -67,8 +70,8 @@ const mockApi = {
   isOnboardingComplete: async () => true,
   setOnboardingComplete: asyncNoop,
   getOBSWSScenes: asyncArr,
-  createOBSScene: async () => ({ success: false, message: 'Not in Electron' }),
-  createOBSSceneFromScratch: async () => ({ success: false, message: 'Not in Electron' }),
+  createOBSScene: async () => ({ success: true, message: 'Scene created (mock)' }),
+  createOBSSceneFromScratch: async () => ({ success: true, message: 'Scene created (mock)' }),
   deleteOBSScene: async () => ({ success: false, message: 'Not in Electron' }),
   addAudioSourceToScenes: async () => ({ success: false, message: 'Not in Electron', results: [] }),
   removeAudioSourceFromScenes: async () => ({

@@ -181,15 +181,10 @@ cJSON *h_create_scene_from_scratch(const cJSON *p)
 	if (!capture_kind)
 		capture_kind = "game_capture";
 
-	if (add_window && window_title) {
+	if (add_window) {
 		char input_name[300];
 		char window_str[512];
 		obs_data_t *settings = obs_data_create();
-
-		if (exe && wclass)
-			snprintf(window_str, sizeof(window_str), "%s:%s:%s", window_title, wclass, exe);
-		else
-			snprintf(window_str, sizeof(window_str), "%s", window_title);
 
 		const char *kind = (strcmp(capture_kind, "window_capture") == 0) ? "window_capture" : "game_capture";
 
@@ -197,10 +192,29 @@ cJSON *h_create_scene_from_scratch(const cJSON *p)
 			 (strcmp(kind, "window_capture") == 0) ? "Window Capture" : "Game Capture");
 
 		if (strcmp(kind, "window_capture") == 0) {
+			if (!window_title || !window_title[0]) {
+				cJSON_AddItemToArray(errors, cJSON_CreateString(
+					"window capture requires a window title"));
+				obs_data_release(settings);
+				goto done_window_capture;
+			}
+			if (exe && wclass)
+				snprintf(window_str, sizeof(window_str), "%s:%s:%s", window_title, wclass, exe);
+			else
+				snprintf(window_str, sizeof(window_str), "%s", window_title);
 			obs_data_set_string(settings, "window", window_str);
 		} else {
-			obs_data_set_string(settings, "capture_mode", "window");
-			obs_data_set_string(settings, "window", window_str);
+			/* If no target window is provided, default to fullscreen capture mode. */
+			if (window_title && window_title[0]) {
+				if (exe && wclass)
+					snprintf(window_str, sizeof(window_str), "%s:%s:%s", window_title, wclass, exe);
+				else
+					snprintf(window_str, sizeof(window_str), "%s", window_title);
+				obs_data_set_string(settings, "capture_mode", "window");
+				obs_data_set_string(settings, "window", window_str);
+			} else {
+				obs_data_set_string(settings, "capture_mode", "any_fullscreen");
+			}
 		}
 
 		obs_source_t *src = obs_source_create(kind, input_name, settings, NULL);
@@ -215,6 +229,8 @@ cJSON *h_create_scene_from_scratch(const cJSON *p)
 			cJSON_AddItemToArray(errors, cJSON_CreateString("Failed to create capture source"));
 		}
 		obs_data_release(settings);
+done_window_capture:
+		;
 	}
 
 	if (add_desktop) {

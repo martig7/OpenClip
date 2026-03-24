@@ -2,7 +2,7 @@ import { stableStringify } from '../utils/stableStringify'
 
 /** Top-level or dot-path keys copied from baseline when reverting a general-settings card. */
 export const SETTINGS_SECTION_REVERT_PATHS = {
-  watcher: ['startWatcherOnStartup'],
+  watcher: ['startWatcherOnStartup', 'advancedGameAddition'],
   organize: ['organizeRemux'],
   view: ['listView', 'waveformResolution'],
   hotkey: ['clipMarkerHotkey'],

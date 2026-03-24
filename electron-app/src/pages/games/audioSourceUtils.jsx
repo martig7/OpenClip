@@ -49,6 +49,32 @@ export const AUDIO_KIND_META = {
   },
 }
 
+/** Prefix for fullscreen-managed Game Audio; must match `electron/gameWatcher.js`. */
+export const FULLSCREEN_GAME_AUDIO_PREFIX = 'Game Audio (Fullscreen'
+
+/**
+ * OBS input name for fullscreen-managed process audio.
+ * Must match `electron/gameWatcher.js` (`FULLSCREEN_AUDIO_SOURCE_PREFIX` + exeKey + `)`).
+ */
+export function fullscreenManagedGameAudioInputName(game) {
+  const exeKey = (game?.exe || game?.name || 'unknown').toLowerCase()
+  return `${FULLSCREEN_GAME_AUDIO_PREFIX} ${exeKey})`
+}
+
+/**
+ * Normalize plugin/OBS track routing to string keys "1".."6" and booleans
+ * (TrackChips treat only strict `true` as active).
+ */
+export function normalizeAudioTrackMap(tracks) {
+  if (!tracks || typeof tracks !== 'object') return {}
+  const out = {}
+  for (let n = 1; n <= 6; n += 1) {
+    const v = tracks[String(n)] ?? tracks[n]
+    out[String(n)] = v === true || v === 1 || v === 'true'
+  }
+  return out
+}
+
 /**
  * Module-level LRU cache for extractExeFromWindowStr.
  * Capped at 256 entries with true LRU eviction.

@@ -86,6 +86,10 @@ const GetClassNameW = user32.func(
 )
 const GetIconInfo = user32.func('bool __stdcall GetIconInfo(void *hIcon, ICONINFO_S *piconinfo)')
 const DestroyIcon = user32.func('bool __stdcall DestroyIcon(void *hIcon)')
+const GetWindowRect = user32.func('bool __stdcall GetWindowRect(void *hWnd, void *lpRect)')
+const GetSystemMetrics = user32.func('int __stdcall GetSystemMetrics(int nIndex)')
+const SM_CXSCREEN = 0
+const SM_CYSCREEN = 1
 
 // ── shell32.dll ───────────────────────────────────────────────────────────────
 const ShellExecuteW = shell32.func(
@@ -251,6 +255,11 @@ function listWindowsWithProcesses() {
   const classBuf = Buffer.alloc(256 * 2)
   const nameBuf = Buffer.alloc(MAX_PATH * 2)
   const sizeBuf = Buffer.alloc(4)
+  const rectBuf = Buffer.alloc(16) // RECT: left(4), top(4), right(4), bottom(4)
+
+  // Get primary screen dimensions once before the loop
+  const screenW = GetSystemMetrics(SM_CXSCREEN)
+  const screenH = GetSystemMetrics(SM_CYSCREEN)
 
   const results = []
 
@@ -284,11 +293,22 @@ function listWindowsWithProcesses() {
     const processName = exeFile ? exeFile.replace(/\.exe$/i, '') : ''
     if (SYSTEM_PROCS.has(processName.toLowerCase())) return true
 
+    // Check if this window fills the primary monitor
+    let isFullscreen = false
+    if (GetWindowRect(hwnd, rectBuf)) {
+      const left = rectBuf.readInt32LE(0)
+      const top = rectBuf.readInt32LE(4)
+      const right = rectBuf.readInt32LE(8)
+      const bottom = rectBuf.readInt32LE(12)
+      isFullscreen = left === 0 && top === 0 && right === screenW && bottom === screenH
+    }
+
     results.push({
       title,
       process: processName,
       exe: exeFile || `${processName}.exe`,
       windowClass: windowClass || processName,
+      isFullscreen,
     })
     return true
   }, koffi.pointer(WNDPROC_WU))
@@ -608,6 +628,13 @@ function findOBSInstallDir() {
   return null
 }
 
+/**
+ * Return visible windows that fill the primary monitor (likely fullscreen games/apps).
+ */
+function getFullscreenProcesses() {
+  return listWindowsWithProcesses().filter((w) => w.isFullscreen)
+}
+
 module.exports = {
   getDiskFreeSpace,
   listWindowsWithProcesses,
@@ -616,4 +643,5 @@ module.exports = {
   extractProcessIcon,
   runElevatedOps,
   findOBSInstallDir,
+  getFullscreenProcesses,
 }

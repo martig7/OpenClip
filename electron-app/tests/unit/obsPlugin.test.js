@@ -81,6 +81,15 @@ function queueErrorResponse(err) {
 /** Fresh import of obsPlugin so module-level caches are reset each test. */
 async function getModule() {
   vi.resetModules()
+  const req = createRequire(import.meta.url)
+  for (const rel of ['../../electron/pluginHttpTransport.js', '../../electron/obsPlugin.js']) {
+    try {
+      const abs = req.resolve(rel)
+      delete req.cache[abs]
+    } catch {
+      // ignore
+    }
+  }
   return await import('../../electron/obsPlugin.js')
 }
 
@@ -88,6 +97,8 @@ async function getModule() {
 
 describe('readPluginPort / port cache', () => {
   beforeEach(() => {
+    delete process.env.OPENCLIP_PLUGIN_HTTP_PORT
+    delete process.env.OPENCLIP_PLUGIN_PORT_FILE
     vi.clearAllMocks()
     mockReadFileSync.mockReturnValue('28756')
   })
@@ -128,13 +139,14 @@ describe('readPluginPort / port cache', () => {
     expect(mockReadFileSync).toHaveBeenCalledTimes(1)
   })
 
-  it('invalidatePortCache causes next call to re-read the file', async () => {
+  it('invalidatePluginPortCache causes next call to re-read the file', async () => {
     queueSuccessResponse({ success: true, data: {} })
-    const { callPlugin, invalidatePortCache } = await getModule()
+    const { callPlugin } = await getModule()
+    const { invalidatePluginPortCache } = _reqCC('../../electron/pluginHttpTransport.js')
     await callPlugin('getStatus')
     expect(mockReadFileSync).toHaveBeenCalledTimes(1)
 
-    invalidatePortCache()
+    invalidatePluginPortCache()
 
     queueSuccessResponse({ success: true, data: {} })
     await callPlugin('getStatus')
@@ -146,6 +158,8 @@ describe('readPluginPort / port cache', () => {
 
 describe('callPlugin', () => {
   beforeEach(() => {
+    delete process.env.OPENCLIP_PLUGIN_HTTP_PORT
+    delete process.env.OPENCLIP_PLUGIN_PORT_FILE
     vi.clearAllMocks()
     mockReadFileSync.mockReturnValue('28756')
   })
@@ -218,6 +232,13 @@ describe('callPlugin', () => {
 })
 
 describe('stopRecording', () => {
+  beforeEach(() => {
+    delete process.env.OPENCLIP_PLUGIN_HTTP_PORT
+    delete process.env.OPENCLIP_PLUGIN_PORT_FILE
+    vi.clearAllMocks()
+    mockReadFileSync.mockReturnValue('28756')
+  })
+
   it('sends stopRecording method', async () => {
     const req = queueSuccessResponse({ success: true, data: {} })
     const { stopRecording } = await getModule()
@@ -229,6 +250,13 @@ describe('stopRecording', () => {
 })
 
 describe('Connection Resilience', () => {
+  beforeEach(() => {
+    delete process.env.OPENCLIP_PLUGIN_HTTP_PORT
+    delete process.env.OPENCLIP_PLUGIN_PORT_FILE
+    vi.clearAllMocks()
+    mockReadFileSync.mockReturnValue('28756')
+  })
+
   it('plugin drops connection mid-request - error propagates cleanly', async () => {
     mockRequest.mockImplementationOnce((opts, cb) => {
       const res = new EventEmitter()

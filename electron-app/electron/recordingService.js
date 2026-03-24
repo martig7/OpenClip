@@ -4,7 +4,7 @@
  */
 const fs = require('fs')
 const path = require('path')
-const { exec, execFile } = require('child_process')
+const { execFile } = require('child_process')
 const { isVideoFile, formatFileSize, CODEC_MAP, FFMPEG_PATH } = require('./constants')
 
 let store // set via init()

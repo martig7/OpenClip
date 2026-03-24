@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api'
 import { useGameWatcherState } from '../hooks/useGameWatcherState'
@@ -9,10 +9,13 @@ import { useTrackState } from '../hooks/useTrackState'
 import {
   AUDIO_KIND_META,
   buildAvailableAudioInputs,
+  fullscreenManagedGameAudioInputName,
   getAppAudioWindowKey,
   isAppAudioKind,
+  normalizeAudioTrackMap,
 } from './games/audioSourceUtils'
 import AddGameModal from './games/AddGameModal'
+import SimpleAddGameModal from './games/SimpleAddGameModal'
 import { GamesPageBody } from './games/GamesPageBody'
 import ConfirmDeleteDialog from '../components/ConfirmDeleteDialog'
 
@@ -70,6 +73,8 @@ export default function GamesPage() {
     setScenesError,
     templateScene,
     setTemplateScene,
+    applyMasterAudioSources,
+    setApplyMasterAudioSources,
     sceneCreateStatus,
     setSceneCreateStatus,
     resetAddModal,
@@ -79,6 +84,8 @@ export default function GamesPage() {
     useTrackState()
 
   const trackDataLoadedRef = useRef(false)
+  const [advancedGameAddition, setAdvancedGameAddition] = useState(false)
+  const [fsConfig, setFsConfig] = useState({ enabled: false, defaultScene: '', gameAudioEnabled: true })
 
   useEffect(() => {
     const allInputNames = new Set([
@@ -111,6 +118,49 @@ export default function GamesPage() {
     }
   }, [masterAudioSources])
 
+  // Hydrate track chips from OBS for fullscreen-managed Game Audio inputs.
+  // Those use names like `Game Audio (Fullscreen <exeKey>)` and are never in the master list,
+  // so the master-audio prefetch above skips them; persisted `audioTracks` may also omit them.
+  useEffect(() => {
+    if (!fsConfig?.defaultScene || fsConfig.gameAudioEnabled === false) return
+    const wantsGameAudio = masterAudioSources.some((s) => s?.kind === 'magic_game_audio')
+    if (!wantsGameAudio) return
+
+    const names = new Set()
+    for (const game of games) {
+      if (!game?.scene || game.scene !== fsConfig.defaultScene) continue
+      names.add(fullscreenManagedGameAudioInputName(game))
+    }
+    if (names.size === 0) return
+
+    let cancelled = false
+    ;(async () => {
+      const entries = await Promise.all(
+        [...names].map(async (name) => {
+          try {
+            const raw = await api.getInputAudioTracks(name)
+            if (!raw || typeof raw !== 'object') return null
+            const tracks = normalizeAudioTrackMap(raw)
+            return { name, tracks }
+          } catch {
+            return null
+          }
+        })
+      )
+      if (cancelled) return
+      const fresh = {}
+      for (const e of entries) {
+        if (e) fresh[e.name] = e.tracks
+      }
+      if (Object.keys(fresh).length > 0) {
+        setTrackData((prev) => ({ ...prev, ...fresh }))
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [games, fsConfig?.defaultScene, fsConfig?.gameAudioEnabled, masterAudioSources])
+
   async function toggleTrack(inputName, trackNum) {
     const current = trackData[inputName] || {}
     const newVal = !current[String(trackNum)]
@@ -138,9 +188,31 @@ export default function GamesPage() {
     }
   }
 
+  // Subscribe to games:updated push (fired when the watcher auto-registers a new game)
+  useEffect(() => {
+    const unsub = api.onGamesUpdated(() => loadGames())
+    return unsub
+  }, [])
+
   useEffect(() => {
     loadGames()
     loadTrackLabels()
+    api
+      .getFullscreenRecording()
+      .then((cfg) =>
+        setFsConfig({
+          enabled: !!cfg?.enabled,
+          defaultScene: cfg?.defaultScene || '',
+          gameAudioEnabled: cfg?.gameAudioEnabled !== false,
+        })
+      )
+      .catch(() => {})
+    api
+      .getStore('settings')
+      .then((s) => {
+        if (s?.advancedGameAddition) setAdvancedGameAddition(true)
+      })
+      .catch(() => {})
     api
       .getStore('masterAudioSources')
       .then((saved) => {
@@ -235,7 +307,7 @@ export default function GamesPage() {
 
   async function finalizeGameSave(sceneMsg) {
     const masterToAdd = masterAudioSources
-    if (newGame.scene && masterToAdd.length > 0) {
+    if (applyMasterAudioSources && newGame.scene && masterToAdd.length > 0) {
       await Promise.all(
         masterToAdd.map((source) => {
           if (source.kind === 'magic_game_audio') {
@@ -283,7 +355,7 @@ export default function GamesPage() {
 
     if (sceneMsg) {
       const sourceNote =
-        newGame.scene && masterToAdd.length > 0
+        applyMasterAudioSources && newGame.scene && masterToAdd.length > 0
           ? ` + ${masterToAdd.length} master source${masterToAdd.length > 1 ? 's' : ''}`
           : ''
       showToast(sceneMsg + sourceNote)
@@ -457,6 +529,16 @@ export default function GamesPage() {
     showToast('Game saved')
   }
 
+  async function saveFsConfig(updated) {
+    const next = {
+      enabled: !!updated?.enabled,
+      defaultScene: updated?.defaultScene || '',
+      gameAudioEnabled: updated?.gameAudioEnabled !== false,
+    }
+    setFsConfig(next)
+    await api.setFullscreenRecording(next).catch(() => {})
+  }
+
   function openAddModal() {
     resetAddModal()
     setShowAddModal(true)
@@ -518,42 +600,59 @@ export default function GamesPage() {
         removeGame={removeGame}
         saveGame={saveGame}
         gamesAudioProps={gamesAudioProps}
+        fsConfig={fsConfig}
+        onFsConfigChange={saveFsConfig}
       />
 
       {showAddModal && (
-        <AddGameModal
-          newGame={newGame}
-          setNewGame={setNewGame}
-          showWindowPicker={showWindowPicker}
-          setShowWindowPicker={setShowWindowPicker}
-          visibleWindows={visibleWindows}
-          setVisibleWindows={setVisibleWindows}
-          loadingWindows={loadingWindows}
-          setLoadingWindows={setLoadingWindows}
-          autoCreateScene={autoCreateScene}
-          setAutoCreateScene={setAutoCreateScene}
-          createMode={createMode}
-          setCreateMode={setCreateMode}
-          capturePref={capturePref}
-          setCapturePref={setCapturePref}
-          obsScenes={obsScenes}
-          setObsScenes={setObsScenes}
-          loadingScenes={loadingScenes}
-          setLoadingScenes={setLoadingScenes}
-          scenesError={scenesError}
-          setScenesError={setScenesError}
-          templateScene={templateScene}
-          setTemplateScene={setTemplateScene}
-          sceneCreateStatus={sceneCreateStatus}
-          onClose={() => {
-            resetAddModal()
-            setShowAddModal(false)
-          }}
-          onAddGame={addGame}
-          onSceneConflictUseExisting={handleSceneConflictUseExisting}
-          onSceneConflictOverwrite={handleSceneConflictOverwrite}
-          onGoToSettings={goToSettings}
-        />
+        advancedGameAddition ? (
+          <AddGameModal
+            newGame={newGame}
+            setNewGame={setNewGame}
+            showWindowPicker={showWindowPicker}
+            setShowWindowPicker={setShowWindowPicker}
+            visibleWindows={visibleWindows}
+            setVisibleWindows={setVisibleWindows}
+            loadingWindows={loadingWindows}
+            setLoadingWindows={setLoadingWindows}
+            autoCreateScene={autoCreateScene}
+            setAutoCreateScene={setAutoCreateScene}
+            createMode={createMode}
+            setCreateMode={setCreateMode}
+            capturePref={capturePref}
+            setCapturePref={setCapturePref}
+            obsScenes={obsScenes}
+            setObsScenes={setObsScenes}
+            loadingScenes={loadingScenes}
+            setLoadingScenes={setLoadingScenes}
+            scenesError={scenesError}
+            setScenesError={setScenesError}
+            templateScene={templateScene}
+            setTemplateScene={setTemplateScene}
+            applyMasterAudioSources={applyMasterAudioSources}
+            setApplyMasterAudioSources={setApplyMasterAudioSources}
+            sceneCreateStatus={sceneCreateStatus}
+            onClose={() => {
+              resetAddModal()
+              setShowAddModal(false)
+            }}
+            onAddGame={addGame}
+            onSceneConflictUseExisting={handleSceneConflictUseExisting}
+            onSceneConflictOverwrite={handleSceneConflictOverwrite}
+            onGoToSettings={goToSettings}
+          />
+        ) : (
+          <SimpleAddGameModal
+            newGame={newGame}
+            setNewGame={setNewGame}
+            onSwitchToAdvanced={() => setAdvancedGameAddition(true)}
+            onClose={() => {
+              resetAddModal()
+              setShowAddModal(false)
+            }}
+            onAddGame={addGame}
+          />
+        )
       )}
 
       {toast && <div className="toast">{toast}</div>}

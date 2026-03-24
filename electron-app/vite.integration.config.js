@@ -1,14 +1,15 @@
 /**
  * Vitest configuration for integration tests.
  *
- * Integration tests (tests/integration/obs/**) are kept separate from the unit and
- * component tests because they:
+ * Integration tests (`tests/integration/obs/**`, `tests/integration/plugin/**`) are
+ * kept separate from the unit and component tests because they:
  *
  *  - Spawn real external processes (OBS Studio) and therefore need the genuine
  *    `child_process` and `fs` modules — not the vi.fn() stubs that
  *    tests/setup.js injects for unit/component tests.
  *
- *  - Communicate over real network sockets (OBS WebSocket server).
+ *  - Communicate over real network sockets (OBS WebSocket server) or the OpenClip
+ *    plugin HTTP API (mock harness in `tests/integration/plugin/`).
  *
  *  - May take tens of seconds to complete due to OBS startup time.
  *
@@ -21,7 +22,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['tests/integration/obs/**/*.test.{js,ts}'],
+    include: ['tests/integration/obs/**/*.test.{js,ts}', 'tests/integration/plugin/**/*.test.{js,ts}'],
     // No setupFiles — integration tests use real modules without any mocking.
     testTimeout: 90_000, // Allow up to 90 s per test (OBS startup + operation)
     hookTimeout: 90_000, // Allow up to 90 s in beforeAll/afterAll hooks

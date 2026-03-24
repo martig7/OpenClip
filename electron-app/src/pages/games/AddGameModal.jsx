@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ChevronDown,
   RefreshCw,
@@ -34,6 +34,8 @@ export default function AddGameModal({
   setScenesError,
   templateScene,
   setTemplateScene,
+  applyMasterAudioSources,
+  setApplyMasterAudioSources,
   sceneCreateStatus,
   onClose,
   onAddGame,
@@ -41,10 +43,25 @@ export default function AddGameModal({
   onSceneConflictOverwrite,
   onGoToSettings,
 }) {
+  const [showScenePicker, setShowScenePicker] = useState(false)
+  const [creatingNewScene, setCreatingNewScene] = useState(false)
+  const scenePickerRef = useRef(null)
+
   useEffect(() => {
     refreshWindows()
     loadOBSScenes()
   }, [])
+
+  useEffect(() => {
+    if (!showScenePicker) return
+    function onDocMouseDown(e) {
+      if (scenePickerRef.current && !scenePickerRef.current.contains(e.target)) {
+        setShowScenePicker(false)
+      }
+    }
+    document.addEventListener('mousedown', onDocMouseDown)
+    return () => document.removeEventListener('mousedown', onDocMouseDown)
+  }, [showScenePicker])
 
   async function refreshWindows() {
     setLoadingWindows(true)
@@ -97,6 +114,20 @@ export default function AddGameModal({
       ],
     })
     if (filePath) setNewGame((g) => ({ ...g, icon_path: filePath }))
+  }
+
+  function selectExistingScene(sceneName) {
+    setNewGame((g) => ({ ...g, scene: sceneName }))
+    setShowScenePicker(false)
+    setCreatingNewScene(false)
+    setAutoCreateScene(false)
+  }
+
+  function switchToCreateScene() {
+    setShowScenePicker(false)
+    setCreatingNewScene(true)
+    setAutoCreateScene(true)
+    if (createMode === 'template' && obsScenes.length === 0) loadOBSScenes()
   }
 
   return (
@@ -271,16 +302,113 @@ export default function AddGameModal({
           <label className="form-label">
             OBS Scene <span style={{ color: 'var(--danger)' }}>*</span>
           </label>
-          <input
-            className="form-input"
-            placeholder="e.g. Gaming Scene (required)"
-            value={newGame.scene}
-            onChange={(e) => setNewGame({ ...newGame, scene: e.target.value })}
-            required
-          />
+          <div className="form-input-row" ref={scenePickerRef}>
+            {!creatingNewScene ? (
+              <button
+                type="button"
+                className="form-input"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  textAlign: 'left',
+                }}
+                onClick={() => setShowScenePicker((v) => !v)}
+                title="Select OBS scene"
+              >
+                <span style={{ color: newGame.scene ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                  {newGame.scene || 'Select scene…'}
+                </span>
+                <ChevronDown size={12} />
+              </button>
+            ) : (
+              <input
+                className="form-input"
+                placeholder="e.g. Gaming Scene (required)"
+                value={newGame.scene}
+                onChange={(e) => setNewGame({ ...newGame, scene: e.target.value })}
+                required
+              />
+            )}
+            {creatingNewScene && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                title="Pick existing scene"
+                onClick={() => setCreatingNewScene(false)}
+              >
+                Existing
+              </button>
+            )}
+
+            {showScenePicker && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  marginTop: 4,
+                  zIndex: 220,
+                  background: 'var(--bg-tertiary)',
+                  border: '1px solid var(--border-light)',
+                  borderRadius: 'var(--radius-sm)',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                  maxHeight: 320,
+                  overflowY: 'auto',
+                }}
+              >
+                {obsScenes.length === 0 ? (
+                  <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-muted)' }}>
+                    No scenes found. Choose "Create new scene…"
+                  </div>
+                ) : (
+                  obsScenes.map((sceneName) => (
+                    <button
+                      key={sceneName}
+                      type="button"
+                      onClick={() => selectExistingScene(sceneName)}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '7px 12px',
+                        border: 'none',
+                        background: sceneName === newGame.scene ? 'var(--bg-hover)' : 'transparent',
+                        color: 'var(--text-primary)',
+                        fontSize: 12,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {sceneName}
+                    </button>
+                  ))
+                )}
+                <div style={{ borderTop: '1px solid var(--border)' }}>
+                  <button
+                    type="button"
+                    onClick={switchToCreateScene}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '8px 12px',
+                      border: 'none',
+                      background: 'transparent',
+                      color: 'var(--primary)',
+                      fontSize: 12,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Create new scene…
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
-        {newGame.scene && (
+        {creatingNewScene && newGame.scene && (
           <div
             className="form-group"
             style={{
@@ -289,35 +417,24 @@ export default function AddGameModal({
               padding: '10px 12px',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <div
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 500,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                  }}
-                >
-                  <Wand2 size={13} /> Auto-create scene in OBS
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                  Create this scene in OBS with sources and audio inputs
-                </div>
-              </div>
-              <button
-                className={`toggle ${autoCreateScene ? 'on' : ''}`}
-                onClick={() => {
-                  const next = !autoCreateScene
-                  setAutoCreateScene(next)
-                  if (next && createMode === 'template' && obsScenes.length === 0) loadOBSScenes()
+            <div>
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 500,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
                 }}
-              />
+              >
+                <Wand2 size={13} /> Scene creation in OBS
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                New scenes are automatically created in OBS with the options below
+              </div>
             </div>
 
-            {autoCreateScene && (
-              <div style={{ marginTop: 10 }}>
+            <div style={{ marginTop: 10 }}>
                 {/* Mode selector */}
                 <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
                   <button
@@ -480,8 +597,18 @@ export default function AddGameModal({
                     </span>
                   </div>
                 )}
-              </div>
-            )}
+
+                <div style={{ marginTop: 10 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                    <input
+                      type="checkbox"
+                      checked={applyMasterAudioSources}
+                      onChange={(e) => setApplyMasterAudioSources(e.target.checked)}
+                    />
+                    Apply master audio sources after scene creation
+                  </label>
+                </div>
+            </div>
 
             {sceneCreateStatus && (
               <div

@@ -123,3 +123,7 @@ jobs:
       - name: Run OBS Playwright integration tests
         working-directory: electron-app
         run: npx playwright test --config playwright.integration.config.js
+
+      - name: Run OBS Electron full-stack integration tests
+        working-directory: electron-app
+        run: npx playwright test --config playwright.electron.integration.config.js

@@ -1245,6 +1245,171 @@
   @apply flex items-center justify-end gap-1;
 }
 
+/* ── Any Fullscreen App pinned row ─────────────────────────────────── */
+.games-table-fullscreen-row {
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  cursor: default;
+}
+
+.games-table-fullscreen-row:hover {
+  background: var(--bg-hover);
+}
+
+.games-table-fullscreen-row td {
+  padding: 9px 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.games-table-fullscreen-row td.col-toggle {
+  padding-left: var(--games-inline-gutter, 16px);
+}
+
+/* ── Default pill on auto-detected games ───────────────────────────── */
+.game-default-pill {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+  vertical-align: middle;
+  line-height: 1.5;
+}
+
+/* ── Inline scene picker (fullscreen row) ──────────────────────────── */
+.fs-scene-picker {
+  position: relative;
+  display: inline-flex;
+}
+
+.fs-scene-picker__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.fs-scene-picker__trigger:hover {
+  background: var(--bg-hover);
+}
+
+.fs-scene-picker__placeholder {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.fs-scene-picker__dropdown {
+  /* position + top/left set inline via portal; z-index must beat any drawer */
+  z-index: 9999;
+  min-width: 200px;
+  max-width: 300px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.fs-scene-picker__list {
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.fs-scene-picker__empty {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.fs-scene-picker__item {
+  display: block;
+  width: 100%;
+  padding: 6px 12px;
+  font-size: 12px;
+  text-align: left;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fs-scene-picker__item:hover {
+  background: var(--bg-hover);
+}
+
+.fs-scene-picker__item.active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.fs-scene-picker__footer {
+  border-top: 1px solid var(--border);
+  padding: 4px 0;
+}
+
+.fs-scene-picker__create-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--accent);
+  background: transparent;
+  cursor: pointer;
+}
+
+.fs-scene-picker__create-btn:hover {
+  background: var(--bg-hover);
+}
+
+.fs-scene-picker__create {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fs-scene-picker__create-input {
+  width: 100%;
+  padding: 5px 8px;
+  font-size: 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.fs-scene-picker__create-input:focus {
+  border-color: var(--accent);
+}
+
+.fs-scene-picker__create-error {
+  font-size: 11px;
+  color: var(--danger);
+}
+
+.fs-scene-picker__create-actions {
+  display: flex;
+  gap: 6px;
+}
+
 .game-avatar {
   @apply rounded-[var(--radius-sm)] flex items-center justify-center font-bold text-white flex-shrink-0 overflow-hidden;
 }

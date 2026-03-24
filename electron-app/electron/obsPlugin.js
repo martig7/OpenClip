@@ -1,56 +1,16 @@
-// OpenClip OBS Plugin — Electron-side HTTP client
-//
-// Communicates with the native OBS plugin's HTTP API on localhost.
-// Drop-in replacement for the previous obsWebSocket.js module — exports the
-// same public API but talks to the plugin instead of obs-websocket-js.
+// OpenClip OBS Plugin — Electron-side HTTP client (native plugin HTTP API on localhost).
 
-const http = require('http')
-const fs = require('fs')
-const { PLUGIN_PORT_FILE } = require('./constants')
+const { resolvePluginPort, callPluginHttp } = require('./pluginHttpTransport')
 
-/* ── Port discovery ───────────────────────────────────────────────────────── */
-
-let cachedPort = null
-let portReadTime = 0
-const PORT_CACHE_MS = 3000
-
-function readPluginPort() {
-  const now = Date.now()
-  if (cachedPort && now - portReadTime < PORT_CACHE_MS) return cachedPort
-  try {
-    const raw = fs.readFileSync(PLUGIN_PORT_FILE, 'utf-8').trim()
-    const port = parseInt(raw, 10)
-    if (port > 0 && port < 65536) {
-      cachedPort = port
-      portReadTime = now
-      return port
-    }
-  } catch {}
-  cachedPort = null
-  return null
-}
-
-function invalidatePortCache() {
-  cachedPort = null
-  portReadTime = 0
-}
-
-/* ── HTTP transport ───────────────────────────────────────────────────────── */
-
-const REQUEST_TIMEOUT_MS = 10000
-
-function parsePluginError(err) {
-  const msg = err.message || ''
-  if (msg.includes('ECONNREFUSED') || msg.includes('refused')) {
-    return 'Cannot connect to OpenClip OBS plugin. Make sure OBS is running with the plugin installed.'
-  }
-  if (msg.includes('timed out') || msg.includes('timeout')) {
-    return 'Plugin request timed out. OBS may be busy or unresponsive.'
-  }
-  if (msg.includes('ECONNRESET') || msg.includes('socket hang up')) {
-    return 'Connection to OBS plugin was reset. OBS may have closed.'
-  }
-  return msg || 'Failed to communicate with OBS plugin'
+let DEFAULT_PLUGIN_PORT_FILE = null
+try {
+  // In Electron runtime this resolves to %APPDATA%/.../runtime/plugin_port.
+  // In pure Node test runners (no Electron app object), constants.js can fail.
+  // In that case tests should provide OPENCLIP_PLUGIN_HTTP_PORT or
+  // OPENCLIP_PLUGIN_PORT_FILE.
+  DEFAULT_PLUGIN_PORT_FILE = require('./constants').PLUGIN_PORT_FILE
+} catch {
+  DEFAULT_PLUGIN_PORT_FILE = null
 }
 
 /**
@@ -60,58 +20,14 @@ function parsePluginError(err) {
  * @returns {Promise<any>} - The `data` field from a successful response
  */
 async function callPlugin(method, params = {}) {
-  const port = readPluginPort()
+  const port = resolvePluginPort(DEFAULT_PLUGIN_PORT_FILE)
   if (!port) {
     throw new Error('OpenClip OBS plugin is not running. Start OBS with the plugin installed.')
   }
-
-  const body = JSON.stringify({ method, params })
-
-  return new Promise((resolve, reject) => {
-    const req = http.request(
-      {
-        hostname: '127.0.0.1',
-        port,
-        path: '/api',
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(body),
-        },
-        timeout: REQUEST_TIMEOUT_MS,
-      },
-      (res) => {
-        let data = ''
-        res.on('data', (chunk) => (data += chunk))
-        res.on('end', () => {
-          try {
-            const json = JSON.parse(data)
-            if (json.success) {
-              resolve(json.data)
-            } else {
-              reject(new Error(json.error || 'Plugin returned an error'))
-            }
-          } catch {
-            reject(new Error('Invalid response from OBS plugin'))
-          }
-        })
-      }
-    )
-    req.on('error', (err) => {
-      invalidatePortCache()
-      reject(new Error(parsePluginError(err)))
-    })
-    req.on('timeout', () => {
-      invalidatePortCache()
-      req.destroy()
-      reject(new Error('Plugin request timed out'))
-    })
-    req.write(body)
-    req.end()
-  })
+  return callPluginHttp(port, method, params)
 }
 
-/* ── Public API (matches obsWebSocket.js exports) ─────────────────────────── */
+/* ── Public API (scene/audio helpers + recording control) ───────────────────── */
 
 /**
  * Test connection to the OBS plugin.  Returns { success, version } or
@@ -341,7 +257,6 @@ async function isPluginReachable() {
 }
 
 module.exports = {
-  // Same interface as obsWebSocket.js
   getOBSScenes,
   createSceneFromTemplate,
   createSceneFromScratch,
@@ -362,5 +277,4 @@ module.exports = {
   getRecordingStatus,
   isPluginReachable,
   callPlugin,
-  invalidatePortCache,
 }

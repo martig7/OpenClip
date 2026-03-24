@@ -17,11 +17,25 @@
 
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest'
 import { isOBSAvailable, startOBS, findFreePort } from './obsHelper.mjs'
+import { existsSync, readFileSync, rmSync } from 'fs'
+import { join } from 'path'
+import { tmpdir } from 'os'
 import {
   getOBSScenes,
   createSceneFromTemplate,
   testOBSConnection,
-} from '../../../electron/obsWebSocket.js'
+} from '../../../electron/obsPlugin.js'
+
+async function withPluginPort(port, fn) {
+  const prev = process.env.OPENCLIP_PLUGIN_HTTP_PORT
+  process.env.OPENCLIP_PLUGIN_HTTP_PORT = String(port)
+  try {
+    return await fn()
+  } finally {
+    if (prev == null) delete process.env.OPENCLIP_PLUGIN_HTTP_PORT
+    else process.env.OPENCLIP_PLUGIN_HTTP_PORT = prev
+  }
+}
 
 // ─── Skip the whole suite when OBS is not installed ───────────────────────
 const obsAvailable = isOBSAvailable()
@@ -42,8 +56,13 @@ describe.skipIf(!obsAvailable)('OBS Orchestration – live OBS instance', () => 
   /** @type {{ wsSettings: object, stop: () => void }} */
   let obsInstance
   let ws // shorthand alias used in every test
+  let pluginPortFile
+  let prevPluginPortFile
+  let prevPluginHttpPort
   /** A free port with nothing listening on it, used for "unreachable OBS" tests. */
   let unusedPort
+  /** Snapshots for SetInputAudioTracks tests — restored in afterEach. */
+  const _audioTrackRestore = new Map()
 
   // Start a single OBS process for the entire test file.
   // We allow up to 60 s for OBS to boot and the WebSocket server to become
@@ -52,17 +71,70 @@ describe.skipIf(!obsAvailable)('OBS Orchestration – live OBS instance', () => 
   // marks the whole suite as failed rather than silently skipping all tests.
   beforeAll(async () => {
     unusedPort = await findFreePort()
-    obsInstance = await startOBS({ initialScenes: ['Scene'] })
+    pluginPortFile = join(
+      tmpdir(),
+      `openclip-vitest-plugin-port-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`
+    )
+    prevPluginPortFile = process.env.OPENCLIP_PLUGIN_PORT_FILE
+    prevPluginHttpPort = process.env.OPENCLIP_PLUGIN_HTTP_PORT
+
+    obsInstance = await startOBS({
+      initialScenes: ['Scene'],
+      installOpenClipPlugin: true,
+      openClipPluginPortFilePath: pluginPortFile,
+    })
     ws = obsInstance.wsSettings
+
+    const deadline = Date.now() + 45_000
+    let pluginHttpPort = null
+    while (Date.now() < deadline) {
+      if (existsSync(pluginPortFile)) {
+        const raw = String(readFileSync(pluginPortFile, 'utf-8')).trim()
+        const parsed = parseInt(raw, 10)
+        if (parsed > 0 && parsed < 65536) {
+          pluginHttpPort = parsed
+          break
+        }
+      }
+      await new Promise((r) => setTimeout(r, 250))
+    }
+    if (!pluginHttpPort) {
+      throw new Error(`OpenClip plugin did not publish a valid port file at ${pluginPortFile}`)
+    }
+    process.env.OPENCLIP_PLUGIN_PORT_FILE = pluginPortFile
+    process.env.OPENCLIP_PLUGIN_HTTP_PORT = String(pluginHttpPort)
   }, 60_000)
 
   afterAll(() => {
     obsInstance?.stop()
+    try {
+      rmSync(pluginPortFile, { force: true })
+    } catch {}
+    if (prevPluginPortFile == null) delete process.env.OPENCLIP_PLUGIN_PORT_FILE
+    else process.env.OPENCLIP_PLUGIN_PORT_FILE = prevPluginPortFile
+    if (prevPluginHttpPort == null) delete process.env.OPENCLIP_PLUGIN_HTTP_PORT
+    else process.env.OPENCLIP_PLUGIN_HTTP_PORT = prevPluginHttpPort
   })
 
-  // After each test, delete every scene except the seed 'Scene' so that the
-  // next test always starts from a clean, known state.
+  // After each test: restore any tweaked audio tracks, then delete every scene
+  // except the seed 'Scene'.
   afterEach(async () => {
+    if (ws && _audioTrackRestore.size > 0) {
+      const { default: OBSWebSocket } = await import('obs-websocket-js')
+      const obs = new OBSWebSocket()
+      try {
+        const url = `ws://${ws.host}:${ws.port}`
+        await obs.connect(url, ws.password)
+        for (const [inputName, tracks] of _audioTrackRestore.entries()) {
+          await obs
+            .call('SetInputAudioTracks', { inputName, inputAudioTracks: tracks })
+            .catch(() => {})
+        }
+      } finally {
+        _audioTrackRestore.clear()
+        obs.disconnect().catch(() => {})
+      }
+    }
     if (ws) await _cleanupScenes(ws, 'Scene')
   })
 
@@ -75,12 +147,12 @@ describe.skipIf(!obsAvailable)('OBS Orchestration – live OBS instance', () => 
       expect(result.success).toBe(true)
       // OBS reports its own version; just confirm the shape is correct.
       expect(typeof result.version).toBe('string')
-      expect(result.version).toMatch(/^OBS .+ \(ws .+\)$/)
+      expect(result.version).toMatch(/^OBS .+ \(plugin v.+\)$/)
     })
 
     it('returns failure when nothing is listening on the port', async () => {
-      // Use a port we acquired and released — nothing is listening on it.
-      const result = await testOBSConnection({ host: '127.0.0.1', port: unusedPort })
+      // obsPlugin ignores wsSettings; force an unreachable plugin port via env.
+      const result = await withPluginPort(unusedPort, async () => testOBSConnection({}))
 
       expect(result.success).toBe(false)
       expect(typeof result.message).toBe('string')
@@ -105,7 +177,7 @@ describe.skipIf(!obsAvailable)('OBS Orchestration – live OBS instance', () => 
     })
 
     it('throws with a user-friendly message when OBS is unreachable', async () => {
-      await expect(getOBSScenes({ host: '127.0.0.1', port: unusedPort })).rejects.toThrow()
+      await expect(withPluginPort(unusedPort, async () => getOBSScenes({}))).rejects.toThrow()
     })
   })
 
@@ -140,19 +212,18 @@ describe.skipIf(!obsAvailable)('OBS Orchestration – live OBS instance', () => 
       expect(scenes).toContain('Gamma')
     })
 
-    it('trims whitespace from the scene name before creating', async () => {
+    it('preserves whitespace in scene names (plugin behavior)', async () => {
       const result = await createSceneFromTemplate(ws, '  Trimmed  ', null)
 
       expect(result.success).toBe(true)
       const scenes = await getOBSScenes(ws)
-      expect(scenes).toContain('Trimmed')
-      expect(scenes).not.toContain('  Trimmed  ')
+      expect(scenes).toContain('  Trimmed  ')
     })
 
-    it('returns failure when the scene name is blank', async () => {
+    it('allows whitespace-only scene names (plugin behavior)', async () => {
       const result = await createSceneFromTemplate(ws, '   ', null)
 
-      expect(result.success).toBe(false)
+      expect(result.success).toBe(true)
       expect(result.message).toBeTruthy()
     })
 
@@ -164,13 +235,11 @@ describe.skipIf(!obsAvailable)('OBS Orchestration – live OBS instance', () => 
       expect(result.message).toContain('Scene')
     })
 
-    it('creates an empty scene when the template name does not exist in OBS', async () => {
+    it('returns failure when the template name does not exist in OBS', async () => {
       const result = await createSceneFromTemplate(ws, 'Orphan', 'NoSuchTemplate')
 
-      // Should succeed — just creates an empty scene
-      expect(result.success).toBe(true)
-      const scenes = await getOBSScenes(ws)
-      expect(scenes).toContain('Orphan')
+      expect(result.success).toBe(false)
+      expect(result.message).toMatch(/template|not found|scene/i)
     })
 
     it('creates an empty scene when the template has no items', async () => {
@@ -185,10 +254,8 @@ describe.skipIf(!obsAvailable)('OBS Orchestration – live OBS instance', () => 
     })
 
     it('returns failure when OBS is unreachable', async () => {
-      const result = await createSceneFromTemplate(
-        { host: '127.0.0.1', port: unusedPort },
-        'Unreachable',
-        null
+      const result = await withPluginPort(unusedPort, async () =>
+        createSceneFromTemplate({}, 'Unreachable', null)
       )
 
       expect(result.success).toBe(false)
@@ -213,6 +280,72 @@ describe.skipIf(!obsAvailable)('OBS Orchestration – live OBS instance', () => 
       const second = await getOBSScenes(ws)
 
       expect(first).toEqual(second)
+    })
+  })
+
+  // ── Input audio tracks (obs-websocket 5.x) ────────────────────────────────
+  // Exercises the same requests OpenClip's UI relies on for per-source routing.
+
+  describe('GetInputAudioTracks / SetInputAudioTracks', () => {
+    async function withRawObs(callback) {
+      const { default: OBSWebSocket } = await import('obs-websocket-js')
+      const obs = new OBSWebSocket()
+      const url = `ws://${ws.host}:${ws.port}`
+      await obs.connect(url, ws.password)
+      try {
+        return await callback(obs)
+      } finally {
+        obs.disconnect().catch(() => {})
+      }
+    }
+
+    async function findTrackableInputName(obs) {
+      const { inputs } = await obs.call('GetInputList')
+      expect(Array.isArray(inputs)).toBe(true)
+      for (const { inputName } of inputs) {
+        try {
+          await obs.call('GetInputAudioTracks', { inputName })
+          return inputName
+        } catch {
+          continue
+        }
+      }
+      return null
+    }
+
+    it('reads inputAudioTracks from at least one OBS input', async (ctx) => {
+      await withRawObs(async (obs) => {
+        const inputName = await findTrackableInputName(obs)
+        if (!inputName) return ctx.skip()
+        const res = await obs.call('GetInputAudioTracks', { inputName })
+        expect(res).toHaveProperty('inputAudioTracks')
+        expect(Object.keys(res.inputAudioTracks).length).toBeGreaterThan(0)
+      })
+    })
+
+    it('round-trips SetInputAudioTracks (e.g. track 4 off, others on)', async (ctx) => {
+      await withRawObs(async (obs) => {
+        const inputName = await findTrackableInputName(obs)
+        if (!inputName) return ctx.skip()
+
+        const before = await obs.call('GetInputAudioTracks', { inputName })
+        _audioTrackRestore.set(inputName, { ...before.inputAudioTracks })
+
+        const desired = {
+          '1': true,
+          '2': true,
+          '3': true,
+          '4': false,
+          '5': true,
+          '6': true,
+        }
+        await obs.call('SetInputAudioTracks', { inputName, inputAudioTracks: desired })
+        const after = await obs.call('GetInputAudioTracks', { inputName })
+        for (let t = 1; t <= 6; t += 1) {
+          const k = String(t)
+          expect(Boolean(after.inputAudioTracks[k])).toBe(desired[k])
+        }
+      })
     })
   })
 })

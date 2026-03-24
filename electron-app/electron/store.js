@@ -17,6 +17,8 @@ const electronConfigDefaults = {
   organizeRemux: true,
   onboardingComplete: false,
   obsInstallPath: '',
+  advancedGameAddition: false,
+  fullscreenRecording: { enabled: false, defaultScene: '' },
 }
 
 // Defaults for Python JSON files
@@ -70,6 +72,7 @@ function msToElectronSettings(ms, obsRecordingPath, electronData) {
     clipMarkerHotkey: ms.clip_hotkey || 'F9',
     listView: electronData?.listView !== false,
     organizeRemux: electronData?.organizeRemux !== false,
+    advancedGameAddition: electronData?.advancedGameAddition || false,
     autoClip: {
       enabled: ms.auto_clip_settings?.enabled || false,
       bufferBefore: ms.auto_clip_settings?.buffer_before_seconds ?? 30,
@@ -211,6 +214,8 @@ const store = {
     }
     if (key === 'windowBounds')
       return this._electron().windowBounds || electronConfigDefaults.windowBounds
+    if (key === 'fullscreenRecording')
+      return this._electron().fullscreenRecording || electronConfigDefaults.fullscreenRecording
     if (key === 'masterAudioSources') return this._electron().masterAudioSources || []
     if (key === 'audioTracks') return this._electron().audioTracks || {}
     if (key === 'clipMarkers') return loadElectronMarkers()
@@ -244,6 +249,11 @@ const store = {
     }
     if (key === 'windowBounds') {
       this._electron().windowBounds = value
+      this._saveElectron()
+      return
+    }
+    if (key === 'fullscreenRecording') {
+      this._electron().fullscreenRecording = value
       this._saveElectron()
       return
     }
@@ -284,6 +294,10 @@ const store = {
         this._electron().organizeRemux = value.organizeRemux
         this._saveElectron()
       }
+      if (value.advancedGameAddition !== undefined) {
+        this._electron().advancedGameAddition = value.advancedGameAddition
+        this._saveElectron()
+      }
       this._msData = electronSettingsToMs(this._ms(), value)
       this._saveMs()
       if (value.destinationPath) {
@@ -310,6 +324,11 @@ const store = {
       // organizeRemux lives only in electron config
       if (subKey === 'organizeRemux') {
         this._electron().organizeRemux = value
+        this._saveElectron()
+        return
+      }
+      if (subKey === 'advancedGameAddition') {
+        this._electron().advancedGameAddition = value
         this._saveElectron()
         return
       }
