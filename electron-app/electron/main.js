@@ -200,6 +200,20 @@ app.whenReady().then(() => {
 
   // Seed default configs and OBS script into AppData on first run
   seedFirstRun()
+
+  // Migrate old flat week-folder structure to new game-folder structure (runs once)
+  if (!isTestMode && !isIntegrationMode) {
+    const { migrateToGameFolders } = require('./fileManager')
+    if (!store._electron().folderStructureMigrated) {
+      migrateToGameFolders(store)
+        .catch(console.error)
+        .finally(() => {
+          store._electron().folderStructureMigrated = true
+          store._saveElectron()
+        })
+    }
+  }
+
   // Ensure runtime and icons directories exist in AppData
   fs.mkdirSync(RUNTIME_DIR, { recursive: true })
   fs.mkdirSync(ICONS_DIR, { recursive: true })

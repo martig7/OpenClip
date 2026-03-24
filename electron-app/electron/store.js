@@ -19,6 +19,8 @@ const electronConfigDefaults = {
   obsInstallPath: '',
   advancedGameAddition: false,
   fullscreenRecording: { enabled: false, defaultScene: '' },
+  weekFolders: false,
+  folderStructureMigrated: false,
 }
 
 // Defaults for Python JSON files
@@ -74,6 +76,7 @@ function msToElectronSettings(ms, obsRecordingPath, electronData) {
     organizeRemux: electronData?.organizeRemux !== false,
     advancedGameAddition: electronData?.advancedGameAddition || false,
     autoRegisterFullscreenApps: electronData?.autoRegisterFullscreenApps || false,
+    weekFolders: electronData?.weekFolders || false,
     autoClip: {
       enabled: ms.auto_clip_settings?.enabled || false,
       bufferBefore: ms.auto_clip_settings?.buffer_before_seconds ?? 30,
@@ -303,6 +306,10 @@ const store = {
         this._electron().autoRegisterFullscreenApps = value.autoRegisterFullscreenApps
         this._saveElectron()
       }
+      if (value.weekFolders !== undefined) {
+        this._electron().weekFolders = value.weekFolders
+        this._saveElectron()
+      }
       this._msData = electronSettingsToMs(this._ms(), value)
       this._saveMs()
       if (value.destinationPath) {
@@ -334,6 +341,11 @@ const store = {
       }
       if (subKey === 'advancedGameAddition') {
         this._electron().advancedGameAddition = value
+        this._saveElectron()
+        return
+      }
+      if (subKey === 'weekFolders') {
+        this._electron().weekFolders = value
         this._saveElectron()
         return
       }

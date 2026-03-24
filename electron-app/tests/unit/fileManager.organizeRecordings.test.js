@@ -373,8 +373,8 @@ describe('organizeRecordings', () => {
     expect(clipArgs).toContain('copy')
     expect(clipArgs).toContain('-y')
 
-    // Verify a clip was created in destDir/Clips
-    const clipsDir = path.join(destDir, 'Clips')
+    // Verify a clip was created in destDir/MyGame/Clips
+    const clipsDir = path.join(destDir, 'MyGame', 'Clips')
     expect(fs.existsSync(clipsDir)).toBe(true)
     const clips = fs.readdirSync(clipsDir).filter((f) => f.endsWith('.mp4'))
     expect(clips).toHaveLength(1)

@@ -222,6 +222,19 @@ export default function GeneralSettingsSection({
               onClick={() => updateSetting('organizeRemux', settings.organizeRemux === false)}
             />
           </div>
+          <div className={tc} style={{ borderTop: 'none' }}>
+            <div>
+              <div className="toggle-label">Week Folders</div>
+              <div className="toggle-desc">
+                Group recordings by week inside each game folder
+              </div>
+            </div>
+            <button
+              type="button"
+              className={`toggle ${settings.weekFolders ? 'on' : ''}`}
+              onClick={() => updateSetting('weekFolders', !settings.weekFolders)}
+            />
+          </div>
         </AppSettingsSectionCard>
       )
 

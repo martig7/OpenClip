@@ -40,7 +40,7 @@ describe('getWeekFolder', () => {
   it('uses prior Monday for a Wednesday date', async () => {
     // We'll verify by creating a file and checking the target dir
     const store = makeMockStore({
-      settings: { obsRecordingPath: obsDir, destinationPath: destDir, autoClip: null },
+      settings: { obsRecordingPath: obsDir, destinationPath: destDir, autoClip: null, weekFolders: true },
     })
     const { organizeRecordings } = await import('../../electron/fileManager.js')
 
@@ -50,8 +50,10 @@ describe('getWeekFolder', () => {
 
     await organizeRecordings(store, 'TestGame')
 
-    // Directory should exist - name contains "Week of"
-    const entries = fs.readdirSync(destDir)
-    expect(entries.some((e) => e.includes('Week of'))).toBe(true)
+    // With weekFolders=true: destDir/TestGame/Week of .../
+    const gameDir = path.join(destDir, 'TestGame')
+    expect(fs.existsSync(gameDir)).toBe(true)
+    const weekEntries = fs.readdirSync(gameDir)
+    expect(weekEntries.some((e) => e.includes('Week of'))).toBe(true)
   })
 })

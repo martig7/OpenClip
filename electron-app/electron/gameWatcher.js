@@ -8,6 +8,7 @@ const {
   addAudioSourceToScenes,
   removeAudioSourceFromScenes,
   setInputAudioTracks,
+  isPluginReachable,
 } = require('./obsPlugin')
 
 const FULLSCREEN_AUDIO_SOURCE_PREFIX = 'Game Audio (Fullscreen'
@@ -91,6 +92,7 @@ function detectFullscreenFallback(games, fsConfig) {
 
 function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}, onGamesUpdate = () => {}) {
   let lastGame = null
+  let obsWasReachable = false
   let lastFullscreenAudioKey = null
   let lastFullscreenAudioSourceName = null
   let lastFullscreenAudioScene = null
@@ -270,6 +272,7 @@ function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}, o
 
     if (detected && !lastGame) {
       lastGame = detected
+      obsWasReachable = true // optimistic: assume OBS is reachable; isPluginReachable will correct if not
       writeGameState(`RECORDING|${detected.name}|${detected.scene || ''}`)
       log(`Game detected: ${detected.name}`)
       onStateChange({ currentGame: detected.name, status: 'recording' })
@@ -321,6 +324,7 @@ function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}, o
       }
 
       // Stop recording for the old game, then start for the new one
+      obsWasReachable = true // optimistic: assume OBS is reachable; isPluginReachable will correct if not
       stopRecording()
         .catch((err) => log(`Plugin stopRecording failed: ${err.message}`))
         .finally(() => {
@@ -345,6 +349,27 @@ function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}, o
 
       if (stoppedGame !== '(Unorganized)') scheduleOrganize(stoppedGame)
     }
+
+    // Check if OBS just became reachable while a game is active (e.g. OBS opened after detection).
+    // isPluginReachable also corrects obsWasReachable if our optimistic set above was wrong.
+    isPluginReachable()
+      .then((reachable) => {
+        if (lastGame && reachable && !obsWasReachable) {
+          const game = lastGame
+          log(`OBS became reachable while ${game.name} is active — sending startRecording`)
+          syncFullscreenProcessAudio(game)
+            .catch((err) => log(`Fullscreen process audio sync failed: ${err.message}`))
+            .finally(() => {
+              startRecording(game.scene || undefined).catch((err) =>
+                log(`Plugin startRecording (OBS reconnect) failed: ${err.message}`)
+              )
+            })
+        }
+        obsWasReachable = reachable
+      })
+      .catch(() => {
+        obsWasReachable = false
+      })
 
     if (!stopped) {
       setTimeout(poll, 5000)

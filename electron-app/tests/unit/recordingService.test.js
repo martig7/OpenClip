@@ -393,7 +393,8 @@ describe('createClip', () => {
     makeFile(src)
     const now = new Date()
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-    makeFile(path.join(clipsDir, `Halo Clip ${today} #1.mp4`))
+    // Clips now go to {destDir}/Halo/Clips/
+    makeFile(path.join(destDir, 'Halo', 'Clips', `Halo Clip ${today} #1.mp4`))
     const result = await service.createClip(src, 0, 10, 'Halo', null)
     expect(result.filename).toContain('#2')
   })
@@ -404,7 +405,8 @@ describe('createClip', () => {
     const now = new Date()
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     // Simulate a concurrent request having already claimed #1 (count=0+1) before writing it
-    makeFile(path.join(clipsDir, `Halo Clip ${today} #1.mp4`))
+    // Clips now go to {destDir}/Halo/Clips/
+    makeFile(path.join(destDir, 'Halo', 'Clips', `Halo Clip ${today} #1.mp4`))
     const result = await service.createClip(src, 0, 10, 'Halo', null)
     expect(result.filename).toContain('#2')
     expect(result.filename).not.toContain('#1')

@@ -4,7 +4,7 @@ import { stableStringify } from '../utils/stableStringify'
 export const SETTINGS_SECTION_REVERT_PATHS = {
   watcher: ['startWatcherOnStartup'],
   'games-list': ['advancedGameAddition', 'autoRegisterFullscreenApps'],
-  organize: ['organizeRemux'],
+  organize: ['organizeRemux', 'weekFolders'],
   view: ['listView', 'waveformResolution'],
   hotkey: ['clipMarkerHotkey'],
   autoclip: ['autoClip'],

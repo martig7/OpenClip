@@ -149,6 +149,11 @@ function getClipsPath() {
   return org ? path.join(org, 'Clips') : null
 }
 
+function getGameClipsPath(gameName) {
+  const org = getOrganizedPath() || getObsPath()
+  return org ? path.join(org, sanitizeGameName(gameName), 'Clips') : null
+}
+
 // --- Scan limits ---
 
 const MAX_FILES_PER_FOLDER = 500
@@ -192,14 +197,21 @@ function normalizePathForComparison(p) {
   return normalized
 }
 
-// Returns true when filePath lives inside the Clips directory.
+// Returns true when filePath lives inside a Clips directory (legacy root or per-game).
 function isClipPath(filePath) {
-  const clipsPath = getClipsPath()
-  if (!clipsPath || !filePath) return false
-  const normClips = normalizePathForComparison(clipsPath)
+  if (!filePath) return false
+  const org = getOrganizedPath() || getObsPath()
+  if (!org) return false
+  const normOrg = normalizePathForComparison(org)
   const normFile = normalizePathForComparison(filePath)
-  const rel = path.relative(normClips, normFile)
-  return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel)
+  const rel = path.relative(normOrg, normFile)
+  if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return false
+  const parts = rel.split(path.sep)
+  // Legacy: {org}/Clips/filename (must have a filename after Clips)
+  if (parts.length >= 2 && parts[0].toLowerCase() === 'clips') return true
+  // New: {org}/{GameName}/Clips/filename
+  if (parts.length >= 3 && parts[1].toLowerCase() === 'clips') return true
+  return false
 }
 
 // --- Scanning ---
@@ -216,27 +228,71 @@ function scanRecordings() {
       for (const entry of fs.readdirSync(organizedPath, { withFileTypes: true })) {
         if (!entry.isDirectory() || entry.name.toLowerCase() === 'clips') continue
         const folderPath = path.join(organizedPath, entry.name)
-        const gameName = entry.name.includes(' - Week of')
-          ? entry.name.split(' - Week of')[0]
-          : entry.name
-        try {
-          const folderFiles = fs.readdirSync(folderPath)
-          if (folderFiles.length > MAX_FILES_PER_FOLDER) {
-            console.warn(
-              `[recordingService] Folder "${entry.name}" has ${folderFiles.length} files; capping scan at ${MAX_FILES_PER_FOLDER}.`
-            )
-          }
-          for (const file of folderFiles.slice(0, MAX_FILES_PER_FOLDER)) {
-            if (!isVideoFile(file)) continue
-            const fp = path.join(folderPath, file)
-            if (activeRemuxPaths.has(path.normalize(fp).toLowerCase())) continue
-            const info = parseRecordingInfo(fp, gameName)
-            if (info) {
-              recordings.push(info)
-              seenPaths.add(fp.toLowerCase())
+
+        if (entry.name.includes(' - Week of')) {
+          // OLD FORMAT: "GameName - Week of ..."
+          const gameName = entry.name.split(' - Week of')[0]
+          try {
+            const folderFiles = fs.readdirSync(folderPath)
+            if (folderFiles.length > MAX_FILES_PER_FOLDER) {
+              console.warn(
+                `[recordingService] Folder "${entry.name}" has ${folderFiles.length} files; capping scan at ${MAX_FILES_PER_FOLDER}.`
+              )
             }
-          }
-        } catch {}
+            for (const file of folderFiles.slice(0, MAX_FILES_PER_FOLDER)) {
+              if (!isVideoFile(file)) continue
+              const fp = path.join(folderPath, file)
+              if (activeRemuxPaths.has(path.normalize(fp).toLowerCase())) continue
+              const info = parseRecordingInfo(fp, gameName)
+              if (info) {
+                recordings.push(info)
+                seenPaths.add(fp.toLowerCase())
+              }
+            }
+          } catch {}
+        } else {
+          // NEW FORMAT: top-level game folder
+          const gameName = entry.name
+          try {
+            const gameEntries = fs.readdirSync(folderPath, { withFileTypes: true })
+            const directVideoFiles = gameEntries.filter((e) => e.isFile() && isVideoFile(e.name))
+            if (directVideoFiles.length > MAX_FILES_PER_FOLDER) {
+              console.warn(
+                `[recordingService] Folder "${entry.name}" has ${directVideoFiles.length} files; capping scan at ${MAX_FILES_PER_FOLDER}.`
+              )
+            }
+            for (const item of gameEntries) {
+              if (!item.isDirectory()) continue
+              if (item.name.toLowerCase() === 'clips') continue
+              if (item.name.startsWith('Week of ')) {
+                // Week subfolder
+                const weekDir = path.join(folderPath, item.name)
+                try {
+                  const weekFiles = fs.readdirSync(weekDir)
+                  for (const file of weekFiles.slice(0, MAX_FILES_PER_FOLDER)) {
+                    if (!isVideoFile(file)) continue
+                    const fp = path.join(weekDir, file)
+                    if (activeRemuxPaths.has(path.normalize(fp).toLowerCase())) continue
+                    const info = parseRecordingInfo(fp, gameName)
+                    if (info) {
+                      recordings.push(info)
+                      seenPaths.add(fp.toLowerCase())
+                    }
+                  }
+                } catch {}
+              }
+            }
+            for (const item of directVideoFiles.slice(0, MAX_FILES_PER_FOLDER)) {
+              const fp = path.join(folderPath, item.name)
+              if (activeRemuxPaths.has(path.normalize(fp).toLowerCase())) continue
+              const info = parseRecordingInfo(fp, gameName)
+              if (info) {
+                recordings.push(info)
+                seenPaths.add(fp.toLowerCase())
+              }
+            }
+          } catch {}
+        }
       }
     } catch {}
   }
@@ -268,19 +324,38 @@ function scanRecordings() {
 
 function scanClips() {
   if (isCacheValid(cache.clips)) return cache.clips.data
-  const clipsPath = getClipsPath()
-  if (!clipsPath || !fs.existsSync(clipsPath)) return []
   const clips = []
-  try {
-    for (const file of fs.readdirSync(clipsPath)) {
-      if (!isVideoFile(file)) continue
-      const fp = path.join(clipsPath, file)
-      const gameMatch = file.match(/^(.+?) Clip \d{4}-\d{2}-\d{2}/)
-      const gameName = gameMatch ? gameMatch[1] : 'Unknown'
-      const info = parseRecordingInfo(fp, gameName)
-      if (info) clips.push(info)
-    }
-  } catch {}
+
+  function scanClipsDir(clipsDir) {
+    if (!clipsDir || !fs.existsSync(clipsDir)) return
+    try {
+      for (const file of fs.readdirSync(clipsDir)) {
+        if (!isVideoFile(file)) continue
+        const fp = path.join(clipsDir, file)
+        const gameMatch = file.match(/^(.+?) Clip \d{4}-\d{2}-\d{2}/)
+        const gameName = gameMatch ? gameMatch[1] : 'Unknown'
+        const info = parseRecordingInfo(fp, gameName)
+        if (info) clips.push(info)
+      }
+    } catch {}
+  }
+
+  // Legacy: {org}/Clips/
+  scanClipsDir(getClipsPath())
+
+  // New: {org}/{GameName}/Clips/
+  const organizedPath = getOrganizedPath()
+  if (organizedPath && fs.existsSync(organizedPath)) {
+    try {
+      for (const entry of fs.readdirSync(organizedPath, { withFileTypes: true })) {
+        if (!entry.isDirectory() || entry.name.toLowerCase() === 'clips') continue
+        if (entry.name.includes(' - Week of')) continue // skip old-format folders
+        const gameClipsDir = path.join(organizedPath, entry.name, 'Clips')
+        scanClipsDir(gameClipsDir)
+      }
+    } catch {}
+  }
+
   clips.sort((a, b) => b.mtime - a.mtime)
   cache.clips.data = clips
   cache.clips.time = Date.now()
@@ -323,7 +398,7 @@ function createClip(sourcePath, startTime, endTime, gameName = 'Unknown', audioT
       return reject(new Error('End time must be > start time'))
     }
 
-    const clipsPath = getClipsPath()
+    const clipsPath = getGameClipsPath(gameName)
     if (!clipsPath) return reject(new Error('No clips folder'))
     fs.mkdirSync(clipsPath, { recursive: true })
 
@@ -746,6 +821,7 @@ module.exports = {
   getOrganizedPath,
   getObsPath,
   getClipsPath,
+  getGameClipsPath,
   isClipPath,
   scanRecordings,
   scanClips,

@@ -31,7 +31,7 @@ describe('organizeSpecificRecording', () => {
   beforeEach(() => {
     vi.resetModules()
     store = makeMockStore({
-      settings: { destinationPath: destDir },
+      settings: { destinationPath: destDir, weekFolders: true },
     })
   })
 
@@ -52,11 +52,15 @@ describe('organizeSpecificRecording', () => {
     vi.useRealTimers()
 
     expect(result.success).toBe(true)
+    // With weekFolders=true: destDir/TestGame/Week of Jan 8 2024/
     const destEntries = fs.readdirSync(destDir)
     expect(destEntries).toHaveLength(1)
+    expect(destEntries[0]).toBe('TestGame')
+    const weekEntries = fs.readdirSync(path.join(destDir, 'TestGame'))
+    expect(weekEntries).toHaveLength(1)
     // Week folder must reflect the file's mtime (Jan 2024), not today's date
-    expect(destEntries[0]).toMatch(/Jan.*2024/)
-    expect(destEntries[0]).toContain('Jan 8 2024')
+    expect(weekEntries[0]).toMatch(/Jan.*2024/)
+    expect(weekEntries[0]).toContain('Jan 8 2024')
   })
 
   // Test 22 — skips files already inside the destination (no double-move)
