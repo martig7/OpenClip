@@ -290,12 +290,14 @@ function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}, o
       cleanupFullscreenProcessAudio().catch((err) =>
         log(`Fullscreen process audio cleanup failed: ${err.message}`)
       )
-      onOrganizeProgress({
-        phase: 'recording',
-        stage: 'waiting',
-        label: 'Waiting for OBS to unlock…',
-        gameName: stoppedGame,
-      })
+      if (stoppedGame !== '(Unorganized)') {
+        onOrganizeProgress({
+          phase: 'recording',
+          stage: 'waiting',
+          label: 'Waiting for OBS to unlock…',
+          gameName: stoppedGame,
+        })
+      }
       // Tell the OBS plugin to stop recording
       stopRecording().catch((err) => log(`Plugin stopRecording failed: ${err.message}`))
       if (stoppedGame !== '(Unorganized)') scheduleOrganize(stoppedGame)
@@ -309,12 +311,14 @@ function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}, o
       cleanupFullscreenProcessAudio().catch((err) =>
         log(`Fullscreen process audio cleanup failed: ${err.message}`)
       )
-      onOrganizeProgress({
-        phase: 'recording',
-        stage: 'waiting',
-        label: 'Waiting for OBS to unlock…',
-        gameName: stoppedGame,
-      })
+      if (stoppedGame !== '(Unorganized)') {
+        onOrganizeProgress({
+          phase: 'recording',
+          stage: 'waiting',
+          label: 'Waiting for OBS to unlock…',
+          gameName: stoppedGame,
+        })
+      }
 
       // Stop recording for the old game, then start for the new one
       stopRecording()

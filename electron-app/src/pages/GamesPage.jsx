@@ -85,7 +85,7 @@ export default function GamesPage() {
 
   const trackDataLoadedRef = useRef(false)
   const [advancedGameAddition, setAdvancedGameAddition] = useState(false)
-  const [fsConfig, setFsConfig] = useState({ enabled: false, defaultScene: '', gameAudioEnabled: true })
+  const [fsConfig, setFsConfig] = useState(null)
 
   useEffect(() => {
     const allInputNames = new Set([
