@@ -73,6 +73,7 @@ function msToElectronSettings(ms, obsRecordingPath, electronData) {
     listView: electronData?.listView !== false,
     organizeRemux: electronData?.organizeRemux !== false,
     advancedGameAddition: electronData?.advancedGameAddition || false,
+    autoRegisterFullscreenApps: electronData?.autoRegisterFullscreenApps || false,
     autoClip: {
       enabled: ms.auto_clip_settings?.enabled || false,
       bufferBefore: ms.auto_clip_settings?.buffer_before_seconds ?? 30,
@@ -296,6 +297,10 @@ const store = {
       }
       if (value.advancedGameAddition !== undefined) {
         this._electron().advancedGameAddition = value.advancedGameAddition
+        this._saveElectron()
+      }
+      if (value.autoRegisterFullscreenApps !== undefined) {
+        this._electron().autoRegisterFullscreenApps = value.autoRegisterFullscreenApps
         this._saveElectron()
       }
       this._msData = electronSettingsToMs(this._ms(), value)

@@ -165,7 +165,13 @@ export default function GeneralSettingsSection({
               }
             />
           </div>
-          <div className={tc} style={{ borderTop: 'none' }}>
+        </AppSettingsSectionCard>
+      )
+
+    case 'games-list':
+      return (
+        <AppSettingsSectionCard {...sectionCardProps}>
+          <div className={tc} style={{ marginTop: 0 }}>
             <div>
               <div className="toggle-label">Advanced Game Addition</div>
               <div className="toggle-desc">
@@ -178,6 +184,21 @@ export default function GeneralSettingsSection({
               className={`toggle ${settings.advancedGameAddition ? 'on' : ''}`}
               onClick={() =>
                 updateSetting('advancedGameAddition', !settings.advancedGameAddition)
+              }
+            />
+          </div>
+          <div className={tc} style={{ borderTop: 'none' }}>
+            <div>
+              <div className="toggle-label">Auto-Register Fullscreen Apps</div>
+              <div className="toggle-desc">
+                Automatically add apps detected by the Any Fullscreen App scene to your games list
+              </div>
+            </div>
+            <button
+              type="button"
+              className={`toggle ${settings.autoRegisterFullscreenApps ? 'on' : ''}`}
+              onClick={() =>
+                updateSetting('autoRegisterFullscreenApps', !settings.autoRegisterFullscreenApps)
               }
             />
           </div>

@@ -23,6 +23,7 @@ export const SETTINGS_CHIP_LABELS = {
 /** All settings areas (General subsections + Encoding). @type {SettingsSectionDef[]} */
 export const SETTINGS_SECTIONS = [
   { id: 'watcher', title: 'Watcher', blurb: 'Startup behavior', group: 'automation' },
+  { id: 'games-list', title: 'Games List', blurb: 'Game addition & auto-registration', group: 'automation' },
   { id: 'organize', title: 'Organize', blurb: 'Remux & move rules', group: 'automation' },
   { id: 'view', title: 'View', blurb: 'List, grid & waveforms', group: 'view' },
   { id: 'hotkey', title: 'Clip Marker Hotkey', blurb: 'In-game marker key', group: 'automation' },

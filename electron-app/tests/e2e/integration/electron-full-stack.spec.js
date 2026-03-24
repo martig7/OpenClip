@@ -251,43 +251,109 @@ test.describe('Electron full stack integration (UI + plugin + OBS + recordings)'
     await expect.poll(() => getScenes(), { timeout: 10_000 }).not.toContain(sceneName)
   })
 
-  test('settings toggles persist after save (watcher + advanced game addition)', async () => {
+  test('settings toggles persist after save (watcher)', async () => {
     await page.goto('http://localhost:5173/#/settings?section=watcher')
     await expect(page.locator('.settings-page .msb-title')).toHaveText('Settings')
 
     const before = await page.evaluate(async () => {
       const s = await window.api.getStore('settings')
-      return {
-        startWatcherOnStartup: !!s?.startWatcherOnStartup,
-        advancedGameAddition: !!s?.advancedGameAddition,
-      }
+      return { startWatcherOnStartup: !!s?.startWatcherOnStartup }
     })
 
     const watcherRow = page.locator('.toggle-row', {
       has: page.locator('.toggle-label:has-text("Start Watcher on Startup")'),
     })
-    const advancedRow = page.locator('.toggle-row', {
-      has: page.locator('.toggle-label:has-text("Advanced Game Addition")'),
-    })
-    const watcherToggle = watcherRow.locator('.toggle')
-    const advancedToggle = advancedRow.locator('.toggle')
-
-    await watcherToggle.click()
-    await advancedToggle.click()
+    await watcherRow.locator('.toggle').click()
     await expect(page.locator('button:has-text("Save Settings")')).toBeEnabled()
     await page.locator('button:has-text("Save Settings")').click()
 
-    // Wait for post-save disable and assert persisted values in real store.
     await expect(page.locator('button:has-text("Save Settings")')).not.toBeEnabled()
     const after = await page.evaluate(async () => {
       const s = await window.api.getStore('settings')
-      return {
-        startWatcherOnStartup: !!s?.startWatcherOnStartup,
-        advancedGameAddition: !!s?.advancedGameAddition,
-      }
+      return { startWatcherOnStartup: !!s?.startWatcherOnStartup }
     })
     expect(after.startWatcherOnStartup).toBe(!before.startWatcherOnStartup)
-    expect(after.advancedGameAddition).toBe(!before.advancedGameAddition)
+  })
+
+  test('games list: Advanced Game Addition toggle persists after save', async () => {
+    // Force known baseline so the test is deterministic regardless of prior state.
+    await page.evaluate(async () => {
+      const s = (await window.api.getStore('settings')) ?? {}
+      await window.api.setStore('settings', { ...s, advancedGameAddition: false })
+    })
+    // Navigate away first so the subsequent goto triggers a full React reload.
+    await page.goto('http://localhost:5173/#/')
+    await page.goto('http://localhost:5173/#/settings?section=games-list')
+    await expect(page.locator('.settings-page .msb-title')).toHaveText('Settings')
+
+    const advancedRow = page.locator('.toggle-row', {
+      has: page.locator('.toggle-label:has-text("Advanced Game Addition")'),
+    })
+    const toggle = advancedRow.locator('.toggle')
+    await expect(toggle).not.toHaveClass(/\bon\b/)
+
+    await toggle.click()
+    await expect(toggle).toHaveClass(/\bon\b/)
+
+    await page.locator('button:has-text("Save Settings")').click()
+    await expect(page.locator('button:has-text("Save Settings")')).not.toBeEnabled()
+
+    const saved = await page.evaluate(async () => {
+      const s = await window.api.getStore('settings')
+      return !!s?.advancedGameAddition
+    })
+    expect(saved).toBe(true)
+  })
+
+  test('games list: Auto-Register Fullscreen Apps toggle persists after save', async () => {
+    // Force known baseline so the test is deterministic regardless of prior state.
+    await page.evaluate(async () => {
+      const s = (await window.api.getStore('settings')) ?? {}
+      await window.api.setStore('settings', { ...s, autoRegisterFullscreenApps: false })
+    })
+    // Navigate away first so the subsequent goto triggers a full React reload.
+    await page.goto('http://localhost:5173/#/')
+    await page.goto('http://localhost:5173/#/settings?section=games-list')
+    await expect(page.locator('.settings-page .msb-title')).toHaveText('Settings')
+
+    const autoRegisterRow = page.locator('.toggle-row', {
+      has: page.locator('.toggle-label:has-text("Auto-Register Fullscreen Apps")'),
+    })
+    const toggle = autoRegisterRow.locator('.toggle')
+    await expect(toggle).not.toHaveClass(/\bon\b/)
+
+    await toggle.click()
+    await expect(toggle).toHaveClass(/\bon\b/)
+
+    await page.locator('button:has-text("Save Settings")').click()
+    await expect(page.locator('button:has-text("Save Settings")')).not.toBeEnabled()
+
+    const saved = await page.evaluate(async () => {
+      const s = await window.api.getStore('settings')
+      return !!s?.autoRegisterFullscreenApps
+    })
+    expect(saved).toBe(true)
+  })
+
+  test('auto-register fullscreen apps: toggle shows off when setting is false', async () => {
+    await page.evaluate(async () => {
+      const s = (await window.api.getStore('settings')) ?? {}
+      await window.api.setStore('settings', { ...s, autoRegisterFullscreenApps: false })
+    })
+
+    const stored = await page.evaluate(async () => {
+      const s = await window.api.getStore('settings')
+      return s?.autoRegisterFullscreenApps
+    })
+    expect(stored).toBe(false)
+
+    // Navigate away first so the subsequent goto triggers a full React reload.
+    await page.goto('http://localhost:5173/#/')
+    await page.goto('http://localhost:5173/#/settings?section=games-list')
+    const autoRegisterRow = page.locator('.toggle-row', {
+      has: page.locator('.toggle-label:has-text("Auto-Register Fullscreen Apps")'),
+    })
+    await expect(autoRegisterRow.locator('.toggle')).not.toHaveClass(/\bon\b/)
   })
 
   test('fullscreen row interactions: enable + choose default scene', async () => {

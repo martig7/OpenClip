@@ -212,44 +212,58 @@ function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}, o
       if (fallback) {
         const exeLower = (fallback.exe || '').toLowerCase()
         const existing = games.find((g) => (g.exe || '').toLowerCase() === exeLower)
-        if (!existing) {
-          const newId = Date.now().toString(36) + Math.random().toString(36).slice(2, 5)
-          const newGame = {
-            id: newId,
-            name: fallback.name,
-            exe: fallback.exe,
-            windowClass: fallback.windowClass,
-            selector: fallback.selector,
-            windowMatchPriority: 2,
-            scene: fallback.scene,
-            isAutoDetected: true,
-            enabled: true,
-          }
-          store.set('games', [...games, newGame])
-          log(`Auto-registered fullscreen app: ${fallback.name}`)
-          onGamesUpdate()
-          Promise.resolve()
-            .then(async () => {
-              const { extractProcessIcon } = require('./winUtils')
-              fs.mkdirSync(ICONS_DIR, { recursive: true })
-              const processName = fallback.exe || fallback.name
-              const outPath = path.join(ICONS_DIR, `${path.basename(processName)}.png`)
-              const iconPath = await extractProcessIcon(processName, outPath)
-              if (!iconPath) return
-
-              const latestGames = store.get('games') || []
-              const idx = latestGames.findIndex((g) => g.id === newId)
-              if (idx < 0) return
-              latestGames[idx] = { ...latestGames[idx], icon_path: iconPath }
-              store.set('games', latestGames)
-              onGamesUpdate()
-            })
-            .catch((err) => {
-              log(`Fullscreen icon extraction failed: ${err.message}`)
-            })
-          detected = newGame
-        } else {
+        if (existing) {
           detected = existing
+        } else {
+          const settings = store.get('settings') || {}
+          if (settings.autoRegisterFullscreenApps === true) {
+            const newId = Date.now().toString(36) + Math.random().toString(36).slice(2, 5)
+            const newGame = {
+              id: newId,
+              name: fallback.name,
+              exe: fallback.exe,
+              windowClass: fallback.windowClass,
+              selector: fallback.selector,
+              windowMatchPriority: 2,
+              scene: fallback.scene,
+              isAutoDetected: true,
+              enabled: true,
+            }
+            store.set('games', [...games, newGame])
+            log(`Auto-registered fullscreen app: ${fallback.name}`)
+            onGamesUpdate()
+            Promise.resolve()
+              .then(async () => {
+                const { extractProcessIcon } = require('./winUtils')
+                fs.mkdirSync(ICONS_DIR, { recursive: true })
+                const processName = fallback.exe || fallback.name
+                const outPath = path.join(ICONS_DIR, `${path.basename(processName)}.png`)
+                const iconPath = await extractProcessIcon(processName, outPath)
+                if (!iconPath) return
+
+                const latestGames = store.get('games') || []
+                const idx = latestGames.findIndex((g) => g.id === newId)
+                if (idx < 0) return
+                latestGames[idx] = { ...latestGames[idx], icon_path: iconPath }
+                store.set('games', latestGames)
+                onGamesUpdate()
+              })
+              .catch((err) => {
+                log(`Fullscreen icon extraction failed: ${err.message}`)
+              })
+            detected = newGame
+          } else {
+            // Record using the fallback config without registering to the games list
+            detected = {
+              name: '(Unorganized)',
+              exe: fallback.exe,
+              windowClass: fallback.windowClass,
+              selector: fallback.selector,
+              scene: fallback.scene,
+              isAutoDetected: true,
+              enabled: true,
+            }
+          }
         }
       }
     }
@@ -284,7 +298,7 @@ function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}, o
       })
       // Tell the OBS plugin to stop recording
       stopRecording().catch((err) => log(`Plugin stopRecording failed: ${err.message}`))
-      scheduleOrganize(stoppedGame)
+      if (stoppedGame !== '(Unorganized)') scheduleOrganize(stoppedGame)
     } else if (detected && lastGame && detected.name !== lastGame.name) {
       const stoppedGame = lastGame.name
       lastGame = detected
@@ -325,7 +339,7 @@ function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}, o
           }, 500)
         })
 
-      scheduleOrganize(stoppedGame)
+      if (stoppedGame !== '(Unorganized)') scheduleOrganize(stoppedGame)
     }
 
     if (!stopped) {
