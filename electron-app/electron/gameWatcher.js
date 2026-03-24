@@ -63,11 +63,6 @@ function detectRunningGame(games) {
   return null
 }
 
-/**
- * Catch-all fallback: if no configured game matched, look for a fullscreen window.
- * Returns a synthetic game object (with _isFullscreenFallback flag) or null.
- * Skips any exe already covered by an enabled configured game.
- */
 function detectFullscreenFallback(games, fsConfig) {
   if (!fsConfig?.enabled || !fsConfig?.defaultScene) return null
 
@@ -78,8 +73,6 @@ function detectFullscreenFallback(games, fsConfig) {
   const fw = fullscreen[0]
   const exeLower = (fw.exe || '').toLowerCase()
 
-  // If this exe already exists in the games list (even disabled), don't let
-  // fullscreen fallback bypass the user's explicit per-game toggle.
   const alreadyCovered = games.some((g) => (g.exe || '').toLowerCase() === exeLower)
   if (alreadyCovered) return null
 
@@ -100,7 +93,7 @@ function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}, o
   let lastGame = null
   let lastFullscreenAudioKey = null
   let lastFullscreenAudioSourceName = null
-let lastFullscreenAudioScene = null
+  let lastFullscreenAudioScene = null
   let stopped = false
   const organizeQueue = []
   let organizing = false
@@ -217,7 +210,6 @@ let lastFullscreenAudioScene = null
       const fsConfig = store.get('fullscreenRecording')
       const fallback = detectFullscreenFallback(games, fsConfig)
       if (fallback) {
-        // Auto-register this exe if not already in the games list
         const exeLower = (fallback.exe || '').toLowerCase()
         const existing = games.find((g) => (g.exe || '').toLowerCase() === exeLower)
         if (!existing) {

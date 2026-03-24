@@ -12,7 +12,6 @@ import {
   fullscreenManagedGameAudioInputName,
 } from './audioSourceUtils'
 
-/** `gamesAudioProps`: master audio + track UI state from GamesPage (`useMemo`). */
 export function GamesPageBody({
   games,
   openAddModal,
@@ -60,7 +59,6 @@ export function GamesPageBody({
     stopEditing,
   } = useDrawerState(games)
 
-  // ── Fullscreen-config drawer state ──────────────────────────────────────
   const [fsDrawerOpen, setFsDrawerOpen] = useState(false)
   const [fsSceneAudioSources, setFsSceneAudioSources] = useState([])
   const [fsAudioLoading, setFsAudioLoading] = useState(false)
@@ -149,7 +147,6 @@ export function GamesPageBody({
     setFsSceneAudioSources([])
   }, [])
 
-  // Reload fs scene audio when the scene changes while the drawer is open
   useEffect(() => {
     if (fsDrawerOpen) loadFsSceneAudio(fsConfig?.defaultScene)
   }, [fsDrawerOpen, fsConfig?.defaultScene, loadFsSceneAudio])

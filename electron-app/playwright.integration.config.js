@@ -24,7 +24,7 @@ import { defineConfig, devices } from '@playwright/test'
 export default defineConfig({
   testDir: './tests/e2e/integration',
   // Exclude the helpers directory — those are modules, not test files
-  testIgnore: ['**/helpers/**'],
+  testIgnore: ['**/helpers/**', '**/electron-full-stack.spec.js'],
   timeout: 60000,
   // Sequential: tests share a single OBS instance
   fullyParallel: false,

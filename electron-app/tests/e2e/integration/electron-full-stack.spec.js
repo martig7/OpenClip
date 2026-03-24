@@ -37,6 +37,21 @@ test.describe('Electron full stack integration (UI + plugin + OBS + recordings)'
   let page
   const recordingsDir = process.env.OBS_RECORDING_PATH
 
+  async function cleanupAllGames() {
+    if (!page) return
+    await page.evaluate(async () => {
+      const games = (await window.api.getGames()) || []
+      for (const game of games) {
+        if (!game?.id) continue
+        try {
+          await window.api.removeGame(game.id)
+        } catch {
+          // Best-effort cleanup to prevent test data buildup.
+        }
+      }
+    })
+  }
+
   test.beforeAll(async () => {
     electronApp = await electron.launch({
       args: ['.', '--integration-mode'],
@@ -59,12 +74,24 @@ test.describe('Electron full stack integration (UI + plugin + OBS + recordings)'
 
   test.afterAll(async () => {
     try {
+      await cleanupAllGames()
+      await cleanupTestScenes()
+    } catch {}
+    try {
       if (electronApp) await electronApp.close()
     } catch {}
   })
 
   test.beforeEach(async () => {
     await cleanupTestScenes()
+    // Keep fullscreen config deterministic across tests.
+    await page.evaluate(async () => {
+      await window.api.setFullscreenRecording({
+        enabled: false,
+        defaultScene: '',
+        gameAudioEnabled: true,
+      })
+    })
   })
 
   test.afterEach(async () => {
@@ -274,9 +301,13 @@ test.describe('Electron full stack integration (UI + plugin + OBS + recordings)'
     await fullscreenRow.locator('button[title="Choose default scene"]').click()
     await page.locator('.fs-scene-picker__item', { hasText: defaultScene }).click()
 
-    // Enable fullscreen catch-all recording.
+    // Enable fullscreen catch-all recording from a known OFF baseline.
     const toggle = fullscreenRow.locator('.col-toggle .toggle')
     await toggle.click()
+    await expect.poll(async () => {
+      const cfg = await page.evaluate(async () => window.api.getFullscreenRecording())
+      return !!cfg?.enabled
+    }).toBe(true)
     await expect(toggle).toHaveClass(/\bon\b/)
 
     const fsCfg = await page.evaluate(async () => window.api.getFullscreenRecording())
