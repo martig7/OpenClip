@@ -44,6 +44,8 @@ describe.skipIf(!obsAvailable)('OBS Orchestration – live OBS instance', () => 
   let ws // shorthand alias used in every test
   /** A free port with nothing listening on it, used for "unreachable OBS" tests. */
   let unusedPort
+  /** Snapshots for SetInputAudioTracks tests — restored in afterEach. */
+  const _audioTrackRestore = new Map()
 
   // Start a single OBS process for the entire test file.
   // We allow up to 60 s for OBS to boot and the WebSocket server to become
@@ -60,9 +62,25 @@ describe.skipIf(!obsAvailable)('OBS Orchestration – live OBS instance', () => 
     obsInstance?.stop()
   })
 
-  // After each test, delete every scene except the seed 'Scene' so that the
-  // next test always starts from a clean, known state.
+  // After each test: restore any tweaked audio tracks, then delete every scene
+  // except the seed 'Scene'.
   afterEach(async () => {
+    if (ws && _audioTrackRestore.size > 0) {
+      const { default: OBSWebSocket } = await import('obs-websocket-js')
+      const obs = new OBSWebSocket()
+      try {
+        const url = `ws://${ws.host}:${ws.port}`
+        await obs.connect(url, ws.password)
+        for (const [inputName, tracks] of _audioTrackRestore.entries()) {
+          await obs
+            .call('SetInputAudioTracks', { inputName, inputAudioTracks: tracks })
+            .catch(() => {})
+        }
+      } finally {
+        _audioTrackRestore.clear()
+        obs.disconnect().catch(() => {})
+      }
+    }
     if (ws) await _cleanupScenes(ws, 'Scene')
   })
 
@@ -213,6 +231,72 @@ describe.skipIf(!obsAvailable)('OBS Orchestration – live OBS instance', () => 
       const second = await getOBSScenes(ws)
 
       expect(first).toEqual(second)
+    })
+  })
+
+  // ── Input audio tracks (obs-websocket 5.x) ────────────────────────────────
+  // Exercises the same requests OpenClip's UI relies on for per-source routing.
+
+  describe('GetInputAudioTracks / SetInputAudioTracks', () => {
+    async function withRawObs(callback) {
+      const { default: OBSWebSocket } = await import('obs-websocket-js')
+      const obs = new OBSWebSocket()
+      const url = `ws://${ws.host}:${ws.port}`
+      await obs.connect(url, ws.password)
+      try {
+        return await callback(obs)
+      } finally {
+        obs.disconnect().catch(() => {})
+      }
+    }
+
+    async function findTrackableInputName(obs) {
+      const { inputs } = await obs.call('GetInputList')
+      expect(Array.isArray(inputs)).toBe(true)
+      for (const { inputName } of inputs) {
+        try {
+          await obs.call('GetInputAudioTracks', { inputName })
+          return inputName
+        } catch {
+          continue
+        }
+      }
+      return null
+    }
+
+    it('reads inputAudioTracks from at least one OBS input', async () => {
+      await withRawObs(async (obs) => {
+        const inputName = await findTrackableInputName(obs)
+        expect(inputName, 'No OBS input responded to GetInputAudioTracks').toBeTruthy()
+        const res = await obs.call('GetInputAudioTracks', { inputName })
+        expect(res).toHaveProperty('inputAudioTracks')
+        expect(Object.keys(res.inputAudioTracks).length).toBeGreaterThan(0)
+      })
+    })
+
+    it('round-trips SetInputAudioTracks (e.g. track 4 off, others on)', async () => {
+      await withRawObs(async (obs) => {
+        const inputName = await findTrackableInputName(obs)
+        expect(inputName, 'No OBS input responded to GetInputAudioTracks').toBeTruthy()
+
+        const before = await obs.call('GetInputAudioTracks', { inputName })
+        _audioTrackRestore.set(inputName, { ...before.inputAudioTracks })
+
+        const desired = {
+          '1': true,
+          '2': true,
+          '3': true,
+          '4': false,
+          '5': true,
+          '6': true,
+        }
+        await obs.call('SetInputAudioTracks', { inputName, inputAudioTracks: desired })
+        const after = await obs.call('GetInputAudioTracks', { inputName })
+        for (let t = 1; t <= 6; t += 1) {
+          const k = String(t)
+          expect(Boolean(after.inputAudioTracks[k])).toBe(desired[k])
+        }
+      })
     })
   })
 })

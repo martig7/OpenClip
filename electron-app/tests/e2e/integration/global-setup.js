@@ -14,7 +14,7 @@
 
 'use strict'
 
-const { mkdtempSync, rmSync } = require('fs')
+const { mkdtempSync, rmSync, existsSync, readFileSync } = require('fs')
 const { tmpdir } = require('os')
 const { join } = require('path')
 
@@ -39,9 +39,34 @@ module.exports = async function globalSetup() {
   // Start a fully isolated headless OBS:
   //   --headless --portable  keeps OBS from touching the developer's real config
   //   random free port       avoids conflicts with any running OBS
+  const pluginPortFile = join(
+    tmpdir(),
+    `openclip-plugin-port-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`
+  )
+
   const obs = await startOBS({
     initialScenes: ['Scene'],
+    installOpenClipPlugin: true,
+    openClipPluginPortFilePath: pluginPortFile,
   })
+
+  // Wait for native plugin to publish its HTTP port.
+  let pluginHttpPort = null
+  const deadline = Date.now() + 45_000
+  while (Date.now() < deadline) {
+    if (existsSync(pluginPortFile)) {
+      const raw = String(readFileSync(pluginPortFile, 'utf-8')).trim()
+      const parsed = parseInt(raw, 10)
+      if (parsed > 0 && parsed < 65536) {
+        pluginHttpPort = parsed
+        break
+      }
+    }
+    await new Promise((r) => setTimeout(r, 250))
+  }
+  if (!pluginHttpPort) {
+    throw new Error(`OpenClip plugin did not publish a valid port file at ${pluginPortFile}`)
+  }
 
   // Set env vars BEFORE Playwright spawns the webServer subprocess and test
   // workers — both inherit the current process environment.
@@ -50,9 +75,13 @@ module.exports = async function globalSetup() {
   process.env.OBS_RECORDING_PATH = obsRecordingsDir
   process.env.OPENCLIP_DEST_PATH = openclipDestDir
   process.env.OPENCLIP_INTEGRATION_TEST = 'true'
+  process.env.OPENCLIP_PLUGIN_PORT_FILE = pluginPortFile
+  process.env.OPENCLIP_PLUGIN_HTTP_PORT = String(pluginHttpPort)
 
   console.log(
     `\n[integration] OBS WebSocket → ws://${obs.wsSettings.host}:${obs.wsSettings.port}` +
+      `\n[integration] OpenClip plugin HTTP → http://127.0.0.1:${pluginHttpPort}` +
+      `\n[integration] OpenClip plugin port file → ${pluginPortFile}` +
       `\n[integration] OBS recordings → ${obsRecordingsDir}` +
       `\n[integration] OpenClip dest  → ${openclipDestDir}\n`
   )
@@ -60,6 +89,9 @@ module.exports = async function globalSetup() {
   // Playwright calls the returned function as teardown after all tests.
   return async function globalTeardown() {
     obs.stop()
+    try {
+      rmSync(pluginPortFile, { force: true })
+    } catch {}
     rmSync(obsRecordingsDir, { recursive: true, force: true })
     rmSync(openclipDestDir, { recursive: true, force: true })
   }

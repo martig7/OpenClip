@@ -17,7 +17,17 @@ All commands run from `electron-app/`:
 - **Unit tests:** `npm run test:unit` or `npx vitest run`
 - **E2E tests:** `npm run test:e2e` (Playwright; needs `npx playwright install chromium` first)
 - **Full test suite:** `npm run test` (includes vitest + Playwright + integration tests)
-- **Build:** `npm run build` (Vite production build to `dist/`)
+- **Integration (OBS WS + plugin harness):** `npm run test:integration` — headless OBS WebSocket tests under `tests/integration/obs/`, plus **mock OpenClip plugin HTTP** contract tests under `tests/integration/plugin/` (no OBS/DLL required).
+- **Build:** `npm run build` (runs `build:plugin` then Vite production build to `dist/`)
+- **OBS plugin only:** `npm run build:plugin` (CMake Release → `resources/obs-plugin/openclip-obs.dll`)
+- **Plugin incremental (tests):** `npm run build:plugin:ensure` — rebuilds only when `obs-plugin/` sources are newer than the staged DLL (used by `pretest`, `test:integration`, `test:e2e:integration`). On non-Windows this no-ops. Set **`OPENCLIP_SKIP_PLUGIN_BUILD=1`** to skip the ensure step.
+- **Plugin watch (dev):** `npm run build:plugin:watch` — rebuild on every change under `obs-plugin/src` and `obs-plugin/include` (Windows only; run in a second terminal).
+
+### OpenClip OBS plugin test harness
+
+- The native plugin speaks **HTTP** (`POST /api` JSON `{ method, params }`) on a port written to `%APPDATA%\open-clip\runtime\plugin_port` (see `electron/pluginHttpTransport.js`).
+- **`tests/integration/plugin/pluginHarness.mjs`** starts an in-process mock that implements the same wire format — use **`OPENCLIP_PLUGIN_HTTP_PORT`** so `resolvePluginPort()` targets the harness without Electron.
+- **`electron/pluginHttpTransport.js`** is Electron-free and shared with the Electron `obsPlugin.js` client; integration tests import it directly.
 
 ### Linux / Cloud VM caveats
 

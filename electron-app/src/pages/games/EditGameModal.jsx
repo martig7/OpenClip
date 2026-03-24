@@ -25,6 +25,11 @@ export default function EditGameModal({
   toggleTrack,
   trackLabels,
   variant = 'modal',
+  /** Dedicated scene (auto-detected games) — drawer edit only */
+  onCreateScene,
+  creatingScene,
+  applyMasterOnCreateScene,
+  setApplyMasterOnCreateScene,
 }) {
   const { game, sceneAudioSources, loading } = modal
 
@@ -219,6 +224,44 @@ export default function EditGameModal({
           </div>
         )}
       </div>
+
+      {variant === 'drawer' && game.isAutoDetected && onCreateScene && (
+        <section className="drawer-section" style={{ marginTop: 8 }}>
+          <div className="drawer-section-title">Dedicated Scene</div>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 8px' }}>
+            This game was auto-detected. Create a dedicated OBS scene to customize its sources and
+            audio independently.
+          </p>
+          {setApplyMasterOnCreateScene && (
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                fontSize: 12,
+                color: 'var(--text-muted)',
+                margin: '0 0 8px',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={!!applyMasterOnCreateScene}
+                onChange={(e) => setApplyMasterOnCreateScene(e.target.checked)}
+              />
+              Apply master audio sources after scene creation
+            </label>
+          )}
+          <button
+            className="btn btn-secondary btn-sm"
+            type="button"
+            disabled={creatingScene}
+            onClick={() => onCreateScene(game)}
+          >
+            <Plus size={12} />
+            {creatingScene ? 'Creating…' : 'Create OBS Scene (Remove from Default)'}
+          </button>
+        </section>
+      )}
 
       {/* Video Capture Source */}
       {game.scene && (

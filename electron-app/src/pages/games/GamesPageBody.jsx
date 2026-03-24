@@ -7,6 +7,10 @@ import { ChevronDown } from 'lucide-react'
 import { useGamesFilter } from '../../hooks/useGamesFilter'
 import { useDrawerState } from '../../hooks/useDrawerState'
 import { useSceneAudioMutations } from '../../hooks/useSceneAudioMutations'
+import {
+  FULLSCREEN_GAME_AUDIO_PREFIX,
+  fullscreenManagedGameAudioInputName,
+} from './audioSourceUtils'
 
 /** `gamesAudioProps`: master audio + track UI state from GamesPage (`useMemo`). */
 export function GamesPageBody({
@@ -74,13 +78,53 @@ export function GamesPageBody({
 
   const fsSceneAudioSourcesForDisplay = useMemo(() => {
     const hasManagedGameAudio = fsSceneAudioSources.some((s) =>
-      (s.inputName || '').startsWith('Game Audio (Fullscreen')
+      (s.inputName || '').startsWith(FULLSCREEN_GAME_AUDIO_PREFIX)
     )
     if (fsConfig?.gameAudioEnabled && !hasManagedGameAudio) {
+      const anchor = games.find(
+        (g) =>
+          g.isAutoDetected &&
+          g.scene === fsConfig?.defaultScene &&
+          (g.exe || g.name)
+      )
+      const syntheticName = anchor
+        ? fullscreenManagedGameAudioInputName(anchor)
+        : null
+      if (syntheticName) {
+        return [
+          ...fsSceneAudioSources,
+          { inputName: syntheticName, inputKind: 'wasapi_process_output_capture' },
+        ]
+      }
       return [...fsSceneAudioSources, { inputName: 'Game Audio', inputKind: 'magic_game_audio' }]
     }
     return fsSceneAudioSources
-  }, [fsSceneAudioSources, fsConfig?.gameAudioEnabled])
+  }, [fsSceneAudioSources, fsConfig?.defaultScene, fsConfig?.gameAudioEnabled, games])
+
+  const isSelectedGameOnFullscreenDefault =
+    !!selectedGame &&
+    !!selectedGame.isAutoDetected &&
+    !!selectedGame.scene &&
+    selectedGame.scene === fsConfig?.defaultScene
+
+  const sceneAudioSourcesForDisplay = useMemo(() => {
+    const hasManagedGameAudio = sceneAudioSources.some((s) =>
+      (s.inputName || '').startsWith(FULLSCREEN_GAME_AUDIO_PREFIX)
+    )
+    if (isSelectedGameOnFullscreenDefault && fsConfig?.gameAudioEnabled && !hasManagedGameAudio && selectedGame) {
+      const syntheticName = fullscreenManagedGameAudioInputName(selectedGame)
+      return [
+        ...sceneAudioSources,
+        { inputName: syntheticName, inputKind: 'wasapi_process_output_capture' },
+      ]
+    }
+    return sceneAudioSources
+  }, [
+    sceneAudioSources,
+    isSelectedGameOnFullscreenDefault,
+    fsConfig?.gameAudioEnabled,
+    selectedGame,
+  ])
 
   const loadFsSceneAudio = useCallback(async (sceneName) => {
     if (!sceneName) { setFsSceneAudioSources([]); return }
@@ -108,7 +152,7 @@ export function GamesPageBody({
   // Reload fs scene audio when the scene changes while the drawer is open
   useEffect(() => {
     if (fsDrawerOpen) loadFsSceneAudio(fsConfig?.defaultScene)
-  }, [fsConfig?.defaultScene]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fsDrawerOpen, fsConfig?.defaultScene, loadFsSceneAudio])
 
   const otherGameScenes = useMemo(() => {
     if (!selectedGame?.id) return new Set()
@@ -129,25 +173,83 @@ export function GamesPageBody({
     try {
       const result = await api.createOBSScene(game.name, fsConfig.defaultScene)
       if (result?.success) {
+        const shouldInheritFullscreenGameAudio =
+          game.scene === fsConfig?.defaultScene && fsConfig?.gameAudioEnabled
         if (applyMasterOnCreateScene && masterAudioSources.length > 0) {
           await Promise.all(
-            masterAudioSources
-              .filter((source) => source.kind !== 'magic_game_audio')
-              .map((source) =>
-                api
-                  .addAudioSourceToScenes([game.name], source.kind, source.name, source.inputSettings || {})
+            masterAudioSources.map((source) => {
+              if (source.kind === 'magic_game_audio') {
+                const exeGuess =
+                  game.exe ||
+                  (game.selector?.toLowerCase().endsWith('.exe')
+                    ? game.selector
+                    : `${game.selector || ''}.exe`)
+                const windowClassGuess = game.windowClass || game.selector || ''
+                const titleGuess = game.selector || ''
+                return api
+                  .addAudioSourceToScenes(
+                    [game.name],
+                    'wasapi_process_output_capture',
+                    `Game Audio (${game.name})`,
+                    {
+                      window: `${titleGuess}:${windowClassGuess}:${exeGuess}`,
+                      window_match_priority: game.windowMatchPriority ?? 0,
+                    }
+                  )
                   .catch(() => {})
-              )
+              }
+              return api
+                .addAudioSourceToScenes(
+                  [game.name],
+                  source.kind,
+                  source.name,
+                  source.inputSettings || {}
+                )
+                .catch(() => {})
+            })
           )
           await Promise.all(
-            masterAudioSources
-              .filter((source) => source.kind !== 'magic_game_audio')
-              .map((source) => {
-                const tracks = trackData[source.name]
-                if (!tracks || Object.keys(tracks).length === 0) return Promise.resolve()
-                return api.setInputAudioTracks(source.name, tracks).catch(() => {})
-              })
+            masterAudioSources.map((source) => {
+              const masterKey = source.kind === 'magic_game_audio' ? 'Game Audio' : source.name
+              const tracks = trackData[masterKey]
+              if (!tracks || Object.keys(tracks).length === 0) return Promise.resolve()
+              const obsInputName =
+                source.kind === 'magic_game_audio' ? `Game Audio (${game.name})` : source.name
+              return api.setInputAudioTracks(obsInputName, tracks).catch(() => {})
+            })
           )
+        }
+        if (
+          shouldInheritFullscreenGameAudio &&
+          !masterAudioSources.some((s) => s.kind === 'magic_game_audio')
+        ) {
+          const exeGuess =
+            game.exe ||
+            (game.selector?.toLowerCase().endsWith('.exe')
+              ? game.selector
+              : `${game.selector || ''}.exe`)
+          const windowClassGuess = game.windowClass || game.selector || ''
+          const titleGuess = game.selector || ''
+          await api
+            .addAudioSourceToScenes(
+              [game.name],
+              'wasapi_process_output_capture',
+              `Game Audio (${game.name})`,
+              {
+                window: `${titleGuess}:${windowClassGuess}:${exeGuess}`,
+                window_match_priority: game.windowMatchPriority ?? 0,
+              }
+            )
+            .catch(() => {})
+          const parentFsInput = fullscreenManagedGameAudioInputName(game)
+          const inheritedTracks =
+            trackData[parentFsInput] ||
+            trackData['Game Audio']
+          if (inheritedTracks && Object.keys(inheritedTracks).length > 0) {
+            await api
+              .setInputAudioTracks(`Game Audio (${game.name})`, inheritedTracks)
+              .catch(() => {})
+          }
         }
         await saveGame(game.id, { scene: game.name, isAutoDetected: false })
         showToast(`Scene "${game.name}" created.`)
@@ -252,6 +354,41 @@ export function GamesPageBody({
     await removeFsSource(sceneName, inputName)
   }
 
+  async function handleAddSourceForSelectedGame(sceneName, source) {
+    if (
+      isSelectedGameOnFullscreenDefault &&
+      sceneName === fsConfig?.defaultScene &&
+      source?.kind === 'magic_game_audio'
+    ) {
+      await onFsConfigChange({ ...fsConfig, gameAudioEnabled: true })
+      showToast('Fullscreen Game Audio enabled.')
+      return
+    }
+    await addSourceToScene(sceneName, source)
+  }
+
+  async function handleRemoveSourceForSelectedGame(sceneName, inputName) {
+    const isFullscreenGameAudio =
+      inputName === 'Game Audio' || (inputName || '').startsWith('Game Audio (Fullscreen')
+    if (isSelectedGameOnFullscreenDefault && sceneName === fsConfig?.defaultScene && isFullscreenGameAudio) {
+      const toRemove = sceneAudioSources
+        .map((s) => s.inputName)
+        .filter((name) => (name || '').startsWith('Game Audio (Fullscreen'))
+      await Promise.all(
+        toRemove.map((name) =>
+          api.removeAudioSourceFromScenes([sceneName], name).catch(() => {})
+        )
+      )
+      setSceneAudioSources((prev) =>
+        prev.filter((s) => !(s.inputName || '').startsWith('Game Audio (Fullscreen'))
+      )
+      await onFsConfigChange({ ...fsConfig, gameAudioEnabled: false })
+      showToast('Fullscreen Game Audio disabled.')
+      return
+    }
+    await removeSourceFromScene(sceneName, inputName)
+  }
+
   return (
     <div className="page-body games-page-layout">
       <GamesToolbar
@@ -288,7 +425,7 @@ export function GamesPageBody({
           gameId={drawerGameId}
           game={selectedGame}
           isEditing={isEditing}
-          sceneAudioSources={sceneAudioSources}
+          sceneAudioSources={sceneAudioSourcesForDisplay}
           audioLoading={audioLoading}
           editedGame={editedGame}
           onClose={closeDrawer}
@@ -299,8 +436,8 @@ export function GamesPageBody({
           onChangeGame={changeDraftGame}
           otherGameScenes={otherGameScenes}
           masterAudioSources={masterAudioSources}
-          addSourceToScene={addSourceToScene}
-          removeSourceFromScene={removeSourceFromScene}
+          addSourceToScene={handleAddSourceForSelectedGame}
+          removeSourceFromScene={handleRemoveSourceForSelectedGame}
           addMasterSource={addMasterSource}
           trackData={trackData}
           trackLoading={trackLoading}

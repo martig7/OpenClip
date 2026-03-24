@@ -70,8 +70,8 @@ const mockApi = {
   isOnboardingComplete: async () => true,
   setOnboardingComplete: asyncNoop,
   getOBSWSScenes: asyncArr,
-  createOBSScene: async () => ({ success: false, message: 'Not in Electron' }),
-  createOBSSceneFromScratch: async () => ({ success: false, message: 'Not in Electron' }),
+  createOBSScene: async () => ({ success: true, message: 'Scene created (mock)' }),
+  createOBSSceneFromScratch: async () => ({ success: true, message: 'Scene created (mock)' }),
   deleteOBSScene: async () => ({ success: false, message: 'Not in Electron' }),
   addAudioSourceToScenes: async () => ({ success: false, message: 'Not in Electron', results: [] }),
   removeAudioSourceFromScenes: async () => ({

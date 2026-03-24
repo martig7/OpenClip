@@ -259,7 +259,9 @@ export function GameDetailDrawer({
                       onClick={() => onCreateScene(drawerGame)}
                     >
                       <Plus size={12} />
-                      {creatingScene ? 'Creating…' : 'Create OBS Scene'}
+                      {creatingScene
+                        ? 'Creating…'
+                        : 'Create OBS Scene (Remove from Default)'}
                     </button>
                   </section>
                 )}
@@ -308,6 +310,10 @@ export function GameDetailDrawer({
                 trackLoading={trackLoading}
                 toggleTrack={toggleTrack}
                 trackLabels={trackLabels}
+                onCreateScene={onCreateScene}
+                creatingScene={creatingScene}
+                applyMasterOnCreateScene={applyMasterOnCreateScene}
+                setApplyMasterOnCreateScene={setApplyMasterOnCreateScene}
               />
             ) : (
               <div style={{ paddingTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>

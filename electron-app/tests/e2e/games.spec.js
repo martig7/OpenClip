@@ -1,5 +1,12 @@
 import { test, expect } from '@playwright/test'
-import { gamesCaptionTitle, gameRow, gameNameCell } from './fixtures/gamesUi.js'
+import {
+  gamesCaptionTitle,
+  gameRow,
+  gameNameCell,
+  gameRowToggle,
+  openAdvancedAddGameModal,
+  fillNewObsSceneNameInAddGameModal,
+} from './fixtures/gamesUi.js'
 
 // GamesPage uses window.api, which falls back to mockApi in browser/test mode.
 // mockApi returns mockGames (Valorant + CS2) from src/browserMockData.js.
@@ -24,28 +31,29 @@ test.describe('Games Page', () => {
   test('mock games start enabled', async ({ page }) => {
     await page.goto('/')
     await expect(gameNameCell(page, 'Valorant')).toBeVisible()
-    const enabledToggles = page.locator('.games-table tbody .toggle.on')
-    await expect(enabledToggles).toHaveCount(2)
+    const enabledGameToggles = page.locator(
+      '.games-table tbody tr:not(.games-table-fullscreen-row) .toggle.on'
+    )
+    await expect(enabledGameToggles).toHaveCount(2)
   })
 
   test('toggling a game disables it', async ({ page }) => {
     await page.goto('/')
     await expect(gameNameCell(page, 'Valorant')).toBeVisible()
-    // First game toggle starts ON (enabled: true in mockGames)
-    const firstToggle = page.locator('.games-table tbody .toggle').first()
-    await expect(firstToggle).toHaveClass(/\bon\b/)
-    await firstToggle.click()
-    await expect(firstToggle).not.toHaveClass(/\bon\b/)
+    const toggle = gameRowToggle(page, 'Valorant')
+    await expect(toggle).toHaveClass(/\bon\b/)
+    await toggle.click()
+    await expect(toggle).not.toHaveClass(/\bon\b/)
   })
 
   test('re-toggling a game re-enables it', async ({ page }) => {
     await page.goto('/')
     await expect(gameNameCell(page, 'Valorant')).toBeVisible()
-    const firstToggle = page.locator('.games-table tbody .toggle').first()
-    await firstToggle.click() // disable
-    await expect(firstToggle).not.toHaveClass(/\bon\b/)
-    await firstToggle.click() // re-enable
-    await expect(firstToggle).toHaveClass(/\bon\b/)
+    const toggle = gameRowToggle(page, 'Valorant')
+    await toggle.click() // disable
+    await expect(toggle).not.toHaveClass(/\bon\b/)
+    await toggle.click() // re-enable
+    await expect(toggle).toHaveClass(/\bon\b/)
   })
 
   test('clicking delete on game with scene shows confirm dialog', async ({ page }) => {
@@ -78,22 +86,19 @@ test.describe('Games Page', () => {
 
   test('can open add game modal', async ({ page }) => {
     await page.goto('/')
-    await page.click('button:has-text("Add Game")')
-    await expect(page.locator('h2:has-text("Add Game")')).toBeVisible()
-    await expect(page.locator('input[placeholder="e.g. Valorant"]')).toBeVisible()
+    await openAdvancedAddGameModal(page)
   })
 
   test('add game modal closes on cancel', async ({ page }) => {
     await page.goto('/')
-    await page.click('button:has-text("Add Game")')
-    await expect(page.locator('h2:has-text("Add Game")')).toBeVisible()
+    await openAdvancedAddGameModal(page)
     await page.locator('.modal button:has-text("Cancel")').click()
     await expect(page.locator('h2:has-text("Add Game")')).not.toBeVisible()
   })
 
   test('can type a game name in add game modal', async ({ page }) => {
     await page.goto('/')
-    await page.click('button:has-text("Add Game")')
+    await openAdvancedAddGameModal(page)
     const nameInput = page.locator('input[placeholder="e.g. Valorant"]')
     await nameInput.fill('Minecraft')
     await expect(nameInput).toHaveValue('Minecraft')
@@ -101,7 +106,7 @@ test.describe('Games Page', () => {
 
   test('add game button is disabled when scene field is empty', async ({ page }) => {
     await page.goto('/')
-    await page.click('button:has-text("Add Game")')
+    await openAdvancedAddGameModal(page)
     await page.locator('input[placeholder="e.g. Valorant"]').fill('Minecraft')
     // Scene is required — button should remain disabled until scene is filled
     const addBtn = page.locator('.modal button:has-text("Add Game")')
@@ -112,11 +117,10 @@ test.describe('Games Page', () => {
 test.describe('Games Page - Modal Edge Cases', () => {
   test('add game modal has all required fields', async ({ page }) => {
     await page.goto('/')
-    await page.click('button:has-text("Add Game")')
-    await expect(page.locator('h2:has-text("Add Game")')).toBeVisible()
+    await openAdvancedAddGameModal(page)
     await expect(page.locator('input[placeholder="e.g. Valorant"]')).toBeVisible()
     await expect(page.locator('input[placeholder="e.g. VALORANT or valorant.exe"]')).toBeVisible()
-    await expect(page.locator('input[placeholder="e.g. Gaming Scene (required)"]')).toBeVisible()
+    await expect(page.locator('.modal').getByRole('button', { name: 'Select scene…' })).toBeVisible()
   })
 
   test('remove game modal closes on cancel button', async ({ page }) => {
@@ -131,8 +135,7 @@ test.describe('Games Page - Modal Edge Cases', () => {
   test('modal can be opened and closed multiple times', async ({ page }) => {
     await page.goto('/')
     for (let i = 0; i < 2; i++) {
-      await page.click('button:has-text("Add Game")')
-      await expect(page.locator('h2:has-text("Add Game")')).toBeVisible()
+      await openAdvancedAddGameModal(page)
       await page.locator('.modal button:has-text("Cancel")').click()
       await expect(page.locator('h2:has-text("Add Game")')).not.toBeVisible()
     }
@@ -142,14 +145,14 @@ test.describe('Games Page - Modal Edge Cases', () => {
 test.describe('Games Page - Form Validation Edge Cases', () => {
   test('add game with whitespace-only name accepts input', async ({ page }) => {
     await page.goto('/')
-    await page.click('button:has-text("Add Game")')
+    await openAdvancedAddGameModal(page)
     await page.locator('input[placeholder="e.g. Valorant"]').fill('   ')
     await expect(page.locator('input[placeholder="e.g. Valorant"]')).toHaveValue('   ')
   })
 
   test('add game button requires scene field', async ({ page }) => {
     await page.goto('/')
-    await page.click('button:has-text("Add Game")')
+    await openAdvancedAddGameModal(page)
     await page.locator('input[placeholder="e.g. Valorant"]').fill('Test Game')
     const addBtn = page.locator('.modal button:has-text("Add Game")')
     await expect(addBtn).toBeDisabled()
@@ -157,9 +160,9 @@ test.describe('Games Page - Form Validation Edge Cases', () => {
 
   test('add game form validates required fields before submission', async ({ page }) => {
     await page.goto('/')
-    await page.click('button:has-text("Add Game")')
+    await openAdvancedAddGameModal(page)
     await page.locator('input[placeholder="e.g. Valorant"]').fill('Test Game')
-    await page.locator('input[placeholder="e.g. Gaming Scene (required)"]').fill('Test Scene')
+    await fillNewObsSceneNameInAddGameModal(page, 'Test Scene')
     const addBtn = page.locator('.modal button:has-text("Add Game")')
     await expect(addBtn).toBeEnabled()
   })
@@ -169,28 +172,28 @@ test.describe('Games Page - Interaction Edge Cases', () => {
   test('toggle state toggles correctly on multiple clicks', async ({ page }) => {
     await page.goto('/')
     await expect(gameNameCell(page, 'Valorant')).toBeVisible()
-    const firstToggle = page.locator('.games-table tbody .toggle').first()
-    await expect(firstToggle).toHaveClass(/\bon\b/)
-    await firstToggle.click()
-    await expect(firstToggle).not.toHaveClass(/\bon\b/)
-    await firstToggle.click()
-    await expect(firstToggle).toHaveClass(/\bon\b/)
+    const toggle = gameRowToggle(page, 'Valorant')
+    await expect(toggle).toHaveClass(/\bon\b/)
+    await toggle.click()
+    await expect(toggle).not.toHaveClass(/\bon\b/)
+    await toggle.click()
+    await expect(toggle).toHaveClass(/\bon\b/)
   })
 
   test('single click on toggle works correctly', async ({ page }) => {
     await page.goto('/')
     await expect(gameNameCell(page, 'Valorant')).toBeVisible()
-    const firstToggle = page.locator('.games-table tbody .toggle').first()
-    await expect(firstToggle).toHaveClass(/\bon\b/)
-    await firstToggle.click()
-    await expect(firstToggle).not.toHaveClass(/\bon\b/)
+    const toggle = gameRowToggle(page, 'Valorant')
+    await expect(toggle).toHaveClass(/\bon\b/)
+    await toggle.click()
+    await expect(toggle).not.toHaveClass(/\bon\b/)
   })
 })
 
 test.describe('Games Page - Input Edge Cases', () => {
   test('game name field accepts long text', async ({ page }) => {
     await page.goto('/')
-    await page.click('button:has-text("Add Game")')
+    await openAdvancedAddGameModal(page)
     const longName = 'A'.repeat(100)
     await page.locator('input[placeholder="e.g. Valorant"]').fill(longName)
     await expect(page.locator('input[placeholder="e.g. Valorant"]')).toHaveValue(longName)
@@ -198,7 +201,7 @@ test.describe('Games Page - Input Edge Cases', () => {
 
   test('exe field accepts long text', async ({ page }) => {
     await page.goto('/')
-    await page.click('button:has-text("Add Game")')
+    await openAdvancedAddGameModal(page)
     const longExe = 'a'.repeat(200) + '.exe'
     await page.locator('input[placeholder="e.g. VALORANT or valorant.exe"]').fill(longExe)
     await expect(page.locator('input[placeholder="e.g. VALORANT or valorant.exe"]')).toHaveValue(

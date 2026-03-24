@@ -2,7 +2,13 @@ import { useEffect, useState } from 'react'
 import { RefreshCw, Check } from 'lucide-react'
 import api from '../../api'
 
-export default function SimpleAddGameModal({ newGame, setNewGame, onClose, onAddGame }) {
+export default function SimpleAddGameModal({
+  newGame,
+  setNewGame,
+  onClose,
+  onAddGame,
+  onSwitchToAdvanced,
+}) {
   const [visibleWindows, setVisibleWindows] = useState([])
   const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState(null)
@@ -133,6 +139,24 @@ export default function SimpleAddGameModal({ newGame, setNewGame, onClose, onAdd
           </div>
         )}
 
+        <div style={{ marginTop: 6, display: 'flex', justifyContent: 'flex-end' }}>
+          <button
+            type="button"
+            onClick={onSwitchToAdvanced}
+            style={{
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              fontSize: 11,
+              color: 'var(--text-muted)',
+              textDecoration: 'underline',
+              cursor: 'pointer',
+            }}
+            title="Switch to advanced game setup"
+          >
+            Advanced
+          </button>
+        </div>
         <div className="modal-actions">
           <button className="btn btn-secondary" onClick={onClose}>
             Cancel

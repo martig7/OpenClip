@@ -144,7 +144,11 @@ let lastFullscreenAudioScene = null
     }
 
     const savedTracks = store.get('audioTracks') || {}
-    const gameAudioTracks = savedTracks['Game Audio']
+    const perSourceTracks = savedTracks[sourceName]
+    const gameAudioTracks =
+      perSourceTracks && typeof perSourceTracks === 'object' && Object.keys(perSourceTracks).length > 0
+        ? perSourceTracks
+        : savedTracks['Game Audio']
     if (gameAudioTracks && typeof gameAudioTracks === 'object') {
       await setInputAudioTracks(undefined, sourceName, gameAudioTracks).catch(() => {})
     }

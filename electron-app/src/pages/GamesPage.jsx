@@ -9,8 +9,10 @@ import { useTrackState } from '../hooks/useTrackState'
 import {
   AUDIO_KIND_META,
   buildAvailableAudioInputs,
+  fullscreenManagedGameAudioInputName,
   getAppAudioWindowKey,
   isAppAudioKind,
+  normalizeAudioTrackMap,
 } from './games/audioSourceUtils'
 import AddGameModal from './games/AddGameModal'
 import SimpleAddGameModal from './games/SimpleAddGameModal'
@@ -115,6 +117,49 @@ export default function GamesPage() {
       cancelled = true
     }
   }, [masterAudioSources])
+
+  // Hydrate track chips from OBS for fullscreen-managed Game Audio inputs.
+  // Those use names like `Game Audio (Fullscreen <exeKey>)` and are never in the master list,
+  // so the master-audio prefetch above skips them; persisted `audioTracks` may also omit them.
+  useEffect(() => {
+    if (!fsConfig?.defaultScene || fsConfig.gameAudioEnabled === false) return
+    const wantsGameAudio = masterAudioSources.some((s) => s?.kind === 'magic_game_audio')
+    if (!wantsGameAudio) return
+
+    const names = new Set()
+    for (const game of games) {
+      if (!game?.scene || game.scene !== fsConfig.defaultScene) continue
+      names.add(fullscreenManagedGameAudioInputName(game))
+    }
+    if (names.size === 0) return
+
+    let cancelled = false
+    ;(async () => {
+      const entries = await Promise.all(
+        [...names].map(async (name) => {
+          try {
+            const raw = await api.getInputAudioTracks(name)
+            if (!raw || typeof raw !== 'object') return null
+            const tracks = normalizeAudioTrackMap(raw)
+            return { name, tracks }
+          } catch {
+            return null
+          }
+        })
+      )
+      if (cancelled) return
+      const fresh = {}
+      for (const e of entries) {
+        if (e) fresh[e.name] = e.tracks
+      }
+      if (Object.keys(fresh).length > 0) {
+        setTrackData((prev) => ({ ...prev, ...fresh }))
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [games, fsConfig?.defaultScene, fsConfig?.gameAudioEnabled, masterAudioSources])
 
   async function toggleTrack(inputName, trackNum) {
     const current = trackData[inputName] || {}
@@ -600,6 +645,7 @@ export default function GamesPage() {
           <SimpleAddGameModal
             newGame={newGame}
             setNewGame={setNewGame}
+            onSwitchToAdvanced={() => setAdvancedGameAddition(true)}
             onClose={() => {
               resetAddModal()
               setShowAddModal(false)

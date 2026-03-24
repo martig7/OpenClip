@@ -165,7 +165,7 @@ export default function GeneralSettingsSection({
               }
             />
           </div>
-          <div className={tc}>
+          <div className={tc} style={{ borderTop: 'none' }}>
             <div>
               <div className="toggle-label">Advanced Game Addition</div>
               <div className="toggle-desc">
