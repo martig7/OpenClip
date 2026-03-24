@@ -353,8 +353,9 @@ afterAll(async () => {
 })
 
 beforeEach(() => {
-  // Remove any clips produced by the previous test so clip counters reset
-  const clipsDir = path.join(destDir, 'Clips')
+  // Remove any clips produced by the previous test so clip counters reset.
+  // Clips now live under dest/{GameName}/Clips/ (per-game structure).
+  const clipsDir = path.join(destDir, 'ClipGame', 'Clips')
   if (fs.existsSync(clipsDir)) {
     for (const f of fs.readdirSync(clipsDir)) {
       try {
@@ -378,7 +379,7 @@ describe('POST /api/clips/create — real ffmpeg', () => {
     expect(res.status).toBe(200)
     expect(res.body.filename).toMatch(/^ClipGame Clip \d{4}-\d{2}-\d{2} #1\.mp4$/)
 
-    const clipsDir = path.join(destDir, 'Clips')
+    const clipsDir = path.join(destDir, 'ClipGame', 'Clips')
     const clips = fs.readdirSync(clipsDir).filter((f) => f.endsWith('.mp4'))
     expect(clips).toHaveLength(1)
 
