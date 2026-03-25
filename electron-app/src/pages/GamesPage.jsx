@@ -645,6 +645,7 @@ export default function GamesPage() {
           <SimpleAddGameModal
             newGame={newGame}
             setNewGame={setNewGame}
+            setAutoCreateScene={setAutoCreateScene}
             onSwitchToAdvanced={() => setAdvancedGameAddition(true)}
             onClose={() => {
               resetAddModal()

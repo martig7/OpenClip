@@ -43,6 +43,9 @@ const _windowsListCache = { data: null, ts: 0 }
 const _audioDevicesCache = { data: null, ts: 0 }
 const _runningAppsCache = { data: null, ts: 0 }
 
+// Integration-test mock override for windows:list (null = use real data).
+let _testWindowsMock = null
+
 const { runElevated } = require('./runElevated')
 const {
   listWindowsWithProcesses,
@@ -171,6 +174,7 @@ function registerIpcHandlers(store, appState) {
 
   // --- Windows ---
   ipcMain.handle('windows:list', async () => {
+    if (_testWindowsMock !== null) return _testWindowsMock
     const now = Date.now()
     if (_windowsListCache.data !== null && now - _windowsListCache.ts < 5000)
       return _windowsListCache.data
@@ -184,6 +188,19 @@ function registerIpcHandlers(store, appState) {
       return []
     }
   })
+
+  // Integration-test only: override / clear the windows list mock.
+  const isIntegrationMode =
+    process.env.OPENCLIP_INTEGRATION_TEST === 'true' ||
+    process.argv.includes('--integration-mode')
+  if (isIntegrationMode) {
+    ipcMain.handle('windows:list:set-mock', (_, data) => {
+      _testWindowsMock = data
+    })
+    ipcMain.handle('windows:list:clear-mock', () => {
+      _testWindowsMock = null
+    })
+  }
 
   ipcMain.handle('windows:list-audio-devices', async () => {
     const now = Date.now()

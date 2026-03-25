@@ -39,6 +39,10 @@ test.describe('obsPlugin.js — real headless OBS plugin', () => {
     await cleanupTestScenes()
   })
 
+  test.afterEach(async () => {
+    await cleanupTestScenes()
+  })
+
   test.afterAll(async () => {
     await cleanupTestScenes()
   })

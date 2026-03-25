@@ -35,6 +35,10 @@ contextBridge.exposeInMainWorld('api', {
   getVisibleWindows: () => ipcRenderer.invoke('windows:list'),
   extractWindowIcon: (processName) => ipcRenderer.invoke('windows:extractIcon', processName),
 
+  // Integration-test helpers (only wired up when --integration-mode is active)
+  setWindowsMock: (data) => ipcRenderer.invoke('windows:list:set-mock', data),
+  clearWindowsMock: () => ipcRenderer.invoke('windows:list:clear-mock'),
+
   // Watcher
   startWatcher: () => ipcRenderer.invoke('watcher:start'),
   stopWatcher: () => ipcRenderer.invoke('watcher:stop'),

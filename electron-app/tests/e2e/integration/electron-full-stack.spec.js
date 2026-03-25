@@ -405,6 +405,143 @@ test.describe('Electron full stack integration (UI + plugin + OBS + recordings)'
     expect(fsCfg.defaultScene).toBe(newScene)
   })
 
+  // ── Simple Add Game Modal ─────────────────────────────────────────────────
+
+  async function ensureSimpleModal(p) {
+    await p.evaluate(async () => {
+      const s = (await window.api.getStore('settings')) ?? {}
+      await window.api.setStore('settings', { ...s, advancedGameAddition: false })
+    })
+    // Navigate away first so GamesPage remounts on return and re-reads
+    // advancedGameAddition from the store (hash routing makes goto('/#/') a
+    // no-op when already on that page, so the useEffect never re-runs).
+    await p.goto('http://localhost:5173/#/settings')
+    await p.goto('http://localhost:5173/#/')
+    await p.waitForSelector('.games-caption-bar .msb-title', { timeout: 30_000 })
+  }
+
+  test('simple modal: opens and lists injected visible windows', async () => {
+    await ensureSimpleModal(page)
+    await page.evaluate(() => window.api.setWindowsMock([
+      { title: 'WindowAlpha', process: 'procAlpha', exe: 'alpha.exe', windowClass: 'ClassA' },
+      { title: 'WindowBeta', process: 'procBeta', exe: 'beta.exe', windowClass: 'ClassB' },
+    ]))
+
+    await page.click('button:has-text("Add Game")')
+    await expect(page.locator('h2:has-text("Add Game")')).toBeVisible()
+
+    // Verify the modal is NOT the advanced one (no selector/name inputs).
+    await expect(page.locator('input[placeholder="e.g. Valorant"]')).not.toBeVisible()
+
+    await expect(page.getByText('WindowAlpha')).toBeVisible()
+    await expect(page.getByText('WindowBeta')).toBeVisible()
+
+    await page.locator('.modal .modal-actions button.btn-secondary:has-text("Cancel")').click()
+    await expect(page.locator('h2:has-text("Add Game")')).not.toBeVisible()
+    await page.evaluate(() => window.api.clearWindowsMock())
+  })
+
+  test('simple modal: Add Game button is disabled until a window is selected', async () => {
+    await ensureSimpleModal(page)
+    await page.evaluate(() => window.api.setWindowsMock([
+      { title: 'SomeWindow', process: 'someProc', exe: 'some.exe', windowClass: 'SomeClass' },
+    ]))
+
+    await page.click('button:has-text("Add Game")')
+    await expect(page.locator('h2:has-text("Add Game")')).toBeVisible()
+
+    const addBtn = page.locator('.modal .modal-actions button.btn-primary:has-text("Add Game")')
+    await expect(addBtn).toBeDisabled()
+
+    await page.getByText('SomeWindow').click()
+    await expect(addBtn).toBeEnabled()
+
+    await page.locator('.modal .modal-actions button.btn-secondary:has-text("Cancel")').click()
+    await expect(page.locator('h2:has-text("Add Game")')).not.toBeVisible()
+    await page.evaluate(() => window.api.clearWindowsMock())
+  })
+
+  test('simple modal: selecting a window and adding creates the game and OBS scene', async () => {
+    const processName = `${TEST_PREFIX}SimpleFlow`
+    await ensureSimpleModal(page)
+    await page.evaluate((proc) => window.api.setWindowsMock([
+      { title: `${proc} Window`, process: proc, exe: `${proc}.exe`, windowClass: 'SimpleClass' },
+    ]), processName)
+
+    await page.click('button:has-text("Add Game")')
+    await expect(page.locator('h2:has-text("Add Game")')).toBeVisible()
+
+    await page.getByText(`${processName} Window`).click()
+
+    // Confirmation text shows the scene name equals the process name.
+    await expect(page.locator('.modal').getByText(processName).first()).toBeVisible()
+
+    const addBtn = page.locator('.modal .modal-actions button.btn-primary:has-text("Add Game")')
+    await addBtn.evaluate((el) => el.click())
+    await expect(page.locator('h2:has-text("Add Game")')).not.toBeVisible()
+    await page.evaluate(() => window.api.clearWindowsMock())
+
+    // Game appears in the games table.
+    await expect(
+      page.locator('.games-table-name', { hasText: processName }).first()
+    ).toBeVisible()
+
+    // OBS scene was actually created.
+    await expect.poll(() => getScenes(), { timeout: 15_000 }).toContain(processName)
+
+    // Persisted game has the correct scene field.
+    const saved = await page.evaluate(async (name) => {
+      const games = await window.api.getGames()
+      return games.find((g) => g.name === name) || null
+    }, processName)
+    expect(saved).toBeTruthy()
+    expect(saved.scene).toBe(processName)
+    expect(saved.exe).toBe(`${processName}.exe`)
+  })
+
+  test('simple modal: refresh button re-fetches the window list', async () => {
+    await ensureSimpleModal(page)
+    // Each call to windows:list increments a counter we can observe.
+    let _callCount = 0
+    await page.evaluate(() => window.api.setWindowsMock(
+      [{ title: 'RefreshWindow', process: 'refreshProc', exe: 'r.exe', windowClass: 'RC' }]
+    ))
+
+    await page.click('button:has-text("Add Game")')
+    await expect(page.locator('h2:has-text("Add Game")')).toBeVisible()
+    // Window should be visible after initial load.
+    await expect(page.getByText('RefreshWindow')).toBeVisible()
+
+    // Click the refresh button — the list should reload (same data, but a new fetch).
+    await page.locator('.modal').getByRole('button', { name: /refresh/i }).click()
+    // After refresh the list entry should still be visible, confirming a successful re-fetch.
+    await expect(page.getByText('RefreshWindow')).toBeVisible()
+
+    await page.locator('.modal .modal-actions button.btn-secondary:has-text("Cancel")').click()
+    await expect(page.locator('h2:has-text("Add Game")')).not.toBeVisible()
+    await page.evaluate(() => window.api.clearWindowsMock())
+  })
+
+  test('simple modal: Advanced link switches to the advanced modal', async () => {
+    await ensureSimpleModal(page)
+    await page.evaluate(() => window.api.setWindowsMock([]))
+
+    await page.click('button:has-text("Add Game")')
+    await expect(page.locator('h2:has-text("Add Game")')).toBeVisible()
+    await expect(page.locator('input[placeholder="e.g. Valorant"]')).not.toBeVisible()
+
+    await page.locator('.modal').getByRole('button', { name: 'Advanced' }).click()
+
+    // Advanced modal has the manual name / selector inputs.
+    await expect(page.locator('input[placeholder="e.g. Valorant"]')).toBeVisible()
+
+    await page.locator('.modal .modal-actions button.btn-secondary:has-text("Cancel")').click()
+    await expect(page.locator('h2:has-text("Add Game")')).not.toBeVisible()
+    await page.evaluate(() => window.api.clearWindowsMock())
+  })
+
+  // ─────────────────────────────────────────────────────────────────────────
+
   test('creates and lists a clip from a real recording through API server', async () => {
     test.skip(!ffmpegPath, 'ffmpeg-static is required for clip-generation test')
 

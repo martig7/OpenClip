@@ -5,6 +5,7 @@ import api from '../../api'
 export default function SimpleAddGameModal({
   newGame,
   setNewGame,
+  setAutoCreateScene,
   onClose,
   onAddGame,
   onSwitchToAdvanced,
@@ -31,6 +32,7 @@ export default function SimpleAddGameModal({
 
   function selectWindow(win) {
     setSelected(win)
+    setAutoCreateScene(true)
     setNewGame((g) => ({
       ...g,
       name: win.process,
