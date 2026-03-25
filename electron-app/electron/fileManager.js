@@ -2,103 +2,22 @@ const fs = require('fs')
 const path = require('path')
 const { execFile } = require('child_process')
 const { promisify } = require('util')
-const { isVideoFile, CODEC_MAP, FFMPEG_PATH, FFPROBE_PATH } = require('./constants')
+const { isVideoFile, FFMPEG_PATH, FFPROBE_PATH } = require('./constants')
 const { pathToFileURL } = require('url')
 const service = require('./recordingService')
 const { preCacheWaveform, setWaveformResolution } = require('./waveformPreCache')
+const {
+  moveFileSafe,
+  isFileLocked,
+  waitForUnlock,
+  waitForStat,
+  unlinkWithRetry,
+} = require('./fileOperations')
+const { migrateToGameFolders } = require('./migrations')
 
 const execFileAsync = promisify(execFile)
 
-// Move a file safely across devices or past transient system locks.
-// Strategy: rename with retry on EBUSY/EPERM (Windows indexer/AV/thumbnail gen hold files
-// briefly but don't block reads), then fall back to copy+delete for EXDEV or
-// persistent EBUSY/EPERM.
-async function moveFileSafe(src, dest) {
-  // Try rename up to 3 times; back off on transient EBUSY or EPERM
-  let renameErr = null
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      fs.renameSync(src, dest)
-      return // success
-    } catch (err) {
-      if (err.code !== 'EXDEV' && err.code !== 'EBUSY' && err.code !== 'EPERM') throw err
-      renameErr = err
-      if (err.code === 'EXDEV') break // cross-device: go straight to copy
-      if (attempt < 2) await new Promise((r) => setTimeout(r, 500 * (attempt + 1)))
-    }
-  }
-
-  // Rename failed (cross-device or persistent EBUSY) — copy then delete
-  await fs.promises.copyFile(src, dest)
-
-  // Retry unlink to handle transient system holds
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      await fs.promises.unlink(src)
-      return // success
-    } catch (unlinkErr) {
-      if (attempt < 2) {
-        await new Promise((r) => setTimeout(r, 500 * (attempt + 1)))
-        continue
-      }
-      // Unlink failed after retries — roll back the copy so no duplicate is left
-      try {
-        await fs.promises.unlink(dest)
-      } catch {}
-      throw unlinkErr
-    }
-  }
-}
-
-// Try to open the file for writing to check if it's still held by another process
-function isFileLocked(filePath) {
-  try {
-    const fd = fs.openSync(filePath, 'r+')
-    fs.closeSync(fd)
-    return false
-  } catch (err) {
-    return err.code === 'EBUSY' || err.code === 'EPERM' || err.code === 'EACCES'
-  }
-}
-
-// Wait until the file is not locked, checking every delayMs up to maxAttempts times
-async function waitForUnlock(filePath, maxAttempts = 5, delayMs = 2000) {
-  for (let i = 0; i < maxAttempts; i++) {
-    if (!isFileLocked(filePath)) return
-    if (i < maxAttempts - 1) await new Promise((r) => setTimeout(r, delayMs))
-  }
-  throw new Error(`File is still locked after ${maxAttempts} attempts — try again in a moment`)
-}
-
-// Retry fs.statSync until it succeeds or the file remains inaccessible after maxAttempts.
-// Returns the Stats object, or null if timed out (EPERM/EBUSY/EACCES from OBS still holding the file).
-async function waitForStat(filePath, maxAttempts = 10, delayMs = 1000) {
-  for (let i = 0; i < maxAttempts; i++) {
-    try {
-      return fs.statSync(filePath)
-    } catch (err) {
-      if (err.code !== 'EPERM' && err.code !== 'EBUSY' && err.code !== 'EACCES') throw err
-      if (i < maxAttempts - 1) await new Promise((r) => setTimeout(r, delayMs))
-    }
-  }
-  return null // timed out — caller should skip this file
-}
-
-// Retry fs.unlinkSync to handle transient EPERM/EBUSY (AV scanning newly created files,
-// Windows indexer, OBS briefly reopening the source after ffmpeg finishes).
-// Throws only if still locked after all attempts.
-async function unlinkWithRetry(filePath, maxAttempts = 4, delayMs = 750) {
-  for (let i = 0; i < maxAttempts; i++) {
-    try {
-      fs.unlinkSync(filePath)
-      return
-    } catch (err) {
-      if (err.code !== 'EPERM' && err.code !== 'EBUSY' && err.code !== 'EACCES') throw err
-      if (i < maxAttempts - 1) await new Promise((r) => setTimeout(r, delayMs))
-    }
-  }
-  throw new Error(`Cannot delete source file — it is still held open by another process`)
-}
+// File-operation helpers are in fileOperations.js (imported above).
 
 function getWeekFolder(date) {
   const d = new Date(date)
@@ -809,77 +728,7 @@ async function organizeSpecificRecording(store, filePath, gameName, opts = {}) {
   }
 }
 
-async function migrateToGameFolders(store) {
-  const destPath = store.get('settings.destinationPath')
-  if (!destPath || !fs.existsSync(destPath)) return { migrated: 0 }
-
-  const weekFolders = store.get('settings.weekFolders')
-  let migrated = 0
-
-  let entries
-  try {
-    entries = fs.readdirSync(destPath, { withFileTypes: true })
-  } catch {
-    return { migrated: 0 }
-  }
-
-  // Migrate old-format game-week folders: "GameName - Week of ..."
-  for (const entry of entries) {
-    if (!entry.isDirectory() || !entry.name.includes(' - Week of ')) continue
-    const dashIdx = entry.name.indexOf(' - Week of ')
-    const gameName = entry.name.slice(0, dashIdx)
-    const weekStr = entry.name.slice(dashIdx + 3) // "Week of ..."
-    const oldDir = path.join(destPath, entry.name)
-    const newTarget = weekFolders
-      ? path.join(destPath, gameName, weekStr)
-      : path.join(destPath, gameName)
-    try {
-      fs.mkdirSync(newTarget, { recursive: true })
-      const files = fs.readdirSync(oldDir)
-      for (const file of files) {
-        const src = path.join(oldDir, file)
-        const dest = path.join(newTarget, file)
-        if (!fs.existsSync(dest)) {
-          await moveFileSafe(src, dest)
-          migrated++
-        }
-      }
-      try {
-        fs.rmdirSync(oldDir)
-      } catch {}
-    } catch (err) {
-      console.error(`[migrate] Failed to migrate "${entry.name}":`, err.message)
-    }
-  }
-
-  // Migrate legacy root Clips folder: move per-game clips into {game}/Clips/
-  const legacyClipsDir = path.join(destPath, 'Clips')
-  if (fs.existsSync(legacyClipsDir)) {
-    try {
-      const clipFiles = fs.readdirSync(legacyClipsDir)
-      for (const file of clipFiles) {
-        const gameMatch = file.match(/^(.+?) Clip \d{4}-\d{2}-\d{2}/)
-        if (!gameMatch) continue
-        const gameName = gameMatch[1]
-        const gameClipsDir = path.join(destPath, gameName, 'Clips')
-        fs.mkdirSync(gameClipsDir, { recursive: true })
-        const src = path.join(legacyClipsDir, file)
-        const dest = path.join(gameClipsDir, file)
-        if (!fs.existsSync(dest)) {
-          await moveFileSafe(src, dest)
-          migrated++
-        }
-      }
-      try {
-        fs.rmdirSync(legacyClipsDir)
-      } catch {}
-    } catch (err) {
-      console.error('[migrate] Failed to migrate legacy Clips folder:', err.message)
-    }
-  }
-
-  return { migrated }
-}
+// migrateToGameFolders is in migrations.js (imported above, re-exported below).
 
 // Reorganize already-organized recordings to match the current weekFolders setting.
 // - weekFolders OFF (flatten): move files from "Week of *" subdirs up to the game folder
@@ -1060,6 +909,12 @@ module.exports = {
   organizeSpecificRecording,
   finalizeDirectRecording,
   getWeekFolder,
-  migrateToGameFolders,
+  migrateToGameFolders, // re-exported from migrations.js for backwards-compat
   reorganizeWeekFolders,
+  // Re-export file-op helpers so tests that import them from fileManager.js still work
+  moveFileSafe,
+  isFileLocked,
+  waitForUnlock,
+  waitForStat,
+  unlinkWithRetry,
 }

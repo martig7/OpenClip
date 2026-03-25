@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useWindowList } from './useWindowList'
 
 /**
  * Manages all state for the "Add Game" modal flow, including the window picker,
@@ -19,8 +20,12 @@ export function useAddGameModalState() {
   })
 
   // Window picker
-  const [visibleWindows, setVisibleWindows] = useState([])
-  const [loadingWindows, setLoadingWindows] = useState(false)
+  const {
+    visibleWindows,
+    setVisibleWindows,
+    loadingWindows,
+    refreshWindows: _refreshWindows,
+  } = useWindowList()
   const [showWindowPicker, setShowWindowPicker] = useState(false)
 
   // OBS scene auto-creation
@@ -62,7 +67,6 @@ export function useAddGameModalState() {
     visibleWindows,
     setVisibleWindows,
     loadingWindows,
-    setLoadingWindows,
     showWindowPicker,
     setShowWindowPicker,
     autoCreateScene,

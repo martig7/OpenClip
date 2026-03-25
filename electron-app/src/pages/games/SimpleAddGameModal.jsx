@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { RefreshCw, Check } from 'lucide-react'
 import api from '../../api'
+import { useWindowList } from '../../hooks/useWindowList'
 
 export default function SimpleAddGameModal({
   newGame,
@@ -10,25 +11,12 @@ export default function SimpleAddGameModal({
   onAddGame,
   onSwitchToAdvanced,
 }) {
-  const [visibleWindows, setVisibleWindows] = useState([])
-  const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState(null)
+  const { visibleWindows, loadingWindows, refreshWindows } = useWindowList()
 
   useEffect(() => {
     refreshWindows()
-  }, [])
-
-  async function refreshWindows() {
-    setLoading(true)
-    try {
-      const windows = await api.getVisibleWindows()
-      setVisibleWindows(windows || [])
-    } catch {
-      // silently fail
-    } finally {
-      setLoading(false)
-    }
-  }
+  }, [refreshWindows])
 
   function selectWindow(win) {
     setSelected(win)
@@ -63,15 +51,15 @@ export default function SimpleAddGameModal({
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-            {loading ? 'Loading windows...' : `${visibleWindows.length} window${visibleWindows.length !== 1 ? 's' : ''} found`}
+            {loadingWindows ? 'Loading windows...' : `${visibleWindows.length} window${visibleWindows.length !== 1 ? 's' : ''} found`}
           </span>
           <button
             className="btn btn-secondary btn-sm"
             onClick={refreshWindows}
-            disabled={loading}
+            disabled={loadingWindows}
             title="Refresh window list"
           >
-            <RefreshCw size={13} className={loading ? 'spinning' : ''} />
+            <RefreshCw size={13} className={loadingWindows ? 'spinning' : ''} />
           </button>
         </div>
 
@@ -84,7 +72,7 @@ export default function SimpleAddGameModal({
             background: 'var(--bg-tertiary)',
           }}
         >
-          {loading && visibleWindows.length === 0 ? (
+          {loadingWindows && visibleWindows.length === 0 ? (
             <div style={{ padding: '12px', fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>
               Loading...
             </div>
