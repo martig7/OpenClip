@@ -142,6 +142,11 @@ function sanitizeGameName(name) {
   )
 }
 
+// OBS filename pattern — only these get treated as recordings that belong to OpenClip.
+// Matches: "2024-01-15 20-30-00", "Replay 2024-01-15 20-30-00", "GameName Session 2024-01-15 #1"
+const OBS_FILENAME_PATTERN =
+  /^\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}|^Replay \d{4}-\d{2}-\d{2}|.+ Session \d{4}-\d{2}-\d{2} #\d+/
+
 async function organizeRecordings(store, gameName, onProgress = () => {}) {
   const obsPath = store.get('settings.obsRecordingPath')
   const destPath = store.get('settings.destinationPath')
@@ -150,7 +155,8 @@ async function organizeRecordings(store, gameName, onProgress = () => {}) {
   const files = fs.readdirSync(obsPath).filter((f) => isVideoFile(f))
 
   const now = new Date()
-  const sanitizedName = sanitizeGameName(gameName)
+  const isUnorganized = gameName === '(Unorganized)'
+  const sanitizedName = isUnorganized ? 'Unorganized' : sanitizeGameName(gameName)
   const weekFolders = store.get('settings.weekFolders')
   const targetDir = weekFolders
     ? path.join(destPath, sanitizedName, getWeekFolder(now))
@@ -160,6 +166,12 @@ async function organizeRecordings(store, gameName, onProgress = () => {}) {
   const autoClipEnabled = autoClipSettings?.enabled
 
   for (const file of files) {
+    // For (Unorganized) sessions, only move files that match OBS naming patterns.
+    // This prevents picking up unrelated videos the user may have placed in their OBS folder.
+    if (isUnorganized) {
+      const nameNoExt = file.replace(/\.[^.]+$/, '')
+      if (!OBS_FILENAME_PATTERN.test(nameNoExt)) continue
+    }
     const src = path.join(obsPath, file)
     // Wait for OBS to release its handle — EPERM on stat means the file isn't accessible yet
     const stat = await waitForStat(src)
@@ -906,11 +918,60 @@ async function reorganizeWeekFolders(store, onProgress = () => {}) {
     }
   }
 
+  // --- Step 1: Move unorganized recordings from OBS folder → {destPath}/Unorganized/ ---
+  const obsPath = store.get('settings.obsRecordingPath')
+  if (obsPath && fs.existsSync(obsPath)) {
+    onProgress('Moving unorganized recordings…')
+    try {
+      const obsFiles = fs.readdirSync(obsPath).filter((f) => isVideoFile(f))
+      for (const file of obsFiles) {
+        // Only move files that match OBS naming patterns — skip unrelated videos
+        const nameNoExt = file.replace(/\.[^.]+$/, '')
+        if (!OBS_FILENAME_PATTERN.test(nameNoExt)) continue
+        const src = path.join(obsPath, file)
+        // Determine the destination date from the filename or mtime
+        let recordingDate
+        const dateMatch = nameNoExt.match(/(\d{4}-\d{2}-\d{2})/)
+        if (dateMatch) {
+          recordingDate = new Date(dateMatch[1] + 'T12:00:00')
+        } else {
+          try {
+            recordingDate = new Date(fs.statSync(src).mtime)
+          } catch {
+            continue
+          }
+        }
+        const unorganizedDir = weekFolders
+          ? path.join(destPath, 'Unorganized', getWeekFolder(recordingDate))
+          : path.join(destPath, 'Unorganized')
+        try {
+          fs.mkdirSync(unorganizedDir, { recursive: true })
+        } catch {
+          continue
+        }
+        const dest = safeDest(unorganizedDir, file)
+        const wasRenamed = path.basename(dest) !== file
+        try {
+          await moveFileSafe(src, dest)
+          await moveTracksJson(src, dest)
+          moved++
+          if (wasRenamed) renamed.push({ from: file, to: path.basename(dest) })
+        } catch (err) {
+          console.warn(`[reorganize] Could not move unorganized ${src}: ${err.message}`)
+        }
+      }
+    } catch (err) {
+      console.warn(`[reorganize] Could not read OBS path for unorganized files: ${err.message}`)
+    }
+  }
+
+  // --- Step 2: Reorganize existing game folders by week-folder setting ---
   let gameDirs
   try {
     gameDirs = fs.readdirSync(destPath, { withFileTypes: true }).filter((e) => e.isDirectory())
   } catch {
-    return { moved: 0, renamed: [] }
+    service.invalidateRecordingsCache()
+    return { moved, renamed }
   }
 
   const total = gameDirs.length

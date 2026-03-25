@@ -229,6 +229,10 @@ function scanRecordings() {
         if (!entry.isDirectory() || entry.name.toLowerCase() === 'clips') continue
         const folderPath = path.join(organizedPath, entry.name)
 
+        // The "Unorganized" folder holds files with game_name '(Unorganized)'
+        const isUnorganizedFolder = entry.name.toLowerCase() === 'unorganized'
+        const displayName = isUnorganizedFolder ? '(Unorganized)' : entry.name
+
         if (entry.name.includes(' - Week of')) {
           // OLD FORMAT: "GameName - Week of ..."
           const gameName = entry.name.split(' - Week of')[0]
@@ -251,8 +255,8 @@ function scanRecordings() {
             }
           } catch {}
         } else {
-          // NEW FORMAT: top-level game folder
-          const gameName = entry.name
+          // NEW FORMAT: top-level game folder (including the special "Unorganized" folder)
+          const gameName = displayName
           try {
             const gameEntries = fs.readdirSync(folderPath, { withFileTypes: true })
             const directVideoFiles = gameEntries.filter((e) => e.isFile() && isVideoFile(e.name))

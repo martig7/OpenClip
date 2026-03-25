@@ -303,7 +303,7 @@ function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}, o
       }
       // Tell the OBS plugin to stop recording
       stopRecording().catch((err) => log(`Plugin stopRecording failed: ${err.message}`))
-      if (stoppedGame !== '(Unorganized)') scheduleOrganize(stoppedGame)
+      scheduleOrganize(stoppedGame)
     } else if (detected && lastGame && detected.name !== lastGame.name) {
       const stoppedGame = lastGame.name
       lastGame = detected
@@ -347,7 +347,7 @@ function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}, o
           }, 500)
         })
 
-      if (stoppedGame !== '(Unorganized)') scheduleOrganize(stoppedGame)
+      scheduleOrganize(stoppedGame)
     }
 
     // Check if OBS just became reachable while a game is active (e.g. OBS opened after detection).
