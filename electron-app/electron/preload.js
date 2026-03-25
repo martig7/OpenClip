@@ -108,6 +108,7 @@ contextBridge.exposeInMainWorld('api', {
   getVideoURL: (filePath) => ipcRenderer.invoke('video:getURL', filePath),
   organizeRecording: (filePath, gameName, remux) =>
     ipcRenderer.invoke('recordings:organize', { filePath, gameName, remux }),
+  reorganizeWeekFolders: () => ipcRenderer.invoke('recordings:reorganize-week-folders'),
   onOrganizeProgress: (callback) => {
     const handler = (_event, progress) => callback(progress)
     ipcRenderer.on('recordings:organize-progress', handler)

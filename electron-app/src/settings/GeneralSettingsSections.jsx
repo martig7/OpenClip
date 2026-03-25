@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   FolderOpen,
   RefreshCw,
@@ -8,6 +9,7 @@ import {
   AlertCircle,
   Loader,
   Undo2,
+  X,
 } from 'lucide-react'
 import { HotkeyCapture } from '../components/OnboardingSteps'
 import api from '../api'
@@ -92,6 +94,109 @@ function AppSettingsSectionCard({
     <SettingsSectionCard title={sectionTitle} headerActions={headerActions}>
       {children}
     </SettingsSectionCard>
+  )
+}
+
+function OrganizeSection({ sectionCardProps, settings, updateSetting }) {
+  const [reorganizing, setReorganizing] = useState(false)
+  const [warnings, setWarnings] = useState(null) // { renamed: [{from, to}] } | null
+
+  async function handleReorganize() {
+    setReorganizing(true)
+    setWarnings(null)
+    try {
+      const result = await api.reorganizeWeekFolders()
+      if (result?.renamed?.length > 0) {
+        setWarnings(result.renamed)
+      }
+    } catch {
+      // error reported via session:process-progress banner
+    } finally {
+      setReorganizing(false)
+    }
+  }
+
+  const buttonLabel = settings.weekFolders ? 'Group into Week Folders' : 'Flatten to Game Folders'
+
+  return (
+    <AppSettingsSectionCard {...sectionCardProps}>
+      <div className={tc} style={{ marginTop: 0 }}>
+        <div>
+          <div className="toggle-label">Remux to MP4</div>
+          <div className="toggle-desc">
+            Convert MKV and other formats to MP4 when organizing. Disable to move files without
+            converting.
+          </div>
+        </div>
+        <button
+          type="button"
+          className={`toggle ${settings.organizeRemux !== false ? 'on' : ''}`}
+          onClick={() => updateSetting('organizeRemux', settings.organizeRemux === false)}
+        />
+      </div>
+      <div className={tc} style={{ borderTop: 'none' }}>
+        <div>
+          <div className="toggle-label">Week Folders</div>
+          <div className="toggle-desc">Group recordings by week inside each game folder</div>
+        </div>
+        <button
+          type="button"
+          className={`toggle ${settings.weekFolders ? 'on' : ''}`}
+          onClick={() => updateSetting('weekFolders', !settings.weekFolders)}
+        />
+      </div>
+      <div className={tc} style={{ borderTop: 'none', alignItems: 'flex-start', gap: 12 }}>
+        <div>
+          <div className="toggle-label">Reorganize Existing Files</div>
+          <div className="toggle-desc">
+            Restructure already-organized recordings to match the current Week Folders setting
+          </div>
+        </div>
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+          disabled={reorganizing}
+          onClick={handleReorganize}
+        >
+          {reorganizing ? (
+            <>
+              <Loader size={13} style={LOADER_SPIN_STYLE} />
+              Running…
+            </>
+          ) : (
+            buttonLabel
+          )}
+        </button>
+      </div>
+      {warnings && warnings.length > 0 && (
+        <div
+          className="organize-error-alert"
+          style={{
+            margin: '8px 0 0',
+            background: 'var(--amber-muted)',
+            borderColor: 'var(--amber-border)',
+          }}
+        >
+          <AlertCircle size={15} style={{ color: 'var(--amber)', flexShrink: 0 }} />
+          <div className="organize-error-alert-body">
+            <strong style={{ color: 'var(--amber)' }}>
+              {warnings.length} file{warnings.length !== 1 ? 's' : ''} renamed to avoid conflicts
+            </strong>
+            <span style={{ color: 'var(--text-secondary)' }}>
+              {warnings.map((w) => `${w.from} → ${w.to}`).join(', ')}
+            </span>
+          </div>
+          <button
+            className="organize-error-alert-close"
+            onClick={() => setWarnings(null)}
+            title="Dismiss"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+    </AppSettingsSectionCard>
   )
 }
 
@@ -207,35 +312,11 @@ export default function GeneralSettingsSection({
 
     case 'organize':
       return (
-        <AppSettingsSectionCard {...sectionCardProps}>
-          <div className={tc} style={{ marginTop: 0 }}>
-            <div>
-              <div className="toggle-label">Remux to MP4</div>
-              <div className="toggle-desc">
-                Convert MKV and other formats to MP4 when organizing. Disable to move files without
-                converting.
-              </div>
-            </div>
-            <button
-              type="button"
-              className={`toggle ${settings.organizeRemux !== false ? 'on' : ''}`}
-              onClick={() => updateSetting('organizeRemux', settings.organizeRemux === false)}
-            />
-          </div>
-          <div className={tc} style={{ borderTop: 'none' }}>
-            <div>
-              <div className="toggle-label">Week Folders</div>
-              <div className="toggle-desc">
-                Group recordings by week inside each game folder
-              </div>
-            </div>
-            <button
-              type="button"
-              className={`toggle ${settings.weekFolders ? 'on' : ''}`}
-              onClick={() => updateSetting('weekFolders', !settings.weekFolders)}
-            />
-          </div>
-        </AppSettingsSectionCard>
+        <OrganizeSection
+          sectionCardProps={sectionCardProps}
+          settings={settings}
+          updateSetting={updateSetting}
+        />
       )
 
     case 'view':

@@ -869,6 +869,130 @@ async function migrateToGameFolders(store) {
   return { migrated }
 }
 
+// Reorganize already-organized recordings to match the current weekFolders setting.
+// - weekFolders OFF (flatten): move files from "Week of *" subdirs up to the game folder
+// - weekFolders ON  (expand):  move files sitting in the game folder into the correct week subdir
+// Naming conflicts are resolved by appending -2, -3, … before the extension.
+// Returns { moved, renamed: [{ from, to }] }
+async function reorganizeWeekFolders(store, onProgress = () => {}) {
+  const destPath = store.get('settings.destinationPath')
+  if (!destPath || !fs.existsSync(destPath)) return { moved: 0, renamed: [] }
+
+  const weekFolders = store.get('settings.weekFolders')
+  let moved = 0
+  const renamed = []
+
+  // Helper: resolve a safe destination path, appending -2/-3/… on conflict
+  function safeDest(dir, filename) {
+    const ext = path.extname(filename)
+    const base = path.basename(filename, ext)
+    let dest = path.join(dir, filename)
+    let counter = 2
+    while (fs.existsSync(dest)) {
+      dest = path.join(dir, `${base}-${counter}${ext}`)
+      counter++
+    }
+    return dest
+  }
+
+  // Helper: move the companion .tracks.json if it exists alongside src → dest
+  async function moveTracksJson(src, dest) {
+    const srcJson = src + '.tracks.json'
+    if (!fs.existsSync(srcJson)) return
+    try {
+      await moveFileSafe(srcJson, dest + '.tracks.json')
+    } catch (err) {
+      console.warn(`[reorganize] Could not move tracks json for ${src}: ${err.message}`)
+    }
+  }
+
+  let gameDirs
+  try {
+    gameDirs = fs.readdirSync(destPath, { withFileTypes: true }).filter((e) => e.isDirectory())
+  } catch {
+    return { moved: 0, renamed: [] }
+  }
+
+  const total = gameDirs.length
+  for (let i = 0; i < gameDirs.length; i++) {
+    const gameDir = gameDirs[i]
+    const gamePath = path.join(destPath, gameDir.name)
+    onProgress(`Reorganizing ${gameDir.name}… (${i + 1}/${total})`)
+
+    if (!weekFolders) {
+      // FLATTEN: find "Week of *" subdirs and move their video files up
+      let subdirs
+      try {
+        subdirs = fs.readdirSync(gamePath, { withFileTypes: true }).filter((e) => e.isDirectory())
+      } catch {
+        continue
+      }
+      for (const subdir of subdirs) {
+        if (!subdir.name.startsWith('Week of ')) continue
+        const weekPath = path.join(gamePath, subdir.name)
+        let weekFiles
+        try {
+          weekFiles = fs.readdirSync(weekPath).filter((f) => isVideoFile(f))
+        } catch {
+          continue
+        }
+        for (const file of weekFiles) {
+          const src = path.join(weekPath, file)
+          const dest = safeDest(gamePath, file)
+          const wasRenamed = path.basename(dest) !== file
+          try {
+            await moveFileSafe(src, dest)
+            await moveTracksJson(src, dest)
+            moved++
+            if (wasRenamed) renamed.push({ from: file, to: path.basename(dest) })
+          } catch (err) {
+            console.warn(`[reorganize] Could not move ${src}: ${err.message}`)
+          }
+        }
+        // Delete the week subdir if now empty (ignore errors)
+        try {
+          const remaining = fs.readdirSync(weekPath)
+          if (remaining.length === 0) fs.rmdirSync(weekPath)
+        } catch {}
+      }
+    } else {
+      // EXPAND: move video files in the game folder root into the appropriate week subdir
+      let gameFiles
+      try {
+        gameFiles = fs.readdirSync(gamePath).filter((f) => isVideoFile(f))
+      } catch {
+        continue
+      }
+      for (const file of gameFiles) {
+        const match = file.match(/Session (\d{4}-\d{2}-\d{2})/)
+        if (!match) continue
+        const recordingDate = new Date(match[1] + 'T12:00:00') // noon local avoids UTC offset issues
+        const weekFolderName = getWeekFolder(recordingDate)
+        const weekPath = path.join(gamePath, weekFolderName)
+        try {
+          fs.mkdirSync(weekPath, { recursive: true })
+        } catch {
+          continue
+        }
+        const src = path.join(gamePath, file)
+        const dest = safeDest(weekPath, file)
+        const wasRenamed = path.basename(dest) !== file
+        try {
+          await moveFileSafe(src, dest)
+          await moveTracksJson(src, dest)
+          moved++
+          if (wasRenamed) renamed.push({ from: file, to: path.basename(dest) })
+        } catch (err) {
+          console.warn(`[reorganize] Could not move ${src}: ${err.message}`)
+        }
+      }
+    }
+  }
+
+  service.invalidateRecordingsCache()
+  return { moved, renamed }
+}
+
 module.exports = {
   setupFileManager,
   organizeRecordings,
@@ -876,4 +1000,5 @@ module.exports = {
   finalizeDirectRecording,
   getWeekFolder,
   migrateToGameFolders,
+  reorganizeWeekFolders,
 }

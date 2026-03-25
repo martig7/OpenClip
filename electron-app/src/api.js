@@ -99,6 +99,7 @@ const mockApi = {
   deleteRecording: asyncNoop,
   getVideoURL: asyncNoop,
   organizeRecording: asyncNoop,
+  reorganizeWeekFolders: async () => ({ moved: 0, renamed: [] }),
   getClips: async () => mockClips,
   createClip: asyncNoop,
   deleteClip: asyncNoop,

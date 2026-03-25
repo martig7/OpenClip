@@ -677,6 +677,28 @@ function registerIpcHandlers(store, appState) {
     }
   })
 
+  // --- Reorganize by week-folder setting ---
+  ipcMain.handle('recordings:reorganize-week-folders', async (event) => {
+    const { reorganizeWeekFolders } = require('./fileManager')
+    const onProgress = (label) => {
+      try {
+        event.sender.send('session:process-progress', { phase: 'recording', label })
+      } catch {}
+    }
+    try {
+      const result = await reorganizeWeekFolders(store, onProgress)
+      try {
+        event.sender.send('session:process-progress', { phase: 'complete' })
+      } catch {}
+      return result
+    } catch (err) {
+      try {
+        event.sender.send('session:process-progress', { phase: 'error', error: err.message })
+      } catch {}
+      throw err
+    }
+  })
+
   // --- Manual organize ---
   ipcMain.handle('recordings:organize', async (event, { filePath, gameName, remux }) => {
     const { organizeSpecificRecording } = require('./fileManager')
