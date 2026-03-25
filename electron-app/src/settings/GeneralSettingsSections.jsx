@@ -676,7 +676,7 @@ export default function GeneralSettingsSection({
             </button>
             {updateStatus?.type === 'available' && (
               <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                Version {updateStatus.version} available — downloading…
+                Version {updateStatus.version} available, downloading…
               </span>
             )}
             {updateStatus?.type === 'progress' && (

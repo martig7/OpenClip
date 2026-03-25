@@ -293,7 +293,7 @@ export default function AddGameModal({
                   gap: 4,
                 }}
               >
-                <AlertTriangle size={11} /> No executable bound — use the window picker to set one,
+                <AlertTriangle size={11} /> No executable bound. Use the window picker to set one,
                 or the watcher won't detect this game.
               </span>
             )}
@@ -467,7 +467,7 @@ export default function AddGameModal({
                         </span>
                         {newGame.selector && (
                           <span style={{ color: 'var(--text-muted)', marginLeft: 4 }}>
-                            — <em>{newGame.selector}</em>
+                            (<em>{newGame.selector}</em>)
                           </span>
                         )}
                       </span>
@@ -577,7 +577,7 @@ export default function AddGameModal({
                         value={templateScene}
                         onChange={(e) => setTemplateScene(e.target.value)}
                       >
-                        <option value="">— Create empty scene —</option>
+                        <option value="">Create empty scene</option>
                         {obsScenes.map((s) => (
                           <option key={s} value={s}>
                             {s}

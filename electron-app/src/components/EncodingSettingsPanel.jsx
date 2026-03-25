@@ -255,7 +255,7 @@ function encodingCardHeaderExtras(ctx) {
   return {
     titleAddon: ctx.obsRunning ? (
       <p className="encoding-section-obs-warn" role="status">
-        OBS is running — close OBS to save encoding settings
+        OBS is running. Close OBS to save encoding settings.
       </p>
     ) : null,
     headerActions,
@@ -430,7 +430,7 @@ export function EncodingSettingsSection({ sectionId, sectionTitle }) {
               onChange={(e) => ctx.set('rate_control', e.target.value)}
               style={{ width: 160 }}
             >
-              <option value="">— unchanged —</option>
+              <option value="">(unchanged)</option>
               {ctx.RATE_CONTROLS.map((r) => (
                 <option key={r} value={r}>
                   {r}
@@ -496,7 +496,7 @@ export function EncodingSettingsSection({ sectionId, sectionTitle }) {
                 onChange={(e) => ctx.set('preset', e.target.value)}
                 style={{ width: 120 }}
               >
-                <option value="">— unchanged —</option>
+                <option value="">(unchanged)</option>
                 {ctx.PRESETS.map((p) => (
                   <option key={p} value={p}>
                     {p}

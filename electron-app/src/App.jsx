@@ -97,7 +97,7 @@ function AppLayout({ sessionProgress, updateState, showOnboarding, setShowOnboar
   const bannerLabel = isManual
     ? (activeProgress?.label ?? 'Organizing…')
     : sessionProgress?.phase === 'recording'
-      ? `Processing session — ${sessionProgress.label}`
+      ? `Processing session: ${sessionProgress.label}`
       : (sessionProgress?.label ?? 'Processing…')
 
   return (
