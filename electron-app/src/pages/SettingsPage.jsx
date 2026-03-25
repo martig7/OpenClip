@@ -95,6 +95,8 @@ export default function SettingsPage() {
 
   /** When true, bento outline is hidden (initial visit, after scroll). Sidebar selection shows it again. */
   const [outlineClearedByScroll, setOutlineClearedByScroll] = useState(true)
+  /** The section id to outline — set directly on sidebar click so it's in sync with outlineClearedByScroll. */
+  const [outlineTargetId, setOutlineTargetId] = useState(/** @type {string | null} */ (null))
 
   const bentoSpans = useMemo(
     () => computeBentoSpans(filteredSections.map((s) => s.id)),
@@ -112,13 +114,13 @@ export default function SettingsPage() {
     }, ms)
   }, [])
 
-  /** Bento outline: current `?section=` tile only after a sidebar pick (or re-click); scroll clears it. */
+  /** Bento outline: section tile only after a sidebar pick (or re-click); scroll clears it. */
   const outlineSectionId = useMemo(() => {
     if (outlineClearedByScroll) return null
-    if (!sectionParam || !isValidSectionId(sectionParam)) return null
-    if (!filteredSections.some((s) => s.id === sectionParam)) return null
-    return sectionParam
-  }, [outlineClearedByScroll, sectionParam, filteredSections])
+    if (!outlineTargetId || !isValidSectionId(outlineTargetId)) return null
+    if (!filteredSections.some((s) => s.id === outlineTargetId)) return null
+    return outlineTargetId
+  }, [outlineClearedByScroll, outlineTargetId, filteredSections])
 
   const hasEncodingSections = useMemo(
     () => filteredSections.some((s) => s.id.startsWith('encoding-')),
@@ -196,6 +198,7 @@ export default function SettingsPage() {
     const onScroll = () => {
       if (suppressOutlineScrollClearRef.current) return
       setOutlineClearedByScroll(true)
+      setOutlineTargetId(null)
       setSidebarNavHighlightId(null)
     }
     root.addEventListener('scroll', onScroll, { passive: true })
@@ -351,6 +354,7 @@ export default function SettingsPage() {
   /** In-settings section nav: always allowed while dirty. Leave/discard only applies to main app nav (see guard). */
   function handleSectionSelect(nextId) {
     setOutlineClearedByScroll(false)
+    setOutlineTargetId(nextId)
     setSidebarNavHighlightId(nextId)
     if (nextId === sectionParam) return
     setSearchParams({ section: nextId })
