@@ -224,6 +224,11 @@ async function getTrackNames(_wsSettings) {
   }
 }
 
+// Like getTrackNames but throws if OBS plugin is unreachable — no fallback defaults.
+async function getTrackNamesLive() {
+  return await callPlugin('getTrackNames')
+}
+
 async function setTrackNames(_wsSettings, names) {
   try {
     await callPlugin('setTrackNames', { names })
@@ -269,6 +274,7 @@ module.exports = {
   getInputAudioTracks,
   setInputAudioTracks,
   getTrackNames,
+  getTrackNamesLive,
   setTrackNames,
 
   // New plugin-specific methods

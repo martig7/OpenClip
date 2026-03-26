@@ -225,6 +225,17 @@ const store = {
       return this._electron().fullscreenRecording || electronConfigDefaults.fullscreenRecording
     if (key === 'masterAudioSources') return this._electron().masterAudioSources || []
     if (key === 'audioTracks') return this._electron().audioTracks || {}
+    if (key === 'trackNames')
+      return (
+        this._electron().trackNames || [
+          'Track 1',
+          'Track 2',
+          'Track 3',
+          'Track 4',
+          'Track 5',
+          'Track 6',
+        ]
+      )
     if (key === 'clipMarkers') return loadElectronMarkers()
     if (key === 'lockedRecordings') return this._ms().locked_recordings || []
     if (key === 'storageSettings') return this._ms().storage_settings || {}
@@ -271,6 +282,11 @@ const store = {
     }
     if (key === 'audioTracks') {
       this._electron().audioTracks = value
+      this._saveElectron()
+      return
+    }
+    if (key === 'trackNames') {
+      this._electron().trackNames = value
       this._saveElectron()
       return
     }
