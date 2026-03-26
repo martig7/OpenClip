@@ -55,8 +55,8 @@ function RecordingsPage() {
       }
     })
     api
-      .getGames()
-      .then((g) => setGames(g || []))
+      .getDestinationFolders()
+      .then((folders) => setGames((folders || []).map((name) => ({ id: name, name }))))
       .catch(() => {})
     api
       .getStore('settings')

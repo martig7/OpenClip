@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('api', {
 
   // Games
   getGames: () => ipcRenderer.invoke('games:list'),
+  getDestinationFolders: () => ipcRenderer.invoke('games:destination-folders'),
   addGame: (game) => ipcRenderer.invoke('games:add', game),
   removeGame: (id) => ipcRenderer.invoke('games:remove', id),
   toggleGame: (id) => ipcRenderer.invoke('games:toggle', id),

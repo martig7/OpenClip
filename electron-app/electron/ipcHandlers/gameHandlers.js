@@ -6,6 +6,23 @@ function registerGameHandlers(ipcMain, store, appState) {
   // --- Games ---
   ipcMain.handle('games:list', () => store.get('games') || [])
 
+  ipcMain.handle('games:destination-folders', () => {
+    const fs = require('fs')
+    const path = require('path')
+    const destPath = store.get('settings.destinationPath')
+    if (!destPath || !fs.existsSync(destPath)) return []
+    const EXCLUDED = new Set(['unorganized', 'clips'])
+    try {
+      return fs
+        .readdirSync(destPath, { withFileTypes: true })
+        .filter((e) => e.isDirectory() && !EXCLUDED.has(e.name.toLowerCase()))
+        .map((e) => e.name)
+        .sort((a, b) => a.localeCompare(b))
+    } catch {
+      return []
+    }
+  })
+
   ipcMain.handle('games:add', (_event, game) => {
     const games = Array.isArray(store.get('games')) ? store.get('games') : []
     const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`
