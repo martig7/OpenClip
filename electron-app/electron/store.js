@@ -46,6 +46,8 @@ const managerSettingsDefaults = {
     audio_tracks: [1],
   },
   obs_websocket: { host: 'localhost', port: 4455, password: '' },
+  share_host: 'catbox',
+  share_litterbox_expiry: '24h',
 }
 
 function readJson(filePath, defaults) {
@@ -98,6 +100,8 @@ function msToElectronSettings(ms, obsRecordingPath, electronData) {
       password: ms.obs_websocket?.password || '',
     },
     waveformResolution: ms.waveform_resolution || 'default',
+    shareHost: ms.share_host || 'gofile',
+    shareLitterboxExpiry: ms.share_litterbox_expiry || '24h',
   }
 }
 
@@ -140,6 +144,12 @@ function electronSettingsToMs(ms, electronSettings) {
   }
   if (electronSettings.waveformResolution !== undefined) {
     updated.waveform_resolution = electronSettings.waveformResolution
+  }
+  if (electronSettings.shareHost !== undefined) {
+    updated.share_host = electronSettings.shareHost
+  }
+  if (electronSettings.shareLitterboxExpiry !== undefined) {
+    updated.share_litterbox_expiry = electronSettings.shareLitterboxExpiry
   }
   return updated
 }
@@ -236,6 +246,7 @@ const store = {
           'Track 6',
         ]
       )
+    if (key === 'shareLinks') return this._electron().shareLinks || {}
     if (key === 'clipMarkers') return loadElectronMarkers()
     if (key === 'lockedRecordings') return this._ms().locked_recordings || []
     if (key === 'storageSettings') return this._ms().storage_settings || {}
@@ -287,6 +298,11 @@ const store = {
     }
     if (key === 'trackNames') {
       this._electron().trackNames = value
+      this._saveElectron()
+      return
+    }
+    if (key === 'shareLinks') {
+      this._electron().shareLinks = value
       this._saveElectron()
       return
     }

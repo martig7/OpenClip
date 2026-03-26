@@ -22,6 +22,7 @@ import { formatTime } from '../formatTime'
 import api from '../../api'
 import { useOrganizeProgress } from '../../App'
 
+
 const WAVEFORM_CHUNK_SIZE = 30
 const WAVEFORM_MAX_INFLIGHT = 3
 
@@ -57,6 +58,8 @@ function VideoPlayer({
   onOrganized,
   onOrganizeError,
   organizeRemux = true,
+  persistedShareState = null,
+  onShareStateChange,
 }) {
   // Use recording if provided, otherwise fall back to clip (for clips page)
   const media = recording || clip
@@ -649,6 +652,77 @@ function VideoPlayer({
     apiPost('/api/show-in-explorer', { path: media.path })
   }, [media])
 
+  // Share state: { phase: 'compressing'|'uploading'|'done'|'error', url, error, percent } or null
+  const [shareModal, setShareModal] = useState(persistedShareState)
+  const [shareCopied, setShareCopied] = useState(false)
+  const isSharing = shareModal?.phase === 'uploading' || shareModal?.phase === 'compressing'
+
+  // Restore persisted share state when the clip changes or when the store finishes loading.
+  // Guard: never overwrite an active share in progress.
+  useEffect(() => {
+    setShareModal((current) => {
+      if (current?.phase === 'compressing' || current?.phase === 'uploading') return current
+      return persistedShareState ?? null
+    })
+    if (!persistedShareState) setShareCopied(false)
+  }, [media?.path, persistedShareState])
+
+  // Listen for compression/upload progress events
+  useEffect(() => {
+    if (!api.onShareProgress) return
+    const unsub = api.onShareProgress((data) => {
+      setShareModal((prev) => {
+        if (!prev || prev.phase === 'done' || prev.phase === 'error') return prev
+        const next = { ...prev, phase: data.phase, percent: data.percent }
+        onShareStateChange?.(media?.path, next)
+        return next
+      })
+    })
+    return () => unsub()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [media?.path])
+
+  const handleShare = useCallback(async () => {
+    if (isSharing) return
+    const initial = { phase: 'compressing', percent: 0, url: null, error: null }
+    setShareModal(initial)
+    onShareStateChange?.(media?.path, initial)
+    setShareCopied(false)
+    try {
+      const result = await api.shareClip(media.path)
+      if (result?.success && result.url) {
+        const done = { phase: 'done', url: result.url, error: null }
+        setShareModal(done)
+        onShareStateChange?.(media?.path, done)
+      } else {
+        const err = { phase: 'error', url: null, error: result?.error || 'Upload failed' }
+        setShareModal(err)
+        onShareStateChange?.(media?.path, err)
+      }
+    } catch (err) {
+      const errState = { phase: 'error', url: null, error: err.message || 'Upload failed' }
+      setShareModal(errState)
+      onShareStateChange?.(media?.path, errState)
+    }
+  }, [isSharing, media, onShareStateChange])
+
+  const handleShareCopy = useCallback(async () => {
+    if (!shareModal?.url) return
+    try {
+      await navigator.clipboard.writeText(shareModal.url)
+    } catch {
+      // ignore
+    }
+    setShareCopied(true)
+    setTimeout(() => setShareCopied(false), 2000)
+  }, [shareModal])
+
+  const handleShareRemove = useCallback(() => {
+    setShareModal(null)
+    setShareCopied(false)
+    onShareStateChange?.(media?.path, null)
+  }, [media, onShareStateChange])
+
   if (!media) {
     return (
       <div className="flex-1 flex flex-col bg-[var(--bg-primary)] w-full h-full overflow-hidden">
@@ -823,6 +897,15 @@ function VideoPlayer({
           handleCreateClip={handleCreateClip}
           isCreatingClip={isCreatingClip}
           onDelete={onDelete}
+          onShare={isClip ? handleShare : undefined}
+          onShareRemove={isClip ? handleShareRemove : undefined}
+          isSharing={isSharing}
+          sharePhase={isClip ? (shareModal?.phase ?? null) : null}
+          sharePercent={isClip ? (shareModal?.percent ?? null) : null}
+          shareUrl={isClip ? (shareModal?.url ?? null) : null}
+          shareError={isClip ? (shareModal?.error ?? null) : null}
+          shareUrlCopied={shareCopied}
+          onShareUrlCopy={handleShareCopy}
           handleOpenInPlayer={handleOpenInPlayer}
           handleShowInExplorer={handleShowInExplorer}
         />
@@ -910,6 +993,7 @@ function VideoPlayer({
           </div>
         )}
       </div>
+
     </div>
   )
 }
