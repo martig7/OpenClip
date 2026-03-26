@@ -399,6 +399,12 @@
   animation: share-indeterminate 1.4s ease-in-out infinite;
   transform-origin: left center;
 }
+.share-progress-bar-determinate {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+  transition: width 0.15s linear;
+}
 @keyframes share-indeterminate {
   0%   { transform: translateX(-100%) scaleX(0.4); }
   40%  { transform: translateX(0%)    scaleX(0.6); }

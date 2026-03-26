@@ -7,28 +7,43 @@ import { Copy, Check, ExternalLink } from 'lucide-react'
  *   phase    'uploading' | 'done' | 'error' | null  (null = hidden)
  *   url      string | null   (set when phase === 'done')
  *   error    string | null   (set when phase === 'error')
+ *   percent  number | null   (0-100, set when phase === 'compressing')
  *   onClose  () => void
  *   onCopy   () => void
  *   copied   boolean
  */
-export default function ShareModal({ phase, url, error, onClose, onCopy, copied }) {
+export default function ShareModal({ phase, url, error, percent, onClose, onCopy, copied }) {
   if (!phase) return null
 
-  const isUploading = phase === 'uploading'
-  const isDone      = phase === 'done'
-  const isError     = phase === 'error'
+  const isCompressing = phase === 'compressing'
+  const isUploading   = phase === 'uploading'
+  const isDone        = phase === 'done'
+  const isError       = phase === 'error'
 
   return (
     <div
       className="modal-overlay"
-      onMouseDown={(e) => { if (e.target === e.currentTarget && !isUploading) onClose() }}
+      onMouseDown={(e) => { if (e.target === e.currentTarget && !isUploading && !isCompressing) onClose() }}
     >
       <div className="modal share-modal" onClick={(e) => e.stopPropagation()}>
         <h2 style={{ marginBottom: '6px' }}>
-          {isUploading && 'Uploading\u2026'}
-          {isDone      && 'Ready to Share'}
-          {isError     && 'Upload Failed'}
+          {isCompressing && 'Compressing…'}
+          {isUploading   && 'Uploading…'}
+          {isDone        && 'Ready to Share'}
+          {isError       && 'Upload Failed'}
         </h2>
+
+        {isCompressing && (
+          <>
+            <p style={{ marginBottom: '20px' }}>Optimizing your clip for sharing…</p>
+            <div className="share-progress-track">
+              <div
+                className="share-progress-bar-determinate"
+                style={{ width: `${Math.round(percent || 0)}%` }}
+              />
+            </div>
+          </>
+        )}
 
         {isUploading && (
           <>
@@ -73,7 +88,7 @@ export default function ShareModal({ phase, url, error, onClose, onCopy, copied 
         )}
 
         <div className="modal-actions" style={{ marginTop: '20px' }}>
-          {isUploading ? (
+          {(isUploading || isCompressing) ? (
             <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
           ) : (
             <button className="btn btn-primary" onClick={onClose}>Close</button>

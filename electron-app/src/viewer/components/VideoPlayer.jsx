@@ -654,7 +654,7 @@ function VideoPlayer({
   // Share modal state: { phase: 'uploading'|'done'|'error', url, error } or null (closed)
   const [shareModal, setShareModal] = useState(null)
   const [shareCopied, setShareCopied] = useState(false)
-  const isSharing = shareModal?.phase === 'uploading'
+  const isSharing = shareModal?.phase === 'uploading' || shareModal?.phase === 'compressing'
 
   // Reset share URL when the selected clip changes
   useEffect(() => {
@@ -663,9 +663,22 @@ function VideoPlayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [media?.path])
 
+  // Listen for compression/upload progress events
+  useEffect(() => {
+    if (!api.onShareProgress) return
+    const unsub = api.onShareProgress((data) => {
+      setShareModal((prev) => {
+        // Only update if we are still in a sharing flow
+        if (!prev || prev.phase === 'done' || prev.phase === 'error') return prev
+        return { ...prev, phase: data.phase, percent: data.percent }
+      })
+    })
+    return () => unsub()
+  }, [])
+
   const handleShare = useCallback(async () => {
     if (isSharing) return
-    setShareModal({ phase: 'uploading', url: null, error: null })
+    setShareModal({ phase: 'compressing', percent: 0, url: null, error: null })
     setShareCopied(false)
     try {
       const result = await api.shareClip(media.path)
