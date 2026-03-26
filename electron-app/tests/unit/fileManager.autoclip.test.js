@@ -8,7 +8,7 @@ describe('buildAutoClipMapArgs', () => {
     return mod.buildAutoClipMapArgs
   }
 
-  it('returns video-only map when audioTracks is empty (no audio)', async () => {
+  it('returns video-only map when audioTracks is empty (no tracks selected = muted)', async () => {
     const buildAutoClipMapArgs = await getBuildFn()
     expect(buildAutoClipMapArgs([])).toEqual(['-map', '0:v:0'])
   })
