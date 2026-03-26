@@ -188,6 +188,7 @@ export default function AudioSourcesCard({
                   isAlreadyInList={isAlreadyInList}
                   onSelect={handleDropdownSelect}
                   dropdownTitle={isScene ? 'Add to Scene' : 'Select Audio Source'}
+                  direction={isMaster ? 'up' : 'down'}
                 />
               )}
             </div>
@@ -401,10 +402,10 @@ export default function AudioSourcesCard({
   )
 }
 
-function AddSourceDropdown({ entries, loading, error, isAlreadyInList, onSelect, dropdownTitle }) {
+function AddSourceDropdown({ entries, loading, error, isAlreadyInList, onSelect, dropdownTitle, direction = 'down' }) {
   if (loading) {
     return (
-      <DropdownShell title={dropdownTitle}>
+      <DropdownShell title={dropdownTitle} direction={direction}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px', fontSize: 12, color: 'var(--text-muted)' }}>
           <RefreshCw size={13} className="spinning" /> Loading audio sources…
         </div>
@@ -413,7 +414,7 @@ function AddSourceDropdown({ entries, loading, error, isAlreadyInList, onSelect,
   }
   if (error) {
     return (
-      <DropdownShell title={dropdownTitle}>
+      <DropdownShell title={dropdownTitle} direction={direction}>
         <div style={{ padding: '10px 14px' }}>
           <div style={{ fontSize: 12, color: 'var(--danger)', marginBottom: 4 }}>{error}</div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Make sure OBS is running and WebSocket is configured.</div>
@@ -423,14 +424,14 @@ function AddSourceDropdown({ entries, loading, error, isAlreadyInList, onSelect,
   }
   if (entries.length === 0) {
     return (
-      <DropdownShell title={dropdownTitle}>
+      <DropdownShell title={dropdownTitle} direction={direction}>
         <div style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)' }}>No audio sources found. Ensure OBS is running.</div>
       </DropdownShell>
     )
   }
 
   return (
-    <DropdownShell title={dropdownTitle}>
+    <DropdownShell title={dropdownTitle} direction={direction}>
       <div style={{ maxHeight: 240, overflowY: 'auto' }}>
         {['obs', 'windows', 'app'].map((group) => {
           const items = entries.filter((a) => a.source === group)
@@ -511,12 +512,12 @@ function AddSourceDropdown({ entries, loading, error, isAlreadyInList, onSelect,
   )
 }
 
-function DropdownShell({ title, children }) {
+function DropdownShell({ title, children, direction = 'down' }) {
   return (
     <div
       style={{
         position: 'absolute',
-        top: 'calc(100% + 6px)',
+        ...(direction === 'up' ? { bottom: 'calc(100% + 6px)' } : { top: 'calc(100% + 6px)' }),
         right: 0,
         zIndex: 300,
         minWidth: 300,
