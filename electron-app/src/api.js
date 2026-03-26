@@ -91,6 +91,7 @@ const mockApi = {
   setTrackNames: async () => ({ success: true }),
   listWindowsAudioDevices: asyncArr,
   listRunningApps: asyncArr,
+  getDestinationFolders: asyncArr,
   openDirectoryDialog: asyncNoop,
   openFileDialog: asyncNoop,
   showInExplorer: noop,
