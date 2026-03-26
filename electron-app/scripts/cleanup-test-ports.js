@@ -2,6 +2,8 @@
 const { execSync } = require('child_process')
 
 const PORT = parseInt(process.env.OPENCLIP_API_PORT || '47531', 10)
+// 9222 is the Playwright CDP port used by the patched electron launcher
+const CDP_PORT = 9222
 
 function run(cmd) {
   return execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
@@ -104,3 +106,4 @@ function cleanupPort(port) {
 }
 
 cleanupPort(PORT)
+cleanupPort(CDP_PORT)
