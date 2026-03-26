@@ -43,6 +43,7 @@ const managerSettingsDefaults = {
     buffer_after_seconds: 5,
     remove_processed_markers: true,
     delete_recording_after_clips: false,
+    audio_tracks: [1],
   },
   obs_websocket: { host: 'localhost', port: 4455, password: '' },
   share_host: 'catbox',
@@ -85,6 +86,7 @@ function msToElectronSettings(ms, obsRecordingPath, electronData) {
       bufferAfter: ms.auto_clip_settings?.buffer_after_seconds ?? 5,
       removeMarkers: ms.auto_clip_settings?.remove_processed_markers !== false,
       deleteFullRecording: ms.auto_clip_settings?.delete_recording_after_clips || false,
+      audioTracks: ms.auto_clip_settings?.audio_tracks ?? [],
     },
     autoDelete: {
       enabled: ms.storage_settings?.auto_delete_enabled || false,
@@ -120,6 +122,7 @@ function electronSettingsToMs(ms, electronSettings) {
       buffer_after_seconds: electronSettings.autoClip.bufferAfter ?? 5,
       remove_processed_markers: electronSettings.autoClip.removeMarkers !== false,
       delete_recording_after_clips: electronSettings.autoClip.deleteFullRecording || false,
+      audio_tracks: electronSettings.autoClip.audioTracks ?? [],
     }
   }
   if (electronSettings.autoDelete !== undefined) {
@@ -232,6 +235,17 @@ const store = {
       return this._electron().fullscreenRecording || electronConfigDefaults.fullscreenRecording
     if (key === 'masterAudioSources') return this._electron().masterAudioSources || []
     if (key === 'audioTracks') return this._electron().audioTracks || {}
+    if (key === 'trackNames')
+      return (
+        this._electron().trackNames || [
+          'Track 1',
+          'Track 2',
+          'Track 3',
+          'Track 4',
+          'Track 5',
+          'Track 6',
+        ]
+      )
     if (key === 'shareLinks') return this._electron().shareLinks || {}
     if (key === 'clipMarkers') return loadElectronMarkers()
     if (key === 'lockedRecordings') return this._ms().locked_recordings || []
@@ -279,6 +293,11 @@ const store = {
     }
     if (key === 'audioTracks') {
       this._electron().audioTracks = value
+      this._saveElectron()
+      return
+    }
+    if (key === 'trackNames') {
+      this._electron().trackNames = value
       this._saveElectron()
       return
     }

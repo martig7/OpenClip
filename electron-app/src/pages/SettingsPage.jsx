@@ -48,6 +48,14 @@ export default function SettingsPage() {
   const [pluginBusy, setPluginBusy] = useState(false)
   const [pluginMsg, setPluginMsg] = useState(null) // { ok: bool, text: string }
   const [obsInstallPath, setObsInstallPath] = useState('')
+  const [trackNames, setTrackNames] = useState([
+    'Track 1',
+    'Track 2',
+    'Track 3',
+    'Track 4',
+    'Track 5',
+    'Track 6',
+  ])
   const encodingPanelRef = useRef(null)
   const [encodingMeta, setEncodingMeta] = useState({ dirty: false, canSave: false })
   /** Snapshot of last loaded/saved app settings — used so Save enables only when values differ */
@@ -209,6 +217,15 @@ export default function SettingsPage() {
     loadSettings()
     api.isOBSPluginRegistered().then(setPluginInstalled)
     api.getOBSInstallPath().then((p) => setObsInstallPath(p || ''))
+    api.getStore('trackNames').then((saved) => {
+      if (Array.isArray(saved) && saved.length === 6) setTrackNames(saved)
+    })
+    api.getTrackNamesLive().then((live) => {
+      if (Array.isArray(live) && live.length === 6) {
+        setTrackNames(live)
+        api.setStore('trackNames', live)
+      }
+    }).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -481,6 +498,7 @@ export default function SettingsPage() {
     checkingUpdate,
     checkForUpdate,
     installUpdate,
+    trackNames,
   }
 
   const noSectionsMatchBody = (
