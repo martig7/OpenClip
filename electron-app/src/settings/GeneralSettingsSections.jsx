@@ -698,6 +698,47 @@ export default function GeneralSettingsSection({
         </AppSettingsSectionCard>
       )
 
+    case 'sharing':
+      return (
+        <AppSettingsSectionCard {...sectionCardProps}>
+          <div className="form-group" style={{ marginTop: 0 }}>
+            <label className="form-label">Share Host</label>
+            <div className="toggle-desc" style={{ marginBottom: 6 }}>
+              Where clips are uploaded when you use the Share button
+            </div>
+            <select
+              className="form-input"
+              value={settings.shareHost || 'catbox'}
+              onChange={(e) => updateSetting('shareHost', e.target.value)}
+            >
+              <option value="catbox">Catbox.moe (permanent, up to 200 MB)</option>
+              <option value="litterbox">Litterbox.catbox.moe (temporary, up to 1 GB)</option>
+              <option value="uguu">Uguu.se (temporary, 48h expiry)</option>
+              <option value="gofile">GoFile.io (no size limit, no embeds)</option>
+            </select>
+          </div>
+
+          {(settings.shareHost || 'catbox') === 'litterbox' && (
+            <div className="form-group" style={{ marginTop: 16 }}>
+              <label className="form-label">Link Expiry</label>
+              <div className="toggle-desc" style={{ marginBottom: 6 }}>
+                How long the shared link stays active
+              </div>
+              <select
+                className="form-input"
+                value={settings.shareLitterboxExpiry || '24h'}
+                onChange={(e) => updateSetting('shareLitterboxExpiry', e.target.value)}
+              >
+                <option value="1h">1 hour</option>
+                <option value="12h">12 hours</option>
+                <option value="24h">24 hours</option>
+                <option value="72h">72 hours</option>
+              </select>
+            </div>
+          )}
+        </AppSettingsSectionCard>
+      )
+
     default:
       return null
   }

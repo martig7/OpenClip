@@ -17,6 +17,39 @@ function ClipsPage() {
   const [games, setGames] = useState([])
   const [organizeRemux, setOrganizeRemux] = useState(true)
   const toastTimerRef = useRef(null)
+  // Persists share state across clip selections: Map<path, { phase, url, error, percent }>
+  const [shareStates, setShareStates] = useState(() => new Map())
+
+  // Load persisted share links from store on mount
+  useEffect(() => {
+    api.getStore('shareLinks').then((links) => {
+      if (!links || typeof links !== 'object') return
+      setShareStates(new Map(
+        Object.entries(links).map(([p, url]) => [p, { phase: 'done', url, error: null }])
+      ))
+    }).catch(() => {})
+  }, [])
+
+  const handleShareStateChange = useCallback((path, state) => {
+    setShareStates((prev) => {
+      const next = new Map(prev)
+      if (state === null) next.delete(path)
+      else next.set(path, state)
+      return next
+    })
+    // Persist completed links to electron-store; remove when cleared
+    if (state?.phase === 'done' && state.url) {
+      api.getStore('shareLinks').then((links) => {
+        api.setStore('shareLinks', { ...(links || {}), [path]: state.url }).catch(() => {})
+      }).catch(() => {})
+    } else if (state === null) {
+      api.getStore('shareLinks').then((links) => {
+        if (!links || !links[path]) return
+        const { [path]: _removed, ...rest } = links
+        api.setStore('shareLinks', rest).catch(() => {})
+      }).catch(() => {})
+    }
+  }, [])
 
   useEffect(() => {
     return () => clearTimeout(toastTimerRef.current)
@@ -133,6 +166,8 @@ function ClipsPage() {
             onOrganized={handleOrganized}
             onOrganizeError={handleOrganizeError}
             organizeRemux={organizeRemux}
+            persistedShareState={shareStates.get(selectedClip?.path) ?? null}
+            onShareStateChange={handleShareStateChange}
           />
         ) : (
           <>

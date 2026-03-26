@@ -22,6 +22,7 @@ const { registerWatcherHandlers } = require('./ipcHandlers/watcherHandlers')
 const { registerObsHandlers } = require('./ipcHandlers/obsHandlers')
 const { registerWindowHandlers } = require('./ipcHandlers/windowHandlers')
 const { registerRecordingHandlers } = require('./ipcHandlers/recordingHandlers')
+const { registerShareHandlers } = require('./ipcHandlers/shareHandlers')
 
 function registerIpcHandlers(store, appState) {
   // appState: { watcher, watcherStartedAt, currentGame, mainWindow, apiPort, apiPortReady }
@@ -82,6 +83,7 @@ function registerIpcHandlers(store, appState) {
   registerObsHandlers(ipcMain, store, appState)
   registerWindowHandlers(ipcMain, store, appState)
   registerRecordingHandlers(ipcMain, store, appState)
+  registerShareHandlers(ipcMain, store)
 }
 
 module.exports = { registerIpcHandlers }

@@ -10,17 +10,20 @@ const asyncArr = async () => []
 let store = {
   settings: { ...defaultSettings },
   games: [...mockGames],
+  shareLinks: {},
 }
 
 const mockApi = {
   getStore: async (key) => {
     if (key === 'settings') return store.settings
     if (key === 'games') return store.games
+    if (key === 'shareLinks') return store.shareLinks
     return null
   },
   setStore: async (key, value) => {
     if (key === 'settings') store.settings = value
     if (key === 'games') store.games = value
+    if (key === 'shareLinks') store.shareLinks = value
   },
   getGames: async () => store.games,
   addGame: async (game) => {
@@ -109,6 +112,7 @@ const mockApi = {
   onMarkerAdded: () => noop,
   onOrganizeProgress: () => noop,
   onSessionProgress: () => noop,
+  onShareProgress: () => noop,
   getStorageStats: async () => mockStorageStats,
   registerHotkey: asyncNoop,
   reencodeVideo: asyncNoop,

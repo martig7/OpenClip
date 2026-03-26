@@ -173,6 +173,14 @@ contextBridge.exposeInMainWorld('api', {
   getOBSInstallPath: () => ipcRenderer.invoke('obs:get-install-path'),
   isOBSPluginRegistered: () => ipcRenderer.invoke('obs:is-plugin-registered'),
 
+  // Share
+  shareClip: (filePath) => ipcRenderer.invoke('share:upload-clip', filePath),
+  onShareProgress: (callback) => {
+    const handler = (_event, progress) => callback(progress)
+    ipcRenderer.on('share:progress', handler)
+    return () => ipcRenderer.removeListener('share:progress', handler)
+  },
+
   // API server port
   getApiPort: () => ipcRenderer.invoke('api:port'),
 
