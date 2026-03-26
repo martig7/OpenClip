@@ -65,6 +65,7 @@ export const SETTINGS_SECTIONS = [
     group: 'encoding',
   },
   { id: 'updates', title: 'Updates', blurb: 'App updates', group: 'updates' },
+  { id: 'sharing', title: 'Sharing', blurb: 'Share host & link expiry', group: 'view' },
 ]
 
 /** @deprecated use SETTINGS_SECTIONS */

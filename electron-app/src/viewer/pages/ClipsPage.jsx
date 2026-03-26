@@ -132,6 +132,16 @@ function ClipsPage() {
             games={games}
             onOrganized={handleOrganized}
             onOrganizeError={handleOrganizeError}
+            onShareSuccess={(url) => {
+              setToast({ type: 'success', message: 'Link copied to clipboard!' })
+              clearTimeout(toastTimerRef.current)
+              toastTimerRef.current = setTimeout(() => setToast(null), 4000)
+            }}
+            onShareError={(msg) => {
+              setToast({ type: 'error', message: `Share failed: ${msg}` })
+              clearTimeout(toastTimerRef.current)
+              toastTimerRef.current = setTimeout(() => setToast(null), 5000)
+            }}
             organizeRemux={organizeRemux}
           />
         ) : (

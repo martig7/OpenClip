@@ -56,6 +56,8 @@ function VideoPlayer({
   games = [],
   onOrganized,
   onOrganizeError,
+  onShareSuccess,
+  onShareError,
   organizeRemux = true,
 }) {
   // Use recording if provided, otherwise fall back to clip (for clips page)
@@ -649,6 +651,30 @@ function VideoPlayer({
     apiPost('/api/show-in-explorer', { path: media.path })
   }, [media])
 
+  const [isSharing, setIsSharing] = useState(false)
+
+  const handleShare = useCallback(async () => {
+    if (isSharing) return
+    setIsSharing(true)
+    try {
+      const result = await api.shareClip(media.path)
+      if (result?.success && result.url) {
+        try {
+          await navigator.clipboard.writeText(result.url)
+        } catch {
+          // clipboard write failed — still surface the URL
+        }
+        onShareSuccess?.(result.url)
+      } else {
+        onShareError?.(result?.error || 'Upload failed')
+      }
+    } catch (err) {
+      onShareError?.(err.message || 'Upload failed')
+    } finally {
+      setIsSharing(false)
+    }
+  }, [isSharing, media, onShareSuccess, onShareError])
+
   if (!media) {
     return (
       <div className="flex-1 flex flex-col bg-[var(--bg-primary)] w-full h-full overflow-hidden">
@@ -823,6 +849,8 @@ function VideoPlayer({
           handleCreateClip={handleCreateClip}
           isCreatingClip={isCreatingClip}
           onDelete={onDelete}
+          onShare={isClip ? handleShare : undefined}
+          isSharing={isSharing}
           handleOpenInPlayer={handleOpenInPlayer}
           handleShowInExplorer={handleShowInExplorer}
         />

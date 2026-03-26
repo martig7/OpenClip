@@ -45,6 +45,8 @@ const managerSettingsDefaults = {
     delete_recording_after_clips: false,
   },
   obs_websocket: { host: 'localhost', port: 4455, password: '' },
+  share_host: 'gofile',
+  share_litterbox_expiry: '24h',
 }
 
 function readJson(filePath, defaults) {
@@ -96,6 +98,8 @@ function msToElectronSettings(ms, obsRecordingPath, electronData) {
       password: ms.obs_websocket?.password || '',
     },
     waveformResolution: ms.waveform_resolution || 'default',
+    shareHost: ms.share_host || 'gofile',
+    shareLitterboxExpiry: ms.share_litterbox_expiry || '24h',
   }
 }
 
@@ -137,6 +141,12 @@ function electronSettingsToMs(ms, electronSettings) {
   }
   if (electronSettings.waveformResolution !== undefined) {
     updated.waveform_resolution = electronSettings.waveformResolution
+  }
+  if (electronSettings.shareHost !== undefined) {
+    updated.share_host = electronSettings.shareHost
+  }
+  if (electronSettings.shareLitterboxExpiry !== undefined) {
+    updated.share_litterbox_expiry = electronSettings.shareLitterboxExpiry
   }
   return updated
 }

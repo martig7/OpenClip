@@ -11,6 +11,8 @@ import {
   Plus,
   Minus,
   Maximize,
+  Share2,
+  Loader,
 } from 'lucide-react'
 import { formatTime } from '../formatTime'
 
@@ -37,6 +39,8 @@ export default function VideoPlayerInfoBar({
   isCreatingClip,
 
   onDelete,
+  onShare,
+  isSharing,
   handleOpenInPlayer,
   handleShowInExplorer,
 }) {
@@ -108,6 +112,11 @@ export default function VideoPlayerInfoBar({
                 <button onClick={() => { setDropdownOpen(false); setOrganizeMode(true); }} disabled={isOrganizing}>
                   <MoveRight size={21} /> Organize
                 </button>
+                {isClip && onShare && (
+                  <button onClick={() => { setDropdownOpen(false); onShare(); }} disabled={isSharing}>
+                    {isSharing ? <Loader size={21} style={{ animation: 'spin 1s linear infinite' }} /> : <Share2 size={21} />} Share
+                  </button>
+                )}
                 <button onClick={() => { setDropdownOpen(false); handleOpenInPlayer(); }}>
                   <Play size={21} /> Open in Player
                 </button>
