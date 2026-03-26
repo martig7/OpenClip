@@ -43,6 +43,7 @@ const managerSettingsDefaults = {
     buffer_after_seconds: 5,
     remove_processed_markers: true,
     delete_recording_after_clips: false,
+    audio_tracks: [],
   },
   obs_websocket: { host: 'localhost', port: 4455, password: '' },
 }
@@ -83,6 +84,7 @@ function msToElectronSettings(ms, obsRecordingPath, electronData) {
       bufferAfter: ms.auto_clip_settings?.buffer_after_seconds ?? 5,
       removeMarkers: ms.auto_clip_settings?.remove_processed_markers !== false,
       deleteFullRecording: ms.auto_clip_settings?.delete_recording_after_clips || false,
+      audioTracks: ms.auto_clip_settings?.audio_tracks ?? [],
     },
     autoDelete: {
       enabled: ms.storage_settings?.auto_delete_enabled || false,
@@ -116,6 +118,7 @@ function electronSettingsToMs(ms, electronSettings) {
       buffer_after_seconds: electronSettings.autoClip.bufferAfter ?? 5,
       remove_processed_markers: electronSettings.autoClip.removeMarkers !== false,
       delete_recording_after_clips: electronSettings.autoClip.deleteFullRecording || false,
+      audio_tracks: electronSettings.autoClip.audioTracks ?? [],
     }
   }
   if (electronSettings.autoDelete !== undefined) {
