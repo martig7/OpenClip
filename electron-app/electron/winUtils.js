@@ -242,10 +242,17 @@ function listWindowsWithProcesses() {
   const SYSTEM_PROCS = new Set([
     'explorer',
     'searchhost',
+    'searchapp',
+    'searchui',
     'textinputhost',
     'shellexperiencehost',
     'applicationframehost',
+    'startmenuexperiencehost',
     'systemsettings',
+    'lockapp',
+    'logonui',
+    'winlogon',
+    'dwm',
     'mmc',
   ])
 
@@ -291,6 +298,7 @@ function listWindowsWithProcesses() {
     }
 
     const processName = exeFile ? exeFile.replace(/\.exe$/i, '') : ''
+    if (!processName) return true // skip if we couldn't resolve the exe name
     if (SYSTEM_PROCS.has(processName.toLowerCase())) return true
 
     // Check if this window fills the primary monitor

@@ -201,6 +201,21 @@ export async function buildAvailableAudioInputs() {
     }
   }
 
+  // Sort within each source group:
+  // - 'obs' and 'windows': alphabetical by name
+  // - 'app': "Game Audio" pinned first, then hasWindow=true apps (alpha), then hasWindow=false (alpha)
+  combined.sort((a, b) => {
+    if (a.source !== b.source) return 0
+    if (a.source === 'app') {
+      const aIsGame = a.kind === 'magic_game_audio'
+      const bIsGame = b.kind === 'magic_game_audio'
+      if (aIsGame) return -1
+      if (bIsGame) return 1
+      if (a.hasWindow !== b.hasWindow) return a.hasWindow ? -1 : 1
+    }
+    return a.name.localeCompare(b.name)
+  })
+
   return combined
 }
 
