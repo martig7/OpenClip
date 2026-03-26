@@ -433,54 +433,103 @@
 .share-error-msg {
   @apply text-[13px] text-[var(--danger)] mb-0 !important;
 }
-/* Persistent share-link bar (appears below the title row after a successful upload) */
-.share-link-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 14px 6px 16px;
-  background: var(--bg-tertiary);
-  border-top: 1px solid var(--border);
-  animation: share-bar-in 0.2s ease;
-}
-@keyframes share-bar-in {
-  from { opacity: 0; transform: translateY(-4px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-.share-link-label {
+/* Inline share pill — shown in the info bar actions row to the right of the Share button */
+.share-inline-pill {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--accent-hover);
-  white-space: nowrap;
+  gap: 7px;
+  height: 36px;
+  border-radius: 6px;
+  font-size: 12px;
+  flex-shrink: 0;
+  animation: share-pill-in 0.18s ease;
+}
+@keyframes share-pill-in {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Loading state */
+.share-inline-pill--loading {
+  padding: 0 10px 0 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  gap: 8px;
+}
+.share-inline-spinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid rgba(124, 58, 237, 0.25);
+  border-top-color: var(--accent);
+  animation: spin 0.7s linear infinite;
   flex-shrink: 0;
 }
-.share-link-input {
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.share-inline-label {
+  color: var(--text-secondary);
+  white-space: nowrap;
+  font-size: 12px;
+}
+.share-inline-track {
+  width: 64px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--bg-active);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.share-inline-bar-determinate {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  transition: width 0.15s linear;
+}
+.share-inline-bar-indeterminate {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  animation: share-indeterminate 1.4s ease-in-out infinite;
+  transform-origin: left center;
+}
+
+/* Done state */
+.share-inline-pill--done {
+  padding: 0 6px 0 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  max-width: 340px;
+}
+.share-inline-icon {
+  color: var(--accent-hover);
+  flex-shrink: 0;
+}
+.share-inline-input {
   flex: 1;
   min-width: 0;
   font-size: 11px;
   font-family: monospace;
-  padding: 4px 8px;
-  height: 28px;
+  padding: 3px 6px;
+  height: 24px;
   background: var(--bg-active);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-light);
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
   outline: none;
 }
-.share-link-input:focus {
+.share-inline-input:focus {
   border-color: var(--accent);
   color: var(--text-primary);
 }
-.share-link-copy-btn {
+.share-inline-copy-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   flex-shrink: 0;
-  height: 28px;
-  padding: 0 10px;
+  height: 24px;
+  padding: 0 8px;
   font-size: 11px;
   font-weight: 600;
   border: none;
@@ -488,18 +537,19 @@
   cursor: pointer;
   background: var(--accent);
   color: #fff;
+  white-space: nowrap;
   transition: background 0.15s ease;
 }
-.share-link-copy-btn:hover {
+.share-inline-copy-btn:hover {
   background: var(--accent-hover);
 }
-.share-link-open-btn {
+.share-inline-open-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  height: 28px;
-  width: 28px;
+  height: 24px;
+  width: 24px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -507,9 +557,22 @@
   color: var(--text-secondary);
   transition: background 0.15s ease, color 0.15s ease;
 }
-.share-link-open-btn:hover {
+.share-inline-open-btn:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
+}
+
+/* Error state */
+.share-inline-pill--error {
+  padding: 0 10px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: var(--danger);
+  font-size: 12px;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 

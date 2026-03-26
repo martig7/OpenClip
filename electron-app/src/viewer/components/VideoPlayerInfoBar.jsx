@@ -15,6 +15,7 @@ import {
   Copy,
   Check,
   ExternalLink,
+  X,
 } from 'lucide-react'
 import { formatTime } from '../formatTime'
 
@@ -42,8 +43,12 @@ export default function VideoPlayerInfoBar({
 
   onDelete,
   onShare,
+  onShareRemove,
   isSharing,
+  sharePhase,
+  sharePercent,
   shareUrl,
+  shareError,
   shareUrlCopied,
   onShareUrlCopy,
   handleOpenInPlayer,
@@ -104,16 +109,82 @@ export default function VideoPlayerInfoBar({
             </button>
           )}
 
-          {/* Standalone Share icon button — only for clips */}
+          {/* Share button + inline state pill — only for clips */}
           {isClip && onShare && (
-            <button
-              className="btn-action-more shrink-0"
-              onClick={onShare}
-              disabled={isSharing}
-              title="Share clip"
-            >
-              <Share2 size={21} />
-            </button>
+            <>
+              {(sharePhase == null || sharePhase === 'error') && (
+                <button
+                  className="btn-action-more shrink-0"
+                  onClick={onShare}
+                  disabled={isSharing}
+                  title="Share clip"
+                >
+                  <Share2 size={21} />
+                </button>
+              )}
+
+              {/* Loading pill */}
+              {(sharePhase === 'compressing' || sharePhase === 'uploading') && (
+                <div className="share-inline-pill share-inline-pill--loading">
+                  <div className="share-inline-spinner" />
+                  <span className="share-inline-label">
+                    {sharePhase === 'compressing' ? 'Compressing…' : 'Uploading…'}
+                  </span>
+                  <div className="share-inline-track">
+                    {sharePhase === 'compressing' ? (
+                      <div
+                        className="share-inline-bar-determinate"
+                        style={{ width: `${Math.round(sharePercent || 0)}%` }}
+                      />
+                    ) : (
+                      <div className="share-inline-bar-indeterminate" />
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Done pill */}
+              {sharePhase === 'done' && shareUrl && (
+                <div className="share-inline-pill share-inline-pill--done">
+                  <Share2 size={12} className="share-inline-icon" />
+                  <input
+                    className="share-inline-input"
+                    readOnly
+                    value={shareUrl}
+                    onFocus={(e) => e.target.select()}
+                  />
+                  <button
+                    className="share-inline-copy-btn"
+                    onClick={onShareUrlCopy}
+                    title="Copy link"
+                  >
+                    {shareUrlCopied ? <Check size={12} /> : <Copy size={12} />}
+                    {shareUrlCopied ? 'Copied!' : 'Copy'}
+                  </button>
+                  <button
+                    className="share-inline-open-btn"
+                    onClick={() => window.open(shareUrl, '_blank')}
+                    title="Open link"
+                  >
+                    <ExternalLink size={12} />
+                  </button>
+                  <button
+                    className="share-inline-open-btn"
+                    onClick={onShareRemove}
+                    title="Remove link"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              )}
+
+              {/* Error pill */}
+              {sharePhase === 'error' && (
+                <div className="share-inline-pill share-inline-pill--error">
+                  {shareError || 'Upload failed'}
+                </div>
+              )}
+            </>
           )}
 
           <div className="action-dropdown" ref={dropdownRefTitle}>
@@ -145,36 +216,6 @@ export default function VideoPlayerInfoBar({
           </div>
         </div>
       </div>
-
-      {/* Persistent share-link bar — shown after a successful upload */}
-      {shareUrl && !isClipMode && (
-        <div className="share-link-bar">
-          <span className="share-link-label">
-            <Share2 size={13} /> Shared link
-          </span>
-          <input
-            className="share-link-input"
-            readOnly
-            value={shareUrl}
-            onFocus={(e) => e.target.select()}
-          />
-          <button
-            className="share-link-copy-btn"
-            onClick={onShareUrlCopy}
-            title="Copy link"
-          >
-            {shareUrlCopied ? <Check size={13} /> : <Copy size={13} />}
-            {shareUrlCopied ? 'Copied!' : 'Copy'}
-          </button>
-          <button
-            className="share-link-open-btn"
-            onClick={() => window.open(shareUrl, '_blank')}
-            title="Open link"
-          >
-            <ExternalLink size={13} />
-          </button>
-        </div>
-      )}
 
       {/* View 2: Clip Creation Controls */}
       <div

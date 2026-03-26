@@ -17,7 +17,6 @@ import Timeline from './Timeline'
 import ZoomTimeline from './ZoomTimeline'
 import VideoPlayerInfoBar from './VideoPlayerInfoBar'
 import MainContentTopBar from './MainContentTopBar'
-import ShareModal from './ShareModal'
 import { apiFetch, apiPost, getBase } from '../apiBase'
 import { formatTime } from '../formatTime'
 import api from '../../api'
@@ -59,6 +58,8 @@ function VideoPlayer({
   onOrganized,
   onOrganizeError,
   organizeRemux = true,
+  persistedShareState = null,
+  onShareStateChange,
 }) {
   // Use recording if provided, otherwise fall back to clip (for clips page)
   const media = recording || clip
@@ -651,46 +652,59 @@ function VideoPlayer({
     apiPost('/api/show-in-explorer', { path: media.path })
   }, [media])
 
-  // Share modal state: { phase: 'uploading'|'done'|'error', url, error } or null (closed)
-  const [shareModal, setShareModal] = useState(null)
+  // Share state: { phase: 'compressing'|'uploading'|'done'|'error', url, error, percent } or null
+  const [shareModal, setShareModal] = useState(persistedShareState)
   const [shareCopied, setShareCopied] = useState(false)
   const isSharing = shareModal?.phase === 'uploading' || shareModal?.phase === 'compressing'
 
-  // Reset share URL when the selected clip changes
+  // Restore persisted share state when the clip changes or when the store finishes loading.
+  // Guard: never overwrite an active share in progress.
   useEffect(() => {
-    setShareModal(null)
-    setShareCopied(false)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [media?.path])
+    setShareModal((current) => {
+      if (current?.phase === 'compressing' || current?.phase === 'uploading') return current
+      return persistedShareState ?? null
+    })
+    if (!persistedShareState) setShareCopied(false)
+  }, [media?.path, persistedShareState])
 
   // Listen for compression/upload progress events
   useEffect(() => {
     if (!api.onShareProgress) return
     const unsub = api.onShareProgress((data) => {
       setShareModal((prev) => {
-        // Only update if we are still in a sharing flow
         if (!prev || prev.phase === 'done' || prev.phase === 'error') return prev
-        return { ...prev, phase: data.phase, percent: data.percent }
+        const next = { ...prev, phase: data.phase, percent: data.percent }
+        onShareStateChange?.(media?.path, next)
+        return next
       })
     })
     return () => unsub()
-  }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [media?.path])
 
   const handleShare = useCallback(async () => {
     if (isSharing) return
-    setShareModal({ phase: 'compressing', percent: 0, url: null, error: null })
+    const initial = { phase: 'compressing', percent: 0, url: null, error: null }
+    setShareModal(initial)
+    onShareStateChange?.(media?.path, initial)
     setShareCopied(false)
     try {
       const result = await api.shareClip(media.path)
       if (result?.success && result.url) {
-        setShareModal({ phase: 'done', url: result.url, error: null })
+        const done = { phase: 'done', url: result.url, error: null }
+        setShareModal(done)
+        onShareStateChange?.(media?.path, done)
       } else {
-        setShareModal({ phase: 'error', url: null, error: result?.error || 'Upload failed' })
+        const err = { phase: 'error', url: null, error: result?.error || 'Upload failed' }
+        setShareModal(err)
+        onShareStateChange?.(media?.path, err)
       }
     } catch (err) {
-      setShareModal({ phase: 'error', url: null, error: err.message || 'Upload failed' })
+      const errState = { phase: 'error', url: null, error: err.message || 'Upload failed' }
+      setShareModal(errState)
+      onShareStateChange?.(media?.path, errState)
     }
-  }, [isSharing, media])
+  }, [isSharing, media, onShareStateChange])
 
   const handleShareCopy = useCallback(async () => {
     if (!shareModal?.url) return
@@ -703,10 +717,11 @@ function VideoPlayer({
     setTimeout(() => setShareCopied(false), 2000)
   }, [shareModal])
 
-  const handleShareClose = useCallback(() => {
+  const handleShareRemove = useCallback(() => {
     setShareModal(null)
     setShareCopied(false)
-  }, [])
+    onShareStateChange?.(media?.path, null)
+  }, [media, onShareStateChange])
 
   if (!media) {
     return (
@@ -883,8 +898,12 @@ function VideoPlayer({
           isCreatingClip={isCreatingClip}
           onDelete={onDelete}
           onShare={isClip ? handleShare : undefined}
+          onShareRemove={isClip ? handleShareRemove : undefined}
           isSharing={isSharing}
+          sharePhase={isClip ? (shareModal?.phase ?? null) : null}
+          sharePercent={isClip ? (shareModal?.percent ?? null) : null}
           shareUrl={isClip ? (shareModal?.url ?? null) : null}
+          shareError={isClip ? (shareModal?.error ?? null) : null}
           shareUrlCopied={shareCopied}
           onShareUrlCopy={handleShareCopy}
           handleOpenInPlayer={handleOpenInPlayer}
@@ -975,14 +994,6 @@ function VideoPlayer({
         )}
       </div>
 
-      <ShareModal
-        phase={shareModal?.phase ?? null}
-        url={shareModal?.url}
-        error={shareModal?.error}
-        onClose={handleShareClose}
-        onCopy={handleShareCopy}
-        copied={shareCopied}
-      />
     </div>
   )
 }
