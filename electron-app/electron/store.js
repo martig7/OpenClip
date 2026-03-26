@@ -71,6 +71,7 @@ function msToElectronSettings(ms, obsRecordingPath, electronData) {
     obsRecordingPath: normalizePath(obsRecordingPath) || '',
     destinationPath: normalizePath(ms.organized_path) || '',
     startWatcherOnStartup: ms.start_watcher_on_startup || false,
+    openObsOnStartup: ms.open_obs_on_startup || false,
     clipMarkerHotkey: ms.clip_hotkey || 'F9',
     listView: electronData?.listView !== false,
     organizeRemux: electronData?.organizeRemux !== false,
@@ -106,6 +107,8 @@ function electronSettingsToMs(ms, electronSettings) {
     updated.organized_path = normalizePath(electronSettings.destinationPath)
   if (electronSettings.startWatcherOnStartup !== undefined)
     updated.start_watcher_on_startup = electronSettings.startWatcherOnStartup
+  if (electronSettings.openObsOnStartup !== undefined)
+    updated.open_obs_on_startup = electronSettings.openObsOnStartup
   if (electronSettings.clipMarkerHotkey !== undefined)
     updated.clip_hotkey = electronSettings.clipMarkerHotkey
   if (electronSettings.autoClip !== undefined) {

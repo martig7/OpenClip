@@ -270,6 +270,21 @@ export default function GeneralSettingsSection({
               }
             />
           </div>
+          <div className={tc}>
+            <div>
+              <div className="toggle-label">Open OBS on Startup</div>
+              <div className="toggle-desc">
+                Automatically open OBS when the app launches (skips if OBS is already running)
+              </div>
+            </div>
+            <button
+              type="button"
+              className={`toggle ${settings.openObsOnStartup ? 'on' : ''}`}
+              onClick={() =>
+                updateSetting('openObsOnStartup', !settings.openObsOnStartup)
+              }
+            />
+          </div>
         </AppSettingsSectionCard>
       )
 

@@ -3,7 +3,7 @@ if (process.argv.includes('--elevated-helper')) {
   require('./elevatedHelper').run()
 }
 
-const { app, BrowserWindow, ipcMain, globalShortcut, protocol, net } = require('electron')
+const { app, BrowserWindow, ipcMain, globalShortcut, protocol, net, shell } = require('electron')
 
 const isTestMode = process.env.OPENCLIP_TEST_MODE === 'true' || process.argv.includes('--test-mode')
 const isIntegrationMode =
@@ -190,7 +190,7 @@ function createWindow() {
 // Register all IPC handlers (safe to register before app is ready)
 registerIpcHandlers(store, appState)
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // Serve local filesystem files (e.g. game icons) via localfile:// protocol.
   // file:// is blocked by Electron's security model when loaded from a different origin.
   protocol.handle('localfile', (request) => {
@@ -297,6 +297,18 @@ app.whenReady().then(() => {
         } catch {}
       }
     )
+  }
+
+  // Auto-open OBS on startup if configured and not already running
+  if (store.get('settings.openObsOnStartup')) {
+    const { findOBSExecutable, isOBSRunning } = require('./obsEncoding')
+    const alreadyRunning = await isOBSRunning()
+    if (!alreadyRunning) {
+      const obsPath = findOBSExecutable()
+      if (obsPath) {
+        shell.openPath(obsPath)
+      }
+    }
   }
 
   app.on('activate', () => {
