@@ -448,6 +448,35 @@ export default function GeneralSettingsSection({
                   }
                 />
               </div>
+
+              <div className="form-group" style={{ marginTop: 12 }}>
+                <label className="form-label">Audio Tracks</label>
+                <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                  {[1, 2, 3, 4, 5, 6].map((num) => {
+                    const selected = (settings.autoClip?.audioTracks || []).includes(num)
+                    return (
+                      <button
+                        key={num}
+                        type="button"
+                        className={`scene-audio-track-chip ${selected ? 'active' : ''}`}
+                        title={`Track ${num}: ${selected ? 'included' : 'excluded'}`}
+                        onClick={() => {
+                          const current = settings.autoClip?.audioTracks || []
+                          const next = selected
+                            ? current.filter((t) => t !== num)
+                            : [...current, num].sort((a, b) => a - b)
+                          updateSetting('autoClip.audioTracks', next)
+                        }}
+                      >
+                        {num}
+                      </button>
+                    )
+                  })}
+                </div>
+                <span className="setting-desc" style={{ marginTop: 4, display: 'block' }}>
+                  All unselected = all tracks included
+                </span>
+              </div>
             </>
           )}
         </AppSettingsSectionCard>
