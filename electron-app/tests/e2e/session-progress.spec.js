@@ -67,6 +67,7 @@ async function injectProgressApi(page) {
       openExternal: asyncNoop,
 
       // Recordings
+      getDestinationFolders: asyncArr,
       getRecordings: asyncArr,
       deleteRecording: asyncNoop,
       getVideoURL: async (p) => `file:///${p}`,

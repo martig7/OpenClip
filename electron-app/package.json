@@ -25,6 +25,7 @@
     "test:e2e:integration": "npm run test:cleanup:ports && npm run build:plugin:ensure && playwright test --config playwright.integration.config.js",
     "test:e2e:integration:electron": "npm run test:cleanup:ports && npm run build:plugin:ensure && playwright test --config playwright.electron.integration.config.js",
     "test:cleanup:ports": "node scripts/cleanup-test-ports.js",
+    "postinstall": "node scripts/patch-playwright-electron.js",
     "dev:test": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron . --dev --test-mode\"",
     "dev:integration": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron . --dev --integration-mode\"",
     "test:ffmpeg": "vitest run --config vite.ffmpeg.config.js",

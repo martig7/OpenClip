@@ -49,7 +49,10 @@ export default defineConfig({
     // Electron reads OBS_HOST/OBS_PORT/OBS_RECORDING_PATH/OPENCLIP_DEST_PATH
     // from env (set by globalSetup above) and seeds the isolated store.
     command: 'npm run dev:integration',
-    url: 'http://localhost:5173',
+    // Poll the Electron API server (not Vite) so Playwright waits until the full
+    // stack is ready — Electron starts after Vite (via wait-on), so 5173 being up
+    // does not guarantee 47531 is up yet.
+    url: 'http://localhost:47531/api/recordings',
     timeout: 120000,
     reuseExistingServer: !process.env.CI,
   },
