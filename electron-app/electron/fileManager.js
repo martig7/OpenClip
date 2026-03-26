@@ -275,6 +275,14 @@ async function getVideoDuration(filePath) {
   }
 }
 
+// Returns FFmpeg -map args to selectively copy audio streams.
+// audioTracks: 1-based array (matching UI), e.g. [1, 3] → ['-map','0:v:0','-map','0:a:0','-map','0:a:2']
+// Empty / null / undefined → [] (no explicit maps = all streams copied)
+function buildAutoClipMapArgs(audioTracks) {
+  if (!Array.isArray(audioTracks) || audioTracks.length === 0) return []
+  return ['-map', '0:v:0', ...audioTracks.flatMap((t) => ['-map', `0:a:${t - 1}`])]
+}
+
 // Create clips from a specific source file before it is renamed or moved.
 // Returns the array of markers that were successfully clipped.
 // Caller is responsible for marker removal, deleteFullRecording, and emitting 'complete'.
@@ -289,6 +297,7 @@ async function processAutoClipsFromFile(store, gameName, srcPath, srcStat, onPro
   const autoClip = store.get('settings.autoClip') || {}
   const bufferBefore = autoClip.bufferBefore || 15
   const bufferAfter = autoClip.bufferAfter || 15
+  const mapArgs = buildAutoClipMapArgs(autoClip.audioTracks)
 
   const duration = await getVideoDuration(srcPath)
   if (!duration) return []
@@ -333,6 +342,7 @@ async function processAutoClipsFromFile(store, gameName, srcPath, srcStat, onPro
           srcPath,
           '-t',
           String(clipDuration),
+          ...mapArgs,
           '-c',
           'copy',
           '-avoid_negative_ts',
@@ -911,6 +921,7 @@ module.exports = {
   getWeekFolder,
   migrateToGameFolders, // re-exported from migrations.js for backwards-compat
   reorganizeWeekFolders,
+  buildAutoClipMapArgs,
   // Re-export file-op helpers so tests that import them from fileManager.js still work
   moveFileSafe,
   isFileLocked,
