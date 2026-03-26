@@ -12,7 +12,9 @@ import {
   Minus,
   Maximize,
   Share2,
-  Loader,
+  Copy,
+  Check,
+  ExternalLink,
 } from 'lucide-react'
 import { formatTime } from '../formatTime'
 
@@ -41,6 +43,9 @@ export default function VideoPlayerInfoBar({
   onDelete,
   onShare,
   isSharing,
+  shareUrl,
+  shareUrlCopied,
+  onShareUrlCopy,
   handleOpenInPlayer,
   handleShowInExplorer,
 }) {
@@ -99,6 +104,18 @@ export default function VideoPlayerInfoBar({
             </button>
           )}
 
+          {/* Standalone Share icon button — only for clips */}
+          {isClip && onShare && (
+            <button
+              className="btn-action-more shrink-0"
+              onClick={onShare}
+              disabled={isSharing}
+              title="Share clip"
+            >
+              <Share2 size={21} />
+            </button>
+          )}
+
           <div className="action-dropdown" ref={dropdownRefTitle}>
             <button
               data-testid="title-bar-dropdown-btn"
@@ -112,11 +129,6 @@ export default function VideoPlayerInfoBar({
                 <button onClick={() => { setDropdownOpen(false); setOrganizeMode(true); }} disabled={isOrganizing}>
                   <MoveRight size={21} /> Organize
                 </button>
-                {isClip && onShare && (
-                  <button onClick={() => { setDropdownOpen(false); onShare(); }} disabled={isSharing}>
-                    {isSharing ? <Loader size={21} style={{ animation: 'spin 1s linear infinite' }} /> : <Share2 size={21} />} Share
-                  </button>
-                )}
                 <button onClick={() => { setDropdownOpen(false); handleOpenInPlayer(); }}>
                   <Play size={21} /> Open in Player
                 </button>
@@ -133,6 +145,36 @@ export default function VideoPlayerInfoBar({
           </div>
         </div>
       </div>
+
+      {/* Persistent share-link bar — shown after a successful upload */}
+      {shareUrl && !isClipMode && (
+        <div className="share-link-bar">
+          <span className="share-link-label">
+            <Share2 size={13} /> Shared link
+          </span>
+          <input
+            className="share-link-input"
+            readOnly
+            value={shareUrl}
+            onFocus={(e) => e.target.select()}
+          />
+          <button
+            className="share-link-copy-btn"
+            onClick={onShareUrlCopy}
+            title="Copy link"
+          >
+            {shareUrlCopied ? <Check size={13} /> : <Copy size={13} />}
+            {shareUrlCopied ? 'Copied!' : 'Copy'}
+          </button>
+          <button
+            className="share-link-open-btn"
+            onClick={() => window.open(shareUrl, '_blank')}
+            title="Open link"
+          >
+            <ExternalLink size={13} />
+          </button>
+        </div>
+      )}
 
       {/* View 2: Clip Creation Controls */}
       <div

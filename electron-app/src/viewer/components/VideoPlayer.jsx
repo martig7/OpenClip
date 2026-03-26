@@ -17,10 +17,12 @@ import Timeline from './Timeline'
 import ZoomTimeline from './ZoomTimeline'
 import VideoPlayerInfoBar from './VideoPlayerInfoBar'
 import MainContentTopBar from './MainContentTopBar'
+import ShareModal from './ShareModal'
 import { apiFetch, apiPost, getBase } from '../apiBase'
 import { formatTime } from '../formatTime'
 import api from '../../api'
 import { useOrganizeProgress } from '../../App'
+
 
 const WAVEFORM_CHUNK_SIZE = 30
 const WAVEFORM_MAX_INFLIGHT = 3
@@ -56,8 +58,6 @@ function VideoPlayer({
   games = [],
   onOrganized,
   onOrganizeError,
-  onShareSuccess,
-  onShareError,
   organizeRemux = true,
 }) {
   // Use recording if provided, otherwise fall back to clip (for clips page)
@@ -651,29 +651,49 @@ function VideoPlayer({
     apiPost('/api/show-in-explorer', { path: media.path })
   }, [media])
 
-  const [isSharing, setIsSharing] = useState(false)
+  // Share modal state: { phase: 'uploading'|'done'|'error', url, error } or null (closed)
+  const [shareModal, setShareModal] = useState(null)
+  const [shareCopied, setShareCopied] = useState(false)
+  const isSharing = shareModal?.phase === 'uploading'
+
+  // Reset share URL when the selected clip changes
+  useEffect(() => {
+    setShareModal(null)
+    setShareCopied(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [media?.path])
 
   const handleShare = useCallback(async () => {
     if (isSharing) return
-    setIsSharing(true)
+    setShareModal({ phase: 'uploading', url: null, error: null })
+    setShareCopied(false)
     try {
       const result = await api.shareClip(media.path)
       if (result?.success && result.url) {
-        try {
-          await navigator.clipboard.writeText(result.url)
-        } catch {
-          // clipboard write failed — still surface the URL
-        }
-        onShareSuccess?.(result.url)
+        setShareModal({ phase: 'done', url: result.url, error: null })
       } else {
-        onShareError?.(result?.error || 'Upload failed')
+        setShareModal({ phase: 'error', url: null, error: result?.error || 'Upload failed' })
       }
     } catch (err) {
-      onShareError?.(err.message || 'Upload failed')
-    } finally {
-      setIsSharing(false)
+      setShareModal({ phase: 'error', url: null, error: err.message || 'Upload failed' })
     }
-  }, [isSharing, media, onShareSuccess, onShareError])
+  }, [isSharing, media])
+
+  const handleShareCopy = useCallback(async () => {
+    if (!shareModal?.url) return
+    try {
+      await navigator.clipboard.writeText(shareModal.url)
+    } catch {
+      // ignore
+    }
+    setShareCopied(true)
+    setTimeout(() => setShareCopied(false), 2000)
+  }, [shareModal])
+
+  const handleShareClose = useCallback(() => {
+    setShareModal(null)
+    setShareCopied(false)
+  }, [])
 
   if (!media) {
     return (
@@ -851,6 +871,9 @@ function VideoPlayer({
           onDelete={onDelete}
           onShare={isClip ? handleShare : undefined}
           isSharing={isSharing}
+          shareUrl={isClip ? (shareModal?.url ?? null) : null}
+          shareUrlCopied={shareCopied}
+          onShareUrlCopy={handleShareCopy}
           handleOpenInPlayer={handleOpenInPlayer}
           handleShowInExplorer={handleShowInExplorer}
         />
@@ -938,6 +961,15 @@ function VideoPlayer({
           </div>
         )}
       </div>
+
+      <ShareModal
+        phase={shareModal?.phase ?? null}
+        url={shareModal?.url}
+        error={shareModal?.error}
+        onClose={handleShareClose}
+        onCopy={handleShareCopy}
+        copied={shareCopied}
+      />
     </div>
   )
 }

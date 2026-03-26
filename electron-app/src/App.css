@@ -381,6 +381,131 @@
 .modal-actions {
   @apply flex gap-2 justify-end;
 }
+/* Share Modal */
+.share-modal {
+  @apply min-w-[420px] max-w-[520px];
+}
+.share-progress-track {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--bg-active);
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.share-progress-bar {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+  animation: share-indeterminate 1.4s ease-in-out infinite;
+  transform-origin: left center;
+}
+@keyframes share-indeterminate {
+  0%   { transform: translateX(-100%) scaleX(0.4); }
+  40%  { transform: translateX(0%)    scaleX(0.6); }
+  70%  { transform: translateX(60%)   scaleX(0.4); }
+  100% { transform: translateX(120%)  scaleX(0.3); }
+}
+.share-url-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.share-url-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-family: monospace;
+}
+.share-copy-btn {
+  flex-shrink: 0;
+  min-width: 80px;
+}
+.share-open-btn {
+  flex-shrink: 0;
+  padding: 8px 10px;
+}
+.share-error-msg {
+  @apply text-[13px] text-[var(--danger)] mb-0 !important;
+}
+/* Persistent share-link bar (appears below the title row after a successful upload) */
+.share-link-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px 6px 16px;
+  background: var(--bg-tertiary);
+  border-top: 1px solid var(--border);
+  animation: share-bar-in 0.2s ease;
+}
+@keyframes share-bar-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.share-link-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-hover);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.share-link-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  font-family: monospace;
+  padding: 4px 8px;
+  height: 28px;
+  background: var(--bg-active);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  outline: none;
+}
+.share-link-input:focus {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+.share-link-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: var(--accent);
+  color: #fff;
+  transition: background 0.15s ease;
+}
+.share-link-copy-btn:hover {
+  background: var(--accent-hover);
+}
+.share-link-open-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  height: 28px;
+  width: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-secondary);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.share-link-open-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
 
 /* Video Player Area */
 .video-layout {
