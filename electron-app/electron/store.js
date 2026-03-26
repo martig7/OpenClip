@@ -45,7 +45,7 @@ const managerSettingsDefaults = {
     delete_recording_after_clips: false,
   },
   obs_websocket: { host: 'localhost', port: 4455, password: '' },
-  share_host: 'gofile',
+  share_host: 'catbox',
   share_litterbox_expiry: '24h',
 }
 

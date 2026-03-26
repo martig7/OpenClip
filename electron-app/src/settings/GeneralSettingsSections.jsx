@@ -708,16 +708,17 @@ export default function GeneralSettingsSection({
             </div>
             <select
               className="form-input"
-              value={settings.shareHost || 'gofile'}
+              value={settings.shareHost || 'catbox'}
               onChange={(e) => updateSetting('shareHost', e.target.value)}
             >
-              <option value="gofile">GoFile.io (no size limit)</option>
               <option value="catbox">Catbox.moe (permanent, up to 200 MB)</option>
               <option value="litterbox">Litterbox.catbox.moe (temporary, up to 1 GB)</option>
+              <option value="uguu">Uguu.se (temporary, 48h expiry)</option>
+              <option value="gofile">GoFile.io (no size limit, no embeds)</option>
             </select>
           </div>
 
-          {(settings.shareHost || 'gofile') === 'litterbox' && (
+          {(settings.shareHost || 'catbox') === 'litterbox' && (
             <div className="form-group" style={{ marginTop: 16 }}>
               <label className="form-label">Link Expiry</label>
               <div className="toggle-desc" style={{ marginBottom: 6 }}>

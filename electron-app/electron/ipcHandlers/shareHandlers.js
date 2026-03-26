@@ -71,6 +71,23 @@ async function uploadToCatbox(filePath) {
   return url
 }
 
+async function uploadToUguu(filePath) {
+  const fileBuffer = fs.readFileSync(filePath)
+  const blob = new Blob([fileBuffer])
+  const form = new FormData()
+  form.append('files[]', blob, path.basename(filePath))
+
+  const res = await fetch('https://uguu.se/upload', {
+    method: 'POST',
+    body: form,
+  })
+  if (!res.ok) throw new Error(`Uguu upload failed: ${res.status}`)
+  const json = await res.json()
+  const url = json?.files?.[0]?.url
+  if (!url) throw new Error('Uguu returned no URL')
+  return url
+}
+
 async function uploadToLitterbox(filePath, expiry) {
   const fileBuffer = fs.readFileSync(filePath)
   const blob = new Blob([fileBuffer])
@@ -114,7 +131,7 @@ function registerShareHandlers(ipcMain, store) {
       // Step 2: Upload
       event.sender.send('share:progress', { phase: 'uploading' })
 
-      const shareHost = store.get('settings.shareHost') || 'gofile'
+      const shareHost = store.get('settings.shareHost') || 'catbox'
       const litterboxExpiry = store.get('settings.shareLitterboxExpiry') || '24h'
 
       let url
@@ -122,6 +139,8 @@ function registerShareHandlers(ipcMain, store) {
         url = await uploadToCatbox(compressedPath)
       } else if (shareHost === 'litterbox') {
         url = await uploadToLitterbox(compressedPath, litterboxExpiry)
+      } else if (shareHost === 'uguu') {
+        url = await uploadToUguu(compressedPath)
       } else {
         url = await uploadToGoFile(compressedPath)
       }
