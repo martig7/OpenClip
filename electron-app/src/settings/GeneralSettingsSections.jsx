@@ -473,9 +473,6 @@ export default function GeneralSettingsSection({
                     )
                   })}
                 </div>
-                <span className="setting-desc" style={{ marginTop: 4, display: 'block' }}>
-                  All unselected = all tracks included
-                </span>
               </div>
             </>
           )}

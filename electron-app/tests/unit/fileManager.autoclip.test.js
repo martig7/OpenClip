@@ -8,19 +8,19 @@ describe('buildAutoClipMapArgs', () => {
     return mod.buildAutoClipMapArgs
   }
 
-  it('returns empty array when audioTracks is empty', async () => {
+  it('returns video-only map when audioTracks is empty (no audio)', async () => {
     const buildAutoClipMapArgs = await getBuildFn()
-    expect(buildAutoClipMapArgs([])).toEqual([])
+    expect(buildAutoClipMapArgs([])).toEqual(['-map', '0:v:0'])
   })
 
-  it('returns empty array when audioTracks is null', async () => {
+  it('returns video-only map when audioTracks is null (no audio)', async () => {
     const buildAutoClipMapArgs = await getBuildFn()
-    expect(buildAutoClipMapArgs(null)).toEqual([])
+    expect(buildAutoClipMapArgs(null)).toEqual(['-map', '0:v:0'])
   })
 
-  it('returns empty array when audioTracks is undefined', async () => {
+  it('returns video-only map when audioTracks is undefined (no audio)', async () => {
     const buildAutoClipMapArgs = await getBuildFn()
-    expect(buildAutoClipMapArgs(undefined)).toEqual([])
+    expect(buildAutoClipMapArgs(undefined)).toEqual(['-map', '0:v:0'])
   })
 
   it('maps track 1 to 0:a:0', async () => {

@@ -279,7 +279,7 @@ async function getVideoDuration(filePath) {
 // audioTracks: 1-based array (matching UI), e.g. [1, 3] → ['-map','0:v:0','-map','0:a:0','-map','0:a:2']
 // Empty / null / undefined → [] (no explicit maps = all streams copied)
 function buildAutoClipMapArgs(audioTracks) {
-  if (!Array.isArray(audioTracks) || audioTracks.length === 0) return []
+  if (!Array.isArray(audioTracks) || audioTracks.length === 0) return ['-map', '0:v:0']
   return ['-map', '0:v:0', ...audioTracks.flatMap((t) => ['-map', `0:a:${t - 1}`])]
 }
 

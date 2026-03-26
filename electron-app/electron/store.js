@@ -43,7 +43,7 @@ const managerSettingsDefaults = {
     buffer_after_seconds: 5,
     remove_processed_markers: true,
     delete_recording_after_clips: false,
-    audio_tracks: [],
+    audio_tracks: [1],
   },
   obs_websocket: { host: 'localhost', port: 4455, password: '' },
 }
