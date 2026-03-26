@@ -15,7 +15,8 @@ async function compressClip(inputPath, outputPath, onProgress) {
         '-crf 28',         // visually transparent for most gameplay, much smaller
         '-preset fast',
         '-acodec aac',
-        '-b:a 128k'
+        '-b:a 128k',
+        '-movflags +faststart' // Crucial for Discord/web embeds to play instantly
       ])
       .on('progress', (progress) => {
         if (progress.percent && onProgress) {
