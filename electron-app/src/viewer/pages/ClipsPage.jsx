@@ -96,6 +96,11 @@ function ClipsPage() {
     return () => unsub?.()
   }, [fetchClips])
 
+  const handleTrimmed = useCallback((updatedClip) => {
+    setSelectedClip(updatedClip)
+    fetchClips()
+  }, [fetchClips])
+
   const handleOrganized = useCallback((result) => {
     setToast({ type: 'success', message: `Organized: ${result.filename}` })
     clearTimeout(toastTimerRef.current)
@@ -162,6 +167,7 @@ function ClipsPage() {
           <VideoPlayer
             clip={selectedClip}
             onDelete={() => setDeleteModal(true)}
+            onTrimmed={handleTrimmed}
             games={games}
             onOrganized={handleOrganized}
             onOrganizeError={handleOrganizeError}
