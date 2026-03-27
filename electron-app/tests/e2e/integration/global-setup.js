@@ -18,6 +18,8 @@ const { mkdtempSync, rmSync, existsSync, readFileSync } = require('fs')
 const { tmpdir } = require('os')
 const { join } = require('path')
 
+const { waitForPluginHttpReady } = require('../../../electron/pluginHttpTransport')
+
 module.exports = async function globalSetup() {
   // Dynamic import of the ESM obsHelper
   const { startOBS, isOBSAvailable } = await import('../../integration/obs/obsHelper.mjs')
@@ -67,6 +69,9 @@ module.exports = async function globalSetup() {
   if (!pluginHttpPort) {
     throw new Error(`OpenClip plugin did not publish a valid port file at ${pluginPortFile}`)
   }
+
+  // Port file can appear before the HTTP server accepts connections — wait for a real response.
+  await waitForPluginHttpReady(pluginHttpPort)
 
   // Set env vars BEFORE Playwright spawns the webServer subprocess and test
   // workers — both inherit the current process environment.

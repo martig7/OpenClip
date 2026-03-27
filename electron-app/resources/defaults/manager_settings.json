@@ -2,6 +2,7 @@
   "organized_path": "",
   "auto_organize": true,
   "start_watcher_on_startup": false,
+  "open_obs_on_startup": false,
   "storage_settings": {
     "auto_delete_enabled": false,
     "max_storage_gb": 100,

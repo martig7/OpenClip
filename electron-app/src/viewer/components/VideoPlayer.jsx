@@ -17,6 +17,7 @@ import Timeline from './Timeline'
 import ZoomTimeline from './ZoomTimeline'
 import VideoPlayerInfoBar from './VideoPlayerInfoBar'
 import MainContentTopBar from './MainContentTopBar'
+import { clampPlaybackTime } from './videoPlaybackBounds'
 import { apiFetch, apiPost, getBase } from '../apiBase'
 import { formatTime } from '../formatTime'
 import api from '../../api'
@@ -53,6 +54,8 @@ function VideoPlayer({
   recording,
   clip,
   onClipCreated,
+  onTrimmed,
+  onTrimFailed,
   onDelete,
   games = [],
   onOrganized,
@@ -79,9 +82,16 @@ function VideoPlayer({
 
   // Clip mode state
   const [clipMode, setClipMode] = useState(false)
+  const [isTrimMode, setIsTrimMode] = useState(false)
   const [clipStart, setClipStart] = useState(0)
   const [clipEnd, setClipEnd] = useState(30)
   const [isCreatingClip, setIsCreatingClip] = useState(false)
+  const [virtualTrimStart, setVirtualTrimStart] = useState(null)
+  const [virtualTrimEnd, setVirtualTrimEnd] = useState(null)
+  const [trimPending, setTrimPending] = useState(false)
+  const [trimFinalizePath, setTrimFinalizePath] = useState(null)
+  const [suppressVideoSrc, setSuppressVideoSrc] = useState(false)
+  const [videoReloadToken, setVideoReloadToken] = useState(0)
   const [isZoomTimelineExpanded, setIsZoomTimelineExpanded] = useState(false)
   const zoomTimelineRef = useRef(null)
 
@@ -126,6 +136,12 @@ function VideoPlayer({
     setCurrentTime(0)
     setDuration(0)
     setClipMode(false)
+    setIsTrimMode(false)
+    setVirtualTrimStart(null)
+    setVirtualTrimEnd(null)
+    setTrimPending(false)
+    setTrimFinalizePath(null)
+    setSuppressVideoSrc(false)
     setIsZoomTimelineExpanded(false)
     setMarkers([])
     setAudioTracks([])
@@ -382,6 +398,10 @@ function VideoPlayer({
     if (videoRef.current) {
       const t = videoRef.current.currentTime
       setCurrentTime(t)
+      if (virtualTrimEnd !== null && t >= virtualTrimEnd) {
+        videoRef.current.pause()
+        videoRef.current.currentTime = virtualTrimStart ?? 0
+      }
       // Reprioritize chunk queue when playback crosses into a new chunk
       const chunkIdx = Math.floor(t / WAVEFORM_CHUNK_SIZE)
       if (chunkIdx !== viewportChunkRef.current && waveformQueueRef.current) {
@@ -389,14 +409,17 @@ function VideoPlayer({
         reprioritizeQueue(waveformQueueRef.current, waveformNumChunksRef.current, chunkIdx)
       }
     }
-  }, [])
+  }, [virtualTrimStart, virtualTrimEnd])
 
   const handleLoadedMetadata = useCallback(() => {
     if (videoRef.current) {
       setDuration(videoRef.current.duration)
       setClipEnd(Math.min(30, videoRef.current.duration))
+      if (virtualTrimStart !== null && videoRef.current.currentTime < virtualTrimStart) {
+        videoRef.current.currentTime = virtualTrimStart
+      }
     }
-  }, [])
+  }, [virtualTrimStart])
 
   const handlePlay = useCallback(() => setIsPlaying(true), [])
   const handlePause = useCallback(() => setIsPlaying(false), [])
@@ -415,7 +438,7 @@ function VideoPlayer({
       if (isPlaying) {
         videoRef.current.pause()
       } else {
-        videoRef.current.play()
+        videoRef.current.play().catch(() => {})
       }
     }
   }, [isPlaying])
@@ -423,16 +446,17 @@ function VideoPlayer({
   const handleSeek = useCallback((time) => {
     if (videoRef.current) {
       deprioritizeWaveforms(1300)
-      videoRef.current.currentTime = time
-      setCurrentTime(time)
+      const clamped = clampPlaybackTime(time, duration, virtualTrimStart, virtualTrimEnd)
+      videoRef.current.currentTime = clamped
+      setCurrentTime(clamped)
       // Reprioritize chunk queue based on seek target
-      const chunkIdx = Math.floor(time / WAVEFORM_CHUNK_SIZE)
+      const chunkIdx = Math.floor(clamped / WAVEFORM_CHUNK_SIZE)
       if (chunkIdx !== viewportChunkRef.current && waveformQueueRef.current) {
         viewportChunkRef.current = chunkIdx
         reprioritizeQueue(waveformQueueRef.current, waveformNumChunksRef.current, chunkIdx)
       }
     }
-  }, [deprioritizeWaveforms])
+  }, [deprioritizeWaveforms, virtualTrimStart, virtualTrimEnd])
 
   const handleVolumeChange = useCallback((newVolume) => {
     if (videoRef.current) {
@@ -457,11 +481,17 @@ function VideoPlayer({
   const skip = useCallback(
     (seconds) => {
       if (videoRef.current) {
-        const newTime = Math.max(0, Math.min(duration, currentTime + seconds))
+        const newTime = clampPlaybackTime(
+          currentTime + seconds,
+          duration,
+          virtualTrimStart,
+          virtualTrimEnd
+        )
         videoRef.current.currentTime = newTime
+        setCurrentTime(newTime)
       }
     },
-    [currentTime, duration]
+    [currentTime, duration, virtualTrimStart, virtualTrimEnd]
   )
 
   // Keyboard shortcuts
@@ -474,16 +504,27 @@ function VideoPlayer({
         case 'ArrowLeft':
           e.preventDefault()
           if (videoRef.current) {
-            videoRef.current.currentTime = Math.max(0, videoRef.current.currentTime - 10)
+            const newTime = clampPlaybackTime(
+              videoRef.current.currentTime - 10,
+              videoRef.current.duration || duration,
+              virtualTrimStart,
+              virtualTrimEnd
+            )
+            videoRef.current.currentTime = newTime
+            setCurrentTime(newTime)
           }
           break
         case 'ArrowRight':
           e.preventDefault()
           if (videoRef.current) {
-            videoRef.current.currentTime = Math.min(
-              videoRef.current.duration || 0,
-              videoRef.current.currentTime + 10
+            const newTime = clampPlaybackTime(
+              videoRef.current.currentTime + 10,
+              videoRef.current.duration || duration,
+              virtualTrimStart,
+              virtualTrimEnd
             )
+            videoRef.current.currentTime = newTime
+            setCurrentTime(newTime)
           }
           break
         case ' ':
@@ -500,7 +541,7 @@ function VideoPlayer({
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [togglePlay, toggleMute])
+  }, [duration, togglePlay, toggleMute, virtualTrimStart, virtualTrimEnd])
 
   // Hover controls handlers
   const handleVideoMouseEnter = useCallback(() => {
@@ -531,7 +572,7 @@ function VideoPlayer({
     (position) => {
       handleSeek(position)
       if (videoRef.current && !isPlaying) {
-        videoRef.current.play()
+        videoRef.current.play().catch(() => {})
       }
     },
     [handleSeek, isPlaying]
@@ -556,9 +597,23 @@ function VideoPlayer({
 
   const exitClipMode = useCallback(() => {
     setClipMode(false)
+    setIsTrimMode(false)
     // Reset track selection so all tracks play when not in clip mode
     setSelectedTracks(audioTracks.map((_, i) => i))
   }, [audioTracks])
+
+  const enterTrimMode = useCallback(() => {
+    setIsTrimMode(true)
+    setClipMode(true)
+    setIsZoomTimelineExpanded(false)
+    setClipStart(0)
+    setClipEnd(duration)
+    setTimeout(() => {
+      if (zoomTimelineRef.current) {
+        zoomTimelineRef.current.zoomFit()
+      }
+    }, 50)
+  }, [duration])
 
   const toggleTrack = useCallback((index) => {
     setSelectedTracks((prev) => {
@@ -606,6 +661,104 @@ function VideoPlayer({
       setIsCreatingClip(false)
     }
   }, [recording, clipStart, clipEnd, isCreatingClip, onClipCreated, audioTracks, selectedTracks])
+
+  const handleTrimClip = useCallback(async () => {
+    if (!media || trimPending) return
+    // Show the virtual trim region immediately so the user sees feedback while
+    // FFmpeg processes, then keep it visible until the rename is done.
+    setClipMode(false)
+    setIsTrimMode(false)
+    setVirtualTrimStart(clipStart)
+    setVirtualTrimEnd(clipEnd)
+    setTrimPending(true)
+    try {
+      // Blocks until FFmpeg finishes — response is { trimStart, trimEnd, status: 'ready' }
+      const response = await apiPost('/api/clips/trim', {
+        source_path: media.path,
+        start_time: clipStart,
+        end_time: clipEnd,
+        game_name: media.game_name,
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        setTrimPending(false)
+        setVirtualTrimStart(null)
+        setVirtualTrimEnd(null)
+        alert(`Failed to trim: ${data.error}`)
+        return
+      }
+
+      // FFmpeg done. Explicitly unload the element before finalize so Windows
+      // releases the read handle before the rename loop starts.
+      if (videoRef.current) {
+        videoRef.current.pause()
+        videoRef.current.removeAttribute('src')
+        videoRef.current.load()
+      }
+      setSuppressVideoSrc(true)
+      setTrimFinalizePath(media.path)
+    } catch (error) {
+      setTrimFinalizePath(null)
+      setSuppressVideoSrc(false)
+      setTrimPending(false)
+      setVirtualTrimStart(null)
+      setVirtualTrimEnd(null)
+      alert(`Error trimming: ${error.message}`)
+    }
+  }, [media, clipStart, clipEnd, trimPending, onTrimmed, onTrimFailed])
+
+  useEffect(() => {
+    if (!trimFinalizePath || !suppressVideoSrc) return
+
+    let cancelled = false
+
+    const finalizeTrim = async () => {
+      // Wait one tick so React commits the src removal before finalize starts.
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      try {
+        const finalRes = await apiPost('/api/clips/trim-finalize', { source_path: trimFinalizePath })
+        const finalData = await finalRes.json()
+        if (cancelled) return
+
+        setTrimFinalizePath(null)
+        setSuppressVideoSrc(false)
+        setTrimPending(false)
+        setVirtualTrimStart(null)
+        setVirtualTrimEnd(null)
+
+        if (!finalRes.ok) {
+          if (onTrimFailed) onTrimFailed(finalData.error || 'Finalize failed')
+          return
+        }
+
+        setVideoReloadToken((token) => token + 1)
+        if (onTrimmed) {
+          setTimeout(() => onTrimmed({ ...media }), 0)
+        }
+      } catch (error) {
+        if (cancelled) return
+        setTrimFinalizePath(null)
+        setSuppressVideoSrc(false)
+        setTrimPending(false)
+        setVirtualTrimStart(null)
+        setVirtualTrimEnd(null)
+        alert(`Error trimming: ${error.message}`)
+      }
+    }
+
+    finalizeTrim()
+
+    return () => {
+      cancelled = true
+    }
+  }, [trimFinalizePath, suppressVideoSrc, media, onTrimmed, onTrimFailed])
+
+  useEffect(() => {
+    if (suppressVideoSrc || videoReloadToken === 0 || !videoRef.current) return
+
+    videoRef.current.load()
+  }, [suppressVideoSrc, videoReloadToken])
 
   // Subscribe to per-stage progress events from the backend
   useEffect(() => {
@@ -750,7 +903,11 @@ function VideoPlayer({
       >
         <video
           ref={videoRef}
-          src={`${getBase()}/api/video?path=${encodeURIComponent(media.path)}`}
+          src={
+            suppressVideoSrc
+              ? undefined
+              : `${getBase()}/api/video?path=${encodeURIComponent(media.path)}&reload=${videoReloadToken}`
+          }
           onTimeUpdate={handleTimeUpdate}
           onLoadedMetadata={handleLoadedMetadata}
           onPlay={handlePlay}
@@ -765,11 +922,11 @@ function VideoPlayer({
             currentTime={currentTime}
             duration={duration}
             onSeek={handleSeek}
-            clipMode={clipMode}
-            clipStart={clipStart}
-            clipEnd={clipEnd}
-            onClipStartChange={setClipStart}
-            onClipEndChange={setClipEnd}
+            clipMode={clipMode || trimPending}
+            clipStart={trimPending && virtualTrimStart !== null ? virtualTrimStart : clipStart}
+            clipEnd={trimPending && virtualTrimEnd !== null ? virtualTrimEnd : clipEnd}
+            onClipStartChange={trimPending ? undefined : setClipStart}
+            onClipEndChange={trimPending ? undefined : setClipEnd}
             markers={markers}
             onMarkerClick={handleMarkerClick}
             onHoverChange={handleTimelineHover}
@@ -870,7 +1027,7 @@ function VideoPlayer({
         selectedTracks={selectedTracks}
         waveforms={waveforms}
         onTrackToggle={toggleTrack}
-        isCreatingClip={isCreatingClip}
+        isCreatingClip={isCreatingClip || trimPending}
         isExpanded={isZoomTimelineExpanded}
       />
     </div>
@@ -880,7 +1037,7 @@ function VideoPlayer({
         <VideoPlayerInfoBar
           media={media}
           isUnorganized={isUnorganized}
-          isClipMode={clipMode}
+          isClipMode={clipMode || trimPending}
           organizeMode={organizeMode}
           setOrganizeMode={setOrganizeMode}
           isOrganizing={isOrganizing}
@@ -893,9 +1050,12 @@ function VideoPlayer({
           onZoomFit={() => zoomTimelineRef.current?.zoomFit()}
           isClip={isClip}
           enterClipMode={isClip ? undefined : enterClipMode}
+          enterTrimMode={isClip ? enterTrimMode : undefined}
           exitClipMode={exitClipMode}
           handleCreateClip={handleCreateClip}
           isCreatingClip={isCreatingClip}
+          handleTrimClip={handleTrimClip}
+          trimPending={trimPending}
           onDelete={onDelete}
           onShare={isClip ? handleShare : undefined}
           onShareRemove={isClip ? handleShareRemove : undefined}

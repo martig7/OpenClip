@@ -190,7 +190,7 @@ function createWindow() {
 // Register all IPC handlers (safe to register before app is ready)
 registerIpcHandlers(store, appState)
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // Serve local filesystem files (e.g. game icons) via localfile:// protocol.
   // file:// is blocked by Electron's security model when loaded from a different origin.
   protocol.handle('localfile', (request) => {
@@ -297,6 +297,12 @@ app.whenReady().then(() => {
         } catch {}
       }
     )
+  }
+
+  // Auto-open OBS on startup if configured and not already running
+  if (store.get('settings.openObsOnStartup')) {
+    const { launchOBS } = require('./obsEncoding')
+    await launchOBS({ skipIfRunning: true })
   }
 
   app.on('activate', () => {

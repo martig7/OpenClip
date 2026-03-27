@@ -15,7 +15,7 @@ import { HotkeyCapture } from '../components/OnboardingSteps'
 import api from '../api'
 import { isSettingsSectionDirty } from './settingsSectionRevert'
 
-const tc = 'toggle-row settings-toggle-row--compact'
+const tc = 'toggle-row'
 
 const LOADER_SPIN_STYLE = { animation: 'spin 1s linear infinite' }
 
@@ -268,6 +268,21 @@ export default function GeneralSettingsSection({
               className={`toggle ${settings.startWatcherOnStartup ? 'on' : ''}`}
               onClick={() =>
                 updateSetting('startWatcherOnStartup', !settings.startWatcherOnStartup)
+              }
+            />
+          </div>
+          <div className={tc}>
+            <div>
+              <div className="toggle-label">Open OBS on Startup</div>
+              <div className="toggle-desc">
+                Automatically open OBS when the app launches (skips if OBS is already running)
+              </div>
+            </div>
+            <button
+              type="button"
+              className={`toggle ${settings.openObsOnStartup ? 'on' : ''}`}
+              onClick={() =>
+                updateSetting('openObsOnStartup', !settings.openObsOnStartup)
               }
             />
           </div>

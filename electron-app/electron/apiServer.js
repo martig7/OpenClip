@@ -117,7 +117,10 @@ function startApiServer(appStore) {
             'Content-Type': mimeType,
             'Access-Control-Allow-Origin': '*',
           })
-          fs.createReadStream(filePath, { start, end }).pipe(res)
+          const rangeStream = fs.createReadStream(filePath, { start, end })
+          rangeStream.on('error', () => {})
+          res.on('close', () => rangeStream.destroy())
+          rangeStream.pipe(res)
         } else {
           res.writeHead(200, {
             'Accept-Ranges': 'bytes',
@@ -125,7 +128,10 @@ function startApiServer(appStore) {
             'Content-Type': mimeType,
             'Access-Control-Allow-Origin': '*',
           })
-          fs.createReadStream(filePath).pipe(res)
+          const fullStream = fs.createReadStream(filePath)
+          fullStream.on('error', () => {})
+          res.on('close', () => fullStream.destroy())
+          fullStream.pipe(res)
         }
         return
       }
@@ -156,6 +162,42 @@ function startApiServer(appStore) {
               ? 400
               : 500
           return json(res, { error: e.message }, status)
+        }
+      }
+
+      // POST /api/clips/trim
+      if (pathname === '/api/clips/trim' && req.method === 'POST') {
+        const data = await readBody(req)
+        const { source_path, start_time, end_time } = data
+        try {
+          const result = await service.trimClip(source_path, start_time, end_time)
+          return json(res, result)
+        } catch (e) {
+          const status = e.message.includes('not found')
+            ? 404
+            : e.message.includes('End time')
+              ? 400
+              : 500
+          return json(res, { error: e.message }, status)
+        }
+      }
+
+      // GET /api/clips/trim-status?path=...
+      if (pathname === '/api/clips/trim-status' && req.method === 'GET') {
+        const filePath = query.path
+        if (!filePath) return json(res, { status: 'idle' })
+        return json(res, service.getTrimState(filePath))
+      }
+
+      // POST /api/clips/trim-finalize — frontend calls this after clearing video src
+      if (pathname === '/api/clips/trim-finalize' && req.method === 'POST') {
+        const data = await readBody(req)
+        const { source_path } = data
+        try {
+          await service.finalizeTrim(source_path)
+          return json(res, { success: true })
+        } catch (e) {
+          return json(res, { error: e.message }, 500)
         }
       }
 
@@ -505,6 +547,7 @@ function startApiServer(appStore) {
       // 404
       json(res, { error: 'Not found' }, 404)
     } catch (e) {
+      if (res.headersSent) return
       if (e.message === 'Payload too large') {
         json(res, { error: 'Payload too large' }, 413)
       } else {

@@ -66,16 +66,16 @@ function queueSuccessResponse(jsonBody) {
 }
 
 /**
- * Queue an error event for the next http.request call.
- * Returns the fake req.
+ * Queue an error event for every http.request call (plugin transport retries
+ * 127.0.0.1, ::1, localhost — a single mockImplementationOnce is not enough).
  */
 function queueErrorResponse(err) {
-  const req = makeReq()
-  mockRequest.mockImplementationOnce(() => {
+  mockRequest.mockImplementation(() => {
+    const req = makeReq()
     Promise.resolve().then(() => req.emit('error', err))
     return req
   })
-  return req
+  return makeReq()
 }
 
 /** Fresh import of obsPlugin so module-level caches are reset each test. */
@@ -100,6 +100,7 @@ describe('readPluginPort / port cache', () => {
     delete process.env.OPENCLIP_PLUGIN_HTTP_PORT
     delete process.env.OPENCLIP_PLUGIN_PORT_FILE
     vi.clearAllMocks()
+    mockRequest.mockReset()
     mockReadFileSync.mockReturnValue('28756')
   })
 
@@ -161,6 +162,7 @@ describe('callPlugin', () => {
     delete process.env.OPENCLIP_PLUGIN_HTTP_PORT
     delete process.env.OPENCLIP_PLUGIN_PORT_FILE
     vi.clearAllMocks()
+    mockRequest.mockReset()
     mockReadFileSync.mockReturnValue('28756')
   })
 
@@ -203,15 +205,16 @@ describe('callPlugin', () => {
   })
 
   it('rejects on timeout and calls req.destroy', async () => {
-    const req = makeReq()
-    mockRequest.mockImplementationOnce(() => {
+    mockRequest.mockImplementation(() => {
+      const req = makeReq()
       Promise.resolve().then(() => req.emit('timeout'))
       return req
     })
     const { callPlugin } = await getModule()
 
     await expect(callPlugin('getStatus')).rejects.toThrow(/timed out/)
-    expect(req.destroy).toHaveBeenCalled()
+    const firstReq = mockRequest.mock.results[0]?.value
+    expect(firstReq?.destroy).toHaveBeenCalled()
   })
 
   it('rethrows malformed JSON response as structured error', async () => {
@@ -236,6 +239,7 @@ describe('stopRecording', () => {
     delete process.env.OPENCLIP_PLUGIN_HTTP_PORT
     delete process.env.OPENCLIP_PLUGIN_PORT_FILE
     vi.clearAllMocks()
+    mockRequest.mockReset()
     mockReadFileSync.mockReturnValue('28756')
   })
 
@@ -254,19 +258,25 @@ describe('Connection Resilience', () => {
     delete process.env.OPENCLIP_PLUGIN_HTTP_PORT
     delete process.env.OPENCLIP_PLUGIN_PORT_FILE
     vi.clearAllMocks()
+    mockRequest.mockReset()
     mockReadFileSync.mockReturnValue('28756')
   })
 
   it('plugin drops connection mid-request - error propagates cleanly', async () => {
-    mockRequest.mockImplementationOnce((opts, cb) => {
-      const res = new EventEmitter()
-      res.on('error', () => {})
-      cb(res)
-      res.emit('error', new Error('ECONNREFUSED'))
-      return { end: vi.fn() }
+    // Response completes without valid JSON — rejects via parse path (res has no
+    // error listener in transport; emitting only res 'error' would hang the promise).
+    const req = makeReq()
+    mockRequest.mockImplementationOnce((_opts, cb) => {
+      Promise.resolve().then(() => {
+        const res = new EventEmitter()
+        cb(res)
+        res.emit('data', 'not valid json')
+        res.emit('end')
+      })
+      return req
     })
     const { callPlugin } = await getModule()
 
-    await expect(callPlugin('getStatus')).rejects.toThrow()
+    await expect(callPlugin('getStatus')).rejects.toThrow(/Invalid response/)
   })
 })

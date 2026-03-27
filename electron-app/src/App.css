@@ -265,9 +265,6 @@
 .toggle-row {
   @apply flex items-center justify-between py-[10px];
 }
-.toggle-row + .toggle-row {
-  @apply border-t border-[var(--border)];
-}
 .toggle-label {
   @apply text-[13px] text-[var(--text-primary)];
 }
@@ -1119,19 +1116,7 @@
   overflow-y: auto;
 }
 
-/* Compact toggle rows (variant B) */
-.settings-toggle-row--compact {
-  padding: 6px 0 !important;
-}
 
-.settings-toggle-row--compact .toggle-label {
-  font-size: 12px;
-}
-
-.settings-toggle-row--compact .toggle-desc {
-  font-size: 10px;
-  margin-top: 2px;
-}
 
 .games-page-layout {
   @apply flex-1 flex flex-col overflow-hidden min-h-0;
