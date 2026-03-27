@@ -4,6 +4,7 @@
  * logic from game_manager.pyw, using line-by-line INI replacement to
  * preserve the original file formatting that OBS expects.
  */
+const { shell } = require('electron')
 const fs = require('fs')
 const path = require('path')
 const ini = require('./iniParser')
@@ -200,10 +201,28 @@ function writeEncodingSettings(profileDir, settings) {
   fs.writeFileSync(encJson, JSON.stringify(enc, null, 2), 'utf-8')
 }
 
+/**
+ * Launch OBS if an executable is found.
+ * @param {object} [options]
+ * @param {boolean} [options.skipIfRunning=false] - Skip launch if OBS is already running.
+ * @returns {Promise<{success: boolean, message?: string}>}
+ */
+async function launchOBS({ skipIfRunning = false } = {}) {
+  if (skipIfRunning && (await isOBSRunning())) {
+    return { success: true }
+  }
+  const obsPath = findOBSExecutable()
+  if (!obsPath) return { success: false, message: 'OBS executable not found' }
+  const error = await shell.openPath(obsPath)
+  if (error) return { success: false, message: error }
+  return { success: true }
+}
+
 module.exports = {
   getProfiles,
   readEncodingSettings,
   writeEncodingSettings,
   isOBSRunning,
   findOBSExecutable,
+  launchOBS,
 }
