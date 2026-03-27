@@ -53,6 +53,7 @@ function VideoPlayer({
   recording,
   clip,
   onClipCreated,
+  onTrimmed,
   onDelete,
   games = [],
   onOrganized,
@@ -79,9 +80,11 @@ function VideoPlayer({
 
   // Clip mode state
   const [clipMode, setClipMode] = useState(false)
+  const [isTrimMode, setIsTrimMode] = useState(false)
   const [clipStart, setClipStart] = useState(0)
   const [clipEnd, setClipEnd] = useState(30)
   const [isCreatingClip, setIsCreatingClip] = useState(false)
+  const [isTrimming, setIsTrimming] = useState(false)
   const [isZoomTimelineExpanded, setIsZoomTimelineExpanded] = useState(false)
   const zoomTimelineRef = useRef(null)
 
@@ -126,6 +129,8 @@ function VideoPlayer({
     setCurrentTime(0)
     setDuration(0)
     setClipMode(false)
+    setIsTrimMode(false)
+    setIsTrimming(false)
     setIsZoomTimelineExpanded(false)
     setMarkers([])
     setAudioTracks([])
@@ -556,9 +561,23 @@ function VideoPlayer({
 
   const exitClipMode = useCallback(() => {
     setClipMode(false)
+    setIsTrimMode(false)
     // Reset track selection so all tracks play when not in clip mode
     setSelectedTracks(audioTracks.map((_, i) => i))
   }, [audioTracks])
+
+  const enterTrimMode = useCallback(() => {
+    setIsTrimMode(true)
+    setClipMode(true)
+    setIsZoomTimelineExpanded(false)
+    setClipStart(0)
+    setClipEnd(duration)
+    setTimeout(() => {
+      if (zoomTimelineRef.current) {
+        zoomTimelineRef.current.zoomFit()
+      }
+    }, 50)
+  }, [duration])
 
   const toggleTrack = useCallback((index) => {
     setSelectedTracks((prev) => {
@@ -606,6 +625,36 @@ function VideoPlayer({
       setIsCreatingClip(false)
     }
   }, [recording, clipStart, clipEnd, isCreatingClip, onClipCreated, audioTracks, selectedTracks])
+
+  const handleTrimClip = useCallback(async () => {
+    if (!media || isTrimming) return
+
+    setIsTrimming(true)
+    try {
+      const response = await apiPost('/api/clips/trim', {
+        source_path: media.path,
+        start_time: clipStart,
+        end_time: clipEnd,
+        game_name: media.game_name,
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setClipMode(false)
+        setIsTrimMode(false)
+        if (onTrimmed) {
+          onTrimmed(data)
+        }
+      } else {
+        alert(`Failed to trim clip: ${data.error}`)
+      }
+    } catch (error) {
+      alert(`Error trimming clip: ${error.message}`)
+    } finally {
+      setIsTrimming(false)
+    }
+  }, [media, clipStart, clipEnd, isTrimming, onTrimmed])
 
   // Subscribe to per-stage progress events from the backend
   useEffect(() => {
@@ -870,7 +919,7 @@ function VideoPlayer({
         selectedTracks={selectedTracks}
         waveforms={waveforms}
         onTrackToggle={toggleTrack}
-        isCreatingClip={isCreatingClip}
+        isCreatingClip={isCreatingClip || isTrimming}
         isExpanded={isZoomTimelineExpanded}
       />
     </div>
@@ -893,9 +942,13 @@ function VideoPlayer({
           onZoomFit={() => zoomTimelineRef.current?.zoomFit()}
           isClip={isClip}
           enterClipMode={isClip ? undefined : enterClipMode}
+          enterTrimMode={isClip ? enterTrimMode : undefined}
           exitClipMode={exitClipMode}
           handleCreateClip={handleCreateClip}
           isCreatingClip={isCreatingClip}
+          handleTrimClip={handleTrimClip}
+          isTrimMode={isTrimMode}
+          isTrimming={isTrimming}
           onDelete={onDelete}
           onShare={isClip ? handleShare : undefined}
           onShareRemove={isClip ? handleShareRemove : undefined}
