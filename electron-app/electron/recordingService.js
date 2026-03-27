@@ -622,6 +622,61 @@ function createClip(sourcePath, startTime, endTime, gameName = 'Unknown', audioT
   })
 }
 
+function trimClip(sourcePath, startTime, endTime, gameName = 'Unknown') {
+  return new Promise((resolve, reject) => {
+    if (!sourcePath || !fs.existsSync(sourcePath)) {
+      return reject(new Error('Source not found'))
+    }
+    if (endTime <= startTime) {
+      return reject(new Error('End time must be > start time'))
+    }
+
+    const tempPath = sourcePath + '.tmp.mp4'
+    const duration = endTime - startTime
+
+    const runFfmpeg = (args, outPathToTrack) =>
+      new Promise((res, rej) => {
+        const proc = execFile(FFMPEG_PATH, args, { timeout: 120000 }, (error, _stdout, stderr) => {
+          activeFFmpeg.delete(proc)
+          if (error) return rej(new Error(stderr || error.message))
+          res()
+        })
+        activeFFmpeg.set(proc, outPathToTrack || null)
+      })
+
+    ;(async () => {
+      try {
+        const args = [
+          '-y',
+          '-ss',
+          String(startTime),
+          '-i',
+          sourcePath,
+          '-t',
+          String(duration),
+          '-map',
+          '0',
+          '-c',
+          'copy',
+          '-avoid_negative_ts',
+          'make_zero',
+          tempPath,
+        ]
+        await runFfmpeg(args, tempPath)
+        fs.renameSync(tempPath, sourcePath)
+        invalidateClipsCache()
+        const info = parseRecordingInfo(sourcePath, gameName)
+        resolve(info || { filename: path.basename(sourcePath), path: sourcePath })
+      } catch (err) {
+        try {
+          if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath)
+        } catch {}
+        reject(new Error(`FFmpeg error: ${err.message}`))
+      }
+    })()
+  })
+}
+
 function deleteFile(filePath) {
   try {
     fs.unlinkSync(filePath)
@@ -831,6 +886,7 @@ module.exports = {
   scanClips,
   countClipsForDate,
   createClip,
+  trimClip,
   deleteFile,
   reencodeVideo,
   runAutoDelete,

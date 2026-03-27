@@ -227,3 +227,56 @@ describe('Clip Creation Concurrency', () => {
     expect(res2.status).toBe(200)
   })
 })
+
+describe('POST /api/clips/trim', () => {
+  it('returns 404 when source file does not exist', async () => {
+    const res = await request(server)
+      .post('/api/clips/trim')
+      .send({ source_path: path.join(clipsDir, 'missing.mp4'), start_time: 0, end_time: 5, game_name: 'Halo' })
+    expect(res.status).toBe(404)
+  })
+
+  it('returns 400 when end_time <= start_time', async () => {
+    const src = path.join(clipsDir, 'Halo Clip 2025-01-15 #1.mp4')
+    fs.writeFileSync(src, Buffer.alloc(1024))
+    const res = await request(server)
+      .post('/api/clips/trim')
+      .send({ source_path: src, start_time: 10, end_time: 5, game_name: 'Halo' })
+    expect(res.status).toBe(400)
+  })
+
+  it('returns 200 and overwrites source on success', async () => {
+    const cp = await import('child_process')
+    cp.execFile.mockImplementation((bin, args, opts, cb) => {
+      const outPath = args[args.length - 1]
+      fs.writeFileSync(outPath, Buffer.alloc(512))
+      process.nextTick(() => cb(null, '', ''))
+      return { kill: vi.fn() }
+    })
+
+    const src = path.join(clipsDir, 'Halo Clip 2025-01-15 #1.mp4')
+    fs.writeFileSync(src, Buffer.alloc(1024))
+    const res = await request(server)
+      .post('/api/clips/trim')
+      .send({ source_path: src, start_time: 0, end_time: 5, game_name: 'Halo' })
+    expect(res.status).toBe(200)
+    expect(res.body.path).toBe(src)
+    expect(res.body.filename).toBe('Halo Clip 2025-01-15 #1.mp4')
+  })
+
+  it('returns 500 when ffmpeg errors and leaves original intact', async () => {
+    const cp = await import('child_process')
+    cp.execFile.mockImplementation((bin, args, opts, cb) => {
+      cb(new Error('ffmpeg failed'), '', 'ffmpeg error output')
+      return { kill: vi.fn() }
+    })
+
+    const src = path.join(clipsDir, 'Halo Clip 2025-01-15 #2.mp4')
+    fs.writeFileSync(src, Buffer.alloc(1024))
+    const res = await request(server)
+      .post('/api/clips/trim')
+      .send({ source_path: src, start_time: 0, end_time: 5, game_name: 'Halo' })
+    expect(res.status).toBe(500)
+    expect(fs.existsSync(src)).toBe(true)
+  })
+})

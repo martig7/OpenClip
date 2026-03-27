@@ -159,6 +159,23 @@ function startApiServer(appStore) {
         }
       }
 
+      // POST /api/clips/trim
+      if (pathname === '/api/clips/trim' && req.method === 'POST') {
+        const data = await readBody(req)
+        const { source_path, start_time, end_time, game_name = 'Unknown' } = data
+        try {
+          const result = await service.trimClip(source_path, start_time, end_time, game_name)
+          return json(res, result)
+        } catch (e) {
+          const status = e.message.includes('not found')
+            ? 404
+            : e.message.includes('End time')
+              ? 400
+              : 500
+          return json(res, { error: e.message }, status)
+        }
+      }
+
       // POST /api/clips/delete or /api/delete
       if (
         (pathname === '/api/clips/delete' || pathname === '/api/delete') &&
