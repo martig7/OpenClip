@@ -15,6 +15,7 @@ const {
   writeEncodingSettings,
   isOBSRunning,
   findOBSExecutable,
+  launchOBS,
 } = require('../obsEncoding')
 const {
   getOBSScenes,
@@ -50,13 +51,7 @@ function registerObsHandlers(ipcMain, store, _appState) {
     }
   })
   ipcMain.handle('obs:running', () => isOBSRunning())
-  ipcMain.handle('obs:launch', async () => {
-    const obsPath = findOBSExecutable()
-    if (!obsPath) return { success: false, message: 'OBS executable not found' }
-    const error = await shell.openPath(obsPath)
-    if (error) return { success: false, message: error }
-    return { success: true }
-  })
+  ipcMain.handle('obs:launch', () => launchOBS())
 
   // --- OBS Plugin / WebSocket ---
   ipcMain.handle('obs:ws:script-loaded', async () => {
