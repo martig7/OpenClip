@@ -100,6 +100,10 @@ contextBridge.exposeInMainWorld('api', {
   openDirectoryDialog: () => ipcRenderer.invoke('dialog:openDirectory'),
   openFileDialog: (opts) => ipcRenderer.invoke('dialog:openFile', opts),
 
+  // Config export / import
+  exportConfig: () => ipcRenderer.invoke('config:export'),
+  importConfig: () => ipcRenderer.invoke('config:import'),
+
   // Shell
   showInExplorer: (path) => ipcRenderer.invoke('shell:showInExplorer', path),
   openExternal: (path) => ipcRenderer.invoke('shell:openExternal', path),

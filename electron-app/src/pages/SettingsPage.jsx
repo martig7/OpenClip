@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { Save, Wand2, Loader, Search, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Save, Wand2, Loader, Search, ChevronLeft, ChevronRight, Upload, Download } from 'lucide-react'
 import api from '../api'
 import { stableStringify } from '../utils/stableStringify'
 import OnboardingModal from '../components/OnboardingModal'
@@ -468,6 +468,25 @@ export default function SettingsPage() {
     await api.installUpdate?.()
   }
 
+  async function handleExportConfig() {
+    const result = await api.exportConfig()
+    if (result?.success) {
+      showToast('Config exported successfully')
+    } else if (!result?.canceled) {
+      showToast(result?.error ? `Export failed: ${result.error}` : 'Export failed')
+    }
+  }
+
+  async function handleImportConfig() {
+    const result = await api.importConfig()
+    if (result?.success) {
+      await loadSettings()
+      showToast('Config imported — settings reloaded')
+    } else if (!result?.canceled) {
+      showToast(result?.error ? `Import failed: ${result.error}` : 'Import failed')
+    }
+  }
+
   if (isLoading) {
     return (
       <div
@@ -648,6 +667,20 @@ export default function SettingsPage() {
               <div className="settings-detail-toolbar">
                 <div className="settings-detail-header-row settings-detail-header-row--actions-only">
                   <div className="settings-detail-actions">
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={handleExportConfig}
+                    >
+                      <Download size={13} /> Export Config
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={handleImportConfig}
+                    >
+                      <Upload size={13} /> Import Config
+                    </button>
                     <button
                       type="button"
                       className="btn btn-secondary btn-sm"

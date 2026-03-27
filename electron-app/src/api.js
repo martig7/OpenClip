@@ -98,6 +98,8 @@ const mockApi = {
   getDestinationFolders: asyncArr,
   openDirectoryDialog: asyncNoop,
   openFileDialog: asyncNoop,
+  exportConfig: async () => ({ success: false, canceled: true }),
+  importConfig: async () => ({ success: false, canceled: true }),
   showInExplorer: noop,
   openExternal: noop,
   getRecordings: async () => mockRecordings,
