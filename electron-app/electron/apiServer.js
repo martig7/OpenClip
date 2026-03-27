@@ -118,6 +118,7 @@ function startApiServer(appStore) {
             'Access-Control-Allow-Origin': '*',
           })
           const rangeStream = fs.createReadStream(filePath, { start, end })
+          rangeStream.on('error', () => {})
           res.on('close', () => rangeStream.destroy())
           rangeStream.pipe(res)
         } else {
@@ -128,6 +129,7 @@ function startApiServer(appStore) {
             'Access-Control-Allow-Origin': '*',
           })
           const fullStream = fs.createReadStream(filePath)
+          fullStream.on('error', () => {})
           res.on('close', () => fullStream.destroy())
           fullStream.pipe(res)
         }
@@ -526,6 +528,7 @@ function startApiServer(appStore) {
       // 404
       json(res, { error: 'Not found' }, 404)
     } catch (e) {
+      if (res.headersSent) return
       if (e.message === 'Payload too large') {
         json(res, { error: 'Payload too large' }, 413)
       } else {
