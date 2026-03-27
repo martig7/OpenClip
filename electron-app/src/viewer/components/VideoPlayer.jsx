@@ -632,10 +632,9 @@ function VideoPlayer({
     if (!media || isTrimming) return
 
     setIsTrimming(true)
-    // Release the file so the server closes its read stream before FFmpeg renames over it.
-    // On Windows, an open read stream locks the file and causes EPERM on rename.
+    // Clear the video src so the browser closes its streaming connection.
+    // The backend rename will retry until the OS releases the file handle.
     setSuppressVideoSrc(true)
-    await new Promise((r) => setTimeout(r, 150))
 
     try {
       const response = await apiPost('/api/clips/trim', {

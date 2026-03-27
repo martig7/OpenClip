@@ -663,7 +663,24 @@ function trimClip(sourcePath, startTime, endTime, gameName = 'Unknown') {
           tempPath,
         ]
         await runFfmpeg(args, tempPath)
-        fs.renameSync(tempPath, sourcePath)
+
+        // Poll until the rename succeeds. On Windows the video read stream may
+        // still hold a handle briefly after the browser drops the connection.
+        // Retry on EPERM/EBUSY until the OS grants the rename or we time out.
+        const maxAttempts = 40 // up to ~4 seconds
+        let renamed = false
+        for (let i = 0; i < maxAttempts; i++) {
+          try {
+            fs.renameSync(tempPath, sourcePath)
+            renamed = true
+            break
+          } catch (err) {
+            if (err.code !== 'EPERM' && err.code !== 'EBUSY') throw err
+            await new Promise((r) => setTimeout(r, 100))
+          }
+        }
+        if (!renamed) throw new Error('file is still locked after retries')
+
         invalidateClipsCache()
         const info = parseRecordingInfo(sourcePath, gameName)
         resolve(info || { filename: path.basename(sourcePath), path: sourcePath })
