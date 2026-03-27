@@ -233,6 +233,12 @@ export default function GamesPage() {
       .catch(() => {
         trackDataLoadedRef.current = true
       })
+    api
+      .getStore('trackNames')
+      .then((saved) => {
+        if (Array.isArray(saved) && saved.length === 6) setTrackLabels(saved)
+      })
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -255,10 +261,13 @@ export default function GamesPage() {
 
   async function loadTrackLabels() {
     try {
-      const labels = await api.getTrackNames()
-      if (labels && labels.length === 6) setTrackLabels(labels)
-    } catch (err) {
-      showToast(err?.message || 'Failed to load track labels')
+      const labels = await api.getTrackNamesLive()
+      if (labels && labels.length === 6) {
+        setTrackLabels(labels)
+        api.setStore('trackNames', labels)
+      }
+    } catch {
+      // OBS offline — use whatever is already in state (loaded from store on mount)
     }
   }
 

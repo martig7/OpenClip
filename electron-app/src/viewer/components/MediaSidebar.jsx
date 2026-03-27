@@ -8,7 +8,7 @@ import { useHorizontalScrollStrip } from '../../hooks/useHorizontalScrollStrip'
 const SORT_DIR_DEFAULTS = { date: 'desc', name: 'asc', size: 'desc', game: 'asc' }
 const SORT_KEYS = ['date', 'name', 'size', 'game']
 
-function MediaSidebar({ items, selectedItem, onSelect, title, emptyMessage }) {
+function MediaSidebar({ items, selectedItem, onSelect, title, emptyMessage, games }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [filterGame, setFilterGame] = useState('all')
   const [sortBy, setSortBy] = useState('date')
@@ -16,7 +16,14 @@ function MediaSidebar({ items, selectedItem, onSelect, title, emptyMessage }) {
 
   const { sidebarWidth, handleMouseDown } = useSidebarResize(STORAGE_KEY_MEDIA_SIDEBAR)
 
-  const gameColors = useMemo(() => buildGameColors({ recordings: items, clips: [] }), [items])
+  const knownGameNames = useMemo(
+    () => (games || []).map((g) => (typeof g === 'string' ? g : g.name)).filter(Boolean),
+    [games]
+  )
+  const gameColors = useMemo(
+    () => buildGameColors({ recordings: items, clips: [] }, knownGameNames),
+    [items, knownGameNames]
+  )
   const filterStripKey = useMemo(() => Object.keys(gameColors).sort().join('|'), [gameColors])
   const {
     scrollRef: filterScrollRef,

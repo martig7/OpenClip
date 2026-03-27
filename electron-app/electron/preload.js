@@ -91,6 +91,7 @@ contextBridge.exposeInMainWorld('api', {
   setInputAudioTracks: (inputName, tracks) =>
     ipcRenderer.invoke('obs:ws:set-input-audio-tracks', inputName, tracks),
   getTrackNames: () => ipcRenderer.invoke('obs:ws:get-track-names'),
+  getTrackNamesLive: () => ipcRenderer.invoke('obs:ws:get-track-names-live'),
   setTrackNames: (names) => ipcRenderer.invoke('obs:ws:set-track-names', names),
   listWindowsAudioDevices: () => ipcRenderer.invoke('windows:list-audio-devices'),
   listRunningApps: () => ipcRenderer.invoke('windows:list-running-apps'),
@@ -172,6 +173,14 @@ contextBridge.exposeInMainWorld('api', {
   setOBSInstallPath: (p) => ipcRenderer.invoke('obs:set-install-path', p),
   getOBSInstallPath: () => ipcRenderer.invoke('obs:get-install-path'),
   isOBSPluginRegistered: () => ipcRenderer.invoke('obs:is-plugin-registered'),
+
+  // Share
+  shareClip: (filePath) => ipcRenderer.invoke('share:upload-clip', filePath),
+  onShareProgress: (callback) => {
+    const handler = (_event, progress) => callback(progress)
+    ipcRenderer.on('share:progress', handler)
+    return () => ipcRenderer.removeListener('share:progress', handler)
+  },
 
   // API server port
   getApiPort: () => ipcRenderer.invoke('api:port'),

@@ -242,6 +242,7 @@ export default function GeneralSettingsSection({
   checkingUpdate,
   checkForUpdate,
   installUpdate,
+  trackNames,
 }) {
   const sectionCardProps = {
     sectionId,
@@ -462,6 +463,39 @@ export default function GeneralSettingsSection({
                     )
                   }
                 />
+              </div>
+
+              <div className="form-group" style={{ marginTop: 12 }}>
+                <label className="form-label">Audio Tracks</label>
+                <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                  {[1, 2, 3, 4, 5, 6].map((num) => (
+                    <div key={num} className="track-label-cell">
+                      {trackNames?.[num - 1] || `T${num}`}
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                  {[1, 2, 3, 4, 5, 6].map((num) => {
+                    const selected = (settings.autoClip?.audioTracks || []).includes(num)
+                    return (
+                      <button
+                        key={num}
+                        type="button"
+                        className={`scene-audio-track-chip ${selected ? 'active' : ''}`}
+                        title={`${trackNames?.[num - 1] || `Track ${num}`}: ${selected ? 'included' : 'excluded'}`}
+                        onClick={() => {
+                          const current = settings.autoClip?.audioTracks || []
+                          const next = selected
+                            ? current.filter((t) => t !== num)
+                            : [...current, num].sort((a, b) => a - b)
+                          updateSetting('autoClip.audioTracks', next)
+                        }}
+                      >
+                        {num}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
             </>
           )}
@@ -710,6 +744,47 @@ export default function GeneralSettingsSection({
               </span>
             )}
           </div>
+        </AppSettingsSectionCard>
+      )
+
+    case 'sharing':
+      return (
+        <AppSettingsSectionCard {...sectionCardProps}>
+          <div className="form-group" style={{ marginTop: 0 }}>
+            <label className="form-label">Share Host</label>
+            <div className="toggle-desc" style={{ marginBottom: 6 }}>
+              Where clips are uploaded when you use the Share button
+            </div>
+            <select
+              className="form-input"
+              value={settings.shareHost || 'catbox'}
+              onChange={(e) => updateSetting('shareHost', e.target.value)}
+            >
+              <option value="catbox">Catbox.moe (permanent, up to 200 MB)</option>
+              <option value="litterbox">Litterbox.catbox.moe (temporary, up to 1 GB)</option>
+              <option value="uguu">Uguu.se (temporary, 48h expiry)</option>
+              <option value="gofile">GoFile.io (no size limit, no embeds)</option>
+            </select>
+          </div>
+
+          {(settings.shareHost || 'catbox') === 'litterbox' && (
+            <div className="form-group" style={{ marginTop: 16 }}>
+              <label className="form-label">Link Expiry</label>
+              <div className="toggle-desc" style={{ marginBottom: 6 }}>
+                How long the shared link stays active
+              </div>
+              <select
+                className="form-input"
+                value={settings.shareLitterboxExpiry || '24h'}
+                onChange={(e) => updateSetting('shareLitterboxExpiry', e.target.value)}
+              >
+                <option value="1h">1 hour</option>
+                <option value="12h">12 hours</option>
+                <option value="24h">24 hours</option>
+                <option value="72h">72 hours</option>
+              </select>
+            </div>
+          )}
         </AppSettingsSectionCard>
       )
 

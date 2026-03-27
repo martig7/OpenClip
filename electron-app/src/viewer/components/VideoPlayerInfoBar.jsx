@@ -11,6 +11,11 @@ import {
   Plus,
   Minus,
   Maximize,
+  Share2,
+  Copy,
+  Check,
+  ExternalLink,
+  X,
 } from 'lucide-react'
 import { formatTime } from '../formatTime'
 
@@ -37,6 +42,15 @@ export default function VideoPlayerInfoBar({
   isCreatingClip,
 
   onDelete,
+  onShare,
+  onShareRemove,
+  isSharing,
+  sharePhase,
+  sharePercent,
+  shareUrl,
+  shareError,
+  shareUrlCopied,
+  onShareUrlCopy,
   handleOpenInPlayer,
   handleShowInExplorer,
 }) {
@@ -93,6 +107,84 @@ export default function VideoPlayerInfoBar({
             <button data-testid="enter-clip-btn" className="btn-action-primary shrink-0" onClick={enterClipMode}>
               <Scissors size={21} /> Create Clip
             </button>
+          )}
+
+          {/* Share button + inline state pill — only for clips */}
+          {isClip && onShare && (
+            <>
+              {(sharePhase == null || sharePhase === 'error') && (
+                <button
+                  className="btn-action-more shrink-0"
+                  onClick={onShare}
+                  disabled={isSharing}
+                  title="Share clip"
+                >
+                  <Share2 size={21} />
+                </button>
+              )}
+
+              {/* Loading pill */}
+              {(sharePhase === 'compressing' || sharePhase === 'uploading') && (
+                <div className="share-inline-pill share-inline-pill--loading">
+                  <div className="share-inline-spinner" />
+                  <span className="share-inline-label">
+                    {sharePhase === 'compressing' ? 'Compressing…' : 'Uploading…'}
+                  </span>
+                  <div className="share-inline-track">
+                    {sharePhase === 'compressing' ? (
+                      <div
+                        className="share-inline-bar-determinate"
+                        style={{ width: `${Math.round(sharePercent || 0)}%` }}
+                      />
+                    ) : (
+                      <div className="share-inline-bar-indeterminate" />
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Done pill */}
+              {sharePhase === 'done' && shareUrl && (
+                <div className="share-inline-pill share-inline-pill--done">
+                  <Share2 size={12} className="share-inline-icon" />
+                  <input
+                    className="share-inline-input"
+                    readOnly
+                    value={shareUrl}
+                    onFocus={(e) => e.target.select()}
+                  />
+                  <button
+                    className="share-inline-copy-btn"
+                    onClick={onShareUrlCopy}
+                    title="Copy link"
+                  >
+                    {shareUrlCopied ? <Check size={12} /> : <Copy size={12} />}
+                    {shareUrlCopied ? 'Copied!' : 'Copy'}
+                  </button>
+                  <button
+                    className="share-inline-open-btn"
+                    onClick={() => window.open(shareUrl, '_blank')}
+                    title="Open link"
+                  >
+                    <ExternalLink size={12} />
+                  </button>
+                  <button
+                    className="share-inline-open-btn"
+                    onClick={onShareRemove}
+                    title="Remove link"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              )}
+
+              {/* Error pill */}
+              {sharePhase === 'error' && (
+                <div className="share-inline-pill share-inline-pill--error">
+                  {shareError || 'Upload failed'}
+                </div>
+              )}
+            </>
           )}
 
           <div className="action-dropdown" ref={dropdownRefTitle}>

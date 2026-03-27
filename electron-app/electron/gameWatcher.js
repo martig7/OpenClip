@@ -74,6 +74,9 @@ function detectFullscreenFallback(games, fsConfig) {
   const fw = fullscreen[0]
   const exeLower = (fw.exe || '').toLowerCase()
 
+  // Skip entries with no usable exe name (e.g. processes we couldn't query)
+  if (!exeLower || exeLower === '.exe') return null
+
   const alreadyCovered = games.some((g) => (g.exe || '').toLowerCase() === exeLower)
   if (alreadyCovered) return null
 
@@ -97,6 +100,9 @@ function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}, o
   let lastFullscreenAudioSourceName = null
   let lastFullscreenAudioScene = null
   let stopped = false
+  // Hysteresis: only start recording a fullscreen app after seeing it in two consecutive polls.
+  // Prevents transient boot-time or splash-screen windows from triggering spurious recordings.
+  let fullscreenCandidateExe = null
   const organizeQueue = []
   let organizing = false
 
@@ -213,60 +219,68 @@ function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}, o
       const fallback = detectFullscreenFallback(games, fsConfig)
       if (fallback) {
         const exeLower = (fallback.exe || '').toLowerCase()
-        const existing = games.find((g) => (g.exe || '').toLowerCase() === exeLower)
-        if (existing) {
-          detected = existing
-        } else {
-          const settings = store.get('settings') || {}
-          if (settings.autoRegisterFullscreenApps === true) {
-            const newId = Date.now().toString(36) + Math.random().toString(36).slice(2, 5)
-            const newGame = {
-              id: newId,
-              name: fallback.name,
-              exe: fallback.exe,
-              windowClass: fallback.windowClass,
-              selector: fallback.selector,
-              windowMatchPriority: 2,
-              scene: fallback.scene,
-              isAutoDetected: true,
-              enabled: true,
-            }
-            store.set('games', [...games, newGame])
-            log(`Auto-registered fullscreen app: ${fallback.name}`)
-            onGamesUpdate()
-            Promise.resolve()
-              .then(async () => {
-                const { extractProcessIcon } = require('./winUtils')
-                fs.mkdirSync(ICONS_DIR, { recursive: true })
-                const processName = fallback.exe || fallback.name
-                const outPath = path.join(ICONS_DIR, `${path.basename(processName)}.png`)
-                const iconPath = await extractProcessIcon(processName, outPath)
-                if (!iconPath) return
-
-                const latestGames = store.get('games') || []
-                const idx = latestGames.findIndex((g) => g.id === newId)
-                if (idx < 0) return
-                latestGames[idx] = { ...latestGames[idx], icon_path: iconPath }
-                store.set('games', latestGames)
-                onGamesUpdate()
-              })
-              .catch((err) => {
-                log(`Fullscreen icon extraction failed: ${err.message}`)
-              })
-            detected = newGame
+        // Hysteresis: require the same exe to be fullscreen on two consecutive polls before
+        // starting a recording. If lastGame is already set we're mid-session — skip the check.
+        const isConfirmed = lastGame ? true : exeLower === fullscreenCandidateExe
+        fullscreenCandidateExe = exeLower
+        if (isConfirmed) {
+          const existing = games.find((g) => (g.exe || '').toLowerCase() === exeLower)
+          if (existing) {
+            detected = existing
           } else {
-            // Record using the fallback config without registering to the games list
-            detected = {
-              name: '(Unorganized)',
-              exe: fallback.exe,
-              windowClass: fallback.windowClass,
-              selector: fallback.selector,
-              scene: fallback.scene,
-              isAutoDetected: true,
-              enabled: true,
+            const settings = store.get('settings') || {}
+            if (settings.autoRegisterFullscreenApps === true) {
+              const newId = Date.now().toString(36) + Math.random().toString(36).slice(2, 5)
+              const newGame = {
+                id: newId,
+                name: fallback.name,
+                exe: fallback.exe,
+                windowClass: fallback.windowClass,
+                selector: fallback.selector,
+                windowMatchPriority: 2,
+                scene: fallback.scene,
+                isAutoDetected: true,
+                enabled: true,
+              }
+              store.set('games', [...games, newGame])
+              log(`Auto-registered fullscreen app: ${fallback.name}`)
+              onGamesUpdate()
+              Promise.resolve()
+                .then(async () => {
+                  const { extractProcessIcon } = require('./winUtils')
+                  fs.mkdirSync(ICONS_DIR, { recursive: true })
+                  const processName = fallback.exe || fallback.name
+                  const outPath = path.join(ICONS_DIR, `${path.basename(processName)}.png`)
+                  const iconPath = await extractProcessIcon(processName, outPath)
+                  if (!iconPath) return
+
+                  const latestGames = store.get('games') || []
+                  const idx = latestGames.findIndex((g) => g.id === newId)
+                  if (idx < 0) return
+                  latestGames[idx] = { ...latestGames[idx], icon_path: iconPath }
+                  store.set('games', latestGames)
+                  onGamesUpdate()
+                })
+                .catch((err) => {
+                  log(`Fullscreen icon extraction failed: ${err.message}`)
+                })
+              detected = newGame
+            } else {
+              // Record using the fallback config without registering to the games list
+              detected = {
+                name: '(Unorganized)',
+                exe: fallback.exe,
+                windowClass: fallback.windowClass,
+                selector: fallback.selector,
+                scene: fallback.scene,
+                isAutoDetected: true,
+                enabled: true,
+              }
             }
           }
         }
+      } else {
+        fullscreenCandidateExe = null
       }
     }
 

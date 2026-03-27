@@ -275,6 +275,14 @@ async function getVideoDuration(filePath) {
   }
 }
 
+// Returns FFmpeg -map args to selectively copy audio streams.
+// audioTracks: 1-based array (matching UI), e.g. [1, 3] → ['-map','0:v:0','-map','0:a:0','-map','0:a:2']
+// Empty / null / undefined → ['-map', '0:v:0'] (video only — no tracks selected means muted)
+function buildAutoClipMapArgs(audioTracks) {
+  if (!Array.isArray(audioTracks) || audioTracks.length === 0) return ['-map', '0:v:0']
+  return ['-map', '0:v:0', ...audioTracks.flatMap((t) => ['-map', `0:a:${t - 1}`])]
+}
+
 // Create clips from a specific source file before it is renamed or moved.
 // Returns the array of markers that were successfully clipped.
 // Caller is responsible for marker removal, deleteFullRecording, and emitting 'complete'.
@@ -282,19 +290,23 @@ async function processAutoClipsFromFile(store, gameName, srcPath, srcStat, onPro
   const markers = (store.get('clipMarkers') || []).filter((m) => m.game === gameName)
   if (markers.length === 0) return []
 
-  const destPath = store.get('settings.destinationPath')
-  const clipsDir = path.join(destPath, sanitizeGameName(gameName), 'Clips')
-  fs.mkdirSync(clipsDir, { recursive: true })
-
   const autoClip = store.get('settings.autoClip') || {}
   const bufferBefore = autoClip.bufferBefore || 15
   const bufferAfter = autoClip.bufferAfter || 15
+  const hasTrackSelection =
+    Array.isArray(autoClip.audioTracks) && autoClip.audioTracks.length > 0
+  // 0-based stream indices for createClip (only used when tracks are selected)
+  const audioTracks = hasTrackSelection ? autoClip.audioTracks.map((t) => t - 1) : null
 
   const duration = await getVideoDuration(srcPath)
   if (!duration) return []
 
   // Use the file's mtime to determine when the recording started
   const recordingStartUnix = srcStat.mtime.getTime() / 1000 - duration
+
+  const destPath = store.get('settings.destinationPath')
+  const clipsDir = path.join(destPath, sanitizeGameName(gameName), 'Clips')
+  fs.mkdirSync(clipsDir, { recursive: true })
 
   const sanitizedName = sanitizeGameName(gameName)
   const dateStr = localDateStr(new Date())
@@ -320,30 +332,38 @@ async function processAutoClipsFromFile(store, gameName, srcPath, srcStat, onPro
     })
 
     const start = Math.max(0, videoPosition - bufferBefore)
-    const clipDuration = bufferBefore + bufferAfter
-    const clipPath = path.join(clipsDir, `${sanitizedName} Clip ${dateStr} #${clipNum}.mp4`)
+    const end = start + bufferBefore + bufferAfter
 
     try {
-      await execFileAsync(
-        FFMPEG_PATH,
-        [
-          '-ss',
-          String(start),
-          '-i',
-          srcPath,
-          '-t',
-          String(clipDuration),
-          '-c',
-          'copy',
-          '-avoid_negative_ts',
-          'make_zero',
-          clipPath,
-          '-y',
-        ],
-        { timeout: 5 * 60 * 1000, killSignal: 'SIGKILL' }
-      )
-      clipNum++
-      service.invalidateClipsCache()
+      if (hasTrackSelection) {
+        // Use createClip so selected tracks are properly mixed into one audio stream
+        await service.createClip(srcPath, start, end, gameName, audioTracks)
+      } else {
+        // No tracks selected → muted output (video only)
+        const clipPath = path.join(clipsDir, `${sanitizedName} Clip ${dateStr} #${clipNum}.mp4`)
+        await execFileAsync(
+          FFMPEG_PATH,
+          [
+            '-ss',
+            String(start),
+            '-i',
+            srcPath,
+            '-t',
+            String(end - start),
+            '-map',
+            '0:v:0',
+            '-c',
+            'copy',
+            '-avoid_negative_ts',
+            'make_zero',
+            clipPath,
+            '-y',
+          ],
+          { timeout: 5 * 60 * 1000, killSignal: 'SIGKILL' }
+        )
+        clipNum++
+        service.invalidateClipsCache()
+      }
       processedMarkers.push(marker)
     } catch {
       // Skip failed clips
@@ -911,6 +931,7 @@ module.exports = {
   getWeekFolder,
   migrateToGameFolders, // re-exported from migrations.js for backwards-compat
   reorganizeWeekFolders,
+  buildAutoClipMapArgs,
   // Re-export file-op helpers so tests that import them from fileManager.js still work
   moveFileSafe,
   isFileLocked,

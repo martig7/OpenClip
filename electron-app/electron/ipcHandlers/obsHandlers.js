@@ -28,6 +28,7 @@ const {
   getInputAudioTracks,
   setInputAudioTracks,
   getTrackNames,
+  getTrackNamesLive,
   setTrackNames,
   isPluginReachable,
 } = require('../obsPlugin')
@@ -123,6 +124,7 @@ function registerObsHandlers(ipcMain, store, _appState) {
     return setInputAudioTracks(undefined, inputName, tracks)
   })
   ipcMain.handle('obs:ws:get-track-names', () => getTrackNames())
+  ipcMain.handle('obs:ws:get-track-names-live', () => getTrackNamesLive())
   ipcMain.handle('obs:ws:set-track-names', (_e, names) => setTrackNames(undefined, names))
 
   // --- OBS installation detection ---

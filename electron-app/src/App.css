@@ -381,6 +381,200 @@
 .modal-actions {
   @apply flex gap-2 justify-end;
 }
+/* Share Modal */
+.share-modal {
+  @apply min-w-[420px] max-w-[520px];
+}
+.share-progress-track {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--bg-active);
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.share-progress-bar {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+  animation: share-indeterminate 1.4s ease-in-out infinite;
+  transform-origin: left center;
+}
+.share-progress-bar-determinate {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+  transition: width 0.15s linear;
+}
+@keyframes share-indeterminate {
+  0%   { transform: translateX(-100%) scaleX(0.4); }
+  40%  { transform: translateX(0%)    scaleX(0.6); }
+  70%  { transform: translateX(60%)   scaleX(0.4); }
+  100% { transform: translateX(120%)  scaleX(0.3); }
+}
+.share-url-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.share-url-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-family: monospace;
+}
+.share-copy-btn {
+  flex-shrink: 0;
+  min-width: 80px;
+}
+.share-open-btn {
+  flex-shrink: 0;
+  padding: 8px 10px;
+}
+.share-error-msg {
+  @apply text-[13px] text-[var(--danger)] mb-0 !important;
+}
+/* Inline share pill — shown in the info bar actions row to the right of the Share button */
+.share-inline-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  border-radius: 6px;
+  font-size: 12px;
+  flex-shrink: 0;
+  animation: share-pill-in 0.18s ease;
+}
+@keyframes share-pill-in {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Loading state */
+.share-inline-pill--loading {
+  padding: 0 10px 0 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  gap: 8px;
+}
+.share-inline-spinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid rgba(124, 58, 237, 0.25);
+  border-top-color: var(--accent);
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.share-inline-label {
+  color: var(--text-secondary);
+  white-space: nowrap;
+  font-size: 12px;
+}
+.share-inline-track {
+  width: 64px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--bg-active);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.share-inline-bar-determinate {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  transition: width 0.15s linear;
+}
+.share-inline-bar-indeterminate {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  animation: share-indeterminate 1.4s ease-in-out infinite;
+  transform-origin: left center;
+}
+
+/* Done state */
+.share-inline-pill--done {
+  padding: 0 6px 0 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  max-width: 340px;
+}
+.share-inline-icon {
+  color: var(--accent-hover);
+  flex-shrink: 0;
+}
+.share-inline-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  font-family: monospace;
+  padding: 3px 6px;
+  height: 24px;
+  background: var(--bg-active);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  outline: none;
+}
+.share-inline-input:focus {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+.share-inline-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: var(--accent);
+  color: #fff;
+  white-space: nowrap;
+  transition: background 0.15s ease;
+}
+.share-inline-copy-btn:hover {
+  background: var(--accent-hover);
+}
+.share-inline-open-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  height: 24px;
+  width: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-secondary);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.share-inline-open-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* Error state */
+.share-inline-pill--error {
+  padding: 0 10px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: var(--danger);
+  font-size: 12px;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 
 /* Video Player Area */
 .video-layout {

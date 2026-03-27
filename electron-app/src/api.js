@@ -10,17 +10,20 @@ const asyncArr = async () => []
 let store = {
   settings: { ...defaultSettings },
   games: [...mockGames],
+  shareLinks: {},
 }
 
 const mockApi = {
   getStore: async (key) => {
     if (key === 'settings') return store.settings
     if (key === 'games') return store.games
+    if (key === 'shareLinks') return store.shareLinks
     return null
   },
   setStore: async (key, value) => {
     if (key === 'settings') store.settings = value
     if (key === 'games') store.games = value
+    if (key === 'shareLinks') store.shareLinks = value
   },
   getGames: async () => store.games,
   addGame: async (game) => {
@@ -88,9 +91,11 @@ const mockApi = {
   getInputAudioTracks: async () => ({ 1: true, 2: true, 3: false, 4: false, 5: false, 6: false }),
   setInputAudioTracks: async () => ({ success: true }),
   getTrackNames: async () => ['Track 1', 'Track 2', 'Track 3', 'Track 4', 'Track 5', 'Track 6'],
+  getTrackNamesLive: async () => ['Track 1', 'Track 2', 'Track 3', 'Track 4', 'Track 5', 'Track 6'],
   setTrackNames: async () => ({ success: true }),
   listWindowsAudioDevices: asyncArr,
   listRunningApps: asyncArr,
+  getDestinationFolders: asyncArr,
   openDirectoryDialog: asyncNoop,
   openFileDialog: asyncNoop,
   showInExplorer: noop,
@@ -108,6 +113,7 @@ const mockApi = {
   onMarkerAdded: () => noop,
   onOrganizeProgress: () => noop,
   onSessionProgress: () => noop,
+  onShareProgress: () => noop,
   getStorageStats: async () => mockStorageStats,
   registerHotkey: asyncNoop,
   reencodeVideo: asyncNoop,

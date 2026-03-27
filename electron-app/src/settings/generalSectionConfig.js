@@ -64,6 +64,7 @@ export const SETTINGS_SECTIONS = [
     blurb: 'Rate control & quality',
     group: 'encoding',
   },
+  { id: 'sharing', title: 'Sharing', blurb: 'Share host & link expiry', group: 'integrations' },
   { id: 'updates', title: 'Updates', blurb: 'App updates', group: 'updates' },
 ]
 
