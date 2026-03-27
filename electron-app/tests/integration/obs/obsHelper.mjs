@@ -203,7 +203,11 @@ export async function startOBS({
   // startup and shows a "did not shut down properly / run in Safe Mode?"
   // dialog that blocks headless and CI runs indefinitely.  Deleting the
   // directory here guarantees every run starts from a pristine config.
-  _rmTemp(obsConfigDir)
+  //
+  // Close every OBS process first so portable config / DLL copies are not
+  // locked (including stray instances from another install path).
+  await _killAllObsProcesses()
+  await _rmTempAsyncWithRetry(obsConfigDir)
 
   _writeOBSConfig(obsConfigDir, wsPort, initialScenes)
 
@@ -223,7 +227,7 @@ export async function startOBS({
 
     const pluginDst = join(obsInstallRoot, 'obs-plugins', '64bit', 'openclip-obs.dll')
     mkdirSync(join(obsInstallRoot, 'obs-plugins', '64bit'), { recursive: true })
-    copyFileSync(dllSrc, pluginDst)
+    await _copyFileWithRetry(dllSrc, pluginDst, 'OpenClip plugin DLL')
 
     // Create empty locale file so OBS can load default locale safely.
     const localeIni = join(
@@ -634,9 +638,73 @@ function _readOBSWebSocketConfig(configPath) {
   }
 }
 
+function _sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms))
+}
+
+/**
+ * Terminate all OBS Studio processes so portable config trees and plugin DLLs
+ * are not locked (any path / install).
+ */
+async function _killAllObsProcesses() {
+  if (isWindows) {
+    for (const name of ['obs64.exe', 'obs32.exe']) {
+      spawnSync('taskkill', ['/F', '/IM', name], { stdio: 'ignore', windowsHide: true })
+    }
+  } else {
+    const r = spawnSync('pkill', ['-x', 'obs'], { stdio: 'ignore' })
+    if (r.error) {
+      spawnSync('killall', ['obs'], { stdio: 'ignore' })
+    }
+  }
+  await _sleep(500)
+}
+
+async function _rmTempAsyncWithRetry(dir) {
+  const attempts = 10
+  const delayMs = 300
+  for (let i = 0; i < attempts; i++) {
+    try {
+      rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 120 })
+      return
+    } catch (e) {
+      if (i === attempts - 1) {
+        console.warn(`[obsHelper] Failed to remove temp config directory ${dir}: ${e.message}`)
+        return
+      }
+      await _sleep(delayMs)
+    }
+  }
+}
+
+async function _copyFileWithRetry(src, dst, label) {
+  const attempts = 25
+  const delayMs = 200
+  for (let i = 0; i < attempts; i++) {
+    try {
+      copyFileSync(src, dst)
+      return
+    } catch (e) {
+      const code = e && e.code
+      const retryable = code === 'EBUSY' || code === 'EPERM' || code === 'EACCES'
+      if (retryable && i < attempts - 1) {
+        await _sleep(delayMs)
+        continue
+      }
+      if (retryable) {
+        throw new Error(
+          `Failed to copy ${label} after ${attempts} attempts: ${e.message}. ` +
+            `Another process may still be locking the file; close OBS and retry.`
+        )
+      }
+      throw e
+    }
+  }
+}
+
 function _rmTemp(dir) {
   try {
-    rmSync(dir, { recursive: true, force: true })
+    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 150 })
   } catch (e) {
     console.warn(`[obsHelper] Failed to remove temp config directory ${dir}: ${e.message}`)
   }

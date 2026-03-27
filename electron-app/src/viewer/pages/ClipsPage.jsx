@@ -97,9 +97,17 @@ function ClipsPage() {
   }, [fetchClips])
 
   const handleTrimmed = useCallback((updatedClip) => {
-    setSelectedClip(updatedClip)
-    fetchClips()
+    fetchClips().then((data) => {
+      const refreshedClip = data?.find((clip) => clip.path === updatedClip.path)
+      setSelectedClip(refreshedClip || updatedClip)
+    })
   }, [fetchClips])
+
+  const handleTrimFailed = useCallback((msg) => {
+    setToast({ type: 'error', message: `Trim failed: ${msg}` })
+    clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = setTimeout(() => setToast(null), 5000)
+  }, [])
 
   const handleOrganized = useCallback((result) => {
     setToast({ type: 'success', message: `Organized: ${result.filename}` })
@@ -168,6 +176,7 @@ function ClipsPage() {
             clip={selectedClip}
             onDelete={() => setDeleteModal(true)}
             onTrimmed={handleTrimmed}
+            onTrimFailed={handleTrimFailed}
             games={games}
             onOrganized={handleOrganized}
             onOrganizeError={handleOrganizeError}

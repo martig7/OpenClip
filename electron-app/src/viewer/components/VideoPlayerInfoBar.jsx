@@ -42,8 +42,7 @@ export default function VideoPlayerInfoBar({
   handleCreateClip,
   isCreatingClip,
   handleTrimClip,
-  isTrimMode,
-  isTrimming,
+  trimPending,
 
   onDelete,
   onShare,
@@ -88,6 +87,7 @@ export default function VideoPlayerInfoBar({
           <div className="video-info-title-col">
             <div className="video-info-title-row">
               <span className="video-info-filename">{media.filename}</span>
+              {trimPending && <div className="spinner-sm" title="Trimming…" />}
               {isUnorganized && (
                 <span className="unorganized-badge-compact">Unorganized</span>
               )}
@@ -202,7 +202,10 @@ export default function VideoPlayerInfoBar({
             {dropdownOpen && (
               <div className="dropdown-menu">
                 {isClip && enterTrimMode && (
-                  <button onClick={() => { setDropdownOpen(false); enterTrimMode(); }}>
+                  <button
+                    onClick={() => { setDropdownOpen(false); enterTrimMode(); }}
+                    disabled={trimPending}
+                  >
                     <Scissors size={21} /> Trim Clip
                   </button>
                 )}
@@ -283,13 +286,13 @@ export default function VideoPlayerInfoBar({
 
           <button
             className="btn-action-primary shrink-0"
-            onClick={isTrimMode ? handleTrimClip : handleCreateClip}
-            disabled={(isTrimMode ? isTrimming : isCreatingClip) || (clipEnd - clipStart) <= 0}
+            onClick={isClip ? handleTrimClip : handleCreateClip}
+            disabled={(isClip ? trimPending : isCreatingClip) || (clipEnd - clipStart) <= 0}
           >
-            {(isTrimMode ? isTrimming : isCreatingClip) ? (
-              <><div className="spinner-sm" /> {isTrimMode ? 'Trimming…' : 'Creating…'}</>
+            {(isClip ? trimPending : isCreatingClip) ? (
+              <><div className="spinner-sm" /> {isClip ? 'Trimming…' : 'Creating…'}</>
             ) : (
-              <><Scissors size={21} /> {isTrimMode ? 'Trim Clip' : 'Create Clip'}</>
+              <><Scissors size={21} /> {isClip ? 'Trim Clip' : 'Create Clip'}</>
             )}
           </button>
 

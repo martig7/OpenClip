@@ -450,6 +450,32 @@ describe('createClip', () => {
   })
 })
 
+describe('trimClip', () => {
+  beforeEach(async () => {
+    const cp = await import('child_process')
+    cp.execFile.mockImplementation((bin, args, opts, cb) => {
+      makeFile(args[args.length - 1])
+      process.nextTick(() => cb(null, '', ''))
+      return { kill: vi.fn() }
+    })
+  })
+
+  it('uses input seek with duration-based copy trimming', async () => {
+    const cp = await import('child_process')
+    const src = path.join(clipsDir, 'Halo Clip 2025-01-15 #1.mp4')
+    makeFile(src)
+
+    await service.trimClip(src, 12, 20)
+
+    const args = cp.execFile.mock.calls[0][1]
+    expect(args.indexOf('-ss')).toBeLessThan(args.indexOf('-i'))
+    expect(args).toContain('-t')
+    expect(args[args.indexOf('-t') + 1]).toBe('8')
+    expect(args).not.toContain('-to')
+    expect(args[args.indexOf('-c') + 1]).toBe('copy')
+  })
+})
+
 // ─── runAutoDelete ────────────────────────────────────────────────
 describe('runAutoDelete', () => {
   it('returns zeros when auto-delete is disabled', () => {

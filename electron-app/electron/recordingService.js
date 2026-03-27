@@ -75,6 +75,14 @@ function unmarkRemuxing(srcPath, destPath) {
   if (destPath) activeRemuxPaths.delete(path.normalize(destPath).toLowerCase())
 }
 
+// --- Virtual trim state ---
+// Map<sourcePath, { trimStart, trimEnd, status: 'processing'|'done'|'failed', error? }>
+const trimState = new Map()
+
+function getTrimState(sourcePath) {
+  return trimState.get(sourcePath) ?? { status: 'idle' }
+}
+
 // --- File operation helpers ---
 
 // Retry fs.renameSync on transient EPERM/EBUSY (video player or AV may hold file briefly).
@@ -622,76 +630,77 @@ function createClip(sourcePath, startTime, endTime, gameName = 'Unknown', audioT
   })
 }
 
-function trimClip(sourcePath, startTime, endTime, gameName = 'Unknown') {
-  return new Promise((resolve, reject) => {
-    if (!sourcePath || !fs.existsSync(sourcePath)) {
-      return reject(new Error('Source not found'))
-    }
-    if (endTime <= startTime) {
-      return reject(new Error('End time must be > start time'))
-    }
+// Runs FFmpeg and waits for it to finish, then returns so the frontend can
+// coordinate clearing its video src before the rename (finalizeTrim).
+async function trimClip(sourcePath, startTime, endTime) {
+  if (!sourcePath || !fs.existsSync(sourcePath)) {
+    throw new Error('Source not found')
+  }
+  if (endTime <= startTime) {
+    throw new Error('End time must be > start time')
+  }
 
-    const tempPath = sourcePath + '.tmp.mp4'
-    const duration = endTime - startTime
+  const tempPath = sourcePath + '.tmp.mp4'
+  const duration = endTime - startTime
+  trimState.set(sourcePath, { trimStart: startTime, trimEnd: endTime, status: 'processing' })
 
-    const runFfmpeg = (args, outPathToTrack) =>
-      new Promise((res, rej) => {
-        const proc = execFile(FFMPEG_PATH, args, { timeout: 120000 }, (error, _stdout, stderr) => {
-          activeFFmpeg.delete(proc)
-          if (error) return rej(new Error(stderr || error.message))
-          res()
-        })
-        activeFFmpeg.set(proc, outPathToTrack || null)
+  try {
+    const args = [
+      '-y',
+      '-ss',
+      String(startTime),
+      '-i',
+      sourcePath,
+      '-t',
+      String(duration),
+      '-c',
+      'copy',
+      '-avoid_negative_ts',
+      'make_zero',
+      tempPath,
+    ]
+    await new Promise((res, rej) => {
+      const proc = execFile(FFMPEG_PATH, args, { timeout: 120000 }, (error, _stdout, stderr) => {
+        activeFFmpeg.delete(proc)
+        if (error) return rej(new Error(stderr || error.message))
+        res()
       })
+      activeFFmpeg.set(proc, tempPath)
+    })
+    trimState.set(sourcePath, { trimStart: startTime, trimEnd: endTime, status: 'ready' })
+    return { trimStart: startTime, trimEnd: endTime, status: 'ready' }
+  } catch (err) {
+    try {
+      if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath)
+    } catch {}
+    trimState.set(sourcePath, { status: 'failed', error: err.message })
+    throw err
+  }
+}
 
-    ;(async () => {
-      try {
-        const args = [
-          '-y',
-          '-ss',
-          String(startTime),
-          '-i',
-          sourcePath,
-          '-t',
-          String(duration),
-          '-map',
-          '0',
-          '-c',
-          'copy',
-          '-avoid_negative_ts',
-          'make_zero',
-          tempPath,
-        ]
-        await runFfmpeg(args, tempPath)
-
-        // Poll until the rename succeeds. On Windows the video read stream may
-        // still hold a handle briefly after the browser drops the connection.
-        // Retry on EPERM/EBUSY until the OS grants the rename or we time out.
-        const maxAttempts = 40 // up to ~4 seconds
-        let renamed = false
-        for (let i = 0; i < maxAttempts; i++) {
-          try {
-            fs.renameSync(tempPath, sourcePath)
-            renamed = true
-            break
-          } catch (err) {
-            if (err.code !== 'EPERM' && err.code !== 'EBUSY') throw err
-            await new Promise((r) => setTimeout(r, 100))
-          }
-        }
-        if (!renamed) throw new Error('file is still locked after retries')
-
-        invalidateClipsCache()
-        const info = parseRecordingInfo(sourcePath, gameName)
-        resolve(info || { filename: path.basename(sourcePath), path: sourcePath })
-      } catch (err) {
-        try {
-          if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath)
-        } catch {}
-        reject(new Error(`FFmpeg error: ${err.message}`))
+// Called by the frontend after it has cleared its video src.
+// Retries until the OS releases the read handle — no fixed cap.
+async function finalizeTrim(sourcePath) {
+  const state = trimState.get(sourcePath)
+  if (!state || state.status !== 'ready') {
+    throw new Error(`Trim not ready (status: ${state?.status ?? 'unknown'})`)
+  }
+  const tempPath = sourcePath + '.tmp.mp4'
+  for (;;) {
+    try {
+      fs.renameSync(tempPath, sourcePath)
+      invalidateClipsCache()
+      trimState.set(sourcePath, { status: 'done' })
+      return
+    } catch (err) {
+      if (err.code !== 'EPERM' && err.code !== 'EBUSY') {
+        try { if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath) } catch {}
+        trimState.set(sourcePath, { status: 'failed', error: err.message })
+        throw err
       }
-    })()
-  })
+      await new Promise((r) => setTimeout(r, 50))
+    }
+  }
 }
 
 function deleteFile(filePath) {
@@ -904,6 +913,8 @@ module.exports = {
   countClipsForDate,
   createClip,
   trimClip,
+  getTrimState,
+  finalizeTrim,
   deleteFile,
   reencodeVideo,
   runAutoDelete,

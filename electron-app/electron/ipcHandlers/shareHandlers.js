@@ -3,6 +3,7 @@ const path = require('path')
 const os = require('os')
 const { FFMPEG_PATH } = require('../constants')
 const ffmpeg = require('fluent-ffmpeg')
+const service = require('../recordingService')
 
 // Ensure fluent-ffmpeg uses our bundled ffmpeg
 ffmpeg.setFfmpegPath(FFMPEG_PATH)
@@ -114,9 +115,19 @@ function registerShareHandlers(ipcMain, store) {
         return { success: false, error: 'File not found' }
       }
 
+      // Wait for any in-flight trim to settle before compressing
+      let trimStateEntry = service.getTrimState(filePath)
+      while (trimStateEntry.status === 'processing') {
+        await new Promise((r) => setTimeout(r, 100))
+        trimStateEntry = service.getTrimState(filePath)
+      }
+      if (trimStateEntry.status === 'failed') {
+        return { success: false, error: `Pending trim failed: ${trimStateEntry.error}` }
+      }
+
       // Step 1: Compress
       event.sender.send('share:progress', { phase: 'compressing', percent: 0 })
-      
+
       const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openclip-share-'))
       compressedPath = path.join(tmpDir, `compressed_${path.basename(filePath)}`)
       // Ensure the output has an .mp4 extension for wide compatibility in browsers

@@ -245,7 +245,7 @@ describe('POST /api/clips/trim', () => {
     expect(res.status).toBe(400)
   })
 
-  it('returns 200 and overwrites source on success', async () => {
+  it('returns 200 with ready status after ffmpeg completes', async () => {
     const cp = await import('child_process')
     cp.execFile.mockImplementation((bin, args, opts, cb) => {
       const outPath = args[args.length - 1]
@@ -260,23 +260,83 @@ describe('POST /api/clips/trim', () => {
       .post('/api/clips/trim')
       .send({ source_path: src, start_time: 0, end_time: 5, game_name: 'Halo' })
     expect(res.status).toBe(200)
-    expect(res.body.path).toBe(src)
-    expect(res.body.filename).toBe('Halo Clip 2025-01-15 #1.mp4')
+    expect(res.body.status).toBe('ready')
+    expect(res.body.trimStart).toBe(0)
+    expect(res.body.trimEnd).toBe(5)
   })
 
-  it('returns 500 when ffmpeg errors and leaves original intact', async () => {
+  it('returns 500 and records failed status when ffmpeg errors', async () => {
     const cp = await import('child_process')
     cp.execFile.mockImplementation((bin, args, opts, cb) => {
-      cb(new Error('ffmpeg failed'), '', 'ffmpeg error output')
+      process.nextTick(() => cb(new Error('ffmpeg failed'), '', 'ffmpeg error output'))
       return { kill: vi.fn() }
     })
 
     const src = path.join(clipsDir, 'Halo Clip 2025-01-15 #2.mp4')
     fs.writeFileSync(src, Buffer.alloc(1024))
+
     const res = await request(server)
       .post('/api/clips/trim')
       .send({ source_path: src, start_time: 0, end_time: 5, game_name: 'Halo' })
     expect(res.status).toBe(500)
+
+    const statusRes = await request(server).get(`/api/clips/trim-status?path=${encodeURIComponent(src)}`)
+    expect(statusRes.body.status).toBe('failed')
     expect(fs.existsSync(src)).toBe(true)
+  })
+})
+
+describe('GET /api/clips/trim-status', () => {
+  it('returns idle for unknown path', async () => {
+    const res = await request(server).get('/api/clips/trim-status?path=/unknown/file.mp4')
+    expect(res.status).toBe(200)
+    expect(res.body.status).toBe('idle')
+  })
+
+  it('returns idle when no path param', async () => {
+    const res = await request(server).get('/api/clips/trim-status')
+    expect(res.status).toBe(200)
+    expect(res.body.status).toBe('idle')
+  })
+
+  it('returns done and overwrites source after finalize', async () => {
+    const cp = await import('child_process')
+    cp.execFile.mockImplementation((bin, args, opts, cb) => {
+      const outPath = args[args.length - 1]
+      fs.writeFileSync(outPath, Buffer.alloc(512))
+      process.nextTick(() => cb(null, '', ''))
+      return { kill: vi.fn() }
+    })
+
+    const src = path.join(clipsDir, 'Halo Clip 2025-01-15 #4.mp4')
+    fs.writeFileSync(src, Buffer.alloc(1024))
+
+    const trimRes = await request(server)
+      .post('/api/clips/trim')
+      .send({ source_path: src, start_time: 0, end_time: 5, game_name: 'Halo' })
+    expect(trimRes.status).toBe(200)
+    expect(trimRes.body.status).toBe('ready')
+
+    const finalizeRes = await request(server)
+      .post('/api/clips/trim-finalize')
+      .send({ source_path: src })
+    expect(finalizeRes.status).toBe(200)
+    expect(finalizeRes.body.success).toBe(true)
+
+    const statusRes = await request(server).get(`/api/clips/trim-status?path=${encodeURIComponent(src)}`)
+    expect(statusRes.body.status).toBe('done')
+    expect(fs.statSync(src).size).toBe(512)
+  })
+
+  it('returns 500 when finalize is called before trim is ready', async () => {
+    const src = path.join(clipsDir, 'Halo Clip 2025-01-15 #5.mp4')
+    fs.writeFileSync(src, Buffer.alloc(1024))
+
+    const res = await request(server)
+      .post('/api/clips/trim-finalize')
+      .send({ source_path: src })
+
+    expect(res.status).toBe(500)
+    expect(res.body.error).toMatch(/Trim not ready/i)
   })
 })

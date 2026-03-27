@@ -168,9 +168,9 @@ function startApiServer(appStore) {
       // POST /api/clips/trim
       if (pathname === '/api/clips/trim' && req.method === 'POST') {
         const data = await readBody(req)
-        const { source_path, start_time, end_time, game_name = 'Unknown' } = data
+        const { source_path, start_time, end_time } = data
         try {
-          const result = await service.trimClip(source_path, start_time, end_time, game_name)
+          const result = await service.trimClip(source_path, start_time, end_time)
           return json(res, result)
         } catch (e) {
           const status = e.message.includes('not found')
@@ -179,6 +179,25 @@ function startApiServer(appStore) {
               ? 400
               : 500
           return json(res, { error: e.message }, status)
+        }
+      }
+
+      // GET /api/clips/trim-status?path=...
+      if (pathname === '/api/clips/trim-status' && req.method === 'GET') {
+        const filePath = query.path
+        if (!filePath) return json(res, { status: 'idle' })
+        return json(res, service.getTrimState(filePath))
+      }
+
+      // POST /api/clips/trim-finalize — frontend calls this after clearing video src
+      if (pathname === '/api/clips/trim-finalize' && req.method === 'POST') {
+        const data = await readBody(req)
+        const { source_path } = data
+        try {
+          await service.finalizeTrim(source_path)
+          return json(res, { success: true })
+        } catch (e) {
+          return json(res, { error: e.message }, 500)
         }
       }
 

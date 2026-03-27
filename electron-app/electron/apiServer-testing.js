@@ -112,6 +112,10 @@ function startApiServer() {
       return json(res, { available: false })
     }
 
+    if (pathname === '/api/clips/trim-status' && req.method === 'GET') {
+      return json(res, { status: 'idle' })
+    }
+
     // All POST mutations succeed silently
     if (req.method === 'POST') {
       return json(res, { success: true })

@@ -2,6 +2,7 @@
 
     - When trying to run the ENTIRE test set, make sure to run `npm run test` from the electron-app folder instead of something like `npx vitest run` because we include playwright tests which test important functionality/integration with OBS.
     - When you add API endpoints, make sure to also update the mock API.
+    - Do not commit random specs and plans.
 
 # Known Issues
 
