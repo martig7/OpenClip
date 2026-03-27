@@ -422,7 +422,7 @@ function VideoPlayer({
       if (isPlaying) {
         videoRef.current.pause()
       } else {
-        videoRef.current.play()
+        videoRef.current.play().catch(() => {})
       }
     }
   }, [isPlaying])
@@ -538,7 +538,7 @@ function VideoPlayer({
     (position) => {
       handleSeek(position)
       if (videoRef.current && !isPlaying) {
-        videoRef.current.play()
+        videoRef.current.play().catch(() => {})
       }
     },
     [handleSeek, isPlaying]
@@ -651,7 +651,7 @@ function VideoPlayer({
         setClipMode(false)
         setIsTrimMode(false)
         if (onTrimmed) {
-          onTrimmed(data)
+          setTimeout(() => onTrimmed(data), 0)
         }
       } else {
         setSuppressVideoSrc(false)
