@@ -37,9 +37,13 @@ export default function VideoPlayerInfoBar({
   onZoomFit,
 
   enterClipMode,
+  enterTrimMode,
   exitClipMode,
   handleCreateClip,
   isCreatingClip,
+  handleTrimClip,
+  isTrimMode,
+  isTrimming,
 
   onDelete,
   onShare,
@@ -197,6 +201,11 @@ export default function VideoPlayerInfoBar({
             </button>
             {dropdownOpen && (
               <div className="dropdown-menu">
+                {isClip && enterTrimMode && (
+                  <button onClick={() => { setDropdownOpen(false); enterTrimMode(); }}>
+                    <Scissors size={21} /> Trim Clip
+                  </button>
+                )}
                 <button onClick={() => { setDropdownOpen(false); setOrganizeMode(true); }} disabled={isOrganizing}>
                   <MoveRight size={21} /> Organize
                 </button>
@@ -272,11 +281,15 @@ export default function VideoPlayerInfoBar({
             Cancel
           </button>
 
-          <button className="btn-action-primary shrink-0" onClick={handleCreateClip} disabled={isCreatingClip || (clipEnd - clipStart) <= 0}>
-            {isCreatingClip ? (
-              <><div className="spinner-sm" /> Creating…</>
+          <button
+            className="btn-action-primary shrink-0"
+            onClick={isTrimMode ? handleTrimClip : handleCreateClip}
+            disabled={(isTrimMode ? isTrimming : isCreatingClip) || (clipEnd - clipStart) <= 0}
+          >
+            {(isTrimMode ? isTrimming : isCreatingClip) ? (
+              <><div className="spinner-sm" /> {isTrimMode ? 'Trimming…' : 'Creating…'}</>
             ) : (
-              <><Scissors size={21} /> Create Clip</>
+              <><Scissors size={21} /> {isTrimMode ? 'Trim Clip' : 'Create Clip'}</>
             )}
           </button>
 
