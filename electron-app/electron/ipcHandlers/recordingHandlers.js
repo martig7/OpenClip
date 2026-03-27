@@ -134,6 +134,7 @@ function registerRecordingHandlers(ipcMain, store, appState) {
         _app: 'openclip',
         _exported: new Date().toISOString(),
         settings: store.get('settings'),
+        games: store.get('games'),
         obsInstallPath: store._electron().obsInstallPath || '',
         fullscreenRecording: store.get('fullscreenRecording'),
         masterAudioSources: store.get('masterAudioSources'),
@@ -201,6 +202,9 @@ function registerRecordingHandlers(ipcMain, store, appState) {
       }
       if (config.trackNames !== undefined) {
         store.set('trackNames', config.trackNames)
+      }
+      if (Array.isArray(config.games)) {
+        store.set('games', config.games)
       }
 
       return { success: true }
