@@ -4,6 +4,10 @@ const os = require('os')
 const { FFMPEG_PATH } = require('../constants')
 const ffmpeg = require('fluent-ffmpeg')
 const service = require('../recordingService')
+// Use undici 7.x explicitly: Electron 34 bundles Node 20 with undici 6.x, which omits the
+// trailing CRLF on the final multipart boundary. undici 7.1+ fixed this. litterbox's PHP
+// server is strict enough to return 403 on malformed multipart; catbox is more lenient.
+const { fetch: undiciFetch, FormData: UndiciFormData } = require('undici')
 
 // Ensure fluent-ffmpeg uses our bundled ffmpeg
 ffmpeg.setFfmpegPath(FFMPEG_PATH)
@@ -92,16 +96,19 @@ async function uploadToUguu(filePath) {
 async function uploadToLitterbox(filePath, expiry) {
   const fileBuffer = fs.readFileSync(filePath)
   const blob = new Blob([fileBuffer])
-  const form = new FormData()
+  const form = new UndiciFormData()
   form.append('reqtype', 'fileupload')
   form.append('time', expiry || '24h')
   form.append('fileToUpload', blob, path.basename(filePath))
 
-  const res = await fetch('https://litterbox.catbox.moe/resources/internals/api.php', {
+  const res = await undiciFetch('https://litterbox.catbox.moe/resources/internals/api.php', {
     method: 'POST',
     body: form,
   })
-  if (!res.ok) throw new Error(`Litterbox upload failed: ${res.status}`)
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    throw new Error(`Litterbox upload failed: ${res.status}${body ? ` - ${body.trim()}` : ''}`)
+  }
   const url = (await res.text()).trim()
   if (!url.startsWith('http')) throw new Error(`Litterbox returned unexpected response: ${url}`)
   return url
