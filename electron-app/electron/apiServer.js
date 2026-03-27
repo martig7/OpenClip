@@ -117,7 +117,9 @@ function startApiServer(appStore) {
             'Content-Type': mimeType,
             'Access-Control-Allow-Origin': '*',
           })
-          fs.createReadStream(filePath, { start, end }).pipe(res)
+          const rangeStream = fs.createReadStream(filePath, { start, end })
+          res.on('close', () => rangeStream.destroy())
+          rangeStream.pipe(res)
         } else {
           res.writeHead(200, {
             'Accept-Ranges': 'bytes',
@@ -125,7 +127,9 @@ function startApiServer(appStore) {
             'Content-Type': mimeType,
             'Access-Control-Allow-Origin': '*',
           })
-          fs.createReadStream(filePath).pipe(res)
+          const fullStream = fs.createReadStream(filePath)
+          res.on('close', () => fullStream.destroy())
+          fullStream.pipe(res)
         }
         return
       }

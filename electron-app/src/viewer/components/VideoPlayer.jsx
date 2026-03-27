@@ -808,7 +808,7 @@ function VideoPlayer({
       >
         <video
           ref={videoRef}
-          src={suppressVideoSrc ? '' : `${getBase()}/api/video?path=${encodeURIComponent(media.path)}`}
+          src={suppressVideoSrc ? undefined : `${getBase()}/api/video?path=${encodeURIComponent(media.path)}`}
           onTimeUpdate={handleTimeUpdate}
           onLoadedMetadata={handleLoadedMetadata}
           onPlay={handlePlay}
