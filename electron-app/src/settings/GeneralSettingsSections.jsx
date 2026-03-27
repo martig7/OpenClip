@@ -15,7 +15,7 @@ import { HotkeyCapture } from '../components/OnboardingSteps'
 import api from '../api'
 import { isSettingsSectionDirty } from './settingsSectionRevert'
 
-const tc = 'toggle-row settings-toggle-row--compact'
+const tc = 'toggle-row'
 
 const LOADER_SPIN_STYLE = { animation: 'spin 1s linear infinite' }
 
