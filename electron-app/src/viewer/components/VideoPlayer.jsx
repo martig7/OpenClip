@@ -85,6 +85,7 @@ function VideoPlayer({
   const [clipEnd, setClipEnd] = useState(30)
   const [isCreatingClip, setIsCreatingClip] = useState(false)
   const [isTrimming, setIsTrimming] = useState(false)
+  const [suppressVideoSrc, setSuppressVideoSrc] = useState(false)
   const [isZoomTimelineExpanded, setIsZoomTimelineExpanded] = useState(false)
   const zoomTimelineRef = useRef(null)
 
@@ -131,6 +132,7 @@ function VideoPlayer({
     setClipMode(false)
     setIsTrimMode(false)
     setIsTrimming(false)
+    setSuppressVideoSrc(false)
     setIsZoomTimelineExpanded(false)
     setMarkers([])
     setAudioTracks([])
@@ -630,6 +632,11 @@ function VideoPlayer({
     if (!media || isTrimming) return
 
     setIsTrimming(true)
+    // Release the file so the server closes its read stream before FFmpeg renames over it.
+    // On Windows, an open read stream locks the file and causes EPERM on rename.
+    setSuppressVideoSrc(true)
+    await new Promise((r) => setTimeout(r, 150))
+
     try {
       const response = await apiPost('/api/clips/trim', {
         source_path: media.path,
@@ -647,9 +654,11 @@ function VideoPlayer({
           onTrimmed(data)
         }
       } else {
+        setSuppressVideoSrc(false)
         alert(`Failed to trim clip: ${data.error}`)
       }
     } catch (error) {
+      setSuppressVideoSrc(false)
       alert(`Error trimming clip: ${error.message}`)
     } finally {
       setIsTrimming(false)
@@ -799,7 +808,7 @@ function VideoPlayer({
       >
         <video
           ref={videoRef}
-          src={`${getBase()}/api/video?path=${encodeURIComponent(media.path)}`}
+          src={suppressVideoSrc ? '' : `${getBase()}/api/video?path=${encodeURIComponent(media.path)}`}
           onTimeUpdate={handleTimeUpdate}
           onLoadedMetadata={handleLoadedMetadata}
           onPlay={handlePlay}
