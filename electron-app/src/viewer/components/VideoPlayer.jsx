@@ -68,6 +68,10 @@ function VideoPlayer({
   const media = recording || clip
 
   const videoRef = useRef(null)
+  // Capture playback state before trim reload so we can resume seamlessly after
+  const resumeAfterTrimRef = useRef(false)
+  const resumePositionRef = useRef(null) // position in the NEW (trimmed) clip timeline
+  const lastMediaPathRef = useRef(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -132,6 +136,9 @@ function VideoPlayer({
 
   // Reset state when media changes
   useEffect(() => {
+    const pathChanged = media?.path !== lastMediaPathRef.current
+    lastMediaPathRef.current = media?.path ?? null
+
     setIsPlaying(false)
     setCurrentTime(0)
     setDuration(0)
@@ -156,6 +163,14 @@ function VideoPlayer({
     waveformQueueRef.current = null
     waveformNumChunksRef.current = 0
     viewportChunkRef.current = null
+    // Only clear resume-after-trim state when navigating to a genuinely different
+    // clip. After a trim, onTrimmed causes the same clip to re-render with updated
+    // metadata (same path) — we must keep the refs so handleLoadedMetadata can
+    // restore the playback position before they're consumed.
+    if (pathChanged) {
+      resumeAfterTrimRef.current = false
+      resumePositionRef.current = null
+    }
     pauseWaveformFetchRef.current = false
     if (resumeWaveformTimerRef.current) {
       clearTimeout(resumeWaveformTimerRef.current)
@@ -415,7 +430,16 @@ function VideoPlayer({
     if (videoRef.current) {
       setDuration(videoRef.current.duration)
       setClipEnd(Math.min(30, videoRef.current.duration))
-      if (virtualTrimStart !== null && videoRef.current.currentTime < virtualTrimStart) {
+      if (resumePositionRef.current !== null) {
+        // Restore position after a trim reload, clamped to the new duration
+        const pos = Math.min(resumePositionRef.current, videoRef.current.duration)
+        videoRef.current.currentTime = pos
+        if (resumeAfterTrimRef.current) {
+          videoRef.current.play().catch(() => {})
+        }
+        resumePositionRef.current = null
+        resumeAfterTrimRef.current = false
+      } else if (virtualTrimStart !== null && videoRef.current.currentTime < virtualTrimStart) {
         videoRef.current.currentTime = virtualTrimStart
       }
     }
@@ -691,6 +715,10 @@ function VideoPlayer({
       // FFmpeg done. Explicitly unload the element before finalize so Windows
       // releases the read handle before the rename loop starts.
       if (videoRef.current) {
+        // Capture playback state so we can resume seamlessly after the reload.
+        // Position is translated into the new clip's timeline (subtract trim start).
+        resumeAfterTrimRef.current = !videoRef.current.paused
+        resumePositionRef.current = Math.max(0, videoRef.current.currentTime - clipStart)
         videoRef.current.pause()
         videoRef.current.removeAttribute('src')
         videoRef.current.load()
