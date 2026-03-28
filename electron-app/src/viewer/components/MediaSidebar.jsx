@@ -8,16 +8,6 @@ import { useHorizontalScrollStrip } from '../../hooks/useHorizontalScrollStrip'
 const SORT_DIR_DEFAULTS = { date: 'desc', name: 'asc', size: 'desc', game: 'asc' }
 const SORT_KEYS = ['date', 'name', 'size', 'game']
 
-/** YYYY-MM-DD key aligned with the DATE column (filename session date), not file mtime — trimming rewrites the file and bumps mtime. */
-function sessionDateSortKey(item) {
-  const d = item?.date
-  if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) return d
-  if (item?.mtime != null) {
-    return new Date(item.mtime * 1000).toISOString().slice(0, 10)
-  }
-  return ''
-}
-
 function MediaSidebar({ items, selectedItem, onSelect, title, emptyMessage, games }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [filterGame, setFilterGame] = useState('all')
@@ -72,13 +62,8 @@ function MediaSidebar({ items, selectedItem, onSelect, title, emptyMessage, game
     const dir = sortDir === 'asc' ? 1 : -1
     result = [...result].sort((a, b) => {
       switch (sortBy) {
-        case 'date': {
-          const ka = sessionDateSortKey(a)
-          const kb = sessionDateSortKey(b)
-          const cmp = ka.localeCompare(kb)
-          if (cmp !== 0) return dir * cmp
-          return a.filename.localeCompare(b.filename)
-        }
+        case 'date':
+          return dir * (a.mtime - b.mtime)
         case 'name':
           return dir * a.filename.localeCompare(b.filename)
         case 'size':

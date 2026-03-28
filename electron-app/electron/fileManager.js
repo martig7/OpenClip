@@ -171,6 +171,9 @@ async function organizeRecordings(store, gameName, onProgress = () => {}) {
           { timeout: 10 * 60 * 1000 }
         )
         remuxDone = true
+        // Stamp the source file's mtime onto the remuxed output so the organized
+        // recording sorts by recording time, not by when the remux ran.
+        try { fs.utimesSync(dest, statCheck.atime, statCheck.mtime) } catch {}
 
         // Save track names in a sidecar file so they survive the container conversion
         if (trackNames) {
@@ -458,6 +461,9 @@ async function finalizeDirectRecording(store, gameName, recordingDir, onProgress
           { timeout: 10 * 60 * 1000 }
         )
         remuxDone = true
+        // Stamp the source file's mtime onto the remuxed output so the organized
+        // recording sorts by recording time, not by when the remux ran.
+        try { fs.utimesSync(dest, statCheck.atime, statCheck.mtime) } catch {}
 
         if (trackNames) {
           fs.writeFileSync(dest + '.tracks.json', JSON.stringify(trackNames))
@@ -706,6 +712,9 @@ async function organizeSpecificRecording(store, filePath, gameName, opts = {}) {
         { timeout: 120000 }
       )
       remuxDone = true
+      // Stamp the source file's mtime onto the remuxed output so the organized
+      // recording sorts by recording time, not by when the remux ran.
+      try { fs.utimesSync(dest, stat2.atime, stat2.mtime) } catch {}
 
       if (trackNames) fs.writeFileSync(dest + '.tracks.json', JSON.stringify(trackNames))
       // Retry unlink: AV software may scan the new MP4 and briefly re-lock the source

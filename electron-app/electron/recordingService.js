@@ -686,9 +686,17 @@ async function finalizeTrim(sourcePath) {
     throw new Error(`Trim not ready (status: ${state?.status ?? 'unknown'})`)
   }
   const tempPath = sourcePath + '.tmp.mp4'
+  // Capture original mtime before overwriting so sort position is stable after trim.
+  let origStat = null
+  try { origStat = fs.statSync(sourcePath) } catch {}
   for (;;) {
     try {
       fs.renameSync(tempPath, sourcePath)
+      // Restore original timestamps so the trimmed clip doesn't jump to the top
+      // of same-day ordering due to the new mtime set by FFmpeg.
+      if (origStat) {
+        try { fs.utimesSync(sourcePath, origStat.atime, origStat.mtime) } catch {}
+      }
       invalidateClipsCache()
       trimState.set(sourcePath, { status: 'done' })
       return

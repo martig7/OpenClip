@@ -456,7 +456,7 @@ function VideoPlayer({
         reprioritizeQueue(waveformQueueRef.current, waveformNumChunksRef.current, chunkIdx)
       }
     }
-  }, [deprioritizeWaveforms, virtualTrimStart, virtualTrimEnd])
+  }, [deprioritizeWaveforms, duration, virtualTrimStart, virtualTrimEnd])
 
   const handleVolumeChange = useCallback((newVolume) => {
     if (videoRef.current) {
