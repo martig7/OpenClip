@@ -714,7 +714,10 @@ function VideoPlayer({
 
     const finalizeTrim = async () => {
       // Wait one tick so React commits the src removal before finalize starts.
+      // Check cancelled here too so the StrictMode double-invocation doesn't
+      // fire two simultaneous trim-finalize requests and cause a race condition.
       await new Promise((resolve) => setTimeout(resolve, 0))
+      if (cancelled) return
 
       try {
         const finalRes = await apiPost('/api/clips/trim-finalize', { source_path: trimFinalizePath })
@@ -759,6 +762,20 @@ function VideoPlayer({
 
     videoRef.current.load()
   }, [suppressVideoSrc, videoReloadToken])
+
+  // When virtual trim bounds are applied, snap cursor into the trim region if it's outside
+  useEffect(() => {
+    if (virtualTrimStart === null || virtualTrimEnd === null) return
+    if (!videoRef.current) return
+    const t = videoRef.current.currentTime
+    if (t < virtualTrimStart) {
+      videoRef.current.currentTime = virtualTrimStart
+      setCurrentTime(virtualTrimStart)
+    } else if (t > virtualTrimEnd) {
+      videoRef.current.currentTime = virtualTrimEnd
+      setCurrentTime(virtualTrimEnd)
+    }
+  }, [virtualTrimStart, virtualTrimEnd])
 
   // Subscribe to per-stage progress events from the backend
   useEffect(() => {
@@ -807,6 +824,8 @@ function VideoPlayer({
 
   // Share state: { phase: 'compressing'|'uploading'|'done'|'error', url, error, percent } or null
   const [shareModal, setShareModal] = useState(persistedShareState)
+  const shareModalRef = useRef(shareModal)
+  shareModalRef.current = shareModal
   const [shareCopied, setShareCopied] = useState(false)
   const isSharing = shareModal?.phase === 'uploading' || shareModal?.phase === 'compressing'
 
@@ -824,12 +843,11 @@ function VideoPlayer({
   useEffect(() => {
     if (!api.onShareProgress) return
     const unsub = api.onShareProgress((data) => {
-      setShareModal((prev) => {
-        if (!prev || prev.phase === 'done' || prev.phase === 'error') return prev
-        const next = { ...prev, phase: data.phase, percent: data.percent }
-        onShareStateChange?.(media?.path, next)
-        return next
-      })
+      const prev = shareModalRef.current
+      if (!prev || prev.phase === 'done' || prev.phase === 'error') return
+      const next = { ...prev, phase: data.phase, percent: data.percent }
+      setShareModal(next)
+      onShareStateChange?.(media?.path, next)
     })
     return () => unsub()
   // eslint-disable-next-line react-hooks/exhaustive-deps
