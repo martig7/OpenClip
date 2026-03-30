@@ -4,9 +4,11 @@ const { contextBridge, ipcRenderer } = require('electron')
 // (e.g. user switches to Recordings page while organize is running) can catch up.
 let _lastSessionProgress = null
 
+const isTestMode = process.argv.includes('--test-mode') || process.env.OPENCLIP_TEST_MODE === 'true'
+
 contextBridge.exposeInMainWorld('api', {
   // Test-mode flag — true when Electron is started with --test-mode
-  testMode: process.argv.includes('--test-mode') || process.env.OPENCLIP_TEST_MODE === 'true',
+  testMode: isTestMode,
 
   // Match native caption buttons to CSS theme (--bg-primary, --text-secondary)
   setTitleBarOverlay: (options) => ipcRenderer.invoke('window:setTitleBarOverlay', options),
@@ -184,6 +186,16 @@ contextBridge.exposeInMainWorld('api', {
 
   // API server port
   getApiPort: () => ipcRenderer.invoke('api:port'),
+
+  // Test-mode helpers — only wired when started with --test-mode.
+  // Allows Playwright fixtures to reset per-test state without restarting Electron.
+  ...(isTestMode
+    ? {
+        resetStore: () => ipcRenderer.invoke('store:reset'),
+        fireSessionProgress: (progress) =>
+          ipcRenderer.invoke('test:fire-session-progress', progress),
+      }
+    : {}),
 
   // Auto-updater
   checkForUpdate: () => ipcRenderer.invoke('update:check'),

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures/electronPage.js'
 import { gameRow, gameNameCell } from './fixtures/gamesUi.js'
 
 test.describe('XSS Security', () => {

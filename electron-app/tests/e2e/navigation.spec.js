@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures/electronPage.js'
 
 test.describe('Navigation', () => {
   test('app loads with correct title', async ({ page }) => {

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures/electronPage.js'
 
 // SettingsPage uses window.api, which falls back to mockApi in browser/test mode.
 // mockApi returns defaultSettings from src/mockData.js (clipMarkerHotkey: 'F9').

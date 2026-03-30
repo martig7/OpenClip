@@ -236,6 +236,42 @@ function registerIpcHandlers(store, appState) {
   ipcMain.handle('obs:remove-plugin', async () => ({ success: true }))
 
   ipcMain.handle('recordings:organize', async () => ({ success: true }))
+
+  // Fullscreen recording config (persisted in memory for test-mode)
+  let _fullscreenConfig = { enabled: false, defaultScene: '', gameAudioEnabled: true }
+  ipcMain.handle('fullscreen-recording:get', () => _fullscreenConfig)
+  ipcMain.handle('fullscreen-recording:set', (_event, config) => {
+    _fullscreenConfig = config
+    return { success: true }
+  })
+
+  // OBS live track names (mirrors the real handler; returns static test labels)
+  ipcMain.handle('obs:ws:get-track-names-live', () => [
+    'Track 1',
+    'Track 2',
+    'Track 3',
+    'Track 4',
+    'Track 5',
+    'Track 6',
+  ])
+
+  // Destination folders for recordings organiser
+  ipcMain.handle('games:destination-folders', async () => [])
+
+  // ── Test-only helpers ────────────────────────────────────────────────────────
+
+  // Reset the in-memory store to initial defaults between tests.
+  ipcMain.handle('store:reset', () => {
+    store.reset()
+    _fullscreenConfig = { enabled: false, defaultScene: '', gameAudioEnabled: true }
+  })
+
+  // Fire a fake session:process-progress event to the renderer.
+  ipcMain.handle('test:fire-session-progress', (_event, progress) => {
+    if (appState.mainWindow && !appState.mainWindow.isDestroyed()) {
+      appState.mainWindow.webContents.send('session:process-progress', progress)
+    }
+  })
 }
 
 module.exports = { registerIpcHandlers }

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures/electronPage.js'
 import { setupApiRoutes } from './fixtures/routes.js'
 import {
   gamesCaptionTitle,

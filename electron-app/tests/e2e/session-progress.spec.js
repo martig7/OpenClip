@@ -1,148 +1,13 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures/electronPage.js'
 
 /**
- * Injects a window.api stub before page scripts load.
- *
- * In the Playwright browser there is no Electron preload, so api.js falls back to
- * mockApi. By setting window.api via addInitScript we get a controlled stub that
- * stores the onSessionProgress callback in window.__sessionProgressCb so tests
- * can fire events with page.evaluate().
+ * Fire a session:process-progress IPC event via the test-mode helper exposed
+ * on window.api.  The real preload listener updates _lastSessionProgress and
+ * calls all subscribed callbacks, so mid-session navigation replay works
+ * without any additional stub setup.
  */
-async function injectProgressApi(page) {
-  await page.addInitScript(() => {
-    const noop = () => {}
-    const asyncNoop = async () => null
-    const asyncArr = async () => []
-
-    window.__sessionProgressCbs = []
-
-    window.api = {
-      // Store
-      getStore: async (key) => {
-        if (key === 'settings') return { organizeRemux: true }
-        return null
-      },
-      setStore: asyncNoop,
-
-      // Games — return empty list so pages don't crash
-      getGames: asyncArr,
-      addGame: asyncArr,
-      removeGame: asyncArr,
-      toggleGame: asyncArr,
-      updateGame: asyncArr,
-
-      // Windows
-      getVisibleWindows: asyncArr,
-      extractWindowIcon: asyncNoop,
-
-      // Watcher
-      startWatcher: asyncNoop,
-      stopWatcher: asyncNoop,
-      getWatcherStatus: async () => ({ running: false }),
-      onWatcherState: () => noop,
-      onWatcherStatusPush: () => noop,
-
-      // OBS (needed by Settings/Games pages; no-ops are fine here)
-      detectOBSPath: asyncNoop,
-      getOBSProfiles: asyncArr,
-      getEncodingSettings: asyncNoop,
-      setEncodingSettings: asyncNoop,
-      isOBSRunning: async () => false,
-      launchOBS: asyncNoop,
-      isOBSScriptLoaded: async () => false,
-      getOBSWSScenes: asyncArr,
-      getOBSAudioInputs: asyncArr,
-      getSceneAudioSources: asyncArr,
-      getInputAudioTracks: asyncNoop,
-      setInputAudioTracks: asyncNoop,
-      getTrackNames: asyncNoop,
-      setTrackNames: asyncNoop,
-      listWindowsAudioDevices: asyncArr,
-      listRunningApps: asyncArr,
-
-      // Dialogs / shell
-      openDirectoryDialog: asyncNoop,
-      openFileDialog: asyncNoop,
-      showInExplorer: asyncNoop,
-      openExternal: asyncNoop,
-
-      // Recordings
-      getDestinationFolders: asyncArr,
-      getRecordings: asyncArr,
-      deleteRecording: asyncNoop,
-      getVideoURL: async (p) => `file:///${p}`,
-      organizeRecording: asyncNoop,
-      onOrganizeProgress: () => noop,
-
-      // Session progress — mirrors preload.js replay logic for mid-session mounts
-      // Supports multiple subscribers (App.jsx + page components both subscribe).
-      onSessionProgress: (cb) => {
-        window.__sessionProgressCbs = window.__sessionProgressCbs || []
-        window.__sessionProgressCbs.push(cb)
-        if (window.__lastSessionProgress) {
-          const p = window.__lastSessionProgress
-          Promise.resolve().then(() => cb(p))
-        }
-        return () => {
-          window.__sessionProgressCbs = (window.__sessionProgressCbs || []).filter(
-            (fn) => fn !== cb
-          )
-        }
-      },
-
-      // Clips
-      getClips: asyncArr,
-      createClip: asyncNoop,
-      deleteClip: asyncNoop,
-
-      // Markers
-      getMarkers: asyncArr,
-      deleteMarker: asyncArr,
-      onMarkerAdded: () => noop,
-
-      // Storage
-      getStorageStats: async () => ({ totalSize: 0, byGame: {} }),
-
-      // Hotkey
-      registerHotkey: asyncNoop,
-
-      // Re-encode
-      reencodeVideo: asyncNoop,
-
-      // Onboarding
-      isOnboardingComplete: async () => true,
-      setOnboardingComplete: asyncNoop,
-      installOBSPlugin: asyncNoop,
-      removeOBSPlugin: asyncNoop,
-      detectOBSInstallPath: asyncNoop,
-      detectOBSPath: asyncNoop,
-      setOBSInstallPath: asyncNoop,
-      getOBSInstallPath: asyncNoop,
-      isOBSPluginRegistered: async () => false,
-
-      // Test mode — enables DOM list rendering in MediaList
-      testMode: true,
-
-      // API server port
-      getApiPort: asyncNoop,
-
-      // Auto-updater
-      checkForUpdate: asyncNoop,
-      installUpdate: asyncNoop,
-      onUpdateAvailable: () => noop,
-      onUpdateProgress: () => noop,
-      onUpdateDownloaded: () => noop,
-      onUpdateError: () => noop,
-    }
-  })
-}
-
-/** Fire a session progress event in the browser (also updates the replay cache). */
 async function fireProgress(page, progress) {
-  await page.evaluate((p) => {
-    window.__lastSessionProgress = p.phase === 'complete' ? null : p
-    ;(window.__sessionProgressCbs || []).forEach((cb) => cb(p))
-  }, progress)
+  await page.evaluate((p) => window.api.fireSessionProgress(p), progress)
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -150,10 +15,6 @@ async function fireProgress(page, progress) {
 // ──────────────────────────────────────────────────────────────────────────────
 
 test.describe('Session Progress — Recordings Page', () => {
-  test.beforeEach(async ({ page }) => {
-    await injectProgressApi(page)
-  })
-
   test('banner appears when a recording-phase event fires', async ({ page }) => {
     await page.route('**/api/recordings', (route) =>
       route.fulfill({
@@ -343,10 +204,6 @@ test.describe('Session Progress — Recordings Page', () => {
 // ──────────────────────────────────────────────────────────────────────────────
 
 test.describe('Session Progress — Clips Page', () => {
-  test.beforeEach(async ({ page }) => {
-    await injectProgressApi(page)
-  })
-
   test('banner appears for recording-phase events with "Processing session" prefix', async ({
     page,
   }) => {
@@ -581,7 +438,6 @@ test.describe('Session Progress — Clips Page', () => {
 
 test.describe('Session Progress — Mid-session Navigation', () => {
   test.beforeEach(async ({ page }) => {
-    await injectProgressApi(page)
     await page.route('**/api/recordings', (route) =>
       route.fulfill({
         status: 200,
