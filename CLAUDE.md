@@ -7,3 +7,16 @@
 # Known Issues
 
     - OBS updates frequently cause the plugin to appear as "missing" in the OBS plugin manager. This is not a code bug — reinstalling OBS (the app, not just the plugin) fixes it. The likely cause is that in-place OBS updates don't re-run the installer's DLL directory registration step, so Windows can't resolve our delay-loaded obs.dll/obs-frontend-api.dll at plugin load time. OBS 32.1.0 also introduced a new plugin manager that surfaces these previously-silent load failures. When testing after an OBS update, reinstall OBS first.
+
+# Knowledge Base
+
+At the start of every session, read `docs/wiki/SCHEMA.md`. It defines the directory
+layout, page types, frontmatter conventions, and all workflow steps.
+
+After reading it:
+1. List files in `docs/wiki/raw/` (excluding `.gitkeep`)
+2. Check `docs/wiki/log.md` for existing ingest entries
+3. Ingest any raw files not yet logged — without being asked
+
+During the session, file any non-obvious insights, edge cases, or decisions into the
+wiki immediately as you encounter them. Announce each filing.

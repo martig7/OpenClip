@@ -39,3 +39,16 @@ All commands run from `electron-app/`:
 ### Frontend / viewer testing note
 
 - **`electron-app/src/viewer/components/TestMediaSidebar.jsx`** is a **test-only** sidebar mock (used by `tests/components/TestMediaSidebar.test.jsx`). The real recordings/clips UI uses **`MediaSidebar.jsx`**. The mock exists so Vitest can assert sort/group/search/list behavior in jsdom without importing production sidebar code that is awkward to test when **canvas** (and related APIs) are involved or poorly supported in the test environment.
+
+# Knowledge Base
+
+At the start of every session, read `docs/wiki/SCHEMA.md`. It defines the directory
+layout, page types, frontmatter conventions, and all workflow steps.
+
+After reading it:
+1. List files in `docs/wiki/raw/` (excluding `.gitkeep`)
+2. Check `docs/wiki/log.md` for existing ingest entries
+3. Ingest any raw files not yet logged — without being asked
+
+During the session, file any non-obvious insights, edge cases, or decisions into the
+wiki immediately as you encounter them. Announce each filing.
