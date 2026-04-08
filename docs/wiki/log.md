@@ -17,3 +17,4 @@ _`## [YYYY-MM-DD] file | pages/type/name.md (mid-session)`_
 ## [2026-04-08] ingest | obs-plugin/PluginInstall.md — created pages/concepts/obs-plugin-install.md
 ## [2026-04-08] ingest | llm-wiki.md — archived to raw/articles/, created pages/sources/llm-wiki.md
 ## [2026-04-08] file | pages/decisions/decision-800-line-limit.md (mid-session)
+## [2026-04-08] file | pages/edge-cases/obs-audio-tracks-no-inputs.md (mid-session)

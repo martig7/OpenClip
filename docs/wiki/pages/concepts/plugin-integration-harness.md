@@ -34,7 +34,7 @@ The tests verify the full round-trip: a call into `obsPlugin.js` produces a corr
 npm run test:integration
 ```
 
-Note: a separate `tests/integration/obs/` suite may require a local OBS installation (`obsHelper.mjs`). That suite is environment-specific. The harness tests are the stable CI contract.
+A separate `tests/integration/obs/obsOrchestration.test.js` suite tests OBS WebSocket helpers against a live headless OBS process started by `obsHelper.mjs`. The whole suite skips automatically when OBS is not installed (`describe.skipIf(!isOBSAvailable())`). Tests within the suite that depend on resources that may be absent (e.g. audio inputs, which `_writeOBSConfig` does not seed) guard with Vitest's `ctx.skip()` rather than a hard assertion — see [[obs-audio-tracks-no-inputs]].
 
 ### Environment variables (transport layer)
 

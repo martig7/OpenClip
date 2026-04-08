@@ -8,7 +8,7 @@ _Updated by Claude on every ingest. Read this first when querying the wiki._
 
 ## Edge Cases
 
-_(none yet)_
+- [[obs-audio-tracks-no-inputs]] — GetInputAudioTracks tests fail in headless OBS (no audio sources seeded); fix: ctx.skip()
 
 ## Decisions
 
