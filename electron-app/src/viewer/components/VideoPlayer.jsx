@@ -136,19 +136,13 @@ function VideoPlayer({
 
   // Reset state when media changes
   useEffect(() => {
-    const pathChanged = media?.path !== lastMediaPathRef.current
+    const prevPath = lastMediaPathRef.current
+    const pathChanged = media?.path !== prevPath
     lastMediaPathRef.current = media?.path ?? null
 
     setIsPlaying(false)
-    setCurrentTime(0)
-    setDuration(0)
     setClipMode(false)
     setIsTrimMode(false)
-    setVirtualTrimStart(null)
-    setVirtualTrimEnd(null)
-    setTrimPending(false)
-    setTrimFinalizePath(null)
-    setSuppressVideoSrc(false)
     setIsZoomTimelineExpanded(false)
     setMarkers([])
     setAudioTracks([])
@@ -163,13 +157,25 @@ function VideoPlayer({
     waveformQueueRef.current = null
     waveformNumChunksRef.current = 0
     viewportChunkRef.current = null
-    // Only clear resume-after-trim state when navigating to a genuinely different
-    // clip. After a trim, onTrimmed causes the same clip to re-render with updated
-    // metadata (same path) — we must keep the refs so handleLoadedMetadata can
-    // restore the playback position before they're consumed.
+    // When navigating to a different clip, reset playback position, duration, and any
+    // in-progress trim state so the UI doesn't flash stale values while the new video loads.
+    // After a trim, onTrimmed re-renders the same clip (same path, new object reference) —
+    // we must NOT reset trimFinalizePath, suppressVideoSrc, trimPending, or virtualTrim bounds
+    // here because a second trim may be completing its finalize phase at this exact moment.
+    // Zeroing these would cancel the in-flight finalize effect (its cleanup sets cancelled=true),
+    // and the video would reload without incrementing the token, causing the browser cache to
+    // serve the old version. The resume refs are kept for the same reason: handleLoadedMetadata
+    // reads them to restore the seek position after the trim reload.
     if (pathChanged) {
+      setCurrentTime(0)
+      setDuration(0)
       resumeAfterTrimRef.current = false
       resumePositionRef.current = null
+      setVirtualTrimStart(null)
+      setVirtualTrimEnd(null)
+      setTrimPending(false)
+      setTrimFinalizePath(null)
+      setSuppressVideoSrc(false)
     }
     pauseWaveformFetchRef.current = false
     if (resumeWaveformTimerRef.current) {
@@ -428,11 +434,12 @@ function VideoPlayer({
 
   const handleLoadedMetadata = useCallback(() => {
     if (videoRef.current) {
-      setDuration(videoRef.current.duration)
-      setClipEnd(Math.min(30, videoRef.current.duration))
+      const videoDur = videoRef.current.duration
+      setDuration(videoDur)
+      setClipEnd(Math.min(30, videoDur))
       if (resumePositionRef.current !== null) {
         // Restore position after a trim reload, clamped to the new duration
-        const pos = Math.min(resumePositionRef.current, videoRef.current.duration)
+        const pos = Math.min(resumePositionRef.current, videoDur)
         videoRef.current.currentTime = pos
         if (resumeAfterTrimRef.current) {
           videoRef.current.play().catch(() => {})
@@ -733,7 +740,7 @@ function VideoPlayer({
       setVirtualTrimEnd(null)
       alert(`Error trimming: ${error.message}`)
     }
-  }, [media, clipStart, clipEnd, trimPending, onTrimmed, onTrimFailed])
+  }, [media, clipStart, clipEnd, trimPending, duration, onTrimmed, onTrimFailed])
 
   useEffect(() => {
     if (!trimFinalizePath || !suppressVideoSrc) return
@@ -780,14 +787,11 @@ function VideoPlayer({
 
     finalizeTrim()
 
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [trimFinalizePath, suppressVideoSrc, media, onTrimmed, onTrimFailed])
 
   useEffect(() => {
     if (suppressVideoSrc || videoReloadToken === 0 || !videoRef.current) return
-
     videoRef.current.load()
   }, [suppressVideoSrc, videoReloadToken])
 

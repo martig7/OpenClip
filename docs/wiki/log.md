@@ -30,3 +30,8 @@ _`## [YYYY-MM-DD] file | pages/type/name.md (mid-session)`_
 ## [2026-04-08] file | pages/concepts/frontend-waveform-loading.md (mid-session)
 ## [2026-04-08] file | pages/edge-cases/trim-resume-position.md (mid-session)
 ## [2026-04-08] file | pages/edge-cases/trim-strictmode-double-finalize.md (mid-session)
+## [2026-04-08] file | pages/edge-cases/trim-duration-reset-race.md (mid-session)
+## [2026-04-08] file | pages/edge-cases/trim-finalize-cancelled-by-media-rerender.md (mid-session)
+## [2026-04-08] file | pages/edge-cases/trim-ffmpeg-stream-copy-duration.md (mid-session)
+## [2026-04-08] update | pages/concepts/frontend-clip-trim-flow.md — pathChanged guard extended to cover trim state; new related links
+## [2026-04-08] update | pages/modules/recordingService.md — added -movflags +faststart quirk

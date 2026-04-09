@@ -633,12 +633,8 @@ function createClip(sourcePath, startTime, endTime, gameName = 'Unknown', audioT
 // Runs FFmpeg and waits for it to finish, then returns so the frontend can
 // coordinate clearing its video src before the rename (finalizeTrim).
 async function trimClip(sourcePath, startTime, endTime) {
-  if (!sourcePath || !fs.existsSync(sourcePath)) {
-    throw new Error('Source not found')
-  }
-  if (endTime <= startTime) {
-    throw new Error('End time must be > start time')
-  }
+  if (!sourcePath || !fs.existsSync(sourcePath)) throw new Error('Source not found')
+  if (endTime <= startTime) throw new Error('End time must be > start time')
 
   const tempPath = sourcePath + '.tmp.mp4'
   const duration = endTime - startTime
@@ -657,6 +653,13 @@ async function trimClip(sourcePath, startTime, endTime) {
       'copy',
       '-avoid_negative_ts',
       'make_zero',
+      // +faststart rewrites the moov atom from the actual output samples, which
+      // guarantees the container duration field reflects the trimmed length.
+      // Without it, FFmpeg can carry over the source file's original duration in
+      // the moov header when doing stream-copy, causing the player to report the
+      // pre-trim duration even though the media data is correctly trimmed.
+      '-movflags',
+      '+faststart',
       tempPath,
     ]
     await new Promise((res, rej) => {
@@ -688,6 +691,7 @@ async function finalizeTrim(sourcePath) {
   const tempPath = sourcePath + '.tmp.mp4'
   // Capture original mtime before overwriting so sort position is stable after trim.
   let origStat = null
+  let epermCount = 0
   try { origStat = fs.statSync(sourcePath) } catch {}
   for (;;) {
     try {
@@ -706,6 +710,7 @@ async function finalizeTrim(sourcePath) {
         trimState.set(sourcePath, { status: 'failed', error: err.message })
         throw err
       }
+      epermCount++
       await new Promise((r) => setTimeout(r, 50))
     }
   }

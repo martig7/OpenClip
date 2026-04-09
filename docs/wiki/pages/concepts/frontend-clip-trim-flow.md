@@ -2,7 +2,7 @@
 type: concept
 tags: [VideoPlayer, clip, trim, frontend, react, state, ipc]
 updated: 2026-04-08
-sources: 0
+sources: 1
 ---
 
 # Frontend Clip & Trim Flow
@@ -67,7 +67,11 @@ Trim involves six distinct state variables and a carefully ordered two-phase IPC
 When `handleLoadedMetadata` fires on the reloaded video, it checks `resumePositionRef.current` and seeks to that position (clamped to the new duration). If `resumeAfterTrimRef.current` is true, it also resumes playback — so the video restarts from approximately where it was before the trim.
 
 ### The path-equality guard on media change
-When `media` changes, the effect that resets state checks `pathChanged = media?.path !== lastMediaPathRef.current`. If the path is **the same** (which happens when `onTrimmed` triggers a re-render with the updated clip metadata), `resumeAfterTrimRef` and `resumePositionRef` are preserved so `handleLoadedMetadata` can still consume them.
+When `media` changes, the effect that resets state checks `pathChanged = media?.path !== lastMediaPathRef.current`. If the path is **the same** (which happens when `onTrimmed` → `fetchClips` → `setSelectedClip` returns a fresh object for the same clip), the following states are intentionally **not** reset:
+
+- `currentTime` and `duration` — `handleLoadedMetadata` fires exactly once per video load. If it already fired and set the correct trimmed values before `setSelectedClip` triggered the media-change effect, zeroing these would permanently corrupt them (no second `loadedmetadata` event arrives because `src` is unchanged). So they are only reset when `pathChanged = true`.
+- `resumeAfterTrimRef` and `resumePositionRef` — preserved so `handleLoadedMetadata` can restore the seek position.
+- `trimFinalizePath`, `suppressVideoSrc`, `trimPending`, `virtualTrimStart/End` — **must not be reset on same-path re-renders**. If the user starts a second trim quickly, `fetchClips` from the first `handleTrimmed` call can return and trigger a `pathChanged = false` re-render while the second trim's finalize effect is still awaiting the API. Resetting `trimFinalizePath` or `suppressVideoSrc` would change a dep of the finalize effect, running its cleanup (`cancelled = true`), causing the API response to be discarded. The video would then reload without incrementing `videoReloadToken`, serving the browser-cached pre-trim URL. See [[edge-case-trim-finalize-cancelled-by-media-rerender]].
 
 ---
 
@@ -89,4 +93,6 @@ This means the user can still scrub and play the "trimmed" portion while waiting
 - [[video-processing-pipeline]]
 - [[recordingService]]
 - [[edge-case-trim-two-phase]]
+- [[edge-case-trim-finalize-cancelled-by-media-rerender]]
+- [[edge-case-trim-ffmpeg-stream-copy-duration]]
 - [[frontend-waveform-loading]]

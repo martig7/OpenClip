@@ -28,6 +28,7 @@ sources: 0
 - **`trimState` map** — persists in memory per process. If the main process restarts between `trimClip` and `finalizeTrim`, the state is lost and `finalizeTrim` will throw. The `.tmp.mp4` orphan must be cleaned up manually.
 - **Multi-track clip produces individual + mixed audio streams** — the mux step maps `1:a` (all streams from the audio temp), so the output MP4 contains both a mixed track and individual per-track streams.
 - **`avoid_negative_ts make_zero`** — used on all copy-cut operations to prevent playback issues in players that don't handle negative DTS.
+- **`-movflags +faststart` on trim** — required so that FFmpeg computes the moov atom from actual output samples rather than copying the source container's duration. Without it, stream-copy trims can produce an MP4 whose `mvhd.duration` still reflects the pre-trim length even though the media data is correctly shortened. See [[edge-case-trim-ffmpeg-stream-copy-duration]].
 - **5-second scan cache** — `scanRecordings()` and `scanClips()` return stale data for up to 5 seconds after an external change (e.g., a file moved from outside the app). Mutations via the app invalidate immediately.
 - **`activeFFmpeg` map** — tracks all running FFmpeg child processes so `killAllProcesses()` (called on app quit) can clean them up and delete their partial output files.
 
