@@ -24,7 +24,6 @@ export default function VideoPlayerInfoBar({
   isUnorganized,
   isClip,
   isClipMode,
-  organizeMode,
   setOrganizeMode,
   isOrganizing,
 

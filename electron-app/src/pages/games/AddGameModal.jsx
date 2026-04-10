@@ -20,7 +20,6 @@ export default function AddGameModal({
   setVisibleWindows,
   loadingWindows,
   setLoadingWindows,
-  autoCreateScene,
   setAutoCreateScene,
   createMode,
   setCreateMode,

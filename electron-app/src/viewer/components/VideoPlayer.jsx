@@ -86,7 +86,7 @@ function VideoPlayer({
 
   // Clip mode state
   const [clipMode, setClipMode] = useState(false)
-  const [isTrimMode, setIsTrimMode] = useState(false)
+  const [, setIsTrimMode] = useState(false)
   const [clipStart, setClipStart] = useState(0)
   const [clipEnd, setClipEnd] = useState(30)
   const [isCreatingClip, setIsCreatingClip] = useState(false)
