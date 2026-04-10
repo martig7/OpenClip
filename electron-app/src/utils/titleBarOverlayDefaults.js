@@ -15,7 +15,7 @@ export const TITLEBAR_OVERLAY_DEFAULTS = {
   '/settings': { color: '#0f0f0f', symbolColor: '#aaaaaa' },
 }
 
-/** Settings leave-warning banner — matches .settings-leave-warning-banner (--danger) */
+/** Settings leave-warning banner, matches .settings-leave-warning-banner (--danger) */
 export const TITLEBAR_SETTINGS_WARNING = {
   color: '#ef4444',
   symbolColor: '#ffffff',

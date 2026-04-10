@@ -1,6 +1,6 @@
 /**
  * Audio source utilities for the GamesPage.
- * Pure functions and constants — no React dependencies.
+ * Pure functions and constants; no React dependencies.
  */
 import { Music, Mic, ChevronDown } from 'lucide-react'
 import api from '../../api'

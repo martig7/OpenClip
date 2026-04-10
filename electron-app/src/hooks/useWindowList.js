@@ -21,11 +21,11 @@ export function useWindowList() {
       const windows = await api.getVisibleWindows()
       setVisibleWindows(windows || [])
     } catch {
-      // silently fail — user can retry with the refresh button
+      // silently fail; user can retry with the refresh button
     } finally {
       setLoadingWindows(false)
     }
-  }, []) // no external deps — setters from useState are stable
+  }, []) // no external deps; setters from useState are stable
 
   return { visibleWindows, setVisibleWindows, loadingWindows, refreshWindows }
 }

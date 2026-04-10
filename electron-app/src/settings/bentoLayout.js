@@ -28,7 +28,7 @@ const ROW_TEMPLATES = [
  * When a row has fewer tiles than its template (e.g. only one item left), pick spans
  * that sum to 12. Rotates pairs for variety when count === 2.
  * @param {number} count
- * @param {number} layoutRowIndex 0-based row index among non–full-width rows
+ * @param {number} layoutRowIndex 0-based row index among non-full-width rows
  * @param {number[]} template  Preferred template for this row (may differ in length from count)
  * @returns {number[]}
  */
@@ -71,7 +71,7 @@ export function computeBentoSpans(orderedIds) {
   const out = []
   let gridRow = 1
   let templateCycle = 0
-  /** Rows that only contain normal (non–full-width) tiles — for pair rotation. */
+  /** Rows that only contain normal (non-full-width) tiles; for pair rotation. */
   let layoutRowIndex = 0
 
   while (queue.length > 0) {

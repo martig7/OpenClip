@@ -398,7 +398,7 @@ export function GamesTable({
         </tr>
       </thead>
       <tbody>
-        {/* Pinned catch-all row — always visible regardless of filter/search */}
+        {/* Pinned catch-all row: always visible regardless of filter/search */}
         {fsConfig && (
           <tr
             className={`games-table-fullscreen-row${fsConfig.enabled ? ' is-enabled' : ''}${fsDrawerOpen ? ' selected' : ''}`}
@@ -513,7 +513,7 @@ export function GamesTable({
                       <span className="game-default-pill">Default</span>
                     )}
                   </td>
-                  <td className="games-table-scene">{game.scene || '—'}</td>
+                  <td className="games-table-scene">{game.scene || '-'}</td>
 
                   <td className="col-status">
                     <GameEnabledBadge enabled={game.enabled} />

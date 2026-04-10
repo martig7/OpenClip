@@ -153,7 +153,7 @@ export function StepWelcome() {
       <h3>Welcome to OpenClip!</h3>
       <p>
         Let's get you set up in just a few steps. We'll connect to OBS, configure the plugin, and
-        tweak the settings that matter most — so you're ready to start capturing clips right away.
+        tweak the settings that matter most, so you're ready to start capturing clips right away.
       </p>
       <p style={{ marginBottom: 0 }}>
         Click <strong>Next</strong> to begin.
@@ -313,7 +313,7 @@ export function StepOBSPlugin({
       <h3>Install OBS Plugin</h3>
       <p className="onboarding-step-desc">
         OpenClip uses a native OBS plugin to control recording and scene management. Click the
-        button below to install it automatically — no manual steps required.
+        button below to install it automatically, with no manual steps required.
       </p>
 
       <div className="onboarding-install-row" style={{ marginBottom: 12 }}>
@@ -382,7 +382,7 @@ export function StepHotkey({ settings, onChange }) {
       <h3>Clip Marker Hotkey</h3>
       <p className="onboarding-step-desc">
         Press this key while gaming to drop a timestamp you can clip later. Pick something easy to
-        reach mid-game — <strong>F9</strong> is a popular choice.
+        reach mid-game. <strong>F9</strong> is a popular choice.
       </p>
       <div className="form-group">
         <label className="form-label">Hotkey</label>

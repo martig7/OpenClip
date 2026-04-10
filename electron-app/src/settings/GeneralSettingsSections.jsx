@@ -40,8 +40,8 @@ function parseIntInputOrZero(e) {
  * @param {object} props
  * @param {string} props.title
  * @param {import('react').ReactNode} [props.children]
- * @param {import('react').ReactNode} [props.titleAddon] — e.g. note under the title (encoding OBS warning)
- * @param {import('react').ReactNode} [props.headerActions] — e.g. icon button (encoding revert)
+ * @param {import('react').ReactNode} [props.titleAddon] - e.g. note under the title (encoding OBS warning)
+ * @param {import('react').ReactNode} [props.headerActions] - e.g. icon button (encoding revert)
  */
 export function SettingsSectionCard({ title, children, titleAddon, headerActions }) {
   return (
@@ -203,9 +203,9 @@ function OrganizeSection({ sectionCardProps, settings, updateSetting }) {
 /**
  * @param {object} props
  * @param {string} props.sectionTitle
- * @param {string} props.sectionId — single section to render
+ * @param {string} props.sectionId - single section to render
  * @param {object} props.settings
- * @param {string | null} props.settingsBaselineStr — JSON snapshot for per-section revert
+ * @param {string | null} props.settingsBaselineStr - JSON snapshot for per-section revert
  * @param {(sectionId: string) => void} props.onRevertSection
  * @param {(path: string, value: unknown) => void} props.updateSetting
  * @param {() => Promise<void>} props.detectOBSPath

@@ -1,12 +1,12 @@
 # Common Agent Errors
-
-    - When trying to run the ENTIRE test set, make sure to run `npm run test` from the electron-app folder instead of something like `npx vitest run` because we include playwright tests which test important functionality/integration with OBS.
-    - When you add API endpoints, make sure to also update the mock API.
-    - Do not commit random specs and plans.
+- When trying to run the ENTIRE test set, make sure to run `npm run test` from the electron-app folder instead of something like `npx vitest run` because we include playwright tests which test important functionality/integration with OBS.
+- When you add API endpoints, make sure to also update the mock API.
+- Do not commit random specs and plans.
+- Do not make commits autonomously.
 
 # Known Issues
 
-    - OBS updates frequently cause the plugin to appear as "missing" in the OBS plugin manager. This is not a code bug — reinstalling OBS (the app, not just the plugin) fixes it. The likely cause is that in-place OBS updates don't re-run the installer's DLL directory registration step, so Windows can't resolve our delay-loaded obs.dll/obs-frontend-api.dll at plugin load time. OBS 32.1.0 also introduced a new plugin manager that surfaces these previously-silent load failures. When testing after an OBS update, reinstall OBS first.
+- OBS updates frequently cause the plugin to appear as "missing" in the OBS plugin manager. This is not a code bug — reinstalling OBS (the app, not just the plugin) fixes it. The likely cause is that in-place OBS updates don't re-run the installer's DLL directory registration step, so Windows can't resolve our delay-loaded obs.dll/obs-frontend-api.dll at plugin load time. OBS 32.1.0 also introduced a new plugin manager that surfaces these previously-silent load failures. When testing after an OBS update, reinstall OBS first.
 
 # Knowledge Base
 
@@ -20,3 +20,18 @@ After reading it:
 
 During the session, file any non-obvious insights, edge cases, or decisions into the
 wiki immediately as you encounter them. Announce each filing.
+
+## Documentation
+- Documentation goes in `docs/wiki/` or existing CLAUDE.md — never create new files at repo root.
+- Check existing doc structure (CLAUDE.md, docs/wiki/) before creating new doc files.
+
+## Testing
+- After any multi-file refactor or feature change, run the relevant unit AND e2e tests before declaring done.
+- When fixing tests, update unit AND integration tests together — CI will fail otherwise.
+- Don't propose global mocks as the first solution; prefer environment/runner changes (e.g., windows-latest) when platform-specific.
+
+## Search & File Operations
+- When a user asks for 'the fix', diagnose the root cause before editing — don't fix the first plausible symptom.
+
+## Task Execution
+- When the user asks for a feature or fix, assume they want you to execute it autonomously — don't ask them to run generators/scripts themselves.

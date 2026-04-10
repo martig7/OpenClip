@@ -1,7 +1,7 @@
 /**
  * Test-only sidebar mock for Vitest (see `tests/components/TestMediaSidebar.test.jsx`).
  *
- * Not used in the shipped app — recordings/clips use `MediaSidebar.jsx`. This component exists so
+ * Not used in the shipped app. Recordings/clips use `MediaSidebar.jsx`. This component exists so
  * unit tests can exercise sort/group/search/list UI and DOM assertions without importing production
  * sidebar code that pulls in canvas-heavy or hard-to-mock paths that jsdom handles poorly.
  */
@@ -33,7 +33,7 @@ function getTimeBucket(mtime) {
 
 // ── Size grouping ────────────────────────────────────────────────────────────
 
-const SIZE_BUCKETS = ['Huge (>10 GB)', 'Large (1–10 GB)', 'Medium (100 MB–1 GB)', 'Small (<100 MB)']
+const SIZE_BUCKETS = ['Huge (>10 GB)', 'Large (1-10 GB)', 'Medium (100 MB-1 GB)', 'Small (<100 MB)']
 
 function getSizeBucket(bytes) {
   if (bytes >= 10 * 1_073_741_824) return SIZE_BUCKETS[0]

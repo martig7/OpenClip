@@ -158,7 +158,7 @@ export default function AudioSourcesCard({
             <span className="card-title">Scene Audio Sources</span>
             {isScene && sceneName && (
               <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>
-                — {sceneName}
+                ({sceneName})
               </span>
             )}
             {isMaster && (
@@ -574,7 +574,7 @@ function DuplicateAppAudioWarning({ sources }) {
       <span>
         This scene has two Application Audio sources targeting the same window
         {duplicated.map((g) => ` (${g.join(' and ')})`).join(', ')}. OBS doesn't support
-        this — it will default to the first source added.
+        this. It will default to the first source added.
       </span>
     </div>
   )

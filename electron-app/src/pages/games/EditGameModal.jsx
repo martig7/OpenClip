@@ -25,7 +25,7 @@ export default function EditGameModal({
   toggleTrack,
   trackLabels,
   variant = 'modal',
-  /** Dedicated scene (auto-detected games) — drawer edit only */
+  /** Dedicated scene (auto-detected games); drawer edit only */
   onCreateScene,
   creatingScene,
   applyMasterOnCreateScene,
@@ -185,7 +185,7 @@ export default function EditGameModal({
                 gap: 4,
               }}
             >
-              <AlertTriangle size={11} /> No executable bound — use the window picker to set one,
+              <AlertTriangle size={11} /> No executable bound. Use the window picker to set one,
               or the watcher won't detect this game.
             </span>
           )}

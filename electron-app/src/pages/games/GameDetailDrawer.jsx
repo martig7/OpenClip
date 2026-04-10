@@ -85,7 +85,7 @@ export function GameDetailDrawer({
                 <div className="drawer-name">Any Fullscreen App</div>
                 <GameEnabledBadge enabled={!!fsConfig?.enabled} />
               </div>
-              <div className="drawer-scene">{fsConfig?.defaultScene || '—'}</div>
+              <div className="drawer-scene">{fsConfig?.defaultScene || '-'}</div>
             </div>
 
             <button
@@ -166,7 +166,7 @@ export function GameDetailDrawer({
                 <div className="drawer-name">{drawerGame.name}</div>
                 <GameEnabledBadge enabled={drawerGame.enabled} />
               </div>
-              <div className="drawer-scene">{drawerGame.scene || '—'}</div>
+              <div className="drawer-scene">{drawerGame.scene || '-'}</div>
             </div>
 
             <button
@@ -193,13 +193,13 @@ export function GameDetailDrawer({
                         className="drawer-info-val"
                         style={{ fontFamily: 'monospace', fontSize: 11 }}
                       >
-                        {drawerGame.selector || '—'}
+                        {drawerGame.selector || '-'}
                       </div>
                     </div>
 
                     <div className="drawer-info-cell">
                       <div className="drawer-info-label">Scene</div>
-                      <div className="drawer-info-val">{drawerGame.scene || '—'}</div>
+                      <div className="drawer-info-val">{drawerGame.scene || '-'}</div>
                     </div>
 
                     <div className="drawer-info-cell">

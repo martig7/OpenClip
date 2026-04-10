@@ -53,7 +53,7 @@ function getProgressWidth(p, isManual = false) {
   return 100
 }
 
-// ── Inner layout component — needs useLocation() so it lives inside HashRouter ──
+// ── Inner layout component (needs useLocation() so it lives inside HashRouter) ──
 
 function AppLayout({ sessionProgress, updateState, showOnboarding, setShowOnboarding }) {
   const location = useLocation()
@@ -184,7 +184,7 @@ export default function App() {
     }
   }, [])
 
-  // Session (auto-organize) progress — drives both the popup and the error banner
+  // Session (auto-organize) progress: drives both the popup and the error banner
   useEffect(() => {
     const unsub = api.onSessionProgress?.((p) => {
       if (p.phase === 'error') {

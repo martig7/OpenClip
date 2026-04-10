@@ -88,7 +88,7 @@ export default function StorageList({
   const dragSbRef = useRef(null)
   const moveRafRef = useRef(null)
 
-  // Latest props in refs — avoids stale closures in draw/event handlers
+  // Latest props in refs: avoids stale closures in draw/event handlers
   const itemsRef = useRef(items)
   const selRef = useRef(selectedItems)
   const lockedRef = useRef(lockedRecordings)
@@ -307,7 +307,7 @@ export default function StorageList({
       ctx.font = '11px "Courier New", monospace'
       truncText(ctx, item.size_formatted || '', L.xSize + 8, y + ROW_H / 2, COL_SIZE - 8)
 
-      // Lock icon — always full opacity so yellow shows clearly
+      // Lock icon: always full opacity so yellow shows clearly
       ctx.globalAlpha = 1
       if (isLk) {
         lockIcon(ctx, L.xAct + COL_ACT / 2, y + ROW_H / 2, 11, true, '#f59e0b')
@@ -359,7 +359,7 @@ export default function StorageList({
     if (x < L.xName) return null
     if (x < L.xGame) return 'name'
     if (x < L.xType) return 'game'
-    if (x < L.xDate) return null // type — not sortable
+    if (x < L.xDate) return null // type (not sortable)
     if (x < L.xSize) return 'date'
     if (x < L.xAct) return 'size'
     return null

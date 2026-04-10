@@ -159,7 +159,7 @@ function VideoPlayer({
     viewportChunkRef.current = null
     // When navigating to a different clip, reset playback position, duration, and any
     // in-progress trim state so the UI doesn't flash stale values while the new video loads.
-    // After a trim, onTrimmed re-renders the same clip (same path, new object reference) —
+    // After a trim, onTrimmed re-renders the same clip (same path, new object reference).
     // we must NOT reset trimFinalizePath, suppressVideoSrc, trimPending, or virtualTrim bounds
     // here because a second trim may be completing its finalize phase at this exact moment.
     // Zeroing these would cancel the in-flight finalize effect (its cleanup sets cancelled=true),
@@ -214,7 +214,7 @@ function VideoPlayer({
           setAudioTracks(data.tracks)
           setSelectedTracks(data.tracks.map((_, i) => i))
 
-          // Fetch waveforms — check cache then handle hit/miss/no-audio
+          // Fetch waveforms: check cache then handle hit/miss/no-audio
           const tracksToChunk = []
           await Promise.all(data.tracks.map(async (_track, trackIndex) => {
             if (cancelled) return
@@ -241,7 +241,7 @@ function VideoPlayer({
               } else if (waveRes.ok && waveData.status === 'miss') {
                 tracksToChunk.push({ trackIndex, fileDuration: waveData.duration })
               }
-              // else: peaks: [] (no audio) — leave waveform empty
+              // else: peaks: [] (no audio); leave waveform empty
             } catch (e) {
               if (e.name !== 'AbortError') {
                 console.error(`Failed to fetch waveform for track ${trackIndex}:`, e)
@@ -251,7 +251,7 @@ function VideoPlayer({
 
           if (cancelled || !tracksToChunk.length) return
 
-          // Chunked delivery — one unified queue, all tracks fetched per chunk
+          // Chunked delivery: one unified queue, all tracks fetched per chunk
           const fileDuration = tracksToChunk[0].fileDuration
           const numChunks = Math.ceil(fileDuration / WAVEFORM_CHUNK_SIZE)
           const viewportIdx = viewportChunkRef.current ?? 0
@@ -344,7 +344,7 @@ function VideoPlayer({
 
           if (cancelled) return
 
-          // Background cache population — fire sequentially to avoid concurrent full-file FFmpeg processes
+          // Background cache population: fire sequentially to avoid concurrent full-file FFmpeg processes
           for (const { trackIndex } of tracksToChunk) {
             if (cancelled) break
             try {
@@ -703,7 +703,7 @@ function VideoPlayer({
     setVirtualTrimEnd(clipEnd)
     setTrimPending(true)
     try {
-      // Blocks until FFmpeg finishes — response is { trimStart, trimEnd, status: 'ready' }
+      // Blocks until FFmpeg finishes; response is { trimStart, trimEnd, status: 'ready' }
       const response = await apiPost('/api/clips/trim', {
         source_path: media.path,
         start_time: clipStart,
@@ -882,7 +882,6 @@ function VideoPlayer({
       onShareStateChange?.(media?.path, next)
     })
     return () => unsub()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [media?.path])
 
   const handleShare = useCallback(async () => {
@@ -1133,7 +1132,7 @@ function VideoPlayer({
                 onChange={(e) => setOrganizeGame(e.target.value)}
                 disabled={isOrganizing}
               >
-                <option value="">— Select game —</option>
+                <option value="">Select game</option>
                 {games.map((g) => (
                   <option key={g.id} value={g.name}>
                     {g.name}

@@ -66,7 +66,7 @@ export default function StorageTreemap({
   const dragRef = useRef(null)
   const dragHandlersRef = useRef({ move: null, up: null })
 
-  // ResizeObserver — sizes the canvas to match its container
+  // ResizeObserver: sizes the canvas to match its container
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
@@ -273,7 +273,7 @@ export default function StorageTreemap({
     })
   }, [])
 
-  // Layout — computed at base (zoom=1) dimensions; zoom applied via coordinate scaling
+  // Layout: computed at base (zoom=1) dimensions; zoom applied via coordinate scaling
   const treemapLayout = useMemo(
     () => squarifiedTreemap(items, baseSize.w, baseSize.h),
     [items, baseSize.w, baseSize.h]

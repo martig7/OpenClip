@@ -113,7 +113,7 @@ export default function VideoPlayerInfoBar({
             </button>
           )}
 
-          {/* Share button + inline state pill — only for clips */}
+          {/* Share button and inline state pill, only for clips */}
           {isClip && onShare && (
             <>
               {(sharePhase == null || sharePhase === 'error') && (

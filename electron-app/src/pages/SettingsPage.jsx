@@ -58,7 +58,7 @@ export default function SettingsPage() {
   ])
   const encodingPanelRef = useRef(null)
   const [encodingMeta, setEncodingMeta] = useState({ dirty: false, canSave: false })
-  /** Snapshot of last loaded/saved app settings — used so Save enables only when values differ */
+  /** Snapshot of last loaded/saved app settings; used so Save enables only when values differ */
   const settingsBaselineRef = useRef('')
   /** Mirrors `settingsBaselineRef` so section cards get a reliable string prop (refs alone don’t re-subscribe children). */
   const [appSettingsBaselineStr, setAppSettingsBaselineStr] = useState(/** @type {string | null} */ (null))
@@ -103,7 +103,7 @@ export default function SettingsPage() {
 
   /** When true, bento outline is hidden (initial visit, after scroll). Sidebar selection shows it again. */
   const [outlineClearedByScroll, setOutlineClearedByScroll] = useState(true)
-  /** The section id to outline — set directly on sidebar click so it's in sync with outlineClearedByScroll. */
+  /** The section id to outline; set directly on sidebar click so it's in sync with outlineClearedByScroll. */
   const [outlineTargetId, setOutlineTargetId] = useState(/** @type {string | null} */ (null))
 
   const bentoSpans = useMemo(

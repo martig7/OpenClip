@@ -7,7 +7,7 @@ import { useState, useRef, useEffect } from 'react'
  * easier maintenance.
  */
 export function useAudioSourcesState() {
-  // Master audio source list — sources applied to all game scenes
+  // Master audio source list: sources applied to all game scenes
   const [masterAudioSources, setMasterAudioSources] = useState([]) // [{ kind, label, name, inputSettings }]
   const masterAudioLoadedRef = useRef(false) // guard against persisting before initial load
   const [applyingSource, setApplyingSource] = useState(null) // name of source currently being applied

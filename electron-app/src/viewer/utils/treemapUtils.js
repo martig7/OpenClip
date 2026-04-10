@@ -4,9 +4,9 @@
  */
 
 export const CELL_GAP = 2 // px gap between cells
-export const MIN_DIM = 36 // px — minimum width or height for any cell; prevents hair-thin slivers
+export const MIN_DIM = 36 // px: minimum width or height for any cell; prevents hair-thin slivers
 
-// Tooltip sizing constants — kept in sync with the .sv2-tooltip CSS rule (max-width: 280px)
+// Tooltip sizing constants: kept in sync with the .sv2-tooltip CSS rule (max-width: 280px)
 export const TOOLTIP_W = 280 // matches CSS max-width
 export const TOOLTIP_H = 56 // conservative height estimate for two lines of text
 export const TOOLTIP_PAD = 14 // gap between cursor and tooltip corner

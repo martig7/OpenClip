@@ -267,7 +267,7 @@ export default function GamesPage() {
         api.setStore('trackNames', labels)
       }
     } catch {
-      // OBS offline — use whatever is already in state (loaded from store on mount)
+      // OBS offline; use whatever is already in state (loaded from store on mount)
     }
   }
 

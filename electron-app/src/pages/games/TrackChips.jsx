@@ -17,7 +17,7 @@ export function TrackLabelHeader({ trackLabels, className = '' }) {
   )
 }
 
-/** Per-source track 1–6 toggles. */
+/** Per-source track 1-6 toggles. */
 export function TrackChips({ inputName, tracks, trackLabels, isLoading, onToggle }) {
   return (
     <div className="track-chips-col">

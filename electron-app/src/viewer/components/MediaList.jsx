@@ -62,7 +62,7 @@ export default function MediaList({ items, selectedItem, onSelect, gameColors, s
   const dragSbRef = useRef(null)
   const moveRafRef = useRef(null)
 
-  // Mirror props to refs — prevents stale closures in draw/event handlers
+  // Mirror props to refs: prevents stale closures in draw/event handlers
   const itemsRef = useRef(items)
   const selRef = useRef(selectedItem) // holds full item Object, not a Set
   const colorsRef = useRef(gameColors)
@@ -206,7 +206,7 @@ export default function MediaList({ items, selectedItem, onSelect, gameColors, s
       const color = gc[item.game_name] || '#888888'
       const isHov = i === hover
 
-      // Row background — no globalAlpha changes, always full opacity
+      // Row background: no globalAlpha changes, always full opacity
       if (isSel) {
         ctx.fillStyle = 'rgba(99,102,241,0.1)'
         ctx.fillRect(0, y, w, ROW_H)

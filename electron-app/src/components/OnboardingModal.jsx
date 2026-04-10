@@ -135,7 +135,7 @@ export default function OnboardingModal({ open, onClose }) {
       setPluginInstallMsg('')
     } else {
       setPluginStatus('error')
-      setPluginInstallMsg('Plugin not found — click Install Plugin to try again')
+      setPluginInstallMsg('Plugin not found. Click Install Plugin to try again.')
     }
   }
 
@@ -179,7 +179,7 @@ export default function OnboardingModal({ open, onClose }) {
           <div className="onboarding-header-left">
             <h2>Setup Wizard</h2>
             <span>
-              Step {step + 1} of {TOTAL_STEPS} — {STEP_TITLES[step]}
+              Step {step + 1} of {TOTAL_STEPS}: {STEP_TITLES[step]}
             </span>
           </div>
         </div>
