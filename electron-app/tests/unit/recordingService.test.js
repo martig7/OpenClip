@@ -478,12 +478,12 @@ describe('trimClip', () => {
 
 // ─── runAutoDelete ────────────────────────────────────────────────
 describe('runAutoDelete', () => {
-  it('returns zeros when auto-delete is disabled', () => {
+  it('returns zeros when auto-delete is disabled', async () => {
     store._data.storageSettings = { auto_delete_enabled: false }
-    expect(service.runAutoDelete()).toEqual({ deleted: 0, skipped: 0, errors: 0 })
+    expect(await service.runAutoDelete()).toEqual({ deleted: 0, skipped: 0, errors: 0 })
   })
 
-  it('deletes files older than max_age_days', () => {
+  it('deletes files older than max_age_days', async () => {
     store._data.storageSettings = {
       auto_delete_enabled: true,
       max_age_days: 1,
@@ -494,11 +494,11 @@ describe('runAutoDelete', () => {
     makeFile(fp)
     fs.utimesSync(fp, new Date(Date.now() - 2 * 86400000), new Date(Date.now() - 2 * 86400000))
     service.invalidateCache()
-    expect(service.runAutoDelete().deleted).toBe(1)
+    expect((await service.runAutoDelete()).deleted).toBe(1)
     expect(fs.existsSync(fp)).toBe(false)
   })
 
-  it('skips locked recordings', () => {
+  it('skips locked recordings', async () => {
     const fp = path.join(destDir, 'Halo', 'Halo Session 2025-01-01 #1.mp4')
     makeFile(fp)
     fs.utimesSync(fp, new Date(Date.now() - 2 * 86400000), new Date(Date.now() - 2 * 86400000))
@@ -510,11 +510,11 @@ describe('runAutoDelete', () => {
       exclude_clips: true,
     }
     service.invalidateCache()
-    expect(service.runAutoDelete().skipped).toBeGreaterThan(0)
+    expect((await service.runAutoDelete()).skipped).toBeGreaterThan(0)
     expect(fs.existsSync(fp)).toBe(true)
   })
 
-  it('does not delete clips when exclude_clips is true', () => {
+  it('does not delete clips when exclude_clips is true', async () => {
     const fp = path.join(clipsDir, 'Halo Clip 2025-01-01 #1.mp4')
     makeFile(fp)
     fs.utimesSync(fp, new Date(Date.now() - 2 * 86400000), new Date(Date.now() - 2 * 86400000))
@@ -525,11 +525,11 @@ describe('runAutoDelete', () => {
       exclude_clips: true,
     }
     service.invalidateCache()
-    service.runAutoDelete()
+    await service.runAutoDelete()
     expect(fs.existsSync(fp)).toBe(true)
   })
 
-  it('deletes clips when exclude_clips is false', () => {
+  it('deletes clips when exclude_clips is false', async () => {
     const fp = path.join(clipsDir, 'Halo Clip 2025-01-01 #1.mp4')
     makeFile(fp)
     fs.utimesSync(fp, new Date(Date.now() - 2 * 86400000), new Date(Date.now() - 2 * 86400000))
@@ -540,7 +540,7 @@ describe('runAutoDelete', () => {
       exclude_clips: false,
     }
     service.invalidateCache()
-    expect(service.runAutoDelete().deleted).toBe(1)
+    expect((await service.runAutoDelete()).deleted).toBe(1)
     expect(fs.existsSync(fp)).toBe(false)
   })
 })

@@ -267,9 +267,7 @@ app.whenReady().then(async () => {
   if (store.get('settings.startWatcherOnStartup')) {
     ensureGameState()
     const { runAutoDelete } = require('./recordingService')
-    try {
-      runAutoDelete()
-    } catch {}
+    runAutoDelete().catch(() => {})
     appState.watcherStartedAt = Date.now()
     appState.watcher = setupGameWatcher(
       store,

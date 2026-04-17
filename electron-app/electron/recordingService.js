@@ -870,7 +870,7 @@ function reencodeVideo(
  *   2. Pushing total storage over max_storage_gb (oldest deleted first).
  * Returns a summary { deleted, skipped, errors }.
  */
-function runAutoDelete() {
+async function runAutoDelete() {
   const settings = store.get('storageSettings') || {}
   if (!settings.auto_delete_enabled) return { deleted: 0, skipped: 0, errors: 0 }
 
@@ -911,7 +911,7 @@ function runAutoDelete() {
   let deleted = 0,
     errors = 0
   for (const filePath of toDelete) {
-    const result = deleteFile(filePath)
+    const result = await deleteFile(filePath)
     if (result.success) deleted++
     else errors++
   }
