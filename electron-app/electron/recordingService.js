@@ -6,6 +6,7 @@ const fs = require('fs')
 const path = require('path')
 const { execFile } = require('child_process')
 const { isVideoFile, formatFileSize, CODEC_MAP, FFMPEG_PATH } = require('./constants')
+const { waitForUnlock, unlinkWithRetry } = require('./fileOperations')
 
 let store // set via init()
 
@@ -716,9 +717,17 @@ async function finalizeTrim(sourcePath) {
   }
 }
 
-function deleteFile(filePath) {
+async function deleteFile(filePath) {
   try {
-    fs.unlinkSync(filePath)
+    // Wait for any open stream (e.g. video player range requests) to release the handle
+    // before attempting deletion; retries up to ~2 seconds on EPERM/EBUSY/EACCES.
+    try {
+      await waitForUnlock(filePath, 4, 500)
+    } catch {
+      // If still locked after retries, attempt deletion anyway — unlinkWithRetry
+      // will handle transient holds and surface a clear error if it truly fails.
+    }
+    await unlinkWithRetry(filePath, 4, 500)
     try {
       fs.unlinkSync(filePath + '.tracks.json')
     } catch {}
