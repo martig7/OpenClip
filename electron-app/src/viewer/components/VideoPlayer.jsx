@@ -815,11 +815,28 @@ function VideoPlayer({
     return () => unsub?.()
   }, [])
 
+  const handleDelete = useCallback(() => {
+    // Close the video stream before the parent's delete flow begins — on Windows,
+    // open file handles cause EPERM on unlink.
+    if (videoRef.current) {
+      videoRef.current.pause()
+      videoRef.current.removeAttribute('src')
+      videoRef.current.load()
+    }
+    onDelete?.()
+  }, [onDelete])
+
   const handleOrganize = useCallback(async () => {
     if (!media || !organizeGame || isOrganizing) return
     setIsOrganizing(true)
     setIsManualOrganizing(true)
     setOrganizeProgress(null)
+    // Release the file handle before rename — Windows blocks rename on open files.
+    if (videoRef.current) {
+      videoRef.current.pause()
+      videoRef.current.removeAttribute('src')
+      videoRef.current.load()
+    }
     try {
       const result = await api.organizeRecording(media.path, organizeGame, organizeRemux)
       if (result && result.success) {
@@ -1105,7 +1122,7 @@ function VideoPlayer({
           isCreatingClip={isCreatingClip}
           handleTrimClip={handleTrimClip}
           trimPending={trimPending}
-          onDelete={onDelete}
+          onDelete={handleDelete}
           onShare={isClip ? handleShare : undefined}
           onShareRemove={isClip ? handleShareRemove : undefined}
           isSharing={isSharing}

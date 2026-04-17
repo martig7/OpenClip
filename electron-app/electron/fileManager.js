@@ -248,7 +248,7 @@ async function organizeRecordings(store, gameName, onProgress = () => {}) {
           console.error('Waveform pre-caching failed before delete:', error)
         }
         try {
-          fs.unlinkSync(movedTo)
+          await unlinkWithRetry(movedTo)
         } catch {}
       }
     }
@@ -536,7 +536,7 @@ async function finalizeDirectRecording(store, gameName, recordingDir, onProgress
           console.error('Waveform pre-caching failed before delete:', error)
         }
         try {
-          fs.unlinkSync(movedTo)
+          await unlinkWithRetry(movedTo)
         } catch {}
       }
     }

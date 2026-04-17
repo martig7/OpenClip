@@ -209,7 +209,7 @@ function startApiServer(appStore) {
         const data = await readBody(req)
         if (!data.path) return json(res, { error: 'Not found' }, 404)
         if (!isAllowedPath(data.path)) return json(res, { error: 'Forbidden' }, 403)
-        const result = service.deleteFile(data.path)
+        const result = await service.deleteFile(data.path)
         return json(res, result, result.status || 200)
       }
 
@@ -218,7 +218,7 @@ function startApiServer(appStore) {
         const data = await readBody(req)
         if (!data.path) return json(res, { error: 'Not found' }, 404)
         if (!isAllowedPath(data.path)) return json(res, { error: 'Forbidden' }, 403)
-        const result = service.deleteFile(data.path)
+        const result = await service.deleteFile(data.path)
         return json(res, result, result.status || 200)
       }
 
@@ -371,7 +371,7 @@ function startApiServer(appStore) {
             skippedLocked.push(p)
             continue
           }
-          const result = service.deleteFile(p)
+          const result = await service.deleteFile(p)
           if (result.success) deleted.push(p)
           else failed.push({ path: p, error: result.error })
         }

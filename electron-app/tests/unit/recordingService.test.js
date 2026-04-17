@@ -206,32 +206,32 @@ describe('countClipsForDate', () => {
 
 // ─── deleteFile ───────────────────────────────────────────────────
 describe('deleteFile', () => {
-  it('deletes a file that exists', () => {
+  it('deletes a file that exists', async () => {
     const fp = path.join(destDir, 'rec.mp4')
     makeFile(fp)
-    expect(service.deleteFile(fp)).toEqual({ success: true })
+    expect(await service.deleteFile(fp)).toEqual({ success: true })
     expect(fs.existsSync(fp)).toBe(false)
   })
 
-  it('also deletes .tracks.json sidecar', () => {
+  it('also deletes .tracks.json sidecar', async () => {
     const fp = path.join(destDir, 'rec.mp4')
     makeFile(fp)
     fs.writeFileSync(fp + '.tracks.json', '[]')
-    service.deleteFile(fp)
+    await service.deleteFile(fp)
     expect(fs.existsSync(fp + '.tracks.json')).toBe(false)
   })
 
-  it('returns error for non-existent file', () => {
-    const result = service.deleteFile(path.join(destDir, 'missing.mp4'))
+  it('returns error for non-existent file', async () => {
+    const result = await service.deleteFile(path.join(destDir, 'missing.mp4'))
     expect(result.error).toBeDefined()
     expect(result.status).toBe(404)
   })
 
-  it('invalidates cache after deletion', () => {
+  it('invalidates cache after deletion', async () => {
     const fp = path.join(destDir, 'Halo', 'Halo Session 2025-01-15 #1.mp4')
     makeFile(fp)
     service.scanRecordings()
-    service.deleteFile(fp)
+    await service.deleteFile(fp)
     expect(service.scanRecordings().every((r) => r.path !== fp)).toBe(true)
   })
 })
@@ -270,7 +270,7 @@ describe('scoped cache invalidation', () => {
     expect(service.scanRecordings()).toBe(recs1) // same reference — recordings cache intact
   })
 
-  it('deleteFile of a recording only invalidates the recordings cache', () => {
+  it('deleteFile of a recording only invalidates the recordings cache', async () => {
     const clipFp = path.join(clipsDir, 'Halo Clip 2025-01-15 #1.mp4')
     const recFp = path.join(destDir, 'Halo', 'Halo Session 2025-01-15 #1.mp4')
     makeFile(clipFp)
@@ -278,14 +278,14 @@ describe('scoped cache invalidation', () => {
     service.invalidateCache()
     const clips1 = service.scanClips()
     service.scanRecordings()
-    service.deleteFile(recFp)
+    await service.deleteFile(recFp)
     // Clips cache should be untouched (same reference)
     expect(service.scanClips()).toBe(clips1)
     // Recordings cache was cleared so the deleted file is gone
     expect(service.scanRecordings().every((r) => r.path !== recFp)).toBe(true)
   })
 
-  it('deleteFile of a clip only invalidates the clips cache', () => {
+  it('deleteFile of a clip only invalidates the clips cache', async () => {
     const clipFp = path.join(clipsDir, 'Halo Clip 2025-01-15 #1.mp4')
     const recFp = path.join(destDir, 'Halo', 'Halo Session 2025-01-15 #1.mp4')
     makeFile(clipFp)
@@ -293,7 +293,7 @@ describe('scoped cache invalidation', () => {
     service.invalidateCache()
     const recs1 = service.scanRecordings()
     service.scanClips()
-    service.deleteFile(clipFp)
+    await service.deleteFile(clipFp)
     // Recordings cache should be untouched (same reference)
     expect(service.scanRecordings()).toBe(recs1)
     // Clips cache was cleared so the deleted clip is gone
@@ -478,12 +478,12 @@ describe('trimClip', () => {
 
 // ─── runAutoDelete ────────────────────────────────────────────────
 describe('runAutoDelete', () => {
-  it('returns zeros when auto-delete is disabled', () => {
+  it('returns zeros when auto-delete is disabled', async () => {
     store._data.storageSettings = { auto_delete_enabled: false }
-    expect(service.runAutoDelete()).toEqual({ deleted: 0, skipped: 0, errors: 0 })
+    expect(await service.runAutoDelete()).toEqual({ deleted: 0, skipped: 0, errors: 0 })
   })
 
-  it('deletes files older than max_age_days', () => {
+  it('deletes files older than max_age_days', async () => {
     store._data.storageSettings = {
       auto_delete_enabled: true,
       max_age_days: 1,
@@ -494,11 +494,11 @@ describe('runAutoDelete', () => {
     makeFile(fp)
     fs.utimesSync(fp, new Date(Date.now() - 2 * 86400000), new Date(Date.now() - 2 * 86400000))
     service.invalidateCache()
-    expect(service.runAutoDelete().deleted).toBe(1)
+    expect((await service.runAutoDelete()).deleted).toBe(1)
     expect(fs.existsSync(fp)).toBe(false)
   })
 
-  it('skips locked recordings', () => {
+  it('skips locked recordings', async () => {
     const fp = path.join(destDir, 'Halo', 'Halo Session 2025-01-01 #1.mp4')
     makeFile(fp)
     fs.utimesSync(fp, new Date(Date.now() - 2 * 86400000), new Date(Date.now() - 2 * 86400000))
@@ -510,11 +510,11 @@ describe('runAutoDelete', () => {
       exclude_clips: true,
     }
     service.invalidateCache()
-    expect(service.runAutoDelete().skipped).toBeGreaterThan(0)
+    expect((await service.runAutoDelete()).skipped).toBeGreaterThan(0)
     expect(fs.existsSync(fp)).toBe(true)
   })
 
-  it('does not delete clips when exclude_clips is true', () => {
+  it('does not delete clips when exclude_clips is true', async () => {
     const fp = path.join(clipsDir, 'Halo Clip 2025-01-01 #1.mp4')
     makeFile(fp)
     fs.utimesSync(fp, new Date(Date.now() - 2 * 86400000), new Date(Date.now() - 2 * 86400000))
@@ -525,11 +525,11 @@ describe('runAutoDelete', () => {
       exclude_clips: true,
     }
     service.invalidateCache()
-    service.runAutoDelete()
+    await service.runAutoDelete()
     expect(fs.existsSync(fp)).toBe(true)
   })
 
-  it('deletes clips when exclude_clips is false', () => {
+  it('deletes clips when exclude_clips is false', async () => {
     const fp = path.join(clipsDir, 'Halo Clip 2025-01-01 #1.mp4')
     makeFile(fp)
     fs.utimesSync(fp, new Date(Date.now() - 2 * 86400000), new Date(Date.now() - 2 * 86400000))
@@ -540,7 +540,7 @@ describe('runAutoDelete', () => {
       exclude_clips: false,
     }
     service.invalidateCache()
-    expect(service.runAutoDelete().deleted).toBe(1)
+    expect((await service.runAutoDelete()).deleted).toBe(1)
     expect(fs.existsSync(fp)).toBe(false)
   })
 })

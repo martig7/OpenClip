@@ -21,11 +21,9 @@ function registerWatcherHandlers(ipcMain, store, appState) {
       }
 
       const { runAutoDelete } = require('../recordingService')
-      try {
-        runAutoDelete()
-      } catch (err) {
+      runAutoDelete().catch((err) => {
         console.warn('[watcherHandlers] runAutoDelete failed (non-fatal):', err.message)
-      }
+      })
 
       try {
         appState.watcherStartedAt = Date.now()
