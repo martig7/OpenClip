@@ -21,6 +21,7 @@ const electronConfigDefaults = {
   fullscreenRecording: { enabled: false, defaultScene: '' },
   weekFolders: false,
   folderStructureMigrated: false,
+  sceneOnStop: { enabled: false, scene: '' },
 }
 
 // Defaults for Python JSON files
@@ -103,6 +104,7 @@ function msToElectronSettings(ms, obsRecordingPath, electronData) {
     waveformResolution: ms.waveform_resolution || 'default',
     shareHost: ms.share_host || 'gofile',
     shareLitterboxExpiry: ms.share_litterbox_expiry || '24h',
+    sceneOnStop: electronData?.sceneOnStop || { enabled: false, scene: '' },
   }
 }
 
@@ -346,6 +348,10 @@ const store = {
       }
       if (value.weekFolders !== undefined) {
         this._electron().weekFolders = value.weekFolders
+        this._saveElectron()
+      }
+      if (value.sceneOnStop !== undefined) {
+        this._electron().sceneOnStop = value.sceneOnStop
         this._saveElectron()
       }
       this._msData = electronSettingsToMs(this._ms(), value)

@@ -106,6 +106,11 @@ async function callPlugin(method, params = {}) {
     case 'stopRecording':
       recordingActive = false
       return { success: true, message: 'Recording stopped' }
+    case 'switchScene':
+      if (params.sceneName && mockScenes.includes(params.sceneName)) {
+        currentScene = params.sceneName
+      }
+      return { success: true, message: `Switched to scene "${params.sceneName}"` }
     case 'getRecordingStatus':
       return { recording: recordingActive, currentScene }
     default:
@@ -264,6 +269,10 @@ async function stopRecording() {
   return await callPlugin('stopRecording')
 }
 
+async function switchScene(sceneName) {
+  return await callPlugin('switchScene', { sceneName })
+}
+
 async function getRecordingStatus() {
   return await callPlugin('getRecordingStatus')
 }
@@ -288,6 +297,7 @@ module.exports = {
   setTrackNames,
   startRecording,
   stopRecording,
+  switchScene,
   getRecordingStatus,
   isPluginReachable,
   callPlugin,

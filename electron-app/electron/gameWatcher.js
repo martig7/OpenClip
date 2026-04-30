@@ -5,6 +5,7 @@ const { getRunningProcessNames, getWindowTitles } = require('./processDetector')
 const {
   startRecording,
   stopRecording,
+  switchScene,
   addAudioSourceToScenes,
   removeAudioSourceFromScenes,
   setInputAudioTracks,
@@ -315,8 +316,17 @@ function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}, o
           gameName: stoppedGame,
         })
       }
-      // Tell the OBS plugin to stop recording
-      stopRecording().catch((err) => log(`Plugin stopRecording failed: ${err.message}`))
+      // Tell the OBS plugin to stop recording, then optionally switch scene
+      stopRecording()
+        .catch((err) => log(`Plugin stopRecording failed: ${err.message}`))
+        .finally(() => {
+          const sceneOnStop = (store.get('settings') || {}).sceneOnStop
+          if (sceneOnStop?.enabled && sceneOnStop?.scene) {
+            switchScene(sceneOnStop.scene).catch((err) =>
+              log(`Plugin switchScene failed: ${err.message}`)
+            )
+          }
+        })
       scheduleOrganize(stoppedGame)
     } else if (detected && lastGame && detected.name !== lastGame.name) {
       const stoppedGame = lastGame.name
@@ -342,6 +352,12 @@ function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}, o
       stopRecording()
         .catch((err) => log(`Plugin stopRecording failed: ${err.message}`))
         .finally(() => {
+          const sceneOnStop = (store.get('settings') || {}).sceneOnStop
+          if (sceneOnStop?.enabled && sceneOnStop?.scene) {
+            switchScene(sceneOnStop.scene).catch((err) =>
+              log(`Plugin switchScene failed: ${err.message}`)
+            )
+          }
           // Capture the target game at schedule time to guard against stale closure.
           const targetName = detected.name
           const targetScene = detected.scene || ''

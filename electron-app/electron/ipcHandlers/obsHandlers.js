@@ -31,6 +31,7 @@ const {
   getTrackNames,
   getTrackNamesLive,
   setTrackNames,
+  switchScene,
   isPluginReachable,
 } = require('../obsPlugin')
 const { runElevated } = require('../runElevated')
@@ -121,6 +122,7 @@ function registerObsHandlers(ipcMain, store, _appState) {
   ipcMain.handle('obs:ws:get-track-names', () => getTrackNames())
   ipcMain.handle('obs:ws:get-track-names-live', () => getTrackNamesLive())
   ipcMain.handle('obs:ws:set-track-names', (_e, names) => setTrackNames(undefined, names))
+  ipcMain.handle('obs:ws:switch-scene', (_e, sceneName) => switchScene(sceneName))
 
   // --- OBS installation detection ---
   ipcMain.handle('obs:detect-install', () => findOBSInstallDir())

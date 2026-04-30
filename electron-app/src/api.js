@@ -93,6 +93,7 @@ const mockApi = {
   getTrackNames: async () => ['Track 1', 'Track 2', 'Track 3', 'Track 4', 'Track 5', 'Track 6'],
   getTrackNamesLive: async () => ['Track 1', 'Track 2', 'Track 3', 'Track 4', 'Track 5', 'Track 6'],
   setTrackNames: async () => ({ success: true }),
+  switchOBSScene: asyncNoop,
   listWindowsAudioDevices: asyncArr,
   listRunningApps: asyncArr,
   getDestinationFolders: asyncArr,

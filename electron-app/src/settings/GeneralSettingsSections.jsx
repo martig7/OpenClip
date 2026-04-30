@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   FolderOpen,
   RefreshCw,
@@ -194,6 +194,69 @@ function OrganizeSection({ sectionCardProps, settings, updateSetting }) {
           >
             <X size={14} />
           </button>
+        </div>
+      )}
+    </AppSettingsSectionCard>
+  )
+}
+
+function SceneOnStopSection({ sectionCardProps, settings, updateSetting }) {
+  const [scenes, setScenes] = useState([])
+  const [loadingScenes, setLoadingScenes] = useState(false)
+
+  const enabled = settings.sceneOnStop?.enabled ?? false
+  const selectedScene = settings.sceneOnStop?.scene ?? ''
+
+  useEffect(() => {
+    if (!enabled) return
+    setLoadingScenes(true)
+    api
+      .getOBSWSScenes()
+      .then((fetched) => setScenes(Array.isArray(fetched) ? fetched : []))
+      .catch(() => setScenes([]))
+      .finally(() => setLoadingScenes(false))
+  }, [enabled])
+
+  return (
+    <AppSettingsSectionCard {...sectionCardProps}>
+      <div className={tc} style={{ marginTop: 0 }}>
+        <div>
+          <div className="toggle-label">Switch Scene on Recording End</div>
+          <div className="toggle-desc">
+            Automatically switch to a chosen OBS scene when a recording stops
+          </div>
+        </div>
+        <button
+          type="button"
+          className={`toggle ${enabled ? 'on' : ''}`}
+          onClick={() => updateSetting('sceneOnStop.enabled', !enabled)}
+        />
+      </div>
+
+      {enabled && (
+        <div className="form-group" style={{ marginTop: 12 }}>
+          <label className="form-label">Scene</label>
+          <select
+            className="form-input"
+            value={selectedScene}
+            disabled={loadingScenes || scenes.length === 0}
+            onChange={(e) => updateSetting('sceneOnStop.scene', e.target.value)}
+          >
+            {loadingScenes ? (
+              <option value="">Loading scenes…</option>
+            ) : scenes.length === 0 ? (
+              <option value="">OBS not connected</option>
+            ) : (
+              <>
+                {!selectedScene && <option value="">Select a scene…</option>}
+                {scenes.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </>
+            )}
+          </select>
         </div>
       )}
     </AppSettingsSectionCard>
@@ -706,6 +769,15 @@ export default function GeneralSettingsSection({
             )}
           </div>
         </AppSettingsSectionCard>
+      )
+
+    case 'scene-on-stop':
+      return (
+        <SceneOnStopSection
+          sectionCardProps={sectionCardProps}
+          settings={settings}
+          updateSetting={updateSetting}
+        />
       )
 
     case 'updates':

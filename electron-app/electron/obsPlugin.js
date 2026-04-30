@@ -248,6 +248,10 @@ async function stopRecording() {
   return await callPlugin('stopRecording')
 }
 
+async function switchScene(sceneName) {
+  return await callPlugin('switchScene', { sceneName })
+}
+
 async function getRecordingStatus() {
   return await callPlugin('getRecordingStatus')
 }
@@ -280,6 +284,7 @@ module.exports = {
   // New plugin-specific methods
   startRecording,
   stopRecording,
+  switchScene,
   getRecordingStatus,
   isPluginReachable,
   callPlugin,
