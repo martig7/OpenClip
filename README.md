@@ -1,11 +1,16 @@
 # OpenClip
 
-Automatic recording manager for OBS Studio. Detects when your configured games are running, starts and stops OBS recording automatically, organizes recordings into dated folders, and lets you create clips with a hotkey.
+Automatic recording manager for OBS Studio. Detects when your configured games are running, starts and stops OBS recording automatically, organizes recordings into dated folders, and lets you create clips with a hotkey. Also provides an easy way to create and share clips, completely free and open-source.
+
+~[Main Page](assets/Screenshot%202026-05-07%20162254.png)
+~[Video Player](assets/Screenshot%202026-05-07%20162544.png)
+~[Clip Creator](assets/Screenshot%202026-05-07%20162921.png)
+~[Storage Grid](assets/Screenshot%202026-05-07%20162937.png)
 
 ## Requirements
 
 - Windows 10 or later (x64)
-- [OBS Studio](https://obsproject.com/) with the **WebSocket Server** enabled *(Tools → WebSocket Server Settings)*
+- [OBS Studio](https://obsproject.com/)
 
 ## Installation
 
@@ -26,6 +31,8 @@ Automatic recording manager for OBS Studio. Detects when your configured games a
 - **Re-encoder** — batch re-encode recordings with H.264, H.265, or AV1
 - **Recordings viewer** — browse, preview, and manage all recordings and clips in-app
 - **Storage management** — auto-delete old recordings by age or total size limit
+- **Scene management** — add audio sources, tracks, and capture sources automatically
+- **Free clip hosting** — use free filehost sites like catbox.moe or uguu.se to share clips
 
 ## Building from Source
 
@@ -41,7 +48,7 @@ npm run release    # build and publish a draft GitHub Release (requires GH_TOKEN
 
 ```
 electron-app/     ← The desktop app (Electron + React + Node.js)
-DEPRECATED/       ← Archived Python-era tooling (no longer maintained)
+obs-plugin/       ← The OBS plugin for communication between your OBS instance and OpenClip
 assets/           ← Screenshots and branding
 ```
 
