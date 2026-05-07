@@ -2,10 +2,10 @@
 
 Automatic recording manager for OBS Studio. Detects when your configured games are running, starts and stops OBS recording automatically, organizes recordings into dated folders, and lets you create clips with a hotkey. Also provides an easy way to create and share clips, completely free and open-source.
 
-~[Main Page](assets/Screenshot%202026-05-07%20162254.png)
-~[Video Player](assets/Screenshot%202026-05-07%20162544.png)
-~[Clip Creator](assets/Screenshot%202026-05-07%20162921.png)
-~[Storage Grid](assets/Screenshot%202026-05-07%20162937.png)
+![Main Page](assets/Screenshot%202026-05-07%20162254.png)
+![Video Player](assets/Screenshot%202026-05-07%20162544.png)
+![Clip Creator](assets/Screenshot%202026-05-07%20162921.png)
+![Storage Grid](assets/Screenshot%202026-05-07%20162937.png)
 
 ## Requirements
 
