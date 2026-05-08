@@ -110,7 +110,31 @@ if (require.main === module) {
   // 6. Publish GitHub release via gh CLI
   run(buildGhCommand(tag, distDir, releaseFiles))
 
+  // 7. Build and deploy the browser demo to the gh-pages branch.
+  //    The personal site at gcmart.net/openclip iframes this URL:
+  //    https://martig7.github.io/OpenClip/
+  console.log('\nBuilding browser demo for GitHub Pages…')
+  run('npx vite build --config vite.demo.config.js')
+
+  const demoDist = path.join(__dirname, '..', 'dist-demo')
+  console.log('\nDeploying demo to gh-pages branch…')
+
+  // Initialise a throwaway git repo in dist-demo and force-push to gh-pages.
+  // The parent repo's remote is reused so this works over HTTPS or SSH.
+  const git = (cmd) => run(`git ${cmd}`, { cwd: demoDist })
+  const remoteUrl = execSync('git remote get-url origin', {
+    cwd: path.join(__dirname, '..'),
+    encoding: 'utf8',
+  }).trim()
+  git('init')
+  git('checkout -b gh-pages')
+  git('add -A')
+  git(`commit -m "chore: deploy demo ${tag}"`)
+  git(`remote add origin "${remoteUrl}"`)
+  git('push -f origin gh-pages')
+
   console.log(`\nRelease ${tag} published successfully!`)
+  console.log(`Demo → https://martig7.github.io/OpenClip/`)
 }
 
 module.exports = { collectArtifacts, buildGhCommand }
