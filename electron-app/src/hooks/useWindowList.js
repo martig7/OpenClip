@@ -7,7 +7,7 @@ import api from '../api'
  *
  * Used by both AddGameModal (via useAddGameModalState) and SimpleAddGameModal.
  *
- * @returns {{ visibleWindows, setVisibleWindows, loadingWindows, refreshWindows }}
+ * @returns {{ visibleWindows, setVisibleWindows, loadingWindows, setLoadingWindows, refreshWindows }}
  */
 export function useWindowList() {
   const [visibleWindows, setVisibleWindows] = useState([])
@@ -27,5 +27,5 @@ export function useWindowList() {
     }
   }, []) // no external deps; setters from useState are stable
 
-  return { visibleWindows, setVisibleWindows, loadingWindows, refreshWindows }
+  return { visibleWindows, setVisibleWindows, loadingWindows, setLoadingWindows, refreshWindows }
 }

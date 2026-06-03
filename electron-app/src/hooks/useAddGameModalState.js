@@ -24,6 +24,7 @@ export function useAddGameModalState() {
     visibleWindows,
     setVisibleWindows,
     loadingWindows,
+    setLoadingWindows,
     refreshWindows: _refreshWindows,
   } = useWindowList()
   const [showWindowPicker, setShowWindowPicker] = useState(false)
@@ -67,6 +68,7 @@ export function useAddGameModalState() {
     visibleWindows,
     setVisibleWindows,
     loadingWindows,
+    setLoadingWindows,
     showWindowPicker,
     setShowWindowPicker,
     autoCreateScene,
