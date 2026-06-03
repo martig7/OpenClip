@@ -127,7 +127,7 @@ if (require.main === module) {
     encoding: 'utf8',
   }).trim()
   git('init')
-  git('checkout -b gh-pages')
+  git('checkout -B gh-pages')
   git('add -A')
   git(`commit -m "chore: deploy demo ${tag}"`)
   git(`remote add origin "${remoteUrl}"`)
