@@ -10,6 +10,7 @@
  *   - Auto-updater registration
  */
 const { dialog, shell } = require('electron')
+const fs = require('fs')
 const { setWaveformResolution } = require('../waveformPreCache')
 const { setupAutoUpdater, setupDevAutoUpdater, registerUpdateHandlers } = require('../autoUpdater')
 
@@ -124,6 +125,93 @@ function registerRecordingHandlers(ipcMain, store, appState) {
 
   // --- Auto-updater IPC handlers ---
   registerUpdateHandlers(ipcMain, () => appState.mainWindow)
+
+  // --- Config export ---
+  ipcMain.handle('config:export', async () => {
+    try {
+      const config = {
+        _version: 1,
+        _app: 'openclip',
+        _exported: new Date().toISOString(),
+        settings: store.get('settings'),
+        games: store.get('games'),
+        obsInstallPath: store._electron().obsInstallPath || '',
+        fullscreenRecording: store.get('fullscreenRecording'),
+        masterAudioSources: store.get('masterAudioSources'),
+        audioTracks: store.get('audioTracks'),
+        trackNames: store.get('trackNames'),
+      }
+
+      const { canceled, filePath } = await dialog.showSaveDialog(appState.mainWindow, {
+        title: 'Export OpenClip Config',
+        defaultPath: 'openclip-config.json',
+        filters: [{ name: 'JSON', extensions: ['json'] }],
+      })
+
+      if (canceled || !filePath) return { success: false, canceled: true }
+
+      fs.writeFileSync(filePath, JSON.stringify(config, null, 2), 'utf-8')
+      return { success: true, path: filePath }
+    } catch (err) {
+      return { success: false, error: err.message }
+    }
+  })
+
+  // --- Config import ---
+  ipcMain.handle('config:import', async () => {
+    try {
+      const { canceled, filePaths } = await dialog.showOpenDialog(appState.mainWindow, {
+        title: 'Import OpenClip Config',
+        properties: ['openFile'],
+        filters: [{ name: 'JSON', extensions: ['json'] }],
+      })
+
+      if (canceled || !filePaths?.[0]) return { success: false, canceled: true }
+
+      let config
+      try {
+        config = JSON.parse(fs.readFileSync(filePaths[0], 'utf-8'))
+      } catch {
+        return { success: false, error: 'File is not valid JSON.' }
+      }
+
+      if (config._app !== 'openclip') {
+        return { success: false, error: 'File is not an OpenClip config.' }
+      }
+      if (config._version === undefined || config._version === null) {
+        return { success: false, error: 'Config file is missing a version field.' }
+      }
+      if (!config.settings || typeof config.settings !== 'object') {
+        return { success: false, error: 'Config file is missing a settings object.' }
+      }
+
+      store.set('settings', config.settings)
+
+      if (config.obsInstallPath !== undefined) {
+        store._electron().obsInstallPath = config.obsInstallPath
+        store._saveElectron()
+      }
+      if (config.fullscreenRecording !== undefined) {
+        store.set('fullscreenRecording', config.fullscreenRecording)
+      }
+      if (config.masterAudioSources !== undefined) {
+        store.set('masterAudioSources', config.masterAudioSources)
+      }
+      if (config.audioTracks !== undefined) {
+        store.set('audioTracks', config.audioTracks)
+      }
+      if (config.trackNames !== undefined) {
+        store.set('trackNames', config.trackNames)
+      }
+      if (Array.isArray(config.games)) {
+        store.set('games', config.games)
+      }
+
+      return { success: true }
+    } catch (err) {
+      return { success: false, error: err.message }
+    }
+  })
 }
 
 module.exports = { registerRecordingHandlers }
