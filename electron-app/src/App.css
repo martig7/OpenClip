@@ -81,6 +81,88 @@
   @apply truncate;
 }
 
+/* Window title hover modal — right of sidebar */
+.sidebar-watcher-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  /* Override line-clamp-2 from first block — clamping moves to the inner span */
+  overflow: visible;
+  -webkit-line-clamp: unset;
+  -webkit-box-orient: initial;
+}
+
+.window-title-icon-wrap {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+.window-title-icon {
+  color: var(--text-muted);
+  cursor: help;
+  transition: color 0.15s;
+}
+
+.window-title-icon-wrap:hover .window-title-icon {
+  color: var(--accent-light);
+}
+
+.window-title-modal {
+  display: none;
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  white-space: nowrap;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  z-index: 100;
+  min-width: 160px;
+}
+
+.window-title-icon-wrap:hover .window-title-modal {
+  display: block;
+}
+
+/* Left-pointing arrow */
+.window-title-modal::before {
+  content: '';
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 6px solid transparent;
+  border-right-color: var(--border-light);
+}
+
+.window-title-modal::after {
+  content: '';
+  position: absolute;
+  right: calc(100% - 1px);
+  top: 50%;
+  transform: translateY(-50%);
+  border: 6px solid transparent;
+  border-right-color: var(--bg-tertiary);
+}
+
+.window-title-modal-label {
+  @apply text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1;
+}
+
+.window-title-modal-value {
+  @apply text-[12px] font-mono text-[var(--text-primary)];
+}
+
+.sidebar-watcher-state > span:first-child {
+  @apply line-clamp-2;
+}
+
 /* Main Content */
 .main-content {
   @apply relative z-[2] flex-1 overflow-hidden flex flex-col;

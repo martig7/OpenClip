@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ExternalLink, Square, Play, Circle, X } from 'lucide-react'
+import { ExternalLink, Square, Play, Circle, X, HelpCircle } from 'lucide-react'
 import { useWatcherRuntime } from '../context/WatcherRuntimeContext'
 import { formatWatcherUptime, parseWatcherGameState } from '../pages/games/watcherStatusUtils'
 
@@ -45,10 +45,21 @@ export default function SidebarWatcherPanel() {
       </div>
 
       <div className="sidebar-watcher-state" style={{ color: state.color }}>
-        {state.recording && (
-          <Circle size={6} fill="var(--danger)" color="var(--danger)" className="inline shrink-0 mr-1" />
+        <span>
+          {state.recording && (
+            <Circle size={6} fill="var(--danger)" color="var(--danger)" className="inline shrink-0 mr-1" />
+          )}
+          {state.label}
+        </span>
+        {state.recording && state.windowTitle && (
+          <span className="window-title-icon-wrap">
+            <HelpCircle size={13} className="window-title-icon" />
+            <div className="window-title-modal">
+              <div className="window-title-modal-label">Matched window</div>
+              <div className="window-title-modal-value">{state.windowTitle}</div>
+            </div>
+          </span>
         )}
-        {state.label}
       </div>
 
       <div className="sidebar-watcher-actions">

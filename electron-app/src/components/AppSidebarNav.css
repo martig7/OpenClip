@@ -1,6 +1,6 @@
 /* App primary sidebar — shell (no padding; compose with __padding / __inner) */
 .app-sidebar-nav {
-  @apply relative z-[2] w-[200px] min-w-[200px] bg-[var(--bg-secondary)] border-r border-[var(--border)]
+  @apply relative z-[3] w-[200px] min-w-[200px] bg-[var(--bg-secondary)] border-r border-[var(--border)]
     flex flex-col min-h-0;
 }
 

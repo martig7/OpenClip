@@ -21,7 +21,7 @@ const { mockGetRunningProcessNames, mockGetWindowTitles } = vi.hoisted(() => {
   }
 })
 
-import { detectRunningGame } from '../../electron/gameWatcher.js'
+import { detectRunningGame, findMatchedWindowTitle } from '../../electron/gameWatcher.js'
 
 function makeGame(overrides = {}) {
   return {
@@ -213,5 +213,38 @@ describe('multiple games', () => {
       const result2 = detectRunningGame([makeGame({ name: 'Game1', exe: 'game.exe' })])
     }
     vi.restoreAllMocks()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────
+// findMatchedWindowTitle — returns original-case title or ''
+// ─────────────────────────────────────────────────────────────────
+describe('findMatchedWindowTitle', () => {
+  it('returns empty string when game is null', () => {
+    expect(findMatchedWindowTitle(null)).toBe('')
+  })
+
+  it('returns empty string when game has no selector', () => {
+    mockGetWindowTitles.mockReturnValue(['VALORANT  '])
+    const game = makeGame({ selector: '', exe: 'valorant.exe' })
+    expect(findMatchedWindowTitle(game)).toBe('')
+  })
+
+  it('returns the original-case matched window title', () => {
+    mockGetWindowTitles.mockReturnValue(['VALORANT  ', 'Discord'])
+    const game = makeGame({ selector: 'valorant' })
+    expect(findMatchedWindowTitle(game)).toBe('VALORANT  ')
+  })
+
+  it('returns empty string when no window title matches', () => {
+    mockGetWindowTitles.mockReturnValue(['Discord', 'Spotify'])
+    const game = makeGame({ selector: 'valorant' })
+    expect(findMatchedWindowTitle(game)).toBe('')
+  })
+
+  it('matches case-insensitively', () => {
+    mockGetWindowTitles.mockReturnValue(['Counter-Strike 2'])
+    const game = makeGame({ selector: 'counter-strike' })
+    expect(findMatchedWindowTitle(game)).toBe('Counter-Strike 2')
   })
 })

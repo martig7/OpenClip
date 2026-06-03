@@ -65,6 +65,18 @@ function detectRunningGame(games) {
   return null
 }
 
+/**
+ * Returns the original-case OS window title of the window that matches
+ * the given game's selector. Returns '' if no match or no selector.
+ */
+function findMatchedWindowTitle(game) {
+  if (!game) return ''
+  const titleStr = (game.selector || '').toLowerCase()
+  if (!titleStr) return ''
+  const rawTitles = getWindowTitles()
+  return rawTitles.find((t) => t.toLowerCase().includes(titleStr)) || ''
+}
+
 function detectFullscreenFallback(games, fsConfig) {
   if (!fsConfig?.enabled || !fsConfig?.defaultScene) return null
 
@@ -288,7 +300,8 @@ function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}, o
     if (detected && !lastGame) {
       lastGame = detected
       obsWasReachable = true // optimistic: assume OBS is reachable; isPluginReachable will correct if not
-      writeGameState(`RECORDING|${detected.name}|${detected.scene || ''}`)
+      const _detectedWindowTitle = findMatchedWindowTitle(detected)
+      writeGameState(`RECORDING|${detected.name}|${detected.scene || ''}|${encodeURIComponent(_detectedWindowTitle)}`)
       log(`Game detected: ${detected.name}`)
       onStateChange({ currentGame: detected.name, status: 'recording' })
       // Tell the OBS plugin to start recording (best-effort, OBS may not be running)
@@ -361,11 +374,12 @@ function setupGameWatcher(store, onStateChange, onOrganizeProgress = () => {}, o
           // Capture the target game at schedule time to guard against stale closure.
           const targetName = detected.name
           const targetScene = detected.scene || ''
+          const targetWindowTitle = findMatchedWindowTitle(detected)
           // After a short delay, signal recording for the newly detected game.
           setTimeout(() => {
             if (stopped) return // watcher was stopped during the delay
             if (!lastGame || lastGame.name !== targetName) return // game changed again during delay
-            writeGameState(`RECORDING|${targetName}|${targetScene}`)
+            writeGameState(`RECORDING|${targetName}|${targetScene}|${encodeURIComponent(targetWindowTitle)}`)
             onStateChange({ currentGame: targetName, status: 'recording' })
             syncFullscreenProcessAudio(lastGame)
               .catch((err) => log(`Fullscreen process audio sync failed: ${err.message}`))
@@ -437,4 +451,4 @@ function writeGameState(state) {
   }
 }
 
-module.exports = { setupGameWatcher, detectRunningGame, detectFullscreenFallback }
+module.exports = { setupGameWatcher, detectRunningGame, detectFullscreenFallback, findMatchedWindowTitle }

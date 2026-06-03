@@ -17,11 +17,22 @@ export function parseWatcherGameState(gameState) {
     const parts = gameState.split('|')
     const game = parts[1] || 'Unknown'
     const scene = parts[2] || ''
+    const rawTitle = parts[3]
+    let windowTitle
+    if (rawTitle) {
+      try {
+        const decoded = decodeURIComponent(rawTitle)
+        if (decoded) windowTitle = decoded
+      } catch {
+        // malformed encoding — skip the title
+      }
+    }
     return {
       label: `Recording ${game}${scene ? ` (Scene: ${scene})` : ''}`,
       color: 'var(--danger)',
       recording: true,
       game,
+      windowTitle,
     }
   }
   if (gameState === 'IDLE')
