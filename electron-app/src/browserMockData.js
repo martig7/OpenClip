@@ -2,6 +2,8 @@ export const defaultSettings = {
   obsRecordingPath: '',
   destinationPath: '',
   startWatcherOnStartup: false,
+  openObsOnStartup: false,
+  launchOnStartup: false,
   clipMarkerHotkey: 'F9',
   listView: true,
   autoClip: {

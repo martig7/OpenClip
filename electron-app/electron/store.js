@@ -22,6 +22,7 @@ const electronConfigDefaults = {
   weekFolders: false,
   folderStructureMigrated: false,
   sceneOnStop: { enabled: false, scene: '' },
+  launchOnStartup: false,
 }
 
 // Defaults for Python JSON files
@@ -82,6 +83,7 @@ function msToElectronSettings(ms, obsRecordingPath, electronData) {
     advancedGameAddition: electronData?.advancedGameAddition || false,
     autoRegisterFullscreenApps: electronData?.autoRegisterFullscreenApps || false,
     weekFolders: electronData?.weekFolders || false,
+    launchOnStartup: electronData?.launchOnStartup || false,
     autoClip: {
       enabled: ms.auto_clip_settings?.enabled || false,
       bufferBefore: ms.auto_clip_settings?.buffer_before_seconds ?? 30,
@@ -350,6 +352,10 @@ const store = {
         this._electron().weekFolders = value.weekFolders
         this._saveElectron()
       }
+      if (value.launchOnStartup !== undefined) {
+        this._electron().launchOnStartup = value.launchOnStartup
+        this._saveElectron()
+      }
       if (value.sceneOnStop !== undefined) {
         this._electron().sceneOnStop = value.sceneOnStop
         this._saveElectron()
@@ -390,6 +396,11 @@ const store = {
       }
       if (subKey === 'weekFolders') {
         this._electron().weekFolders = value
+        this._saveElectron()
+        return
+      }
+      if (subKey === 'launchOnStartup') {
+        this._electron().launchOnStartup = value
         this._saveElectron()
         return
       }

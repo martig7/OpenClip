@@ -9,7 +9,7 @@
  *   - Recording reorganize (week folders) and manual organize
  *   - Auto-updater registration
  */
-const { dialog, shell } = require('electron')
+const { app, dialog, shell } = require('electron')
 const { setWaveformResolution } = require('../waveformPreCache')
 const { setupAutoUpdater, setupDevAutoUpdater, registerUpdateHandlers } = require('../autoUpdater')
 
@@ -33,6 +33,11 @@ function registerRecordingHandlers(ipcMain, store, appState) {
       setWaveformResolution(value.waveformResolution)
     } else if (key === 'settings.waveformResolution') {
       setWaveformResolution(value)
+    }
+    if (key === 'settings' && value?.launchOnStartup !== undefined) {
+      app.setLoginItemSettings({ openAtLogin: value.launchOnStartup })
+    } else if (key === 'settings.launchOnStartup') {
+      app.setLoginItemSettings({ openAtLogin: value })
     }
     return result
   })

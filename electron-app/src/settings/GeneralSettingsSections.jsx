@@ -321,6 +321,19 @@ export default function GeneralSettingsSection({
         <AppSettingsSectionCard {...sectionCardProps}>
           <div className={tc} style={{ marginTop: 0 }}>
             <div>
+              <div className="toggle-label">Launch OpenClip on Startup</div>
+              <div className="toggle-desc">
+                Automatically open OpenClip when you log in to Windows
+              </div>
+            </div>
+            <button
+              type="button"
+              className={`toggle ${settings.launchOnStartup ? 'on' : ''}`}
+              onClick={() => updateSetting('launchOnStartup', !settings.launchOnStartup)}
+            />
+          </div>
+          <div className={tc}>
+            <div>
               <div className="toggle-label">Start Watcher on Startup</div>
               <div className="toggle-desc">
                 Automatically start the game watcher when the app launches

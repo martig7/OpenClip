@@ -237,6 +237,9 @@ app.whenReady().then(async () => {
     console.log('[integration] Store seeded with OBS WebSocket settings and paths')
   }
 
+  // Sync Windows startup registry with stored preference
+  app.setLoginItemSettings({ openAtLogin: store.get('settings.launchOnStartup') || false })
+
   // Auto-detect OBS recording path on startup in production (non-integration) mode if not set
   if (!isIntegrationMode && !store.get('settings.obsRecordingPath')) {
     const detected = readOBSRecordingPath()
